@@ -7,6 +7,7 @@ missing repository and unit-of-work boundaries needed by the application layer.
 
 from __future__ import annotations
 
+from types import TracebackType
 from typing import Protocol, Self
 
 from kordena_fiscal.archive import FiscalArchiveStore
@@ -75,17 +76,35 @@ class FiscalReconciliationRepository(Protocol):
 class FiscalUnitOfWork(Protocol):
     """One atomic local transaction spanning all durable fiscal repositories."""
 
-    idempotency: IdempotencyStore
-    sequences: FiscalSequenceStore
-    outbox: FiscalOutboxStore
-    archive: FiscalArchiveStore
-    bindings: FiscalBindingRepository
-    lifecycle: FiscalLifecycleRepository
-    reconciliations: FiscalReconciliationRepository
+    @property
+    def idempotency(self) -> IdempotencyStore: ...
+
+    @property
+    def sequences(self) -> FiscalSequenceStore: ...
+
+    @property
+    def outbox(self) -> FiscalOutboxStore: ...
+
+    @property
+    def archive(self) -> FiscalArchiveStore: ...
+
+    @property
+    def bindings(self) -> FiscalBindingRepository: ...
+
+    @property
+    def lifecycle(self) -> FiscalLifecycleRepository: ...
+
+    @property
+    def reconciliations(self) -> FiscalReconciliationRepository: ...
 
     def __enter__(self) -> Self: ...
 
-    def __exit__(self, exc_type: object, exc: object, traceback: object) -> None: ...
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None: ...
 
     def commit(self) -> None: ...
 
