@@ -2,6 +2,9 @@ name: FM Fiscal Core V2 CI
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - v2/fm-fiscal-identity-and-brand
 
 permissions:
   contents: read
