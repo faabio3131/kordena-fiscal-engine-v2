@@ -3,9 +3,9 @@ requires = ["setuptools>=69", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "kordena-fiscal-engine"
+name = "fm-fiscal-core"
 version = "0.1.0.dev0"
-description = "Motor fiscal brasileiro modular e desacoplado para integração por contratos explícitos."
+description = "FM Fiscal Core — motor fiscal brasileiro modular, multiproduto e desacoplado da FM Tecnologia."
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "Proprietary-compatible public development; license TBD before release"}
