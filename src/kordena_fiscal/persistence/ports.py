@@ -14,12 +14,25 @@ from kordena_fiscal.contingency import FiscalOutboxStore
 from kordena_fiscal.domain import (
     ExecutionScope,
     FiscalAccountBinding,
+    FiscalDomainError,
     HostScope,
     SourceReference,
 )
 from kordena_fiscal.lifecycle import FiscalStateSnapshot, IdempotencyStore
 from kordena_fiscal.numbering import FiscalSequenceStore
 from kordena_fiscal.reconciliation import FiscalReconciliationResult
+
+
+class FiscalPersistenceError(FiscalDomainError):
+    """Base error for durable persistence contract violations."""
+
+
+class PersistenceConflictError(FiscalPersistenceError):
+    """Raised on duplicate identity or optimistic-concurrency conflict."""
+
+
+class PersistenceStateError(FiscalPersistenceError):
+    """Raised when durable state is missing, corrupt or violates a repository contract."""
 
 
 class FiscalBindingRepository(Protocol):
