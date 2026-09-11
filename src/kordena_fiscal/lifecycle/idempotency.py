@@ -127,6 +127,8 @@ def build_issuance_key(document: CanonicalFiscalDocument) -> IdempotencyKey:
         "document_kind": document.document_kind.value,
         "operation": "issue",
     }
+    if document.scope.host_namespace is not None:
+        material["host_namespace"] = document.scope.host_namespace
     encoded = json.dumps(material, sort_keys=True, separators=(",", ":")).encode()
     return IdempotencyKey(hashlib.sha256(encoded).hexdigest())
 
