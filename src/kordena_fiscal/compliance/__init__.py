@@ -1,6 +1,12 @@
 """Public regulatory-compliance and jurisdiction-hardening surface."""
 
+from .capability_api import (
+    CapabilityReadinessError,
+    CapabilityReadinessService,
+    CapabilityReadinessSnapshot,
+)
 from .jurisdiction import (
+    FiscalActionCapability,
     FiscalCapabilityLevel,
     JurisdictionCapabilityError,
     JurisdictionCapabilityMatrix,
@@ -23,6 +29,10 @@ from .rtc import (
 )
 
 __all__ = [
+    "CapabilityReadinessError",
+    "CapabilityReadinessService",
+    "CapabilityReadinessSnapshot",
+    "FiscalActionCapability",
     "FiscalCapabilityLevel",
     "JurisdictionCapabilityError",
     "JurisdictionCapabilityMatrix",
