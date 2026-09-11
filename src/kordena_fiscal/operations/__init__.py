@@ -1,5 +1,11 @@
-"""Public fiscal query, cancellation and inutilization surface."""
+"""Public fiscal operation and document-operation surfaces."""
 
+from .contract import (
+    FiscalOperationKind,
+    FiscalOperationPayment,
+    FiscalOperationSnapshot,
+    FiscalOperationTotals,
+)
 from .events import (
     CancellationOutcome,
     CancellationRequest,
@@ -24,6 +30,10 @@ __all__ = [
     "FakeFiscalOperationsGateway",
     "FiscalCancellationService",
     "FiscalEventStatus",
+    "FiscalOperationKind",
+    "FiscalOperationPayment",
+    "FiscalOperationSnapshot",
+    "FiscalOperationTotals",
     "FiscalOperationsClient",
     "FiscalOperationsContractError",
     "FiscalOperationsGateway",
