@@ -154,6 +154,8 @@ class FiscalArchiveEntry:
             "kind": kind.value,
             "content_sha256": content_sha256,
         }
+        if scope.host_namespace is not None:
+            material["host_namespace"] = scope.host_namespace
         encoded = json.dumps(material, sort_keys=True, separators=(",", ":")).encode()
         return cls(
             entry_id=_sha256(encoded),
@@ -174,7 +176,7 @@ class FiscalArchiveManifest:
     """Tamper-evident metadata representation of one archive entry."""
 
     entry_id: str
-    scope_partition: tuple[str, str, str]
+    scope_partition: tuple[str, ...]
     document_reference: str
     kind: FiscalArchiveKind
     content_sha256: str
@@ -189,13 +191,10 @@ class FiscalArchiveManifest:
     def from_entry(cls, entry: FiscalArchiveEntry) -> FiscalArchiveManifest:
         if not isinstance(entry, FiscalArchiveEntry):
             raise FiscalValidationError("entry must be FiscalArchiveEntry")
+        scope_partition = entry.scope.identity_material
         payload = {
             "entry_id": entry.entry_id,
-            "scope_partition": (
-                entry.scope.tenant_id,
-                entry.scope.unit_id,
-                entry.scope.environment.value,
-            ),
+            "scope_partition": scope_partition,
             "document_reference": entry.document_reference,
             "kind": entry.kind.value,
             "content_sha256": entry.content_sha256,
@@ -208,11 +207,7 @@ class FiscalArchiveManifest:
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
         return cls(
             entry_id=entry.entry_id,
-            scope_partition=(
-                entry.scope.tenant_id,
-                entry.scope.unit_id,
-                entry.scope.environment.value,
-            ),
+            scope_partition=scope_partition,
             document_reference=entry.document_reference,
             kind=entry.kind,
             content_sha256=entry.content_sha256,
@@ -243,17 +238,12 @@ class InMemoryFiscalArchiveStore:
     def __init__(self) -> None:
         self._lock = Lock()
         self._entries: dict[str, FiscalArchiveEntry] = {}
-        self._by_document: dict[tuple[str, str, str, str], list[str]] = {}
+        self._by_document: dict[tuple[str, ...], list[str]] = {}
 
     def append(self, entry: FiscalArchiveEntry) -> FiscalArchiveEntry:
         if not isinstance(entry, FiscalArchiveEntry):
             raise FiscalValidationError("entry must be FiscalArchiveEntry")
-        key = (
-            entry.scope.tenant_id,
-            entry.scope.unit_id,
-            entry.scope.environment.value,
-            entry.document_reference,
-        )
+        key = (*entry.scope.identity_material, entry.document_reference)
         with self._lock:
             existing = self._entries.get(entry.entry_id)
             if existing is not None:
@@ -279,12 +269,7 @@ class InMemoryFiscalArchiveStore:
         if not isinstance(scope, ExecutionScope):
             raise FiscalValidationError("scope must be ExecutionScope")
         reference = _required(document_reference, "document_reference", 256)
-        key = (
-            scope.tenant_id,
-            scope.unit_id,
-            scope.environment.value,
-            reference,
-        )
+        key = (*scope.identity_material, reference)
         with self._lock:
             return tuple(self._entries[entry_id] for entry_id in self._by_document.get(key, ()))
 
