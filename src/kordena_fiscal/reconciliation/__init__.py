@@ -1,4 +1,4 @@
-"""Public sale/payment/fiscal reconciliation surface."""
+"""Public operation/fiscal reconciliation surface."""
 
 from .engine import (
     FiscalReconciliationCandidate,

@@ -1,4 +1,4 @@
-"""Deterministic reconciliation of one settled sale against fiscal attempts."""
+"""Deterministic reconciliation of one settled fiscal operation against attempts."""
 
 from __future__ import annotations
 
@@ -17,6 +17,12 @@ from kordena_fiscal.domain import (
     SourceReference,
 )
 from kordena_fiscal.lifecycle import FiscalDocumentState
+from kordena_fiscal.operations.contract import (
+    FiscalOperationKind,
+    FiscalOperationPayment,
+    FiscalOperationSnapshot,
+    FiscalOperationTotals,
+)
 
 
 class ReconciliationContractError(FiscalDomainError):
@@ -30,15 +36,20 @@ class ReconciliationStatus(StrEnum):
 
 
 class ReconciliationIssueCode(StrEnum):
-    HOST_PAYMENT_MISMATCH = "host_payment_mismatch"
+    OPERATION_PAYMENT_MISMATCH = "operation_payment_mismatch"
     MISSING_AUTHORIZED_FISCAL_DOCUMENT = "missing_authorized_fiscal_document"
     FISCAL_PROCESSING_PENDING = "fiscal_processing_pending"
-    CLOSED_SALE_WITH_CANCELLED_FISCAL = "closed_sale_with_cancelled_fiscal"
+    CLOSED_OPERATION_WITH_CANCELLED_FISCAL = "closed_operation_with_cancelled_fiscal"
     DUPLICATE_AUTHORIZED_FISCAL_DOCUMENT = "duplicate_authorized_fiscal_document"
     PARALLEL_FISCAL_ATTEMPT = "parallel_fiscal_attempt"
-    SALE_FISCAL_TOTAL_MISMATCH = "sale_fiscal_total_mismatch"
+    OPERATION_FISCAL_TOTAL_MISMATCH = "operation_fiscal_total_mismatch"
     FISCAL_PAYMENT_MISMATCH = "fiscal_payment_mismatch"
     PAYMENT_SNAPSHOT_MISMATCH = "payment_snapshot_mismatch"
+
+    # V1 compatibility codes. New V2 callers should use the operation-neutral names.
+    HOST_PAYMENT_MISMATCH = "host_payment_mismatch"
+    CLOSED_SALE_WITH_CANCELLED_FISCAL = "closed_sale_with_cancelled_fiscal"
+    SALE_FISCAL_TOTAL_MISMATCH = "sale_fiscal_total_mismatch"
 
 
 _PENDING_STATES = frozenset(
@@ -54,6 +65,16 @@ _PENDING_STATES = frozenset(
         FiscalDocumentState.CANCEL_REQUESTED,
     }
 )
+
+_LEGACY_ISSUE_CODE_MAP = {
+    ReconciliationIssueCode.OPERATION_PAYMENT_MISMATCH: ReconciliationIssueCode.HOST_PAYMENT_MISMATCH,
+    ReconciliationIssueCode.CLOSED_OPERATION_WITH_CANCELLED_FISCAL: (
+        ReconciliationIssueCode.CLOSED_SALE_WITH_CANCELLED_FISCAL
+    ),
+    ReconciliationIssueCode.OPERATION_FISCAL_TOTAL_MISMATCH: (
+        ReconciliationIssueCode.SALE_FISCAL_TOTAL_MISMATCH
+    ),
+}
 
 
 def _required(value: str, field_name: str, max_length: int = 256) -> str:
@@ -81,7 +102,7 @@ def _validate_money(value: Money, field_name: str) -> Money:
 
 @dataclass(frozen=True, slots=True)
 class HostSettlementSnapshot:
-    """Authoritative host snapshot for one sale considered financially settled."""
+    """Legacy V1 compatibility snapshot for one financially settled sale."""
 
     scope: ExecutionScope
     source: SourceReference
@@ -105,6 +126,28 @@ class HostSettlementSnapshot:
     @property
     def settled_payment_amount(self) -> Money:
         return self.payment_amount - self.change_amount
+
+    def to_operation(self) -> FiscalOperationSnapshot:
+        """Adapt the historical sale snapshot to the universal V2 operation contract."""
+
+        payments: tuple[FiscalOperationPayment, ...] = ()
+        if self.payment_amount.amount > 0:
+            payments = (
+                FiscalOperationPayment(
+                    method="legacy_unspecified",
+                    amount=self.payment_amount,
+                ),
+            )
+        return FiscalOperationSnapshot(
+            scope=self.scope,
+            operation_reference=self.source,
+            operation_kind=FiscalOperationKind.SALE,
+            occurred_at=self.settled_at,
+            totals=FiscalOperationTotals.from_net_amount(self.sale_amount),
+            payments=payments,
+            settled_at=self.settled_at,
+            change_amount=self.change_amount,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -212,17 +255,27 @@ class FiscalReconciliationResult:
         if self.status is ReconciliationStatus.MATCHED and self.issues:
             raise FiscalValidationError("matched reconciliation cannot contain issues")
 
+    @property
+    def operation_reference(self) -> SourceReference:
+        """Universal V2 name for the legacy ``source`` result field."""
+
+        return self.source
+
 
 class FiscalReconciliationEngine:
     """Pure reconciliation service; it performs no provider or host mutation."""
 
-    def reconcile(
+    def reconcile_operation(
         self,
-        host: HostSettlementSnapshot,
+        operation: FiscalOperationSnapshot,
         candidates: tuple[FiscalReconciliationCandidate, ...],
     ) -> FiscalReconciliationResult:
-        if not isinstance(host, HostSettlementSnapshot):
-            raise FiscalValidationError("host must be HostSettlementSnapshot")
+        """Reconcile one settled, host-neutral fiscal operation."""
+
+        if not isinstance(operation, FiscalOperationSnapshot):
+            raise FiscalValidationError("operation must be FiscalOperationSnapshot")
+        if not operation.is_settled:
+            raise FiscalValidationError("operation must be settled before reconciliation")
         if not isinstance(candidates, tuple) or not all(
             isinstance(candidate, FiscalReconciliationCandidate) for candidate in candidates
         ):
@@ -230,15 +283,15 @@ class FiscalReconciliationEngine:
                 "candidates must be a tuple of FiscalReconciliationCandidate"
             )
 
-        self._validate_identity(host, candidates)
-        fingerprint = self._fingerprint(host, candidates)
+        self._validate_identity(operation, candidates)
+        fingerprint = self._fingerprint(operation, candidates)
         issues: list[ReconciliationIssue] = []
 
-        if host.settled_payment_amount.amount != host.sale_amount.amount:
+        if operation.settled_payment_amount.amount != operation.totals.net_amount.amount:
             issues.append(
                 ReconciliationIssue(
-                    code=ReconciliationIssueCode.HOST_PAYMENT_MISMATCH,
-                    message="host payment less change does not equal settled sale amount",
+                    code=ReconciliationIssueCode.OPERATION_PAYMENT_MISMATCH,
+                    message="operation payment less change does not equal operation net amount",
                 )
             )
 
@@ -258,11 +311,11 @@ class FiscalReconciliationEngine:
             issues.append(
                 ReconciliationIssue(
                     code=ReconciliationIssueCode.DUPLICATE_AUTHORIZED_FISCAL_DOCUMENT,
-                    message="more than one authorized fiscal document exists for the sale",
+                    message="more than one authorized fiscal document exists for the operation",
                 )
             )
             return self._result(
-                host,
+                operation,
                 fingerprint,
                 ReconciliationStatus.DIVERGENT,
                 None,
@@ -279,12 +332,12 @@ class FiscalReconciliationEngine:
                         document_id=selected.document_id,
                     )
                 )
-            self._compare_amounts(host, selected, issues)
+            self._compare_amounts(operation, selected, issues)
             status = (
                 ReconciliationStatus.DIVERGENT if issues else ReconciliationStatus.MATCHED
             )
             return self._result(
-                host,
+                operation,
                 fingerprint,
                 status,
                 selected.document_id,
@@ -299,7 +352,7 @@ class FiscalReconciliationEngine:
                 )
             )
             return self._result(
-                host,
+                operation,
                 fingerprint,
                 ReconciliationStatus.PENDING,
                 None,
@@ -309,39 +362,72 @@ class FiscalReconciliationEngine:
         if cancelled:
             issues.append(
                 ReconciliationIssue(
-                    code=ReconciliationIssueCode.CLOSED_SALE_WITH_CANCELLED_FISCAL,
-                    message="settled sale has only cancelled fiscal document evidence",
+                    code=ReconciliationIssueCode.CLOSED_OPERATION_WITH_CANCELLED_FISCAL,
+                    message="settled operation has only cancelled fiscal document evidence",
                 )
             )
         else:
             issues.append(
                 ReconciliationIssue(
                     code=ReconciliationIssueCode.MISSING_AUTHORIZED_FISCAL_DOCUMENT,
-                    message="settled sale has no authorized fiscal document",
+                    message="settled operation has no authorized fiscal document",
                 )
             )
         return self._result(
-            host,
+            operation,
             fingerprint,
             ReconciliationStatus.DIVERGENT,
             None,
             issues,
         )
 
+    def reconcile(
+        self,
+        host: HostSettlementSnapshot,
+        candidates: tuple[FiscalReconciliationCandidate, ...],
+    ) -> FiscalReconciliationResult:
+        """V1 compatibility wrapper over the operation-neutral reconciliation path."""
+
+        if not isinstance(host, HostSettlementSnapshot):
+            raise FiscalValidationError("host must be HostSettlementSnapshot")
+        result = self.reconcile_operation(host.to_operation(), candidates)
+        legacy_issues = tuple(
+            ReconciliationIssue(
+                code=_LEGACY_ISSUE_CODE_MAP.get(issue.code, issue.code),
+                message=issue.message,
+                document_id=issue.document_id,
+            )
+            for issue in result.issues
+        )
+        return FiscalReconciliationResult(
+            status=result.status,
+            scope=result.scope,
+            source=result.source,
+            fingerprint=result.fingerprint,
+            selected_document_id=result.selected_document_id,
+            issues=legacy_issues,
+        )
+
     @staticmethod
     def _validate_identity(
-        host: HostSettlementSnapshot,
+        operation: FiscalOperationSnapshot,
         candidates: tuple[FiscalReconciliationCandidate, ...],
     ) -> None:
         document_ids: set[str] = set()
         for candidate in candidates:
-            if candidate.scope.identity_partition_key != host.scope.identity_partition_key:
+            if (
+                candidate.scope.identity_partition_key
+                != operation.scope.identity_partition_key
+            ):
                 raise ReconciliationContractError(
                     "fiscal candidate crosses host/tenant/unit/environment identity scope"
                 )
-            if candidate.source.canonical_tuple != host.source.canonical_tuple:
+            if (
+                candidate.source.canonical_tuple
+                != operation.operation_reference.canonical_tuple
+            ):
                 raise ReconciliationContractError(
-                    "fiscal candidate does not reference the reconciled host sale"
+                    "fiscal candidate does not reference the reconciled fiscal operation"
                 )
             if candidate.document_id in document_ids:
                 raise ReconciliationContractError("duplicate candidate document_id in input")
@@ -349,15 +435,15 @@ class FiscalReconciliationEngine:
 
     @staticmethod
     def _compare_amounts(
-        host: HostSettlementSnapshot,
+        operation: FiscalOperationSnapshot,
         fiscal: FiscalReconciliationCandidate,
         issues: list[ReconciliationIssue],
     ) -> None:
-        if fiscal.net_amount.amount != host.sale_amount.amount:
+        if fiscal.net_amount.amount != operation.totals.net_amount.amount:
             issues.append(
                 ReconciliationIssue(
-                    code=ReconciliationIssueCode.SALE_FISCAL_TOTAL_MISMATCH,
-                    message="authorized fiscal net amount differs from settled sale amount",
+                    code=ReconciliationIssueCode.OPERATION_FISCAL_TOTAL_MISMATCH,
+                    message="authorized fiscal net amount differs from operation net amount",
                     document_id=fiscal.document_id,
                 )
             )
@@ -370,31 +456,54 @@ class FiscalReconciliationEngine:
                 )
             )
         if (
-            fiscal.payment_amount.amount != host.payment_amount.amount
-            or fiscal.change_amount.amount != host.change_amount.amount
+            fiscal.payment_amount.amount != operation.payment_amount.amount
+            or fiscal.change_amount.amount != operation.change_amount.amount
         ):
             issues.append(
                 ReconciliationIssue(
                     code=ReconciliationIssueCode.PAYMENT_SNAPSHOT_MISMATCH,
-                    message="fiscal payment/change snapshot differs from host settlement",
+                    message="fiscal payment/change snapshot differs from operation settlement",
                     document_id=fiscal.document_id,
                 )
             )
 
     @staticmethod
     def _fingerprint(
-        host: HostSettlementSnapshot,
+        operation: FiscalOperationSnapshot,
         candidates: tuple[FiscalReconciliationCandidate, ...],
     ) -> str:
+        payments = sorted(
+            operation.payments,
+            key=lambda item: (item.method, item.reference or "", str(item.amount.amount)),
+        )
         material = {
-            "tenant_id": host.scope.tenant_id,
-            "unit_id": host.scope.unit_id,
-            "environment": host.scope.environment.value,
-            "source": host.source.canonical_tuple,
-            "sale_amount": str(host.sale_amount.amount),
-            "payment_amount": str(host.payment_amount.amount),
-            "change_amount": str(host.change_amount.amount),
-            "settled_at": host.settled_at.isoformat(),
+            "tenant_id": operation.scope.tenant_id,
+            "unit_id": operation.scope.unit_id,
+            "environment": operation.scope.environment.value,
+            "operation_reference": operation.operation_reference.canonical_tuple,
+            "operation_kind": operation.operation_kind.value,
+            "occurred_at": operation.occurred_at.isoformat(),
+            "settled_at": (
+                operation.settled_at.isoformat()
+                if operation.settled_at is not None
+                else None
+            ),
+            "totals": {
+                "gross_amount": str(operation.totals.gross_amount.amount),
+                "discount_amount": str(operation.totals.discount_amount.amount),
+                "surcharge_amount": str(operation.totals.surcharge_amount.amount),
+                "net_amount": str(operation.totals.net_amount.amount),
+            },
+            "payments": [
+                {
+                    "method": payment.method,
+                    "amount": str(payment.amount.amount),
+                    "reference": payment.reference,
+                }
+                for payment in payments
+            ],
+            "payment_amount": str(operation.payment_amount.amount),
+            "change_amount": str(operation.change_amount.amount),
             "candidates": [
                 {
                     "document_id": candidate.document_id,
@@ -406,14 +515,14 @@ class FiscalReconciliationEngine:
                 for candidate in sorted(candidates, key=lambda item: item.document_id)
             ],
         }
-        if host.scope.host_namespace is not None:
-            material["host_namespace"] = host.scope.host_namespace
+        if operation.scope.host_namespace is not None:
+            material["host_namespace"] = operation.scope.host_namespace
         encoded = json.dumps(material, sort_keys=True, separators=(",", ":")).encode()
         return hashlib.sha256(encoded).hexdigest()
 
     @staticmethod
     def _result(
-        host: HostSettlementSnapshot,
+        operation: FiscalOperationSnapshot,
         fingerprint: str,
         status: ReconciliationStatus,
         selected_document_id: str | None,
@@ -421,8 +530,8 @@ class FiscalReconciliationEngine:
     ) -> FiscalReconciliationResult:
         return FiscalReconciliationResult(
             status=status,
-            scope=host.scope,
-            source=host.source,
+            scope=operation.scope,
+            source=operation.operation_reference,
             fingerprint=fingerprint,
             selected_document_id=selected_document_id,
             issues=tuple(issues),
