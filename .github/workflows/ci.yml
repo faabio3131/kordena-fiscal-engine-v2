@@ -1,14 +1,7 @@
 name: FM Fiscal Core V2 CI
 
 on:
-  push:
-    branches:
-      - main
-      - "feat/**"
-      - "v2/**"
-  pull_request:
-    branches:
-      - main
+  workflow_dispatch:
 
 permissions:
   contents: read
