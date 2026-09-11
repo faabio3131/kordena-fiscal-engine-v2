@@ -529,15 +529,7 @@ def _build_entry_id(
     operation: str,
     deduplication_key: str,
 ) -> str:
-    material = "|".join(
-        (
-            scope.tenant_id,
-            scope.unit_id,
-            scope.environment.value,
-            operation,
-            deduplication_key,
-        )
-    )
+    material = "|".join((*scope.identity_material, operation, deduplication_key))
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
