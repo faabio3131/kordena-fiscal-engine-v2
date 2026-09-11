@@ -3,7 +3,8 @@
 Data de início: 2026-09-11  
 Repositório: `faabio3131/kordena-fiscal-engine-v2`  
 Status global: **EM EXECUÇÃO**  
-Fase ativa: **V2-01 — Identidade FM + neutralização de branding**
+Última fase concluída: **V2-01 — Identidade FM + neutralização de branding**  
+Próxima fase liberada: **V2-02 — Host namespace + fiscal account binding**
 
 ## Regra de governança
 
@@ -14,8 +15,8 @@ Nenhum bloco pode ser marcado `CONCLUÍDO` sem branch, SHA, PR, CI, testes/gates
 | Bloco | Escopo | Status | Evidência / Gate |
 |---|---|---|---|
 | V2-00 | Clone técnico + equivalência | **CONCLUÍDO** | PR #1 Draft; baseline `b336def47ad4f5188307102203f4e04b98406014`; `src/` tree `bd756be69685cecad0907816e93fca8616482553`; `tests/` tree `af98a932eca692a1eb2307879de7afbd01d1f003`; gate SHA `9da776e353b31d03a8453a83c6e61a736e6ed00b`; Actions run `34633874565` SUCCESS; Ruff PASS; Mypy PASS; Pytest 215 PASS |
-| V2-01 | Identidade FM + neutralização de branding | **EM EXECUÇÃO** | branch `v2/fm-fiscal-identity-and-brand`; identidade, Brand System e política de namespace em implementação |
-| V2-02 | Host namespace + fiscal account binding | PENDENTE | depende V2-01 |
+| V2-01 | Identidade FM + neutralização de branding | **CONCLUÍDO** | PR #2 Draft; gate SHA `ac6ad42eeacca2a84675e7e57e04b18414cadf36`; Actions run `34635131000` SUCCESS; distribuição `fm-fiscal-core`; Ruff PASS; Mypy PASS; Pytest 215 PASS |
+| V2-02 | Host namespace + fiscal account binding | PENDENTE | liberado após V2-01 |
 | V2-03 | Fiscal Operation Contract genérico | PENDENTE | depende V2-02 |
 | V2-04 | FM Fiscal Bridge — OpenAPI/JSON Schema/AsyncAPI | PENDENTE | depende V2-03 |
 | V2-05 | Auth S2S + workload identity + webhook security | PENDENTE | depende V2-04 |
@@ -77,6 +78,18 @@ Nenhum bloco pode ser marcado `CONCLUÍDO` sem branch, SHA, PR, CI, testes/gates
 - Design tokens registrados em `docs/brand/fm-fiscal.tokens.json`.
 - Política de identidade/namespace registrada em `docs/V2_01_IDENTITY_NAMESPACE_POLICY.md`.
 - Nenhuma regra fiscal, cálculo, state machine, idempotência, emissão, gateway ou contrato fiscal existente foi alterado neste checkpoint.
-- Próximo gate: CI completo após a alteração da identidade de distribuição.
 
-Decisão: **V2-01 permanece EM EXECUÇÃO até CI e auditoria final do diff. V2-02 continua bloqueado.**
+## Checkpoint V2-01.2 — Identidade certificada — 2026-09-11
+
+- PR #2 criada em Draft e empilhada sobre V2-00.
+- Gate executado no SHA `ac6ad42eeacca2a84675e7e57e04b18414cadf36`.
+- GitHub Actions run `34635131000`: **SUCCESS**.
+- Instalação da distribuição `fm-fiscal-core==0.1.0.dev0`: PASS.
+- Ruff: PASS.
+- Mypy strict: PASS — 45 source files sem issues.
+- Pytest: PASS — **215 passed em 0.80s**.
+- Auditoria do diff contra `820e58001d17d07537f2a1c740a69e092f3cef3c`: mudanças restritas a README, `pyproject.toml`, documentação de identidade/brand/tokens/tracker e CI temporário; nenhuma árvore fiscal de `src/` foi modificada.
+- CI retornado a `workflow_dispatch` após o gate verde para controlar consumo de minutos.
+- Risco residual: namespace Python legado `kordena_fiscal` permanece intencionalmente por compatibilidade e será migrado somente com estratégia explícita e gate próprio.
+
+Decisão: **V2-01 CONCLUÍDO. V2-02 está LIBERADO, mas permanece PENDENTE até abertura formal de sua branch/PR.**
