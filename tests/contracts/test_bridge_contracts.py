@@ -147,7 +147,9 @@ def test_openapi_covers_bridge_operations_transport_and_s2s_security() -> None:
 
     schemes = openapi["components"]["securitySchemes"]
     assert schemes["FMWorkloadCredentialId"] == {
-        "description": "Opaque workload credential identifier used for rotation and revocation lookup.",
+        "description": (
+            "Opaque workload credential identifier used for rotation and revocation lookup."
+        ),
         "in": "header",
         "name": "X-FM-Workload-Credential-Id",
         "type": "apiKey",
