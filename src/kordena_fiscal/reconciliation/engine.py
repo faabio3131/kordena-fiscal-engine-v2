@@ -335,9 +335,9 @@ class FiscalReconciliationEngine:
     ) -> None:
         document_ids: set[str] = set()
         for candidate in candidates:
-            if candidate.scope.partition_key != host.scope.partition_key:
+            if candidate.scope.identity_partition_key != host.scope.identity_partition_key:
                 raise ReconciliationContractError(
-                    "fiscal candidate crosses host tenant/unit/environment scope"
+                    "fiscal candidate crosses host/tenant/unit/environment identity scope"
                 )
             if candidate.source.canonical_tuple != host.source.canonical_tuple:
                 raise ReconciliationContractError(
@@ -406,6 +406,8 @@ class FiscalReconciliationEngine:
                 for candidate in sorted(candidates, key=lambda item: item.document_id)
             ],
         }
+        if host.scope.host_namespace is not None:
+            material["host_namespace"] = host.scope.host_namespace
         encoded = json.dumps(material, sort_keys=True, separators=(",", ":")).encode()
         return hashlib.sha256(encoded).hexdigest()
 
