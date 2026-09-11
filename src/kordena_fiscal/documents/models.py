@@ -32,7 +32,7 @@ class PaymentMethodKind(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class FiscalPaymentSnapshot:
-    """Immutable payment fact captured from the host sale."""
+    """Immutable payment fact captured from the host operation."""
 
     method: PaymentMethodKind
     amount: Money
@@ -156,8 +156,8 @@ class CanonicalFiscalDocument:
             raise FiscalValidationError("issued_at must be timezone-aware")
         if not isinstance(self.issuer, FiscalProfile):
             raise FiscalValidationError("issuer must be FiscalProfile")
-        if self.issuer.scope.partition_key != self.scope.partition_key:
-            raise FiscalValidationError("issuer and document must share the same scope")
+        if self.issuer.scope.identity_partition_key != self.scope.identity_partition_key:
+            raise FiscalValidationError("issuer and document must share the same identity scope")
         if not self.issuer.is_effective_at(self.issued_at):
             raise FiscalValidationError("issuer fiscal profile is not effective at issued_at")
         if not self.items:
@@ -169,8 +169,10 @@ class CanonicalFiscalDocument:
         if len(line_numbers) != len(set(line_numbers)):
             raise FiscalValidationError("line_number values must be unique")
         for item in self.items:
-            if item.product.scope.partition_key != self.scope.partition_key:
-                raise FiscalValidationError("item product and document must share the same scope")
+            if item.product.scope.identity_partition_key != self.scope.identity_partition_key:
+                raise FiscalValidationError(
+                    "item product and document must share the same identity scope"
+                )
             if not item.product.is_effective_at(self.issued_at):
                 raise FiscalValidationError(
                     "item product fiscal profile is not effective at issued_at"
