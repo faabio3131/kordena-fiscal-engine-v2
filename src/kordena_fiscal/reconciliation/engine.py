@@ -67,7 +67,9 @@ _PENDING_STATES = frozenset(
 )
 
 _LEGACY_ISSUE_CODE_MAP = {
-    ReconciliationIssueCode.OPERATION_PAYMENT_MISMATCH: ReconciliationIssueCode.HOST_PAYMENT_MISMATCH,
+    ReconciliationIssueCode.OPERATION_PAYMENT_MISMATCH: (
+        ReconciliationIssueCode.HOST_PAYMENT_MISMATCH
+    ),
     ReconciliationIssueCode.CLOSED_OPERATION_WITH_CANCELLED_FISCAL: (
         ReconciliationIssueCode.CLOSED_SALE_WITH_CANCELLED_FISCAL
     ),
