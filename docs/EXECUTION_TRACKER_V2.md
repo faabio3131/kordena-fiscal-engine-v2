@@ -13,7 +13,7 @@ Nenhum bloco pode ser marcado `CONCLUÍDO` sem branch, SHA, PR, CI, testes/gates
 
 | Bloco | Escopo | Status | Evidência / Gate |
 |---|---|---|---|
-| V2-00 | Clone técnico + equivalência | **EM EXECUÇÃO** | baseline `b336def47ad4f5188307102203f4e04b98406014`; importação e gates em andamento |
+| V2-00 | Clone técnico + equivalência | **EM EXECUÇÃO** | PR #1 Draft; baseline `b336def47ad4f5188307102203f4e04b98406014`; importação e gates em andamento |
 | V2-01 | Identidade FM + neutralização de branding | PENDENTE | depende V2-00 |
 | V2-02 | Host namespace + fiscal account binding | PENDENTE | depende V2-01 |
 | V2-03 | Fiscal Operation Contract genérico | PENDENTE | depende V2-02 |
@@ -40,6 +40,15 @@ Nenhum bloco pode ser marcado `CONCLUÍDO` sem branch, SHA, PR, CI, testes/gates
 - Branch de execução: `v2/foundation-equivalence-and-master-plan`.
 - Plano Mestre criado em `docs/PLANO_MESTRE_EXECUCAO_V2.md`.
 - Baseline de origem fixado em `b336def47ad4f5188307102203f4e04b98406014`.
-- Próximo gate: importar árvore técnica certificada do original sem alteração semântica e validar equivalência.
+- Manifest de equivalência criado em `docs/BASELINE_EQUIVALENCE_MANIFEST.md`.
 
-Decisão: **V2-00 permanece EM EXECUÇÃO.**
+## Checkpoint V2-00.2 — Execução iniciada — 2026-09-11
+
+- PR #1 criada em Draft: `V2-00 — Foundation, Master Plan and Baseline Equivalence`.
+- `.gitignore` e `pyproject.toml` do baseline importados sem alteração semântica.
+- CI criada com os mesmos gates Ruff + Mypy + Pytest; durante a cópia massiva ficou temporariamente em `workflow_dispatch` para evitar consumo desnecessário de minutos. Reativação automática é gate obrigatório antes do fechamento.
+- Primeiro slice técnico importado do SHA certificado: `src/kordena_fiscal/__init__.py` e todo o pacote `src/kordena_fiscal/domain/` (`errors`, `identifiers`, `primitives`, `events`, `product`, `profile` e public surface).
+- Nenhuma refatoração multiproduto foi iniciada; os arquivos importados preservam o comportamento original.
+- Próximo passo: continuar importação dos demais módulos e testes do baseline, depois executar equivalência integral.
+
+Decisão: **V2-00 permanece EM EXECUÇÃO. Não liberar V2-01 antes do gate de equivalência.**
