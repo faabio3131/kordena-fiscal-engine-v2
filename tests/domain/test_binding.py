@@ -69,6 +69,13 @@ def test_binding_resolves_external_scope_to_internal_fiscal_scope() -> None:
     assert scope.unit_id == "funit-001"
     assert scope.environment is FiscalEnvironment.HOMOLOGATION
     assert scope.correlation_id == "corr-001"
+    assert scope.host_namespace == "fm.kordena"
+    assert scope.identity_partition_key == (
+        "fm.kordena",
+        "facc-001",
+        "funit-001",
+        FiscalEnvironment.HOMOLOGATION,
+    )
     assert "tenant-123" not in scope.partition_key
     assert "unit-1" not in scope.partition_key
 
@@ -88,6 +95,26 @@ def test_registry_allows_same_external_ids_in_different_host_namespaces() -> Non
 
     assert registry.resolve(kordena.host_scope).fiscal_account_id.value == "facc-kordena"
     assert registry.resolve(iron.host_scope).fiscal_account_id.value == "facc-iron"
+
+
+def test_same_internal_account_and_unit_remain_partitioned_by_host() -> None:
+    kordena = _binding(binding_id="binding-kordena", namespace="fm.kordena")
+    iron = _binding(binding_id="binding-iron", namespace="fm.iron")
+    registry = FiscalBindingRegistry((kordena, iron))
+
+    kordena_scope = registry.execution_scope(
+        kordena.host_scope,
+        environment=FiscalEnvironment.PRODUCTION,
+        correlation_id="corr-kordena",
+    )
+    iron_scope = registry.execution_scope(
+        iron.host_scope,
+        environment=FiscalEnvironment.PRODUCTION,
+        correlation_id="corr-iron",
+    )
+
+    assert kordena_scope.partition_key == iron_scope.partition_key
+    assert kordena_scope.identity_partition_key != iron_scope.identity_partition_key
 
 
 def test_registry_never_falls_back_across_host_namespace() -> None:
