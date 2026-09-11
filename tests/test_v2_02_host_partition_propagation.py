@@ -14,7 +14,11 @@ from kordena_fiscal.archive import (
     RetentionPolicyMetadata,
 )
 from kordena_fiscal.contingency import FiscalOutboxService, InMemoryFiscalOutboxStore
-from kordena_fiscal.documents import CanonicalFiscalDocument, FiscalLineSnapshot, to_canonical_payload
+from kordena_fiscal.documents import (
+    CanonicalFiscalDocument,
+    FiscalLineSnapshot,
+    to_canonical_payload,
+)
 from kordena_fiscal.domain import (
     BrazilianJurisdiction,
     CnaeCode,
