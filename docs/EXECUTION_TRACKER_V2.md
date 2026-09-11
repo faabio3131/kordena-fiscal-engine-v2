@@ -3,7 +3,8 @@
 Data de início: 2026-09-11  
 Repositório: `faabio3131/kordena-fiscal-engine-v2`  
 Status global: **EM EXECUÇÃO**  
-Fase ativa: **V2-00 — Clone técnico + prova de equivalência**
+Última fase concluída: **V2-00 — Clone técnico + prova de equivalência**  
+Próxima fase liberada: **V2-01 — Identidade FM + neutralização de branding**
 
 ## Regra de governança
 
@@ -13,8 +14,8 @@ Nenhum bloco pode ser marcado `CONCLUÍDO` sem branch, SHA, PR, CI, testes/gates
 
 | Bloco | Escopo | Status | Evidência / Gate |
 |---|---|---|---|
-| V2-00 | Clone técnico + equivalência | **EM EXECUÇÃO** | PR #1 Draft; baseline `b336def47ad4f5188307102203f4e04b98406014`; importação e gates em andamento |
-| V2-01 | Identidade FM + neutralização de branding | PENDENTE | depende V2-00 |
+| V2-00 | Clone técnico + equivalência | **CONCLUÍDO** | PR #1 Draft; baseline `b336def47ad4f5188307102203f4e04b98406014`; `src/` tree `bd756be69685cecad0907816e93fca8616482553`; `tests/` tree `af98a932eca692a1eb2307879de7afbd01d1f003`; gate SHA `9da776e353b31d03a8453a83c6e61a736e6ed00b`; Actions run `34633874565` SUCCESS; Ruff PASS; Mypy PASS; Pytest 215 PASS |
+| V2-01 | Identidade FM + neutralização de branding | PENDENTE | liberado após V2-00; branch/PR ainda não iniciados |
 | V2-02 | Host namespace + fiscal account binding | PENDENTE | depende V2-01 |
 | V2-03 | Fiscal Operation Contract genérico | PENDENTE | depende V2-02 |
 | V2-04 | FM Fiscal Bridge — OpenAPI/JSON Schema/AsyncAPI | PENDENTE | depende V2-03 |
@@ -46,9 +47,24 @@ Nenhum bloco pode ser marcado `CONCLUÍDO` sem branch, SHA, PR, CI, testes/gates
 
 - PR #1 criada em Draft: `V2-00 — Foundation, Master Plan and Baseline Equivalence`.
 - `.gitignore` e `pyproject.toml` do baseline importados sem alteração semântica.
-- CI criada com os mesmos gates Ruff + Mypy + Pytest; durante a cópia massiva ficou temporariamente em `workflow_dispatch` para evitar consumo desnecessário de minutos. Reativação automática é gate obrigatório antes do fechamento.
-- Primeiro slice técnico importado do SHA certificado: `src/kordena_fiscal/__init__.py` e todo o pacote `src/kordena_fiscal/domain/` (`errors`, `identifiers`, `primitives`, `events`, `product`, `profile` e public surface).
-- Nenhuma refatoração multiproduto foi iniciada; os arquivos importados preservam o comportamento original.
-- Próximo passo: continuar importação dos demais módulos e testes do baseline, depois executar equivalência integral.
+- CI criada com os mesmos gates Ruff + Mypy + Pytest; durante a cópia massiva ficou temporariamente em `workflow_dispatch` para evitar consumo desnecessário de minutos.
+- Primeiro slice técnico importado do SHA certificado: `src/kordena_fiscal/__init__.py` e todo o pacote `src/kordena_fiscal/domain/`.
+- Nenhuma refatoração multiproduto foi iniciada; os arquivos importados preservaram o comportamento original.
 
-Decisão: **V2-00 permanece EM EXECUÇÃO. Não liberar V2-01 antes do gate de equivalência.**
+## Checkpoint V2-00.3 — Equivalência certificada — 2026-09-11
+
+- Árvore completa `src/` transportada sem mudança semântica.
+- Suíte completa de 24 arquivos de teste transportada byte-for-byte.
+- Tree SHA `src/` no original e no V2: `bd756be69685cecad0907816e93fca8616482553`.
+- Tree SHA `tests/` no original e no V2: `af98a932eca692a1eb2307879de7afbd01d1f003`.
+- Commit submetido ao gate: `9da776e353b31d03a8453a83c6e61a736e6ed00b`.
+- GitHub Actions run `34633874565`: **SUCCESS**.
+- Install: PASS.
+- Ruff: PASS.
+- Mypy: PASS — 45 source files sem issues.
+- Pytest: PASS — **215 passed**.
+- Diff auditado: diferenças fora da árvore fiscal são apenas governança/documentação/CI do V2 (`INFRA-ONLY`).
+- Risco residual de equivalência: nenhum desvio conhecido em relação ao baseline certificado.
+- CI retornado a `workflow_dispatch` após o gate verde para controlar consumo de minutos.
+
+Decisão: **V2-00 CONCLUÍDO. V2-01 está LIBERADO, mas permanece PENDENTE até a abertura formal de sua branch/PR.**
