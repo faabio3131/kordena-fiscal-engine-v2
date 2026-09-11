@@ -1,6 +1,6 @@
 # V2-02 — Host Namespace + Fiscal Account Binding
 
-Status: **EM EXECUÇÃO**  
+Status: **CONCLUÍDO**  
 Data: 2026-09-11
 
 ## Objetivo
@@ -33,6 +33,7 @@ host namespace + external tenant + external unit
 6. O Core não recebe entidades privadas do host.
 7. O binding não concede autorização; autenticação S2S e workload identity pertencem ao V2-05.
 8. Persistência durável e lifecycle operacional de bindings pertencem ao V2-07/V2-11.
+9. Novas fronteiras host-facing do V2 devem resolver identidade externa por binding antes de construir o `ExecutionScope` interno.
 
 ## Convenção de namespace
 
@@ -52,14 +53,21 @@ O namespace deve ser estável e não conter tenant, unidade, ambiente ou credenc
 
 V2-02 introduz apenas os value objects e contratos puros de binding, mais testes de isolamento. Não adiciona banco, API HTTP, secrets, permissões, provisioning nem integrações reais.
 
-## Gate
+## Gate certificado
 
 - Host namespace validado e normalizado;
 - Host scope possui chave canônica sem colisão cross-product;
 - binding resolve exclusivamente o escopo exato;
 - resolução produz `ExecutionScope` interno sem carregar IDs externos como autoridade fiscal;
 - testes explícitos de isolamento cross-host;
+- Install PASS;
 - Ruff PASS;
-- Mypy strict PASS;
-- Pytest PASS;
-- diff auditado sem regressão fiscal.
+- Mypy strict PASS — 46 source files sem issues;
+- Pytest PASS — 228 passed;
+- GitHub Actions run `34635737969`: SUCCESS;
+- gate SHA `dbb77082be4daba149ba4bb72585bfa77b76a4da`;
+- diff auditado sem alteração em regras fiscais preexistentes.
+
+## Decisão
+
+V2-02 está **CONCLUÍDO**. O contrato de identidade multiproduto passa a ser obrigatório para novas fronteiras externas do FM Fiscal. V2-03 está liberado para construção do Fiscal Operation Contract genérico.
