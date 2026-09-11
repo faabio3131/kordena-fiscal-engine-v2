@@ -1,11 +1,12 @@
 """Canonical fiscal-domain primitives.
 
 These value objects are intentionally host-agnostic. They carry only the minimum
-information required by the fiscal engine and never depend on private Kordena models.
+information required by the fiscal engine and never depend on private host models.
 """
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from decimal import Decimal
 from enum import IntEnum, StrEnum
@@ -43,6 +44,7 @@ _BRAZILIAN_STATES = frozenset(
         "TO",
     }
 )
+_HOST_NAMESPACE_PATTERN = re.compile(r"^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$")
 
 
 def _required_text(value: str, field_name: str, *, max_length: int = 128) -> str:
@@ -51,6 +53,16 @@ def _required_text(value: str, field_name: str, *, max_length: int = 128) -> str
         raise FiscalValidationError(f"{field_name} must not be blank")
     if len(normalized) > max_length:
         raise FiscalValidationError(f"{field_name} exceeds max length {max_length}")
+    return normalized
+
+
+def _normalize_host_namespace(value: str) -> str:
+    normalized = _required_text(value, "host_namespace", max_length=64).lower()
+    if not _HOST_NAMESPACE_PATTERN.fullmatch(normalized):
+        raise FiscalValidationError(
+            "host_namespace must use lowercase letters, digits, '.', '_' or '-' "
+            "and must start/end with an alphanumeric character"
+        )
     return normalized
 
 
@@ -78,12 +90,18 @@ class ElectronicInvoiceModel(IntEnum):
 
 @dataclass(frozen=True, slots=True)
 class ExecutionScope:
-    """Host-neutral tenant/unit scope carried through every fiscal operation."""
+    """Host-neutral fiscal account/unit scope carried through every operation.
+
+    ``host_namespace`` is optional only for compatibility with the certified V1
+    baseline. New host-facing V2 boundaries must populate it through a governed
+    FiscalAccountBinding before entering the Core.
+    """
 
     tenant_id: str
     unit_id: str
     environment: FiscalEnvironment
     correlation_id: str
+    host_namespace: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "tenant_id", _required_text(self.tenant_id, "tenant_id"))
@@ -95,12 +113,40 @@ class ExecutionScope:
         )
         if not isinstance(self.environment, FiscalEnvironment):
             raise FiscalValidationError("environment must be a FiscalEnvironment")
+        if self.host_namespace is not None:
+            object.__setattr__(
+                self,
+                "host_namespace",
+                _normalize_host_namespace(self.host_namespace),
+            )
 
     @property
     def partition_key(self) -> tuple[str, str, FiscalEnvironment]:
-        """Stable partition tuple for repositories, queues and idempotency scopes."""
+        """Legacy-compatible tenant/unit/environment partition tuple."""
 
         return (self.tenant_id, self.unit_id, self.environment)
+
+    @property
+    def identity_partition_key(
+        self,
+    ) -> tuple[str | None, str, str, FiscalEnvironment]:
+        """Universal V2 identity partition including host namespace."""
+
+        return (self.host_namespace, self.tenant_id, self.unit_id, self.environment)
+
+    @property
+    def identity_material(self) -> tuple[str, ...]:
+        """Stable string material for hashes/keys with legacy compatibility.
+
+        Legacy scopes intentionally keep the original three-part material so the
+        certified V1 identities remain stable. Bound V2 scopes add host namespace
+        as the leading partition dimension.
+        """
+
+        legacy = (self.tenant_id, self.unit_id, self.environment.value)
+        if self.host_namespace is None:
+            return legacy
+        return (self.host_namespace, *legacy)
 
 
 @dataclass(frozen=True, slots=True)
