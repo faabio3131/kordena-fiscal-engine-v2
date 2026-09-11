@@ -2,9 +2,6 @@ name: FM Fiscal Core V2 CI
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - v2/foundation-equivalence-and-master-plan
 
 permissions:
   contents: read
