@@ -14,8 +14,8 @@ from kordena_fiscal.domain import (
 )
 from kordena_fiscal.security import (
     CallerIdentity,
-    FixedWindowRateLimiter,
     FiscalCapability,
+    FixedWindowRateLimiter,
     HostScopeGrant,
     InMemorySecurityAuditSink,
     InMemoryWebhookKeyRing,
@@ -30,7 +30,6 @@ from kordena_fiscal.security import (
     WorkloadCredentialRecord,
     WorkloadRateLimitError,
 )
-
 
 NOW = datetime(2026, 9, 11, 20, 0, tzinfo=UTC)
 SECRET = "synthetic-workload-secret-0123456789abcdef"
