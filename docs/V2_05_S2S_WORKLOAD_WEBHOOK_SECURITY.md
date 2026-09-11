@@ -1,6 +1,6 @@
 # V2-05 — Auth S2S, Workload Identity e Webhook Security
 
-Status: **EM EXECUÇÃO**  
+Status: **CONCLUÍDO E CERTIFICADO**  
 Data: 2026-09-11
 
 ## Objetivo
@@ -11,9 +11,7 @@ O V2-05 também define assinatura/verificação de webhooks com rotação de cha
 
 ## Princípio de autoridade
 
-Headers e payloads recebidos do consumidor são **claims não confiáveis**.
-
-A autoridade nasce desta sequência:
+Headers e payloads recebidos do consumidor são **claims não confiáveis**. A autoridade segue obrigatoriamente:
 
 ```text
 credencial de workload
@@ -29,54 +27,31 @@ ExecutionScope interno
 
 O caller nunca escolhe diretamente `FiscalAccountId`, `FiscalUnitId`, perfil fiscal, certificado ou segredo interno.
 
-## Contratos de identidade
+## Identidade e credenciais
 
-`CallerIdentity` contém:
+`CallerIdentity` contém `caller_id`, `host_namespace` fixo, capabilities explícitas e grants de tenant/unidade. `HostScopeGrant` permite todos os tenants/unidades do host, todas as unidades de um tenant ou uma unidade exata. Não existe grant cross-host.
 
-- `caller_id`;
-- `host_namespace` fixo;
-- capabilities explícitas;
-- grants de tenant/unidade dentro do host.
-
-`HostScopeGrant` suporta três níveis intencionais:
-
-- todos os tenants/unidades do host;
-- todas as unidades de um tenant específico;
-- uma unidade exata de um tenant.
-
-Não existe grant cross-host porque o namespace está fixado na identidade autenticada.
-
-## Credenciais e rotação
-
-`WorkloadCredentialRecord` armazena somente:
-
-- `credential_id`;
-- identidade do caller;
-- SHA-256 de um token de alta entropia;
-- janela `valid_from` / `expires_at`;
-- estado de revogação.
-
-O token bruto é aceito apenas no momento da autenticação e não é retido.
+`WorkloadCredentialRecord` retém somente `credential_id`, identidade do caller, SHA-256 do token de alta entropia, janela `valid_from`/`expires_at` e estado de revogação. O token bruto é apresentado na autenticação e não é armazenado pelo contrato de referência.
 
 Múltiplos `credential_id` podem apontar para a mesma `CallerIdentity`, permitindo overlap controlado durante rotação. Credenciais desconhecidas, revogadas, futuras, expiradas ou com segredo incorreto falham fechado.
 
-Este mecanismo é a implementação provider-neutral de referência. Integrações futuras podem substituir a origem da identidade por workload identity gerenciada, mTLS, OIDC ou API Gateway sem alterar a semântica de autorização.
+A implementação é provider-neutral. Uma implantação futura pode obter a identidade via workload identity gerenciada, mTLS, OIDC ou API Gateway sem mudar a semântica de autorização do Core.
 
-## Autorização
+## Autorização fail-closed
 
 `S2SAuthorizer` exige simultaneamente:
 
 1. caller autenticado;
 2. `host_namespace` solicitado idêntico ao da identidade;
 3. capability permitida;
-4. tenant/unidade cobertos por `HostScopeGrant`;
+4. tenant/unidade cobertos pelo grant;
 5. rate policy aprovada, quando configurada;
 6. `FiscalAccountBinding` exato existente;
 7. environment e correlation válidos.
 
 Somente depois dessas validações é criado o `ExecutionScope` fiscal interno.
 
-### Capabilities V2-05
+Capabilities de autoridade do caller introduzidas nesta fase:
 
 - `fiscal.issue`;
 - `fiscal.query`;
@@ -86,36 +61,17 @@ Somente depois dessas validações é criado o `ExecutionScope` fiscal interno.
 - `fiscal.reconcile`;
 - `fiscal.archive.read`.
 
-Capabilities funcionais/readiness do estabelecimento continuam no V2-06. Aqui tratamos apenas **autoridade do caller**.
+Capabilities/readiness funcionais do estabelecimento continuam no V2-06.
 
-## Proteção tenant/unit/profile
+## Proteção de tenant, unidade e perfil
 
-Tenant e unidade externos nunca são promovidos diretamente para autoridade fiscal. O binding exato converte o escopo externo em `FiscalAccountId` e `FiscalUnitId`.
+Tenant e unidade externos nunca são promovidos diretamente para autoridade fiscal. O binding exato converte o escopo externo em `FiscalAccountId` e `FiscalUnitId` internos. Perfil fiscal não é aceito como autoridade fornecida pelo caller; sua seleção permanece propriedade interna do FM Fiscal.
 
-Perfil fiscal não é aceito como autoridade vinda do caller. A seleção/autorização de perfil permanece propriedade interna do FM Fiscal e será conectada ao application service/control plane nas fases correspondentes.
+## Rate limiting e audit trail
 
-## Rate limiting
+`FixedWindowRateLimiter` fornece semântica executável de rate limit por `caller_id`. Nesta fase ele é in-memory; coordenação distribuída pertence ao runtime/persistência posterior.
 
-`FixedWindowRateLimiter` fornece semântica executável e testável de rate limit por `caller_id`.
-
-Ele é propositalmente in-memory nesta fase. Persistência/distribuição e coordenação multi-instância pertencem ao V2-07/V2-11 e infraestrutura de runtime.
-
-## Audit trail
-
-Toda decisão de autorização registra:
-
-- timestamp;
-- caller;
-- credential id;
-- host namespace;
-- tenant;
-- unidade;
-- capability;
-- decisão allowed/denied;
-- reason code;
-- correlation id.
-
-O sink de referência é in-memory. Persistência durável e observabilidade operacional ficam para V2-07/V2-13.
+Toda decisão de autorização registra timestamp, caller, credential id, host namespace, tenant, unidade, capability, resultado allowed/denied, reason code e correlation id. O sink de referência é in-memory; persistência durável e observabilidade ficam para V2-07/V2-13.
 
 ## Webhook security
 
@@ -125,67 +81,55 @@ O sink de referência é in-memory. Persistência durável e observabilidade ope
 unix_timestamp + "." + raw_body
 ```
 
-O header canônico é:
+Header canônico:
 
 ```text
 t=<unix>,kid=<key-id>,v1=<sha256-hmac>
 ```
 
-A verificação exige:
+A verificação exige `key_id` conhecido, HMAC válido com comparação constant-time, assinatura dentro da janela antirreplay, tolerância limitada para clock futuro e corpo byte-for-byte idêntico. `InMemoryWebhookKeyRing` aceita múltiplas chaves, permitindo rotação com uma chave ativa de assinatura e chaves anteriores ainda válidas para verificação.
 
-- `key_id` conhecido;
-- HMAC válido com comparação constant-time;
-- assinatura não expirada;
-- timestamp não excessivamente futuro;
-- corpo byte-for-byte idêntico.
+Segredos reais/vault e rotação operacional ficam no V2-12. Delivery state, retries, DLQ e inbox/outbox de webhook ficam no V2-08.
 
-`InMemoryWebhookKeyRing` aceita múltiplas chaves simultaneamente, permitindo rotação com uma chave ativa para assinatura e chaves anteriores ainda válidas para verificação.
+## Contrato público V1.1
 
-Segredos reais, vault e rotação operacional são V2-12. Delivery state, retries, DLQ e inbox/outbox de webhook são V2-08.
+O FM Fiscal Bridge foi elevado de `1.0.0` para `1.1.0` de forma aditiva:
 
-## Fail-closed obrigatório
+- OpenAPI exige **dois fatores do contrato de workload**: `X-FM-Workload-Credential-Id` + `Authorization: Bearer <opaque-secret>`;
+- `X-FM-Host-Namespace`, tenant, unidade e ambiente permanecem claims e não autoridade;
+- todas as operações documentam 401, 403 e 429 por meio de `CanonicalError` provider-neutral;
+- AsyncAPI exige `X-FM-Webhook-Signature` e registra algoritmo, janela antirreplay e rotação por `key_id`;
+- `https://fiscal.invalid` continua sendo apenas placeholder não roteável; nenhum endpoint real foi declarado.
 
-Devem falhar:
+## Fail-closed certificado
 
-- credencial desconhecida;
-- segredo incorreto;
-- credencial revogada;
-- credencial fora da janela de validade;
-- spoofing Kordena → Iron ou qualquer cross-host;
-- capability ausente;
-- tenant não autorizado;
-- unidade não autorizada;
-- binding inexistente;
-- limite excedido;
-- webhook adulterado;
-- webhook stale;
-- webhook com timestamp futuro além da tolerância;
-- key id de webhook desconhecido.
+A suíte cobre negativamente credencial desconhecida/incorreta/revogada/expirada/futura, spoofing cross-host, capability ausente, cross-tenant, cross-unit, binding inexistente, rate limit, webhook adulterado, webhook stale, timestamp futuro e header malformado. Também cobre rotação de credencial e rotação de chave de webhook.
 
-## Fora de escopo
+## Certificação
 
-- escolha de provedor IAM/cloud;
-- armazenamento real de segredo;
-- OAuth/OIDC/JWT específico de fornecedor;
-- mTLS infrastructure;
-- persistência distribuída de rate limit;
-- application service;
-- banco/migrations;
-- delivery durável de webhook;
-- rules de capability/readiness fiscal do estabelecimento.
+- branch: `v2/s2s-workload-webhook-security`;
+- PR: **#6 Draft**;
+- base V2-04: `1eadc6d95f779b8e5e2a8eaddee03941bc18bf4a`;
+- gate final: `196928d1b0cfe896df0c4741839ce72258f8f4d4`;
+- GitHub Actions run: `34656535435` — **SUCCESS**;
+- Install: PASS — `fm-fiscal-core==0.1.0.dev0`;
+- Ruff: PASS;
+- Mypy strict: PASS — **48 source files sem issues**;
+- Pytest: PASS — **290 passed em 0.82s**;
+- diff auditado contra V2-04: alterações limitadas a segurança S2S/webhook, contratos públicos, testes, documentação e CI temporário;
+- README e demais domínios fiscais permanecem sem mudança de conteúdo em relação à base;
+- nenhum merge ou deploy realizado.
 
-## Gate
+Os gates intermediários `34656063690` e `34656471412` falharam exclusivamente em lint (ordenação de import e uma linha E501). As correções foram somente de formatação; o gate definitivo acima ficou integralmente verde.
 
-- autenticação provider-neutral implementada;
-- rotação/revogação/expiração cobertas;
-- autorização capability + host + tenant + unit fail-closed;
-- binding caller → host provado;
-- audit trail de decisões provado;
-- rate policy provada;
-- assinatura e verificação de webhook provadas;
-- rotação de key de webhook provada;
-- contratos públicos atualizados para exigir workload auth;
-- testes negativos cross-host/cross-tenant/cross-unit verdes;
-- Install, Ruff, Mypy strict e Pytest verdes;
-- diff auditado;
-- PR Draft registrada.
+## Riscos residuais governados
+
+- capability/readiness operacional: V2-06;
+- persistência durável e rate limit distribuído: V2-07/V2-11;
+- delivery/retry/DLQ de webhook: V2-08;
+- secret manager/vault e adapters de identidade de produção: V2-12;
+- observabilidade operacional persistente: V2-13.
+
+## Decisão
+
+**V2-05 CONCLUÍDO E CERTIFICADO. V2-06 — Capability & Readiness API está LIBERADO.**

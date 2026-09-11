@@ -3,25 +3,27 @@
 Data de início: 2026-09-11  
 Repositório: `faabio3131/kordena-fiscal-engine-v2`  
 Status global: **EM EXECUÇÃO**  
-Última fase concluída: **V2-04 — FM Fiscal Bridge — OpenAPI/JSON Schema/AsyncAPI**  
-Próxima fase liberada: **V2-05 — Auth S2S + workload identity + webhook security**
+Última fase concluída: **V2-05 — Auth S2S + Workload Identity + Webhook Security**  
+Próxima fase liberada: **V2-06 — Capability & Readiness API**
+
+> O tracker detalhado anterior ao fechamento do V2-05 foi preservado byte-for-byte em `docs/history/EXECUTION_TRACKER_V2_PRE_V2_05.md`.
 
 ## Regra de governança
 
 Estados permitidos: `PENDENTE`, `EM EXECUÇÃO`, `BLOQUEADO`, `CONCLUÍDO`.
 
-Nenhum bloco pode ser marcado `CONCLUÍDO` sem branch, SHA, PR, CI, testes/gates, revisão do diff e riscos residuais documentados.
+Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, auditoria de diff e riscos residuais documentados. Nenhum merge, deploy, promoção ou cutover é automático.
 
 | Bloco | Escopo | Status | Evidência / Gate |
 |---|---|---|---|
-| V2-00 | Clone técnico + equivalência | **CONCLUÍDO** | PR #1 Draft; baseline `b336def47ad4f5188307102203f4e04b98406014`; `src/` tree `bd756be69685cecad0907816e93fca8616482553`; `tests/` tree `af98a932eca692a1eb2307879de7afbd01d1f003`; gate SHA `9da776e353b31d03a8453a83c6e61a736e6ed00b`; Actions run `34633874565` SUCCESS; Ruff PASS; Mypy PASS; Pytest 215 PASS |
-| V2-01 | Identidade FM + neutralização de branding | **CONCLUÍDO** | PR #2 Draft; gate SHA `ac6ad42eeacca2a84675e7e57e04b18414cadf36`; Actions run `34635131000` SUCCESS; distribuição `fm-fiscal-core`; Ruff PASS; Mypy PASS; Pytest 215 PASS |
-| V2-02 | Host namespace + fiscal account binding | **CONCLUÍDO** | PR #3 Draft; gate definitivo SHA `4fa8a2a8c74db65622099cd7dca43d2e8d19aea3`; Actions run `34637445978` SUCCESS; propagação sequence/idempotency/archive/outbox/reconciliation/audit/document composition; Ruff PASS; Mypy PASS; Pytest 239 PASS |
-| V2-03 | Fiscal Operation Contract genérico | **CONCLUÍDO** | PR #4 Draft; gate SHA `598a2ec83aecd27a5427f3e1e401532e8be2696a`; Actions run `34645939363` SUCCESS; Ruff PASS; Mypy strict PASS — 47 source files; Pytest 262 PASS |
-| V2-04 | FM Fiscal Bridge — OpenAPI/JSON Schema/AsyncAPI | **CONCLUÍDO** | PR #5 Draft; gate SHA `86689b3d3d7d47740b56bcc22594aa8c8e0b08c7`; Actions run `34655024269` SUCCESS; OpenAPI 3.1 + JSON Schema 2020-12 + AsyncAPI 3.0; Ruff PASS; Mypy strict PASS — 47 source files; Pytest 269 PASS |
-| V2-05 | Auth S2S + workload identity + webhook security | PENDENTE | depende V2-04 |
-| V2-06 | Capability & Readiness API | PENDENTE | depende V2-04/V2-05 |
-| V2-07 | Application service + persistência durável | PENDENTE | depende V2-05 |
+| V2-00 | Clone técnico + equivalência | **CONCLUÍDO** | PR #1 Draft; baseline `b336def47ad4f5188307102203f4e04b98406014`; `src/` e `tests/` equivalentes; gate `9da776e353b31d03a8453a83c6e61a736e6ed00b`; run `34633874565` SUCCESS; Pytest 215 PASS |
+| V2-01 | Identidade FM + neutralização de branding | **CONCLUÍDO** | PR #2 Draft; gate `ac6ad42eeacca2a84675e7e57e04b18414cadf36`; run `34635131000` SUCCESS; distribuição `fm-fiscal-core`; Pytest 215 PASS |
+| V2-02 | Host namespace + fiscal account binding | **CONCLUÍDO** | PR #3 Draft; gate `4fa8a2a8c74db65622099cd7dca43d2e8d19aea3`; run `34637445978` SUCCESS; partição host/account/unit/environment; Pytest 239 PASS |
+| V2-03 | Fiscal Operation Contract genérico | **CONCLUÍDO** | PR #4 Draft; gate `598a2ec83aecd27a5427f3e1e401532e8be2696a`; run `34645939363` SUCCESS; 47 source files; Pytest 262 PASS |
+| V2-04 | FM Fiscal Bridge — OpenAPI/JSON Schema/AsyncAPI | **CONCLUÍDO** | PR #5 Draft; gate `86689b3d3d7d47740b56bcc22594aa8c8e0b08c7`; run `34655024269` SUCCESS; contratos v1 language-neutral; 47 source files; Pytest 269 PASS |
+| V2-05 | Auth S2S + workload identity + webhook security | **CONCLUÍDO** | PR #6 Draft; gate `196928d1b0cfe896df0c4741839ce72258f8f4d4`; run `34656535435` SUCCESS; OpenAPI/AsyncAPI v1.1; 48 source files; Pytest 290 PASS |
+| V2-06 | Capability & Readiness API | PENDENTE | **LIBERADO** após V2-05 |
+| V2-07 | Application service + persistência durável | PENDENTE | depende V2-05; integração com V2-06 conforme contrato |
 | V2-08 | Events/Webhooks/Inbox/Outbox | PENDENTE | depende V2-07 |
 | V2-09 | Modularização de verticais | PENDENTE | após contratos core estabilizados |
 | V2-10 | Contract Packs Kordena/Iron/Vendedor/CampaIA | PENDENTE | depende V2-03..V2-09 |
@@ -34,170 +36,74 @@ Nenhum bloco pode ser marcado `CONCLUÍDO` sem branch, SHA, PR, CI, testes/gates
 | V2-17 | Convergência/cutover + arquivamento original | PENDENTE | somente após equivalência e integrações certificadas |
 | V2-18 | Produto comercial independente | PENDENTE | posterior ao uso interno certificado |
 
-## Checkpoint V2-00.1 — Bootstrap — 2026-09-11
+## Checkpoints executivos
 
-- Repositório privado V2 confirmado e acessível pelo GitHub App.
-- `main` inicializada e README atualizado com a estratégia de fork transitório.
-- Branch de execução: `v2/foundation-equivalence-and-master-plan`.
-- Plano Mestre criado em `docs/PLANO_MESTRE_EXECUCAO_V2.md`.
-- Baseline de origem fixado em `b336def47ad4f5188307102203f4e04b98406014`.
-- Manifest de equivalência criado em `docs/BASELINE_EQUIVALENCE_MANIFEST.md`.
+### V2-00 — Equivalência
 
-## Checkpoint V2-00.2 — Execução iniciada — 2026-09-11
+- baseline original congelado em `b336def47ad4f5188307102203f4e04b98406014`;
+- código e suíte de regressão transportados para o V2;
+- gate final: Ruff PASS, Mypy PASS, **215 testes PASS**;
+- nenhuma refatoração multiproduto ocorreu antes da equivalência.
 
-- PR #1 criada em Draft: `V2-00 — Foundation, Master Plan and Baseline Equivalence`.
-- `.gitignore` e `pyproject.toml` do baseline importados sem alteração semântica.
-- CI criada com os mesmos gates Ruff + Mypy + Pytest; durante a cópia massiva ficou temporariamente em `workflow_dispatch` para evitar consumo desnecessário de minutos.
-- Primeiro slice técnico importado do SHA certificado: `src/kordena_fiscal/__init__.py` e todo o pacote `src/kordena_fiscal/domain/`.
-- Nenhuma refatoração multiproduto foi iniciada; os arquivos importados preservaram o comportamento original.
+### V2-01 — Identidade FM Fiscal
 
-## Checkpoint V2-00.3 — Equivalência certificada — 2026-09-11
+- **FM Fiscal** oficializado como produto independente da **FM Tecnologia**;
+- Kordena reclassificado como consumidor/adapter;
+- distribuição Python renomeada para `fm-fiscal-core`;
+- namespace legado `kordena_fiscal` preservado temporariamente por compatibilidade;
+- identidade visual e política de naming registradas e certificadas.
 
-- Árvore completa `src/` transportada sem mudança semântica.
-- Suíte completa de 24 arquivos de teste transportada byte-for-byte.
-- Tree SHA `src/` no original e no V2: `bd756be69685cecad0907816e93fca8616482553`.
-- Tree SHA `tests/` no original e no V2: `af98a932eca692a1eb2307879de7afbd01d1f003`.
-- Commit submetido ao gate: `9da776e353b31d03a8453a83c6e61a736e6ed00b`.
-- GitHub Actions run `34633874565`: **SUCCESS**.
-- Install: PASS.
-- Ruff: PASS.
-- Mypy: PASS — 45 source files sem issues.
-- Pytest: PASS — **215 passed**.
-- Diff auditado: diferenças fora da árvore fiscal são apenas governança/documentação/CI do V2 (`INFRA-ONLY`).
-- Risco residual de equivalência: nenhum desvio conhecido em relação ao baseline certificado.
-- CI retornado a `workflow_dispatch` após o gate verde para controlar consumo de minutos.
+### V2-02 — Identidade multiproduto
 
-## Checkpoint V2-01.1 — Identidade FM Fiscal iniciada — 2026-09-11
+- `HostNamespace`, `HostScope`, `FiscalAccountId`, `FiscalUnitId` e `FiscalAccountBinding` introduzidos;
+- `ExecutionScope.identity_partition_key` passou a incluir host + conta fiscal + unidade fiscal + ambiente;
+- sequência, idempotência, archive, outbox, reconciliação, audit e composição documental passaram a respeitar partição host-aware;
+- spoofing/cross-host falha fechado;
+- gate final: **239 testes PASS**.
 
-- Branch: `v2/fm-fiscal-identity-and-brand`.
-- Produto oficializado como **FM Fiscal**, da **FM Tecnologia**.
-- Kordena reclassificado formalmente como produto consumidor/adapter, não marca-mãe.
-- Distribuição Python renomeada de `kordena-fiscal-engine` para `fm-fiscal-core`.
-- Namespace `kordena_fiscal` preservado temporariamente por compatibilidade; renomeação em massa proibida nesta fase.
-- Brand System registrado em `docs/brand/FM_FISCAL_BRAND_SYSTEM.md`.
-- Design tokens registrados em `docs/brand/fm-fiscal.tokens.json`.
-- Política de identidade/namespace registrada em `docs/V2_01_IDENTITY_NAMESPACE_POLICY.md`.
-- Nenhuma regra fiscal, cálculo, state machine, idempotência, emissão, gateway ou contrato fiscal existente foi alterado neste checkpoint.
+### V2-03 — Operação fiscal neutra
 
-## Checkpoint V2-01.2 — Identidade certificada — 2026-09-11
+- `FiscalOperationSnapshot`, totals, payments e kinds universais introduzidos;
+- venda, mensalidade, assinatura, serviço, cobrança recorrente e SaaS billing suportados;
+- `reconcile_operation(...)` tornou-se rota canônica;
+- `HostSettlementSnapshot` mantido somente como compatibilidade V1;
+- gate final: **262 testes PASS**.
 
-- PR #2 criada em Draft e empilhada sobre V2-00.
-- Gate executado no SHA `ac6ad42eeacca2a84675e7e57e04b18414cadf36`.
-- GitHub Actions run `34635131000`: **SUCCESS**.
-- Instalação da distribuição `fm-fiscal-core==0.1.0.dev0`: PASS.
-- Ruff: PASS.
-- Mypy strict: PASS — 45 source files sem issues.
-- Pytest: PASS — **215 passed em 0.80s**.
-- Auditoria do diff contra `820e58001d17d07537f2a1c740a69e092f3cef3c`: mudanças restritas a README, `pyproject.toml`, documentação de identidade/brand/tokens/tracker e CI temporário; nenhuma árvore fiscal de `src/` foi modificada.
-- CI retornado a `workflow_dispatch` após o gate verde para controlar consumo de minutos.
-- Risco residual: namespace Python legado `kordena_fiscal` permanece intencionalmente por compatibilidade e será migrado somente com estratégia explícita e gate próprio.
+### V2-04 — Bridge language-neutral
 
-## Checkpoint V2-02.1 — Binding multiproduto implementado — 2026-09-11
+- `contracts/v1/` criou OpenAPI 3.1, JSON Schema 2020-12 e AsyncAPI 3.0;
+- emissão, consulta, cancelamento, inutilização, capabilities, reconciliação e archive reference possuem contratos independentes de linguagem/banco;
+- `CanonicalError` provider-neutral e correlation/causation/idempotency formalizados;
+- nenhuma alteração de runtime `src/` nesta fase;
+- gate final: **269 testes PASS**.
 
-- Branch: `v2/host-namespace-fiscal-account-binding`.
-- Documento de invariantes: `docs/V2_02_HOST_NAMESPACE_AND_BINDING.md`.
-- `HostNamespace` introduz namespace estável por aplicação consumidora.
-- `HostScope` qualifica `tenant_id` e `unit_id` externos pelo namespace do host.
-- `FiscalAccountId` e `FiscalUnitId` introduzem identidades fiscais internas opacas.
-- `FiscalAccountBinding` mapeia escopo externo para escopo fiscal interno.
-- `FiscalBindingRegistry` define resolução exata, sem fallback cross-host/cross-unit.
-- Resolução para `ExecutionScope` usa IDs fiscais internos, impedindo que IDs externos sejam tratados como autoridade fiscal.
-- Testes novos cobrem normalização, validação, colisão entre produtos, resolução exata, unidade incorreta e duplicidade de bindings.
-- Autenticação, persistência e provisioning permanecem fora do V2-02 conforme Plano Mestre.
+### V2-05 — S2S, Workload Identity e Webhook Security
 
-## Checkpoint V2-02.2 — Gate inicial de binding — 2026-09-11
+- branch `v2/s2s-workload-webhook-security`;
+- PR #6 Draft sobre V2-04;
+- `CallerIdentity` fixa `host_namespace`, capabilities e grants de tenant/unidade;
+- `WorkloadCredentialRecord` usa segredo opaco com hash, validade, revogação e rotação;
+- `S2SAuthorizer` valida caller → host → capability → grant → binding exato antes de criar `ExecutionScope`;
+- cross-host, cross-tenant e cross-unit falham fechado;
+- rate limiting de referência por caller e audit trail allowed/denied implementados;
+- `WebhookSecurity` usa HMAC-SHA256, `key_id`, janela antirreplay, tolerância de clock e comparação constant-time;
+- rotação de chave de webhook suportada por overlap controlado;
+- Bridge elevado para contrato **v1.1.0**: OpenAPI exige workload credential id + bearer secret; AsyncAPI exige `X-FM-Webhook-Signature`;
+- gate definitivo: `196928d1b0cfe896df0c4741839ce72258f8f4d4`;
+- Actions run `34656535435`: **SUCCESS**;
+- Install PASS; Ruff PASS; Mypy strict PASS — **48 source files sem issues**; Pytest **290 PASS em 0.82s**;
+- diff auditado contra V2-04: somente segurança S2S/webhook, contratos, testes, docs e CI temporário;
+- gates anteriores desta fase falharam somente em lint e foram corrigidos sem mudança semântica;
+- CI retornado a `workflow_dispatch` após certificação;
+- nenhum merge ou deploy executado.
 
-- PR #3 criada em Draft e empilhada sobre V2-01.
-- Gate inicial executado no SHA `dbb77082be4daba149ba4bb72585bfa77b76a4da`.
-- GitHub Actions run `34635737969`: **SUCCESS**.
-- Ruff e Mypy verdes; Pytest **228 passed**.
-- Após reconciliação com o Plano Mestre, o escopo foi ampliado dentro da mesma V2-02 para completar a propagação obrigatória de host namespace em todos os subsistemas de identidade.
+## Riscos residuais governados após V2-05
 
-## Checkpoint V2-02.3 — Partição host-aware propagada — 2026-09-11
+- V2-06 deve transformar capability/readiness em autoridade consultável, versionada e com provenance normativa;
+- persistência/coordenação distribuída de credenciais, rate limit, bindings e auditoria pertence ao runtime/control plane posterior;
+- delivery durável, retries, DLQ e estado de webhooks pertencem ao V2-08;
+- secret manager/vault e identidade de produção serão adapters governados, não regras incorporadas ao Core.
 
-- `ExecutionScope` passou a carregar `host_namespace` e expor `identity_partition_key = host + fiscal account + fiscal unit + environment`, mantendo o `partition_key` legado para compatibilidade.
-- `FiscalAccountBinding` propaga o namespace resolvido ao escopo interno.
-- Sequence Manager passou a separar streams de numeração por host.
-- Idempotency passou a incluir host na identidade de emissão quando presente.
-- Archive e manifest de auditoria passaram a particionar por host; consulta por documento não cruza namespaces.
-- Outbox passou a gerar identidade determinística por host.
-- Reconciliation passou a comparar a partição universal e falhar fechado em tentativa cross-host; fingerprint também inclui host.
-- Canonical serialization registra `host_namespace` para scopes V2-bound.
-- `FiscalDomainEvent` carrega o `ExecutionScope`, portanto a metadata de evento/auditoria preserva o host.
-- Gate intermediário SHA `5e9cd9fec2f98f85503f951c3accaf9816ea8f1b`; run `34636812046` SUCCESS; Pytest **237 passed**.
+## Próxima decisão
 
-## Checkpoint V2-02.4 — Hardening cross-host e certificação definitiva — 2026-09-11
-
-- `CanonicalFiscalDocument` agora valida issuer e product profile pela `identity_partition_key`, não apenas tenant/unit/environment legados.
-- Composição cross-host falha fechado mesmo quando conta/unidade internas têm os mesmos IDs.
-- Testes adicionais cobrem spoofing cross-host de issuer/product e presença do host no snapshot canônico.
-- Gate definitivo executado no SHA `4fa8a2a8c74db65622099cd7dca43d2e8d19aea3`.
-- GitHub Actions run `34637445978`: **SUCCESS**.
-- Install: PASS — `fm-fiscal-core==0.1.0.dev0`.
-- Ruff: PASS.
-- Mypy strict: PASS — **46 source files sem issues**.
-- Pytest: PASS — **239 passed em 0.48s**.
-- Diff auditado contra a base V2-01 `00f8136fa2a2b2ad38e4752a8b55bdc542f239ae`: alterações limitadas ao contrato de identidade/binding, propagação da partição, hardening cross-host, testes e documentação/CI.
-- Compatibilidade preservada: scopes legados sem host mantêm o material determinístico V1; novas fronteiras host-facing devem obrigatoriamente resolver binding antes de ingressar no Core.
-- CI retornado a `workflow_dispatch` após o gate verde.
-- Riscos residuais: autenticação S2S será V2-05; persistência durável de bindings será V2-07/V2-11; neutralização semântica de `sale/HostSettlement` pertence ao V2-03.
-
-## Checkpoint V2-03.1 — Contrato universal e reconciliação neutra — 2026-09-11
-
-- Branch: `v2/generic-fiscal-operation-contract`.
-- PR #4 criada em Draft e empilhada sobre V2-02.
-- `FiscalOperationKind` introduz famílias canônicas: sale, membership, subscription, service, recurring_charge, saas_billing e other.
-- `FiscalOperationPayment`, `FiscalOperationTotals` e `FiscalOperationSnapshot` introduzem o contrato econômico/fiscal host-neutral.
-- `FiscalOperationSnapshot` separa `occurred_at` de `settled_at` e valida a identidade econômica `net = gross - discount + surcharge`.
-- `FiscalReconciliationEngine.reconcile_operation(...)` tornou-se a rota canônica neutra de reconciliação.
-- `HostSettlementSnapshot` permanece como camada de compatibilidade V1 e adapta a venda histórica para `FiscalOperationSnapshot`.
-- Novos códigos de divergência são operation-neutral; o wrapper legado traduz de volta os códigos históricos para preservar compatibilidade.
-- `operation_kind`, totals, pagamentos, timestamps, reference e host namespace participam do fingerprint neutro.
-- Cross-host/cross-account/cross-unit/cross-environment continua fail-closed.
-
-## Checkpoint V2-03.2 — Certificação — 2026-09-11
-
-- Base V2-02: `637b326cab5c179875186201756bd3561bdf008d`.
-- Primeiro gate run `34645774207` falhou somente no Ruff por uma linha `E501`; Mypy/Pytest nem foram executados nesse run.
-- Correção de formatação aplicada sem mudança semântica.
-- Gate definitivo executado no SHA `598a2ec83aecd27a5427f3e1e401532e8be2696a`.
-- GitHub Actions run `34645939363`: **SUCCESS**.
-- Install: PASS — `fm-fiscal-core==0.1.0.dev0`.
-- Ruff: PASS.
-- Mypy strict: PASS — **47 source files sem issues**.
-- Pytest: PASS — **262 passed em 0.77s**.
-- Testes cobrem venda, mensalidade, assinatura, serviço, cobrança recorrente, faturamento SaaS, invariantes econômicos, timestamps, liquidação, cross-host e compatibilidade V1.
-- Diff auditado contra V2-02: mudanças limitadas ao contrato genérico, reconciliação, testes e documentação; nenhuma regra tributária, cálculo, emissão, numeração, assinatura ou provider contract foi modificada.
-- CI retornado a `workflow_dispatch` após o gate verde para controlar consumo de minutos.
-- Riscos residuais governados: contratos language-neutral pertencem ao V2-04; autenticação caller/workload ao V2-05; persistência durável ao V2-07; adapters concretos por produto ao V2-10/V2-16.
-
-## Checkpoint V2-04.1 — FM Fiscal Bridge language-neutral — 2026-09-11
-
-- Branch: `v2/fm-fiscal-bridge-contracts`.
-- PR #5 criada em Draft e empilhada sobre V2-03.
-- Contrato público v1 criado em `contracts/v1/` com manifest `1.0.0`.
-- OpenAPI 3.1 define emissão, consulta, cancelamento, inutilização, capabilities/readiness, reconciliação e archive reference.
-- JSON Schema Draft 2020-12 define tipos canônicos independentes de pacote Python e banco interno.
-- AsyncAPI 3.0 define envelopes versionados para issuance updated, autorização, rejeição, cancelamento, reconciliação e archive reference.
-- Headers de escopo externo transportam host namespace, tenant, unidade e ambiente; correlation e causation são explícitos.
-- Operações mutáveis exigem `Idempotency-Key`.
-- `CanonicalError` é provider-neutral e correlacionável.
-- O OpenAPI usa `https://fiscal.invalid` propositalmente e declara readiness `CONTRACT_ONLY`; nenhum endpoint real, DNS, segredo ou credencial foi criado.
-- Segurança/autorização dos headers permanece bloqueada para V2-05; o V2-04 não trata headers como autoridade.
-- Testes de contract lint provam parseabilidade, versionamento, referências de schema, cobertura das operações, headers obrigatórios, neutralidade de marca/linguagem e erro canônico.
-
-## Checkpoint V2-04.2 — Certificação — 2026-09-11
-
-- Base V2-03: `5014bbfe838f22137451b05203f4b0449061c6f8`.
-- Gate definitivo executado no SHA `86689b3d3d7d47740b56bcc22594aa8c8e0b08c7`.
-- GitHub Actions run `34655024269`: **SUCCESS**.
-- Install: PASS — `fm-fiscal-core==0.1.0.dev0`.
-- Ruff: PASS.
-- Mypy strict: PASS — **47 source files sem issues**.
-- Pytest: PASS — **269 passed em 0.72s**.
-- Diff auditado contra V2-03: somente contratos públicos, documentação, contract tests e ativação temporária do CI; nenhuma árvore de runtime `src/` foi alterada.
-- Contratos públicos não contêm `kordena`, `kordena_fiscal`, Python, SQLAlchemy ou PostgreSQL.
-- CI retornado a `workflow_dispatch` após o gate verde.
-- Riscos residuais governados: autenticação/workload identity e webhook signing no V2-05; implementação real de capabilities no V2-06; application service/persistência no V2-07; delivery durável de eventos no V2-08.
-
-Decisão: **V2-04 CONCLUÍDO E CERTIFICADO. V2-05 está LIBERADO, mas permanece PENDENTE até abertura formal de sua branch/PR.**
+**V2-05 CONCLUÍDO E CERTIFICADO. V2-06 — Capability & Readiness API está LIBERADO e é o próximo bloco de construção.**

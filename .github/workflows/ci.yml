@@ -2,9 +2,6 @@ name: FM Fiscal Core V2 CI
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - v2/s2s-workload-webhook-security
 
 permissions:
   contents: read
