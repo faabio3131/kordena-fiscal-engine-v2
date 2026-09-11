@@ -1,6 +1,6 @@
 # V2-01 — Identity & Namespace Policy
 
-Status: **EM EXECUÇÃO**  
+Status: **CONCLUÍDO**  
 Data: 2026-09-11
 
 ## 1. Objetivo
@@ -90,6 +90,16 @@ V2-01 somente pode ser concluído quando:
 - diff confirmar ausência de alteração semântica fiscal;
 - PR Draft e evidências forem registradas no tracker.
 
-## 8. Decisão
+## 8. Evidência de fechamento
+
+- gate SHA: `ac6ad42eeacca2a84675e7e57e04b18414cadf36`;
+- GitHub Actions run: `34635131000` — SUCCESS;
+- instalação: `fm-fiscal-core==0.1.0.dev0` PASS;
+- Ruff PASS;
+- Mypy strict PASS — 45 source files sem issues;
+- Pytest PASS — 215 testes;
+- auditoria de diff sem alteração da árvore fiscal em `src/`.
+
+## 9. Decisão
 
 V2-01 neutraliza a identidade do produto agora, mas **não sacrifica a compatibilidade técnica por estética de nomenclatura**. O nome Kordena deixa de governar o produto; a retirada do namespace legado ocorre em etapa compatível e testada.
