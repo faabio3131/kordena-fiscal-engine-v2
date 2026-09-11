@@ -3,8 +3,7 @@
 Data de início: 2026-09-11  
 Repositório: `faabio3131/kordena-fiscal-engine-v2`  
 Status global: **EM EXECUÇÃO**  
-Última fase concluída: **V2-00 — Clone técnico + prova de equivalência**  
-Próxima fase liberada: **V2-01 — Identidade FM + neutralização de branding**
+Fase ativa: **V2-01 — Identidade FM + neutralização de branding**
 
 ## Regra de governança
 
@@ -15,7 +14,7 @@ Nenhum bloco pode ser marcado `CONCLUÍDO` sem branch, SHA, PR, CI, testes/gates
 | Bloco | Escopo | Status | Evidência / Gate |
 |---|---|---|---|
 | V2-00 | Clone técnico + equivalência | **CONCLUÍDO** | PR #1 Draft; baseline `b336def47ad4f5188307102203f4e04b98406014`; `src/` tree `bd756be69685cecad0907816e93fca8616482553`; `tests/` tree `af98a932eca692a1eb2307879de7afbd01d1f003`; gate SHA `9da776e353b31d03a8453a83c6e61a736e6ed00b`; Actions run `34633874565` SUCCESS; Ruff PASS; Mypy PASS; Pytest 215 PASS |
-| V2-01 | Identidade FM + neutralização de branding | PENDENTE | liberado após V2-00; branch/PR ainda não iniciados |
+| V2-01 | Identidade FM + neutralização de branding | **EM EXECUÇÃO** | branch `v2/fm-fiscal-identity-and-brand`; identidade, Brand System e política de namespace em implementação |
 | V2-02 | Host namespace + fiscal account binding | PENDENTE | depende V2-01 |
 | V2-03 | Fiscal Operation Contract genérico | PENDENTE | depende V2-02 |
 | V2-04 | FM Fiscal Bridge — OpenAPI/JSON Schema/AsyncAPI | PENDENTE | depende V2-03 |
@@ -67,4 +66,17 @@ Nenhum bloco pode ser marcado `CONCLUÍDO` sem branch, SHA, PR, CI, testes/gates
 - Risco residual de equivalência: nenhum desvio conhecido em relação ao baseline certificado.
 - CI retornado a `workflow_dispatch` após o gate verde para controlar consumo de minutos.
 
-Decisão: **V2-00 CONCLUÍDO. V2-01 está LIBERADO, mas permanece PENDENTE até a abertura formal de sua branch/PR.**
+## Checkpoint V2-01.1 — Identidade FM Fiscal iniciada — 2026-09-11
+
+- Branch: `v2/fm-fiscal-identity-and-brand`.
+- Produto oficializado como **FM Fiscal**, da **FM Tecnologia**.
+- Kordena reclassificado formalmente como produto consumidor/adapter, não marca-mãe.
+- Distribuição Python renomeada de `kordena-fiscal-engine` para `fm-fiscal-core`.
+- Namespace `kordena_fiscal` preservado temporariamente por compatibilidade; renomeação em massa proibida nesta fase.
+- Brand System registrado em `docs/brand/FM_FISCAL_BRAND_SYSTEM.md`.
+- Design tokens registrados em `docs/brand/fm-fiscal.tokens.json`.
+- Política de identidade/namespace registrada em `docs/V2_01_IDENTITY_NAMESPACE_POLICY.md`.
+- Nenhuma regra fiscal, cálculo, state machine, idempotência, emissão, gateway ou contrato fiscal existente foi alterado neste checkpoint.
+- Próximo gate: CI completo após a alteração da identidade de distribuição.
+
+Decisão: **V2-01 permanece EM EXECUÇÃO até CI e auditoria final do diff. V2-02 continua bloqueado.**
