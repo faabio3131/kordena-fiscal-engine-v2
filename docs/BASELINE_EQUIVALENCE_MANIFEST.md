@@ -1,6 +1,6 @@
 # V2-00 — BASELINE EQUIVALENCE MANIFEST
 
-Status: **EM EXECUÇÃO**  
+Status: **CONCLUÍDO**  
 Data: 2026-09-11
 
 ## Fonte congelada
@@ -37,6 +37,40 @@ V2-00 só poderá ser concluído quando:
 7. diff de importação auditado;
 8. PR Draft e CI registrados no tracker.
 
+## Evidência de equivalência certificada — 2026-09-11
+
+Baseline certificado de origem: `b336def47ad4f5188307102203f4e04b98406014`.
+
+Árvores Git comparadas:
+
+- `src/` origem: `bd756be69685cecad0907816e93fca8616482553`;
+- `src/` V2 no gate: `bd756be69685cecad0907816e93fca8616482553`;
+- `tests/` origem: `af98a932eca692a1eb2307879de7afbd01d1f003`;
+- `tests/` V2 no gate: `af98a932eca692a1eb2307879de7afbd01d1f003`;
+- `pyproject.toml` preservado com blob `16d48cd0b47321b64837499e8b74bbabaeeacf22`.
+
+A igualdade dos SHAs de árvore de `src/` e `tests/` prova igualdade byte-for-byte da árvore técnica e da suíte de regressão transportadas para o V2.
+
+Commit submetido ao gate de equivalência: `9da776e353b31d03a8453a83c6e61a736e6ed00b`.
+
+GitHub Actions:
+
+- workflow: `FM Fiscal Core V2 CI`;
+- run: `34633874565`;
+- Install: **PASS**;
+- Ruff: **PASS**;
+- Mypy: **PASS** — 45 source files sem issues;
+- Pytest: **PASS** — 215 passed;
+- conclusão do job `quality`: **SUCCESS**.
+
+Após o gate verde, o workflow foi devolvido a `workflow_dispatch` para evitar consumo desnecessário de minutos enquanto não houver novo gate autorizado.
+
+## Auditoria do diff
+
+A árvore fiscal `src/`, a suíte `tests/` e o `pyproject.toml` permanecem equivalentes ao baseline certificado. Diferenças deliberadas do V2 estão limitadas à governança e infraestrutura do novo repositório, incluindo README, `AGENTS.md`, Plano Mestre, tracker, manifest e configuração de acionamento do CI. Essas diferenças são classificadas como `INFRA-ONLY`/documentais e não alteram semântica fiscal.
+
+Risco residual do V2-00: nenhum desvio conhecido de comportamento em relação ao baseline certificado. Integrações reais, credenciais, homologação externa e universalização pertencem às fases posteriores e não fazem parte do gate de equivalência.
+
 ## Adaptações permitidas no clone
 
 - nome/descrição do repositório em documentação V2;
@@ -46,7 +80,7 @@ V2-00 só poderá ser concluído quando:
 
 Essas adaptações não podem modificar semântica fiscal.
 
-## Progresso
+## Fechamento
 
 - [x] repositório V2 privado criado;
 - [x] baseline SHA/tree congelados;
@@ -54,6 +88,8 @@ Essas adaptações não podem modificar semântica fiscal.
 - [x] Plano Mestre registrado;
 - [x] tracker V2 registrado;
 - [x] governança V2 registrada;
-- [ ] árvore certificada integralmente importada;
-- [ ] suíte integral executada;
-- [ ] equivalência certificada.
+- [x] árvore certificada integralmente importada;
+- [x] suíte integral executada;
+- [x] equivalência certificada.
+
+Decisão: **V2-00 CONCLUÍDO. A universalização só pode avançar a partir desta base certificada.**
