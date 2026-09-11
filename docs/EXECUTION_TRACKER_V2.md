@@ -3,8 +3,8 @@
 Data de início: 2026-09-11  
 Repositório: `faabio3131/kordena-fiscal-engine-v2`  
 Status global: **EM EXECUÇÃO**  
-Última fase concluída: **V2-05 — Auth S2S + Workload Identity + Webhook Security**  
-Fase atual: **V2-06 — Capability & Readiness API — EM EXECUÇÃO**
+Última fase concluída: **V2-06 — Capability & Readiness API**  
+Próxima fase liberada: **V2-07 — Application service + persistência durável**
 
 > O estado imediatamente anterior ao início do V2-06 foi preservado em `docs/history/EXECUTION_TRACKER_V2_PRE_V2_06.md`.
 
@@ -21,9 +21,9 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 | V2-02 | Host namespace + fiscal account binding | **CONCLUÍDO** | PR #3 Draft; gate `4fa8a2a8c74db65622099cd7dca43d2e8d19aea3`; run `34637445978`; Pytest 239 PASS |
 | V2-03 | Fiscal Operation Contract genérico | **CONCLUÍDO** | PR #4 Draft; gate `598a2ec83aecd27a5427f3e1e401532e8be2696a`; run `34645939363`; Pytest 262 PASS |
 | V2-04 | FM Fiscal Bridge — OpenAPI/JSON Schema/AsyncAPI | **CONCLUÍDO** | PR #5 Draft; gate `86689b3d3d7d47740b56bcc22594aa8c8e0b08c7`; run `34655024269`; Pytest 269 PASS |
-| V2-05 | Auth S2S + workload identity + webhook security | **CONCLUÍDO** | PR #6 Draft; gate `196928d1b0cfe896df0c4741839ce72258f8f4d4`; run `34656535435`; Pytest 290 PASS |
-| V2-06 | Capability & Readiness API | **EM EXECUÇÃO** | branch `v2/capability-readiness-api`; implementação e testes candidatos presentes; certificação CI pendente |
-| V2-07 | Application service + persistência durável | PENDENTE | depende do fechamento certificado do V2-06 |
+| V2-05 | Auth S2S + workload identity + webhook security | **CONCLUÍDO** | PR #6 Draft; gate `196928d1b0cfe896df0c4741839ce72258f8f4d4`; run `34656535435`; 48 source files; Pytest 290 PASS |
+| V2-06 | Capability & Readiness API | **CONCLUÍDO** | PR #7 Draft; gate `e6c7b2b9e507116ef4919812153f8e54f84173f3`; run `34659021574` SUCCESS; 49 source files; Pytest 305 PASS |
+| V2-07 | Application service + persistência durável | PENDENTE | **LIBERADO** após V2-06 |
 | V2-08 | Events/Webhooks/Inbox/Outbox | PENDENTE | depende V2-07 |
 | V2-09 | Modularização de verticais | PENDENTE | após contratos core estabilizados |
 | V2-10 | Contract Packs Kordena/Iron/Vendedor/CampaIA | PENDENTE | depende V2-03..V2-09 |
@@ -36,35 +36,36 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 | V2-17 | Convergência/cutover + arquivamento original | PENDENTE | somente após equivalência e integrações certificadas |
 | V2-18 | Produto comercial independente | PENDENTE | posterior ao uso interno certificado |
 
-## Checkpoint V2-06 — em execução
+## Checkpoint V2-06 — concluído e certificado
 
-- baseline imediato: `v2/s2s-workload-webhook-security` com V2-05 certificado;
-- branch de trabalho: `v2/capability-readiness-api`;
+- branch `v2/capability-readiness-api` sobre V2-05 certificado;
+- PR #7 mantida em Draft, mergeable, sem merge;
 - `FiscalActionCapability` torna explícitas `issue`, `query`, `cancel`, `inutilize`, `contingency`, `reconcile` e `archive_reference`;
-- `JurisdictionCapabilityRule` passa a carregar ações explícitas sem alterar a semântica fail-closed existente;
-- `capability_version` é determinístico e não expõe diretamente o `rule_id` interno;
-- `CapabilityReadinessService.query(...)` resolve a declaração efetiva sem promover readiness;
+- `JurisdictionCapabilityRule` carrega ações explícitas sem remover a resolução fail-closed existente;
+- `CapabilityReadinessService.query(...)` retorna declaração efetiva sem promoção implícita de readiness;
 - `CapabilityReadinessService.require_action(...)` exige ação declarada e readiness mínimo por ambiente;
-- homologação requer no mínimo `HOMOLOGATION_READY`;
-- produção requer `PRODUCTION_APPROVED`;
-- família documental não implica permissão operacional;
+- homologação exige no mínimo `HOMOLOGATION_READY`; produção exige `PRODUCTION_APPROVED`;
+- família documental não implica autorização operacional;
 - regra municipal mais específica continua prevalecendo quando aplicável;
-- resposta é compatível com `CapabilityResponse` do FM Fiscal Bridge V1 existente;
-- testes candidatos cobrem NF-e, NFC-e, NFS-e, município, produção, homologação, ausência de ação e contrato público;
-- documentação técnica registrada em `docs/V2_06_CAPABILITY_READINESS_API.md`;
-- nenhum servidor HTTP produtivo, persistência, segredo, merge ou deploy foi introduzido.
+- `capability_version` combina versão governada com fingerprint do conteúdo semântico da regra;
+- resposta permanece compatível com `CapabilityResponse` do FM Fiscal Bridge V1;
+- nenhuma quebra de contrato público, provider, banco, migration, segredo ou endpoint produtivo foi introduzida;
+- gate definitivo: `e6c7b2b9e507116ef4919812153f8e54f84173f3`;
+- Actions run `34659021574`: **SUCCESS**;
+- Install PASS; Ruff PASS; Mypy strict PASS — **49 source files sem issues**; Pytest **305 PASS em 0.85s**;
+- 15 testes adicionados sobre o baseline de 290;
+- diff auditado contra V2-05: 14 commits à frente, 0 atrás, restrito a compliance/capability, testes, docs/tracker e CI temporário;
+- nenhum merge ou deploy executado.
 
-## Gate pendente
+## Riscos residuais governados após V2-06
 
-Antes de marcar V2-06 como `CONCLUÍDO` ainda é obrigatório:
-
-- abrir/manter PR Draft;
-- executar Install, Ruff, Mypy strict e Pytest completos;
-- obter CI definitivo verde e registrar run/SHA;
-- auditar o diff contra V2-05;
-- registrar riscos residuais e decisão de avanço;
-- retornar o CI ao modo controlado após a certificação.
+- persistência e distribuição durável das regras/capabilities pertencem ao V2-07;
+- composição HTTP/application service pertence ao V2-07;
+- inbox/outbox, delivery durável, retries e DLQ pertencem ao V2-08;
+- control plane de promoção/gestão das regras pertence ao V2-11;
+- nenhuma regra real foi promovida a `PRODUCTION_APPROVED` nesta fase; cenários de produção na suíte são sintéticos;
+- cobertura real por UF/município dependerá de regras explicitamente governadas, nunca de fallback implícito.
 
 ## Próxima decisão
 
-**V2-06 permanece EM EXECUÇÃO. Não avançar para V2-07 antes do gate definitivo 100% verde e do fechamento auditável desta fase.**
+**V2-06 CONCLUÍDO E CERTIFICADO. V2-07 — Application service + persistência durável está LIBERADO e é o próximo bloco de construção.**
