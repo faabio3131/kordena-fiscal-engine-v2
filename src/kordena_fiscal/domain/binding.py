@@ -7,13 +7,15 @@ business objects.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 
 from .errors import FiscalValidationError
-from .primitives import ExecutionScope, FiscalEnvironment, _required_text
-
-_NAMESPACE_PATTERN = re.compile(r"^[a-z0-9](?:[a-z0-9._-]{0,62}[a-z0-9])?$")
+from .primitives import (
+    ExecutionScope,
+    FiscalEnvironment,
+    _normalize_host_namespace,
+    _required_text,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,13 +25,7 @@ class HostNamespace:
     value: str
 
     def __post_init__(self) -> None:
-        value = _required_text(self.value, "host_namespace", max_length=64).lower()
-        if not _NAMESPACE_PATTERN.fullmatch(value):
-            raise FiscalValidationError(
-                "host_namespace must use lowercase letters, digits, '.', '_' or '-' "
-                "and must start/end with an alphanumeric character"
-            )
-        object.__setattr__(self, "value", value)
+        object.__setattr__(self, "value", _normalize_host_namespace(self.value))
 
     def __str__(self) -> str:
         return self.value
@@ -139,6 +135,7 @@ class FiscalAccountBinding:
             unit_id=self.fiscal_unit_id.value,
             environment=environment,
             correlation_id=correlation_id,
+            host_namespace=self.host_scope.namespace.value,
         )
 
 
