@@ -16,7 +16,7 @@ Nenhum bloco pode ser marcado `CONCLUÍDO` sem branch, SHA, PR, CI, testes/gates
 |---|---|---|---|
 | V2-00 | Clone técnico + equivalência | **CONCLUÍDO** | PR #1 Draft; baseline `b336def47ad4f5188307102203f4e04b98406014`; `src/` tree `bd756be69685cecad0907816e93fca8616482553`; `tests/` tree `af98a932eca692a1eb2307879de7afbd01d1f003`; gate SHA `9da776e353b31d03a8453a83c6e61a736e6ed00b`; Actions run `34633874565` SUCCESS; Ruff PASS; Mypy PASS; Pytest 215 PASS |
 | V2-01 | Identidade FM + neutralização de branding | **CONCLUÍDO** | PR #2 Draft; gate SHA `ac6ad42eeacca2a84675e7e57e04b18414cadf36`; Actions run `34635131000` SUCCESS; distribuição `fm-fiscal-core`; Ruff PASS; Mypy PASS; Pytest 215 PASS |
-| V2-02 | Host namespace + fiscal account binding | **CONCLUÍDO** | PR #3 Draft; gate SHA `dbb77082be4daba149ba4bb72585bfa77b76a4da`; Actions run `34635737969` SUCCESS; Ruff PASS; Mypy PASS; Pytest 228 PASS |
+| V2-02 | Host namespace + fiscal account binding | **CONCLUÍDO** | PR #3 Draft; gate final SHA `5e9cd9fec2f98f85503f951c3accaf9816ea8f1b`; Actions run `34636812046` SUCCESS; propagação sequence/idempotency/archive/outbox/reconciliation/audit; Ruff PASS; Mypy PASS; Pytest 237 PASS |
 | V2-03 | Fiscal Operation Contract genérico | PENDENTE | liberado após V2-02 |
 | V2-04 | FM Fiscal Bridge — OpenAPI/JSON Schema/AsyncAPI | PENDENTE | depende V2-03 |
 | V2-05 | Auth S2S + workload identity + webhook security | PENDENTE | depende V2-04 |
@@ -105,18 +105,35 @@ Nenhum bloco pode ser marcado `CONCLUÍDO` sem branch, SHA, PR, CI, testes/gates
 - Testes novos cobrem normalização, validação, colisão entre produtos, resolução exata, unidade incorreta e duplicidade de bindings.
 - Autenticação, persistência e provisioning permanecem fora do V2-02 conforme Plano Mestre.
 
-## Checkpoint V2-02.2 — Binding multiproduto certificado — 2026-09-11
+## Checkpoint V2-02.2 — Gate inicial de binding — 2026-09-11
 
 - PR #3 criada em Draft e empilhada sobre V2-01.
-- Gate executado no SHA `dbb77082be4daba149ba4bb72585bfa77b76a4da`.
+- Gate inicial executado no SHA `dbb77082be4daba149ba4bb72585bfa77b76a4da`.
 - GitHub Actions run `34635737969`: **SUCCESS**.
-- Install: PASS — distribuição `fm-fiscal-core==0.1.0.dev0`.
+- Ruff e Mypy verdes; Pytest **228 passed**.
+- Após reconciliação com o Plano Mestre, o escopo foi ampliado dentro da mesma V2-02 para completar a propagação obrigatória de host namespace em todos os subsistemas de identidade.
+
+## Checkpoint V2-02.3 — Partição host-aware propagada e certificada — 2026-09-11
+
+- `ExecutionScope` passou a carregar `host_namespace` e expor `identity_partition_key = host + fiscal account + fiscal unit + environment`, mantendo o `partition_key` legado para compatibilidade.
+- `FiscalAccountBinding` propaga o namespace resolvido ao escopo interno.
+- Sequence Manager passou a separar streams de numeração por host.
+- Idempotency passou a incluir host na identidade de emissão quando presente.
+- Archive e manifest de auditoria passaram a particionar por host; consulta por documento não cruza namespaces.
+- Outbox passou a gerar identidade determinística por host.
+- Reconciliation passou a comparar a partição universal e falhar fechado em tentativa cross-host; fingerprint também inclui host.
+- Canonical serialization registra `host_namespace` para scopes V2-bound.
+- `FiscalDomainEvent` já carrega o `ExecutionScope`, portanto a metadata de evento/auditoria preserva o host.
+- Testes de colisão usam `fm.kordena`, `fm.iron`, `fm.vendedor-ia` e `fm.campaia` com os mesmos IDs locais.
+- Gate final executado no SHA `5e9cd9fec2f98f85503f951c3accaf9816ea8f1b`.
+- GitHub Actions run `34636812046`: **SUCCESS**.
+- Install: PASS — `fm-fiscal-core==0.1.0.dev0`.
 - Ruff: PASS.
 - Mypy strict: PASS — **46 source files sem issues**.
-- Pytest: PASS — **228 passed em 0.70s**.
-- Auditoria do diff contra `00f8136fa2a2b2ad38e4752a8b55bdc542f239ae`: alterações limitadas ao novo contrato de binding, sua superfície pública, testes, documentação/tracker e CI temporário.
-- Nenhuma regra fiscal preexistente de cálculo, emissão, lifecycle, idempotência, gateway, reconciliação ou documentos foi modificada.
-- CI retornado a `workflow_dispatch` após o gate verde para controlar consumo de minutos.
-- Risco residual controlado: `ExecutionScope` legado continua construtível diretamente para compatibilidade interna; novas fronteiras host-facing do V2 deverão obrigatoriamente resolver `HostScope` por binding antes de ingressar no Core.
+- Pytest: PASS — **237 passed em 0.66s**.
+- Diff auditado contra a base V2-01 `00f8136fa2a2b2ad38e4752a8b55bdc542f239ae`: alterações limitadas ao contrato de identidade/binding, propagação de partição, testes e documentação/CI.
+- Compatibilidade preservada: scopes legados sem host mantêm o material determinístico V1; novas fronteiras host-facing devem obrigatoriamente resolver binding antes de ingressar no Core.
+- CI retornado a `workflow_dispatch` após o gate verde.
+- Riscos residuais: autenticação S2S será V2-05; persistência durável de bindings será V2-07/V2-11; neutralização semântica de `sale/HostSettlement` pertence ao V2-03.
 
-Decisão: **V2-02 CONCLUÍDO. V2-03 está LIBERADO, mas permanece PENDENTE até abertura formal de sua branch/PR.**
+Decisão: **V2-02 CONCLUÍDO E CERTIFICADO. V2-03 está LIBERADO, mas permanece PENDENTE até abertura formal de sua branch/PR.**
