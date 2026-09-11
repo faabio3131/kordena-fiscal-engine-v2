@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from enum import IntEnum, StrEnum
+from hashlib import sha256
 
 from kordena_fiscal.domain import (
     BrazilianJurisdiction,
@@ -144,9 +145,10 @@ class JurisdictionCapabilityRule:
 
     @property
     def capability_version(self) -> str:
-        """Stable public capability version derived from the governed rule identity."""
+        """Stable public version token without leaking internal rule identifiers."""
 
-        return f"{self.rule_id}:{self.version}"
+        rule_digest = sha256(self.rule_id.encode("utf-8")).hexdigest()[:16]
+        return f"r{self.version}-{rule_digest}"
 
 
 class JurisdictionCapabilityMatrix:
