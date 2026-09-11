@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from enum import IntEnum
+from enum import IntEnum, StrEnum
 
 from kordena_fiscal.domain import (
     BrazilianJurisdiction,
@@ -27,6 +27,18 @@ class FiscalCapabilityLevel(IntEnum):
     CONTRACT_ONLY = 1
     HOMOLOGATION_READY = 2
     PRODUCTION_APPROVED = 3
+
+
+class FiscalActionCapability(StrEnum):
+    """Actions that must be declared explicitly for one jurisdiction rule."""
+
+    ISSUE = "issue"
+    QUERY = "query"
+    CANCEL = "cancel"
+    INUTILIZE = "inutilize"
+    CONTINGENCY = "contingency"
+    RECONCILE = "reconcile"
+    ARCHIVE_REFERENCE = "archive_reference"
 
 
 def _required(value: str, field_name: str, max_length: int = 256) -> str:
@@ -60,6 +72,7 @@ class JurisdictionCapabilityRule:
     municipality_ibge_code: str | None = None
     effective_to: datetime | None = None
     priority: int = 0
+    capabilities: frozenset[FiscalActionCapability] = frozenset()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "rule_id", _required(self.rule_id, "rule_id", 128))
@@ -96,6 +109,12 @@ class JurisdictionCapabilityRule:
             or self.priority < 0
         ):
             raise FiscalValidationError("priority must be an integer >= 0")
+        if not isinstance(self.capabilities, frozenset) or not all(
+            isinstance(capability, FiscalActionCapability) for capability in self.capabilities
+        ):
+            raise FiscalValidationError(
+                "capabilities must be a frozenset of FiscalActionCapability"
+            )
 
     def matches(
         self,
@@ -122,6 +141,12 @@ class JurisdictionCapabilityRule:
     @property
     def rank(self) -> tuple[int, int]:
         return (1 if self.municipality_ibge_code is not None else 0, self.priority)
+
+    @property
+    def capability_version(self) -> str:
+        """Stable public capability version derived from the governed rule identity."""
+
+        return f"{self.rule_id}:{self.version}"
 
 
 class JurisdictionCapabilityMatrix:
