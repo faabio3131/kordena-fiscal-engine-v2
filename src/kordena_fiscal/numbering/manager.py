@@ -14,6 +14,7 @@ from kordena_fiscal.domain import (
     FiscalEnvironment,
     FiscalValidationError,
 )
+from kordena_fiscal.domain.primitives import _normalize_host_namespace
 
 
 class SequenceExhaustedError(FiscalDomainError):
@@ -33,6 +34,7 @@ class FiscalSequenceKey:
     environment: FiscalEnvironment
     model: ElectronicInvoiceModel
     series: int
+    host_namespace: str | None = None
 
     def __post_init__(self) -> None:
         tenant_id = self.tenant_id.strip()
@@ -51,6 +53,12 @@ class FiscalSequenceKey:
             raise FiscalValidationError("series must be non-negative")
         object.__setattr__(self, "tenant_id", tenant_id)
         object.__setattr__(self, "unit_id", unit_id)
+        if self.host_namespace is not None:
+            object.__setattr__(
+                self,
+                "host_namespace",
+                _normalize_host_namespace(self.host_namespace),
+            )
 
     @classmethod
     def from_scope(
@@ -68,19 +76,21 @@ class FiscalSequenceKey:
             environment=scope.environment,
             model=model,
             series=series,
+            host_namespace=scope.host_namespace,
         )
 
     @property
     def canonical_material(self) -> str:
-        return "|".join(
-            (
-                self.tenant_id,
-                self.unit_id,
-                self.environment.value,
-                str(self.model.value),
-                str(self.series),
-            )
+        legacy = (
+            self.tenant_id,
+            self.unit_id,
+            self.environment.value,
+            str(self.model.value),
+            str(self.series),
         )
+        if self.host_namespace is None:
+            return "|".join(legacy)
+        return "|".join((self.host_namespace, *legacy))
 
 
 @dataclass(frozen=True, slots=True)
