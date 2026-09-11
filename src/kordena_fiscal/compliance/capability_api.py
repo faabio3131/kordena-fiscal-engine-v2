@@ -93,7 +93,7 @@ class CapabilityReadinessSnapshot:
             raise FiscalValidationError("actions must contain FiscalActionCapability values")
         if len(self.actions) != len(set(self.actions)):
             raise FiscalValidationError("actions must not contain duplicates")
-        object.__setattr__(self, "provenance", _required(self.provenance, "provenance", 1000))
+        object.__setattr__(self, "provenance", _required(self.provenance, "provenance", 512))
         if not isinstance(self.validation_mode, TechnicalValidationMode):
             raise FiscalValidationError("validation_mode must be TechnicalValidationMode")
         _aware(self.effective_from, "effective_from")
@@ -135,9 +135,7 @@ class CapabilityReadinessService:
         rule: JurisdictionCapabilityRule,
         jurisdiction: BrazilianJurisdiction,
     ) -> CapabilityReadinessSnapshot:
-        actions = tuple(
-            action for action in _ACTION_ORDER if action in rule.capabilities
-        )
+        actions = tuple(action for action in _ACTION_ORDER if action in rule.capabilities)
         return CapabilityReadinessSnapshot(
             jurisdiction=jurisdiction,
             document_kind=rule.document_kind,
