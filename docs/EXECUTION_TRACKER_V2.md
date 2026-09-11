@@ -3,8 +3,7 @@
 Data de início: 2026-09-11  
 Repositório: `faabio3131/kordena-fiscal-engine-v2`  
 Status global: **EM EXECUÇÃO**  
-Última fase concluída: **V2-01 — Identidade FM + neutralização de branding**  
-Próxima fase liberada: **V2-02 — Host namespace + fiscal account binding**
+Fase ativa: **V2-02 — Host namespace + fiscal account binding**
 
 ## Regra de governança
 
@@ -16,7 +15,7 @@ Nenhum bloco pode ser marcado `CONCLUÍDO` sem branch, SHA, PR, CI, testes/gates
 |---|---|---|---|
 | V2-00 | Clone técnico + equivalência | **CONCLUÍDO** | PR #1 Draft; baseline `b336def47ad4f5188307102203f4e04b98406014`; `src/` tree `bd756be69685cecad0907816e93fca8616482553`; `tests/` tree `af98a932eca692a1eb2307879de7afbd01d1f003`; gate SHA `9da776e353b31d03a8453a83c6e61a736e6ed00b`; Actions run `34633874565` SUCCESS; Ruff PASS; Mypy PASS; Pytest 215 PASS |
 | V2-01 | Identidade FM + neutralização de branding | **CONCLUÍDO** | PR #2 Draft; gate SHA `ac6ad42eeacca2a84675e7e57e04b18414cadf36`; Actions run `34635131000` SUCCESS; distribuição `fm-fiscal-core`; Ruff PASS; Mypy PASS; Pytest 215 PASS |
-| V2-02 | Host namespace + fiscal account binding | PENDENTE | liberado após V2-01 |
+| V2-02 | Host namespace + fiscal account binding | **EM EXECUÇÃO** | branch `v2/host-namespace-fiscal-account-binding`; contratos e isolamento cross-host implementados; gate pendente |
 | V2-03 | Fiscal Operation Contract genérico | PENDENTE | depende V2-02 |
 | V2-04 | FM Fiscal Bridge — OpenAPI/JSON Schema/AsyncAPI | PENDENTE | depende V2-03 |
 | V2-05 | Auth S2S + workload identity + webhook security | PENDENTE | depende V2-04 |
@@ -92,4 +91,17 @@ Nenhum bloco pode ser marcado `CONCLUÍDO` sem branch, SHA, PR, CI, testes/gates
 - CI retornado a `workflow_dispatch` após o gate verde para controlar consumo de minutos.
 - Risco residual: namespace Python legado `kordena_fiscal` permanece intencionalmente por compatibilidade e será migrado somente com estratégia explícita e gate próprio.
 
-Decisão: **V2-01 CONCLUÍDO. V2-02 está LIBERADO, mas permanece PENDENTE até abertura formal de sua branch/PR.**
+## Checkpoint V2-02.1 — Binding multiproduto implementado — 2026-09-11
+
+- Branch: `v2/host-namespace-fiscal-account-binding`.
+- Documento de invariantes: `docs/V2_02_HOST_NAMESPACE_AND_BINDING.md`.
+- `HostNamespace` introduz namespace estável por aplicação consumidora.
+- `HostScope` qualifica `tenant_id` e `unit_id` externos pelo namespace do host.
+- `FiscalAccountId` e `FiscalUnitId` introduzem identidades fiscais internas opacas.
+- `FiscalAccountBinding` mapeia escopo externo para escopo fiscal interno.
+- `FiscalBindingRegistry` define resolução exata, sem fallback cross-host/cross-unit.
+- Resolução para `ExecutionScope` usa IDs fiscais internos, impedindo que IDs externos sejam tratados como autoridade fiscal.
+- Testes novos cobrem normalização, validação, colisão entre produtos, resolução exata, unidade incorreta e duplicidade de bindings.
+- Autenticação, persistência e provisioning permanecem fora do V2-02 conforme Plano Mestre.
+
+Decisão: **V2-02 permanece EM EXECUÇÃO até PR Draft, CI completo e auditoria final do diff. V2-03 continua bloqueado.**
