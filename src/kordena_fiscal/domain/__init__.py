@@ -1,5 +1,13 @@
-"""Public canonical domain surface for Kordena Fiscal Engine."""
+"""Public canonical domain surface for FM Fiscal Core."""
 
+from .binding import (
+    FiscalAccountBinding,
+    FiscalAccountId,
+    FiscalBindingRegistry,
+    FiscalUnitId,
+    HostNamespace,
+    HostScope,
+)
 from .errors import FiscalDomainError, FiscalValidationError
 from .events import FiscalDomainEvent
 from .identifiers import CnaeCode, Cnpj
@@ -36,7 +44,10 @@ __all__ = [
     "Cnpj",
     "ElectronicInvoiceModel",
     "ExecutionScope",
+    "FiscalAccountBinding",
+    "FiscalAccountId",
     "FiscalAddress",
+    "FiscalBindingRegistry",
     "FiscalDocumentKind",
     "FiscalDomainError",
     "FiscalDomainEvent",
@@ -44,8 +55,11 @@ __all__ = [
     "FiscalProductProfile",
     "FiscalProfile",
     "FiscalUnitCode",
+    "FiscalUnitId",
     "FiscalValidationError",
     "Gtin",
+    "HostNamespace",
+    "HostScope",
     "Money",
     "MunicipalRegistration",
     "NcmCode",
