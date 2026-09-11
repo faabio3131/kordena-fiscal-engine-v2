@@ -157,15 +157,18 @@ def to_canonical_payload(document: CanonicalFiscalDocument) -> dict[str, Any]:
     """Return a JSON-safe canonical snapshot without provider/XML assumptions."""
 
     totals = document.totals
+    scope_payload: dict[str, Any] = {
+        "tenant_id": document.scope.tenant_id,
+        "unit_id": document.scope.unit_id,
+        "environment": document.scope.environment.value,
+        "correlation_id": document.scope.correlation_id,
+    }
+    if document.scope.host_namespace is not None:
+        scope_payload["host_namespace"] = document.scope.host_namespace
     return {
         "schema_version": document.schema_version,
         "document_id": document.document_id,
-        "scope": {
-            "tenant_id": document.scope.tenant_id,
-            "unit_id": document.scope.unit_id,
-            "environment": document.scope.environment.value,
-            "correlation_id": document.scope.correlation_id,
-        },
+        "scope": scope_payload,
         "source": {
             "source_type": document.source.source_type,
             "source_id": document.source.source_id,
