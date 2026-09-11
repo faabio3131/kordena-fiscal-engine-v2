@@ -145,9 +145,26 @@ class JurisdictionCapabilityRule:
 
     @property
     def capability_version(self) -> str:
-        """Stable public version token without leaking internal rule identifiers."""
+        """Stable public token that changes when governed rule semantics change."""
 
-        rule_digest = sha256(self.rule_id.encode("utf-8")).hexdigest()[:16]
+        material = "|".join(
+            (
+                self.rule_id,
+                str(self.version),
+                self.state_code,
+                self.municipality_ibge_code or "",
+                self.document_kind.value,
+                self.environment.value,
+                self.capability_level.name,
+                self.validation_mode.value,
+                self.effective_from.isoformat(),
+                self.effective_to.isoformat() if self.effective_to is not None else "",
+                str(self.priority),
+                ",".join(sorted(capability.value for capability in self.capabilities)),
+                self.source_normative,
+            )
+        )
+        rule_digest = sha256(material.encode("utf-8")).hexdigest()[:16]
         return f"r{self.version}-{rule_digest}"
 
 
