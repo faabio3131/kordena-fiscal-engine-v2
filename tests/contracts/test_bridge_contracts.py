@@ -44,11 +44,25 @@ def _parameter_names(openapi: dict[str, Any], operation: dict[str, Any]) -> set[
     return names
 
 
+def _response(openapi: dict[str, Any], response: dict[str, Any]) -> dict[str, Any]:
+    ref = response.get("$ref")
+    if ref is None:
+        return response
+    prefix = "#/components/responses/"
+    assert ref.startswith(prefix), ref
+    name = ref.removeprefix(prefix)
+    resolved = openapi["components"]["responses"][name]
+    assert isinstance(resolved, dict)
+    return resolved
+
+
 def test_manifest_and_artifacts_are_versioned_json_contracts() -> None:
     manifest = _load(MANIFEST_PATH)
     assert manifest["name"] == "FM Fiscal Bridge"
-    assert manifest["contract_version"] == "1.0.0"
+    assert manifest["contract_version"] == "1.1.0"
     assert manifest["status"] == "CONTRACT_ONLY"
+    assert manifest["security_stage"] == "V2-05_CERTIFIED"
+    assert manifest["authentication"]["model"] == "S2S_WORKLOAD_IDENTITY"
     assert manifest["openapi"] == "openapi.json"
     assert manifest["asyncapi"] == "asyncapi.json"
     assert manifest["canonical_schema"] == "schemas/fm-fiscal.schema.json"
@@ -119,12 +133,27 @@ def test_json_schema_exposes_all_canonical_bridge_shapes() -> None:
     ]
 
 
-def test_openapi_covers_bridge_operations_and_transport_metadata() -> None:
+def test_openapi_covers_bridge_operations_transport_and_s2s_security() -> None:
     openapi = _load(OPENAPI_PATH)
     assert openapi["openapi"] == "3.1.0"
-    assert openapi["info"]["version"] == "1.0.0"
+    assert openapi["info"]["version"] == "1.1.0"
     assert openapi["x-fm-contract-readiness"] == "CONTRACT_ONLY"
-    assert openapi["security"] == []
+    assert openapi["x-fm-authentication-stage"] == "V2-05_CERTIFIED"
+    assert openapi["x-fm-authentication-model"] == "S2S_WORKLOAD_IDENTITY"
+    assert "untrusted claims" in openapi["x-fm-scope-authority"]
+    assert openapi["security"] == [
+        {"FMWorkloadBearer": [], "FMWorkloadCredentialId": []}
+    ]
+
+    schemes = openapi["components"]["securitySchemes"]
+    assert schemes["FMWorkloadCredentialId"] == {
+        "description": "Opaque workload credential identifier used for rotation and revocation lookup.",
+        "in": "header",
+        "name": "X-FM-Workload-Credential-Id",
+        "type": "apiKey",
+    }
+    assert schemes["FMWorkloadBearer"]["type"] == "http"
+    assert schemes["FMWorkloadBearer"]["scheme"] == "bearer"
 
     expected_paths = {
         "/v1/issuances",
@@ -151,6 +180,7 @@ def test_openapi_covers_bridge_operations_and_transport_metadata() -> None:
         "/v1/inutilizations",
         "/v1/reconciliations",
     }
+    schema_defs = _load(SCHEMA_PATH)["$defs"]
 
     for path in expected_paths:
         operation = _operation(openapi, path)
@@ -162,17 +192,19 @@ def test_openapi_covers_bridge_operations_and_transport_metadata() -> None:
             assert "Idempotency-Key" not in names
 
         request_ref = operation["requestBody"]["content"]["application/json"]["schema"]["$ref"]
-        assert _schema_ref_name(request_ref) in _load(SCHEMA_PATH)["$defs"]
+        assert _schema_ref_name(request_ref) in schema_defs
+        assert {"401", "403", "429"} <= set(operation["responses"])
 
         for response in operation["responses"].values():
-            content = response.get("content")
+            resolved = _response(openapi, response)
+            content = resolved.get("content")
             if content is None:
                 continue
             ref = content["application/json"]["schema"]["$ref"]
-            assert _schema_ref_name(ref) in _load(SCHEMA_PATH)["$defs"]
+            assert _schema_ref_name(ref) in schema_defs
 
 
-def test_openapi_declares_no_live_server_or_v2_05_security_scheme() -> None:
+def test_openapi_declares_only_non_routable_documentation_server() -> None:
     openapi = _load(OPENAPI_PATH)
     assert openapi["servers"] == [
         {
@@ -183,16 +215,25 @@ def test_openapi_declares_no_live_server_or_v2_05_security_scheme() -> None:
             "url": "https://fiscal.invalid",
         }
     ]
-    assert "securitySchemes" not in openapi["components"]
-    assert openapi["x-fm-authentication-stage"] == "V2-05"
 
 
-def test_asyncapi_exposes_versioned_event_envelopes() -> None:
+def test_asyncapi_exposes_versioned_signed_event_envelopes() -> None:
     asyncapi = _load(ASYNCAPI_PATH)
     schema = _load(SCHEMA_PATH)
     assert asyncapi["asyncapi"] == "3.0.0"
-    assert asyncapi["info"]["version"] == "1.0.0"
+    assert asyncapi["info"]["version"] == "1.1.0"
     assert asyncapi["x-fm-contract-readiness"] == "CONTRACT_ONLY"
+
+    signature = asyncapi["x-fm-webhook-signature"]
+    assert signature["algorithm"] == "HMAC-SHA256"
+    assert signature["header"] == "X-FM-Webhook-Signature"
+    assert signature["max_age_seconds"] == 300
+    assert signature["max_future_skew_seconds"] == 30
+    assert signature["security_stage"] == "V2-05_CERTIFIED"
+    assert signature["delivery_stage"] == "V2-08"
+
+    webhook_headers = asyncapi["components"]["schemas"]["WebhookHeaders"]
+    assert webhook_headers["required"] == ["X-FM-Webhook-Signature"]
 
     addresses = {channel["address"] for channel in asyncapi["channels"].values()}
     assert addresses == {
@@ -205,6 +246,7 @@ def test_asyncapi_exposes_versioned_event_envelopes() -> None:
     }
 
     for message in asyncapi["components"]["messages"].values():
+        assert message["headers"] == {"$ref": "#/components/schemas/WebhookHeaders"}
         all_of = message["payload"]["allOf"]
         envelope_ref = all_of[0]["$ref"]
         assert _schema_ref_name(envelope_ref) == "EventEnvelope"
