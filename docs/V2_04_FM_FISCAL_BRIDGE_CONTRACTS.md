@@ -1,6 +1,6 @@
 # V2-04 — FM Fiscal Bridge: contratos públicos language-neutral
 
-Status: **EM EXECUÇÃO**  
+Status: **CONCLUÍDO E CERTIFICADO**  
 Data: 2026-09-11
 
 ## Objetivo
@@ -127,3 +127,21 @@ O V2-04 congela apenas o formato do contrato. A autoridade operacional e a lógi
 - Install, Ruff, Mypy strict e Pytest verdes;
 - diff auditado;
 - PR Draft registrada.
+
+## Certificação
+
+- PR #5 criada em Draft sobre V2-03;
+- base: `5014bbfe838f22137451b05203f4b0449061c6f8`;
+- gate final SHA: `86689b3d3d7d47740b56bcc22594aa8c8e0b08c7`;
+- GitHub Actions run `34655024269`: **SUCCESS**;
+- Install: PASS — `fm-fiscal-core==0.1.0.dev0`;
+- Ruff: PASS;
+- Mypy strict: PASS — **47 source files sem issues**;
+- Pytest: PASS — **269 passed em 0.72s**;
+- diff auditado contra V2-03 e restrito a contratos públicos, documentação, contract tests e CI temporário;
+- nenhuma alteração em `src/` nesta fase;
+- CI retornado a `workflow_dispatch` após o gate verde.
+
+## Decisão
+
+V2-04 está **CONCLUÍDO E CERTIFICADO**. A fronteira pública do FM Fiscal passa a ser `contracts/v1/`, independente de linguagem e sem autoridade de segurança implícita. V2-05 — Auth S2S + workload identity + webhook security está liberado.

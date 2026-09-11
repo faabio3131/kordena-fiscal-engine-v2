@@ -3,8 +3,8 @@
 Data de início: 2026-09-11  
 Repositório: `faabio3131/kordena-fiscal-engine-v2`  
 Status global: **EM EXECUÇÃO**  
-Última fase concluída: **V2-03 — Fiscal Operation Contract genérico**  
-Próxima fase liberada: **V2-04 — FM Fiscal Bridge — OpenAPI/JSON Schema/AsyncAPI**
+Última fase concluída: **V2-04 — FM Fiscal Bridge — OpenAPI/JSON Schema/AsyncAPI**  
+Próxima fase liberada: **V2-05 — Auth S2S + workload identity + webhook security**
 
 ## Regra de governança
 
@@ -18,7 +18,7 @@ Nenhum bloco pode ser marcado `CONCLUÍDO` sem branch, SHA, PR, CI, testes/gates
 | V2-01 | Identidade FM + neutralização de branding | **CONCLUÍDO** | PR #2 Draft; gate SHA `ac6ad42eeacca2a84675e7e57e04b18414cadf36`; Actions run `34635131000` SUCCESS; distribuição `fm-fiscal-core`; Ruff PASS; Mypy PASS; Pytest 215 PASS |
 | V2-02 | Host namespace + fiscal account binding | **CONCLUÍDO** | PR #3 Draft; gate definitivo SHA `4fa8a2a8c74db65622099cd7dca43d2e8d19aea3`; Actions run `34637445978` SUCCESS; propagação sequence/idempotency/archive/outbox/reconciliation/audit/document composition; Ruff PASS; Mypy PASS; Pytest 239 PASS |
 | V2-03 | Fiscal Operation Contract genérico | **CONCLUÍDO** | PR #4 Draft; gate SHA `598a2ec83aecd27a5427f3e1e401532e8be2696a`; Actions run `34645939363` SUCCESS; Ruff PASS; Mypy strict PASS — 47 source files; Pytest 262 PASS |
-| V2-04 | FM Fiscal Bridge — OpenAPI/JSON Schema/AsyncAPI | PENDENTE | liberado após V2-03 |
+| V2-04 | FM Fiscal Bridge — OpenAPI/JSON Schema/AsyncAPI | **CONCLUÍDO** | PR #5 Draft; gate SHA `86689b3d3d7d47740b56bcc22594aa8c8e0b08c7`; Actions run `34655024269` SUCCESS; OpenAPI 3.1 + JSON Schema 2020-12 + AsyncAPI 3.0; Ruff PASS; Mypy strict PASS — 47 source files; Pytest 269 PASS |
 | V2-05 | Auth S2S + workload identity + webhook security | PENDENTE | depende V2-04 |
 | V2-06 | Capability & Readiness API | PENDENTE | depende V2-04/V2-05 |
 | V2-07 | Application service + persistência durável | PENDENTE | depende V2-05 |
@@ -171,4 +171,33 @@ Nenhum bloco pode ser marcado `CONCLUÍDO` sem branch, SHA, PR, CI, testes/gates
 - CI retornado a `workflow_dispatch` após o gate verde para controlar consumo de minutos.
 - Riscos residuais governados: contratos language-neutral pertencem ao V2-04; autenticação caller/workload ao V2-05; persistência durável ao V2-07; adapters concretos por produto ao V2-10/V2-16.
 
-Decisão: **V2-03 CONCLUÍDO E CERTIFICADO. V2-04 está LIBERADO, mas permanece PENDENTE até abertura formal de sua branch/PR.**
+## Checkpoint V2-04.1 — FM Fiscal Bridge language-neutral — 2026-09-11
+
+- Branch: `v2/fm-fiscal-bridge-contracts`.
+- PR #5 criada em Draft e empilhada sobre V2-03.
+- Contrato público v1 criado em `contracts/v1/` com manifest `1.0.0`.
+- OpenAPI 3.1 define emissão, consulta, cancelamento, inutilização, capabilities/readiness, reconciliação e archive reference.
+- JSON Schema Draft 2020-12 define tipos canônicos independentes de pacote Python e banco interno.
+- AsyncAPI 3.0 define envelopes versionados para issuance updated, autorização, rejeição, cancelamento, reconciliação e archive reference.
+- Headers de escopo externo transportam host namespace, tenant, unidade e ambiente; correlation e causation são explícitos.
+- Operações mutáveis exigem `Idempotency-Key`.
+- `CanonicalError` é provider-neutral e correlacionável.
+- O OpenAPI usa `https://fiscal.invalid` propositalmente e declara readiness `CONTRACT_ONLY`; nenhum endpoint real, DNS, segredo ou credencial foi criado.
+- Segurança/autorização dos headers permanece bloqueada para V2-05; o V2-04 não trata headers como autoridade.
+- Testes de contract lint provam parseabilidade, versionamento, referências de schema, cobertura das operações, headers obrigatórios, neutralidade de marca/linguagem e erro canônico.
+
+## Checkpoint V2-04.2 — Certificação — 2026-09-11
+
+- Base V2-03: `5014bbfe838f22137451b05203f4b0449061c6f8`.
+- Gate definitivo executado no SHA `86689b3d3d7d47740b56bcc22594aa8c8e0b08c7`.
+- GitHub Actions run `34655024269`: **SUCCESS**.
+- Install: PASS — `fm-fiscal-core==0.1.0.dev0`.
+- Ruff: PASS.
+- Mypy strict: PASS — **47 source files sem issues**.
+- Pytest: PASS — **269 passed em 0.72s**.
+- Diff auditado contra V2-03: somente contratos públicos, documentação, contract tests e ativação temporária do CI; nenhuma árvore de runtime `src/` foi alterada.
+- Contratos públicos não contêm `kordena`, `kordena_fiscal`, Python, SQLAlchemy ou PostgreSQL.
+- CI retornado a `workflow_dispatch` após o gate verde.
+- Riscos residuais governados: autenticação/workload identity e webhook signing no V2-05; implementação real de capabilities no V2-06; application service/persistência no V2-07; delivery durável de eventos no V2-08.
+
+Decisão: **V2-04 CONCLUÍDO E CERTIFICADO. V2-05 está LIBERADO, mas permanece PENDENTE até abertura formal de sua branch/PR.**
