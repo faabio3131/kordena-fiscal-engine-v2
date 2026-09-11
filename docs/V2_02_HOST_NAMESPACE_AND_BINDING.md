@@ -37,6 +37,7 @@ host namespace + external tenant + external unit
 8. O Core não recebe entidades privadas do host.
 9. O binding não concede autorização; autenticação S2S e workload identity pertencem ao V2-05.
 10. Persistência durável e lifecycle operacional de bindings pertencem ao V2-07/V2-11.
+11. Composição de documento, issuer e product profile deve falhar fechado quando o `host_namespace` divergir, mesmo que conta/unidade internas coincidam.
 
 ## Convenção de namespace
 
@@ -62,7 +63,8 @@ A dimensão de host foi propagada para os pontos definidos no Plano Mestre:
 - **Archive/Audit:** identidade de archive, índice por documento e manifest incluem a partição universal; `FiscalDomainEvent` preserva o scope com host;
 - **Outbox:** a identidade determinística de outbox inclui host;
 - **Reconciliation:** comparação de escopo falha fechado quando o host diverge e o fingerprint inclui host;
-- **Canonical serialization:** snapshots canônicos incluem `host_namespace` quando o scope é V2-bound.
+- **Canonical serialization:** snapshots canônicos incluem `host_namespace` quando o scope é V2-bound;
+- **Canonical document composition:** issuer e product profile são validados pela partição universal, impedindo composição cross-host.
 
 Compatibilidade: quando `host_namespace` é `None`, materiais determinísticos legados preservam a composição V1 para evitar alteração silenciosa de hashes/tokens do baseline.
 
@@ -75,16 +77,16 @@ A suíte cobre explicitamente os namespaces:
 - `fm.vendedor-ia`;
 - `fm.campaia`.
 
-Com os mesmos IDs locais, os quatro produtos recebem partições, sequências, chaves de idempotência, identidades de outbox, archive/manifests e fingerprints independentes. Tentativa de reconciliação cross-host falha fechado.
+Com os mesmos IDs locais, os quatro produtos recebem partições, sequências, chaves de idempotência, identidades de outbox, archive/manifests e fingerprints independentes. Tentativas cross-host em reconciliação e composição de documentos falham fechado.
 
 ## Gate final certificado
 
-- Gate SHA: `5e9cd9fec2f98f85503f951c3accaf9816ea8f1b`;
-- GitHub Actions run: `34636812046` — **SUCCESS**;
+- Gate SHA: `4fa8a2a8c74db65622099cd7dca43d2e8d19aea3`;
+- GitHub Actions run: `34637445978` — **SUCCESS**;
 - Install: PASS — `fm-fiscal-core==0.1.0.dev0`;
 - Ruff: PASS;
 - Mypy strict: PASS — **46 source files sem issues**;
-- Pytest: PASS — **237 passed em 0.66s**;
+- Pytest: PASS — **239 passed em 0.48s**;
 - diff auditado contra a base V2-01 `00f8136fa2a2b2ad38e4752a8b55bdc542f239ae`;
 - nenhuma regra tributária, cálculo fiscal, emissão, state machine ou provider contract foi alterado;
 - CI retornado a `workflow_dispatch` após o gate verde.
