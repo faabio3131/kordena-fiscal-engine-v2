@@ -1,6 +1,6 @@
 # V2-03 — Fiscal Operation Contract genérico
 
-Status: **EM EXECUÇÃO**  
+Status: **CONCLUÍDO E CERTIFICADO**  
 Data: 2026-09-11
 
 ## Objetivo
@@ -90,16 +90,25 @@ O método legado `reconcile(HostSettlementSnapshot, ...)` é preservado e traduz
 - adapters concretos Kordena/Iron/Vendedor/CampaIA: V2-10/V2-16;
 - regras tributárias específicas por tipo de operação continuam no motor fiscal e não no contrato de host.
 
-## Gate
+## Certificação
 
-- contrato neutro implementado e exportado;
-- venda, mensalidade, assinatura, serviço, cobrança recorrente e faturamento SaaS testados;
-- compatibilidade `HostSettlementSnapshot` provada por regressão;
-- reconciliação neutra certificada;
-- cross-host continua fail-closed;
-- Install PASS;
-- Ruff PASS;
-- Mypy strict PASS;
-- Pytest PASS;
-- diff auditado;
-- PR Draft registrada.
+- PR #4 criada em Draft sobre V2-02;
+- base: `637b326cab5c179875186201756bd3561bdf008d`;
+- gate final SHA: `598a2ec83aecd27a5427f3e1e401532e8be2696a`;
+- GitHub Actions run `34645939363`: **SUCCESS**;
+- Install: PASS — `fm-fiscal-core==0.1.0.dev0`;
+- Ruff: PASS;
+- Mypy strict: PASS — **47 source files sem issues**;
+- Pytest: PASS — **262 passed em 0.77s**;
+- venda, mensalidade, assinatura, serviço, cobrança recorrente e faturamento SaaS cobertos por testes;
+- compatibilidade `HostSettlementSnapshot` preservada pelos testes legados e por teste explícito de tradução de códigos;
+- reconciliação cross-host permanece fail-closed;
+- diff auditado contra V2-02 e limitado ao contrato genérico, reconciliação, testes e documentação;
+- nenhuma regra tributária, cálculo, emissão, numeração, gateway, assinatura ou provider contract foi alterado;
+- CI retornado a `workflow_dispatch` após o gate verde.
+
+O primeiro gate desta fase (`34645774207`) parou apenas em uma violação `E501` de formatação antes de Mypy/Pytest; a linha foi corrigida e o gate definitivo acima ficou integralmente verde.
+
+## Decisão
+
+V2-03 está **CONCLUÍDO E CERTIFICADO**. O `FiscalOperationSnapshot` passa a ser o contrato canônico para novas fronteiras universais. V2-04 — FM Fiscal Bridge está liberado.
