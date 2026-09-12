@@ -27,7 +27,7 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 | V2-08 | Events/Webhooks/Inbox/Outbox | **CONCLUÍDO** | PR #9 Draft; gate `bc77ee4cf2b7151d06c09cf32ca9168363ece1c7`; run `34666753555`; 67 source files; Pytest 337 PASS; CI restaurado |
 | V2-09 | Modularização de verticais | **CONCLUÍDO** | PR #10 Draft; gate `88071fd557199ffd6848312ea5559b0cba415ee1`; run `34668430831`; 71 source files; Pytest 346 PASS; CI restaurado |
 | V2-10 | Contract Packs Kordena/Iron/Vendedor/CampaIA | **CONCLUÍDO** | PR #11 Draft; fechamento `345652ecbfc18c8bd3511cf5b9083ba0dbc259cb`; run `34707976358`; 78 source files; Pytest 397 PASS; CI restaurado |
-| V2-11 | Control Plane independente | **EM EXECUÇÃO** | branch `v2/control-plane`; snapshot pré-fase preservado; plano `docs/V2_11_CONTROL_PLANE.md`; PR Draft a abrir |
+| V2-11 | Control Plane independente | **EM EXECUÇÃO** | PR #12 Draft; Foundation `eaeca06739f756d31085617c1eecabebcc846dd7`; run `34708472525`; 81 source files; Pytest 406 PASS; CI restaurado |
 | V2-12 | Gateway/Signer/Vault production adapters | PENDENTE | depende V2-11 |
 | V2-13 | Observabilidade + Compliance Operations | PENDENTE | depende V2-07/V2-12 |
 | V2-14 | Hardening sistêmico | PENDENTE | regressão/carga/falhas/segurança |
@@ -59,19 +59,48 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 - gate funcional cross-product `44941004207d2991fccfd0f28b402bc3cda9357f`, run `34707834828`, 397 PASS;
 - regressão final de fechamento `345652ecbfc18c8bd3511cf5b9083ba0dbc259cb`, run `34707976358`, 397 PASS;
 - diff final documental V2-09 -> V2-10: 56 commits à frente, 0 atrás, 16 arquivos líquidos;
-- nenhum OpenAPI/AsyncAPI/JSON Schema, migration, persistência, S2S/webhook, provider fiscal ou infraestrutura alterado;
 - PR #11 permaneceu Draft e sem merge; CI restaurado.
 
 ## V2-11 — Control Plane independente
 
-### Bootstrap — EM EXECUÇÃO
+### Bootstrap — CONCLUÍDO
 
 - branch `v2/control-plane` criada a partir do fechamento V2-10 `156a945cc8e2708eba21551b128ac3d673bb0cdc`;
 - snapshot pré-fase em `docs/history/EXECUTION_TRACKER_V2_PRE_V2_11.md`;
 - plano da fase em `docs/V2_11_CONTROL_PLANE.md`;
-- escopo segue o Plano Mestre: onboarding empresa/unidade, perfis e vigências, capabilities/ambientes, referências opacas de segredo, operações/erros/contingência/archive/reconciliação, RBAC e audit trail;
-- UI premium/comercial, Vault real, signer real e provider adapters permanecem fora desta fase.
+- PR #12 Draft stacked sobre `v2/product-contract-packs`.
+
+### Bloco 1 — Foundation administrativa — CONCLUÍDO/CERTIFICADO
+
+- `kordena_fiscal.control_plane` host-neutral;
+- `AdminPrincipal` + RBAC explícito e tenant/global scope fail-closed;
+- `FiscalOrganization` e `FiscalUnitRegistration` para onboarding;
+- environments explicitamente habilitados, default somente HOMOLOGATION;
+- `SecretReference` armazena apenas referências opacas `ref:...`, nunca segredo bruto;
+- `ControlPlaneAuditEvent` sem payload livre e audit trail para mutações;
+- serviço in-memory certifica invariantes antes da persistência durável;
+- duplicate org/unit e secret binding conflitante falham fechado;
+- audit read é permissionado e isolado por tenant.
+
+Primeiro CI `34708348014`: falha de coleta por basename duplicado de teste; corrigido tornando `tests/control_plane` package. Segundo CI `34708391513`: 405 PASS, 1 FAIL por fixture que misturava duas invariantes RBAC; serviço falhou corretamente primeiro pela permission ausente. Fixture corrigido sem mudança semântica.
+
+Gate definitivo:
+- SHA `eaeca06739f756d31085617c1eecabebcc846dd7`;
+- run `34708472525` — **SUCCESS**;
+- Install PASS;
+- Ruff PASS;
+- Mypy strict PASS — **81 source files**;
+- Pytest **406 PASS em 1.46s**;
+- baseline V2-10 397; incremento **+9**;
+- compare bootstrap `f2167b5ac7ca3806287c3fd4abf509a5b698925a` -> gate: **7 commits à frente, 0 atrás**;
+- CI restaurado em `71823391c456b120ae5a4cf35d599caea0df353d`.
+
+## Governança
+
+- PR #12 permanece Draft e sem merge;
+- nenhum deploy, promoção, homologação externa ou cutover foi realizado;
+- V2-11 permanece **EM EXECUÇÃO**.
 
 ## Próxima decisão
 
-**Abrir PR Draft stacked sobre `v2/product-contract-packs` e executar o Bloco 1 — Foundation administrativa, com domínio host-neutral, RBAC, secret references opacas e audit trail antes da persistência durável.**
+**Bloco 2 obrigatório: persistência durável + perfis fiscais/vigências/ambientes/referências, com migration explícita, restart safety, sobreposição de vigência fail-closed e nenhum material secreto persistido.**
