@@ -31,6 +31,15 @@ from .kordena import (
     KORDENA_RESTAURANT_POS_SALE,
     KordenaFiscalContractPack,
 )
+from .sales import (
+    SALES_CONTRACT_DESCRIPTOR,
+    SALES_FISCAL_CONTRACT_PACK,
+    SALES_HOST_NAMESPACE,
+    SALES_NFCE_SALE,
+    SALES_NFE_SALE,
+    SALES_PACK_ID,
+    SalesFiscalContractPack,
+)
 
 __all__ = [
     "DeclarativeProductFiscalContractPack",
@@ -58,4 +67,11 @@ __all__ = [
     "ProductOperationContractError",
     "ProductUseCaseDescriptor",
     "ProductUseCaseNotFoundError",
+    "SALES_CONTRACT_DESCRIPTOR",
+    "SALES_FISCAL_CONTRACT_PACK",
+    "SALES_HOST_NAMESPACE",
+    "SALES_NFCE_SALE",
+    "SALES_NFE_SALE",
+    "SALES_PACK_ID",
+    "SalesFiscalContractPack",
 ]
