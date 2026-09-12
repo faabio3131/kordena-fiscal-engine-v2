@@ -1,8 +1,8 @@
 """Persistence ports for the independently operable FM Fiscal application layer.
 
 The domain stays persistence-agnostic. Existing atomic store contracts for
-idempotency, numbering, outbox and archive are reused here; V2-07 adds only the
-missing repository and unit-of-work boundaries needed by the application layer.
+idempotency, numbering, outbox, archive and inbox are reused here; repository
+ports and the unit-of-work boundary keep application coordination transactional.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ from kordena_fiscal.domain import (
     HostScope,
     SourceReference,
 )
+from kordena_fiscal.events import FiscalInboxStore
 from kordena_fiscal.lifecycle import FiscalStateSnapshot, IdempotencyStore
 from kordena_fiscal.numbering import FiscalSequenceStore
 from kordena_fiscal.reconciliation import FiscalReconciliationResult
@@ -81,6 +82,9 @@ class FiscalUnitOfWork(Protocol):
 
     @property
     def sequences(self) -> FiscalSequenceStore: ...
+
+    @property
+    def inbox(self) -> FiscalInboxStore: ...
 
     @property
     def outbox(self) -> FiscalOutboxStore: ...
