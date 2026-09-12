@@ -26,7 +26,7 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 | V2-07 | Application service + persistência durável | **CONCLUÍDO** | PR #8 Draft; gate `999ba84b9c25988441867820bfe8af0571269548`; run `34659892798`; 59 source files; Pytest 309 PASS; CI restaurado |
 | V2-08 | Events/Webhooks/Inbox/Outbox | **CONCLUÍDO** | PR #9 Draft; gate final `bc77ee4cf2b7151d06c09cf32ca9168363ece1c7`; run `34666753555`; 67 source files; Pytest 337 PASS; CI restaurado |
 | V2-09 | Modularização de verticais | **CONCLUÍDO** | PR #10 Draft; gate `88071fd557199ffd6848312ea5559b0cba415ee1`; run `34668430831`; 71 source files; Pytest 346 PASS; CI restaurado |
-| V2-10 | Contract Packs Kordena/Iron/Vendedor/CampaIA | **EM EXECUÇÃO** | PR #11 Draft; Foundation `3af9a6d...`/354 PASS; Kordena `6fd934c...`/362 PASS; Iron `3c3f18d...`/371 PASS; Vendedor IA `7be9453...`/380 PASS; CI restaurado |
+| V2-10 | Contract Packs Kordena/Iron/Vendedor/CampaIA | **EM EXECUÇÃO** | PR #11 Draft; Foundation 354; Kordena 362; Iron 371; Vendedor IA 380; CampaIA `1e05587...` / run `34707632430` / 389 PASS; cross-product pendente |
 | V2-11 | Control Plane independente | PENDENTE | depende core operacional |
 | V2-12 | Gateway/Signer/Vault production adapters | PENDENTE | depende V2-11 |
 | V2-13 | Observabilidade + Compliance Operations | PENDENTE | depende V2-07/V2-12 |
@@ -38,113 +38,78 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 
 ## Fechamento V2-08 — resumo preservado
 
-- Durable Inbox com deduplicação, lifecycle versionado e migration SQLite v2: gate `f467d0dafa70e3c0debd3aacccbb183c954c5b35`, run `34662707064`, 316 PASS.
-- Durable Outbox Worker com claim/lease, retry/backoff, restart, crash recovery, DLQ e fencing: gate `56678f730f2e7c3c235530887612a7ee71b5efc8`, run `34663828770`, 322 PASS.
-- Signed Webhook Delivery com HMAC V2-05, rotação e compatibilidade AsyncAPI: gate `8321106338aca262a76fe2bdfa76665bdcc57950`, run `34664214273`, 331 PASS.
-- Fechamento funcional com audit, ordering e duplicate delivery idempotente: gate `bc77ee4cf2b7151d06c09cf32ca9168363ece1c7`, run `34666753555`, 337 PASS.
-- CI V2-08 restaurado para `workflow_dispatch` no commit `10953d0f413ba8a4f06cc97fa924c565cd2f0b29`.
+- Durable Inbox: gate `f467d0dafa70e3c0debd3aacccbb183c954c5b35`, run `34662707064`, 316 PASS.
+- Durable Outbox Worker: gate `56678f730f2e7c3c235530887612a7ee71b5efc8`, run `34663828770`, 322 PASS.
+- Signed Webhook Delivery: gate `8321106338aca262a76fe2bdfa76665bdcc57950`, run `34664214273`, 331 PASS.
+- audit + ordering + duplicate delivery: gate `bc77ee4cf2b7151d06c09cf32ca9168363ece1c7`, run `34666753555`, 337 PASS.
+- CI restaurado para `workflow_dispatch`.
 
 ## Fechamento V2-09 — Modularização de verticais
 
-- superfície host-neutral `kordena_fiscal.verticals`;
-- restaurante como módulo explícito com classificador/regra preservados;
-- `service`, `fitness` e `saas` neutros, sem import de restaurante;
-- registry explícito/fail-closed e extensão futura sem fork;
+- `kordena_fiscal.verticals` host-neutral;
+- restaurante explícito com regras preservadas;
+- `service`, `fitness` e `saas` neutros;
+- registry explícito/fail-closed e extensão sem fork;
 - gate `88071fd557199ffd6848312ea5559b0cba415ee1`, run `34668430831`, 71 source files, 346 PASS;
-- fechamento documental também verde no run `34668559367`;
-- CI restaurado para `workflow_dispatch`.
+- fechamento documental também verde no run `34668559367`.
 
 ## V2-10 — Product Contract Packs
 
 ### Bootstrap
 
-- branch `v2/product-contract-packs` criada a partir do head final certificado da V2-09: `5d3e06be52a75b60b36640ee8a5d1869b11de928`;
-- snapshot pré-fase salvo em `docs/history/EXECUTION_TRACKER_V2_PRE_V2_10.md`;
+- branch `v2/product-contract-packs` criada a partir de V2-09 `5d3e06be52a75b60b36640ee8a5d1869b11de928`;
+- snapshot pré-fase em `docs/history/EXECUTION_TRACKER_V2_PRE_V2_10.md`;
 - plano em `docs/V2_10_PRODUCT_CONTRACT_PACKS.md`;
-- PR #11 criada em Draft, stacked sobre `v2/vertical-modularization`.
+- PR #11 Draft, stacked sobre `v2/vertical-modularization`.
 
 ### Bloco 1 — Foundation — CONCLUÍDO/CERTIFICADO
 
-- `kordena_fiscal.contract_packs` com descriptors de pack/use case, registry fail-closed, isolamento por host e validação explícita de vertical;
-- nenhuma promoção de readiness.
-
-Gate Foundation:
-- SHA `3af9a6ded0303ca7d591bbfa69b771c4571a9cc0`;
-- run `34672479434` — **SUCCESS**;
-- Install/Ruff/Mypy PASS; **73 source files**;
-- Pytest **354 PASS em 1.45s**;
-- baseline V2-09 346; incremento **+8**;
-- CI restaurado no commit `24b54f47fad9dac11b900194d63f0803b8dfda30`.
+Gate `3af9a6ded0303ca7d591bbfa69b771c4571a9cc0`, run `34672479434`: Install/Ruff/Mypy PASS, 73 source files, **354 PASS**. Registry e descriptors fail-closed; nenhuma promoção de readiness.
 
 ### Bloco 2 — KordenaFiscalContractPack — CONCLUÍDO/CERTIFICADO
 
-- `fm.kordena` obrigatório;
-- `restaurant-pos-sale`: SALE + NFC-e;
-- `restaurant-invoice-sale`: SALE + NF-e;
-- vertical `restaurant` e capabilities fiscais setoriais exigidas explicitamente;
-- nenhuma regra tributária copiada/alterada e nenhum readiness concedido;
-- eventos validados contra AsyncAPI público e cross-host fail-closed.
-
-Gate Kordena:
-- SHA `6fd934c024736f3d5e23aa4d1172d60caa49fb7c`;
-- run `34672769666` — **SUCCESS**;
-- Install/Ruff PASS;
-- Mypy strict PASS — **74 source files**;
-- Pytest **362 PASS em 1.16s**;
-- incremento **+8**;
-- CI restaurado no commit `6a919ebdcab17b5f7b3215aa8d032abc2411afb0`.
+`fm.kordena`; SALE + NFC-e/NF-e; vertical `restaurant` explícita; nenhuma regra tributária copiada. Gate `6fd934c024736f3d5e23aa4d1172d60caa49fb7c`, run `34672769666`: 74 source files, **362 PASS**.
 
 ### Bloco 3 — IronFiscalContractPack — CONCLUÍDO/CERTIFICADO
 
-- namespace obrigatório `fm.iron`;
-- `membership-billing`: MEMBERSHIP + NFS-e + `fitness/operation.membership`;
-- `recurring-membership-billing`: RECURRING_CHARGE + NFS-e + `fitness/operation.recurring`;
-- `fitness-service-billing`: SERVICE + NFS-e + `fitness/operation.service`;
-- ações genéricas limitadas a issue/query/cancel/reconcile/archive reference;
-- nenhum readiness/homologação é concedido;
-- cross-host e operation kind incompatível falham fechado.
-
-Gate Iron Fit:
-- SHA `3c3f18dd77663e021424b9f32c9f1a849b001c84`;
-- run `34672919212` — **SUCCESS**;
-- Install/Ruff PASS;
-- Mypy strict PASS — **75 source files**;
-- Pytest **371 PASS em 1.41s**;
-- incremento **+9**;
-- CI restaurado no commit `270a602316423f928ed10124fc8e9688fb38904c`.
+`fm.iron`; MEMBERSHIP/RECURRING_CHARGE/SERVICE + NFS-e; vertical `fitness` com capability por caso; sem overclaim de NFS-e. Gate `3c3f18dd77663e021424b9f32c9f1a849b001c84`, run `34672919212`: 75 source files, **371 PASS**.
 
 ### Bloco 4 — SalesFiscalContractPack / Vendedor IA — CONCLUÍDO/CERTIFICADO
 
-- namespace obrigatório `fm.vendedor-ia`;
-- `nfce-sale`: SALE + NFC-e;
-- `nfe-sale`: SALE + NF-e;
-- nenhum módulo vertical específico exigido;
-- NFC-e declara issue/query/cancel/contingency/reconcile/archive reference;
-- NF-e declara issue/query/cancel/inutilize/contingency/reconcile/archive reference;
-- nenhum readiness/homologação é concedido;
-- fixture sintética sem `payments` e sem `settled_at` comprova que o pack não infere autoridade de pagamento ou settlement;
-- operação SERVICE em use case de venda e namespace `fm.kordena` contra Sales falham fechado;
-- eventos inbound validados contra o AsyncAPI público; nenhum outbound privado foi inventado;
-- descriptor não contém restaurante, fitness, SaaS ou namespaces de outro produto.
+`fm.vendedor-ia`; SALE + NFC-e/NF-e; sem vertical setorial; sem inferência de pagamento/settlement; cross-host fail-closed. Gate `7be9453e6757784e38e77e83928bc0f828007f90`, run `34674065346`: 76 source files, **380 PASS**.
 
-Gate Vendedor IA:
-- SHA `7be9453e6757784e38e77e83928bc0f828007f90`;
-- run `34674065346` — **SUCCESS**;
+### Bloco 5 — CampaiaFiscalContractPack — CONCLUÍDO/CERTIFICADO
+
+- namespace obrigatório `fm.campaia`;
+- `service-billing`: SERVICE + NFS-e + `service/operation.service`;
+- `saas-billing`: SAAS_BILLING + NFS-e + `saas/operation.service` + `saas/operation.subscription`;
+- nenhum modelo privado do CampaIA importado;
+- nenhum readiness/homologação concedido;
+- nenhuma inferência de pagamento, settlement, tributo municipal ou jurisdição;
+- `SUBSCRIPTION` não é aceito silenciosamente no use case SAAS_BILLING;
+- ausência de `service` ou `saas` falha fechado;
+- cross-host com `fm.vendedor-ia` falha fechado;
+- eventos inbound validados contra AsyncAPI público; sem outbound privado.
+
+Gate CampaIA:
+- SHA `1e0558773f7a39b6e5b4156f874fd201d4efdf3c`;
+- run `34707632430` — **SUCCESS**;
 - Install PASS;
 - Ruff PASS;
-- Mypy strict PASS — **76 source files**;
-- Pytest **380 PASS em 1.29s**;
-- checkpoint Iron Fit 371; incremento Vendedor IA **+9**;
-- compare `364d743c8aef40299b7a4855da02edf75a5a3b02` -> `7be9453...`: **4 commits à frente, 0 atrás**;
-- CI restaurado a `workflow_dispatch` no commit `40fb0a83574bffeab1981656dfa3f90c44762b9a`.
+- Mypy strict PASS — **77 source files**;
+- Pytest **389 PASS em 2.14s**;
+- checkpoint Vendedor IA 380; incremento **+9**;
+- compare `def50ae4d8914ec88821309a5a31990cfdc0b879` -> `1e055877...`: **4 commits à frente, 0 atrás**;
+- CI restaurado no commit `e4918e8471a3e710daab897d32ffe000bcba5212`.
 
 ## Governança
 
 - PR #11 permanece Draft e sem merge;
 - nenhum deploy, promoção, homologação externa ou cutover foi realizado;
-- CI voltou a `workflow_dispatch` após o gate Vendedor IA;
-- V2-10 permanece **EM EXECUÇÃO** até concluir CampaIA e certificação cross-product.
+- CI está novamente em `workflow_dispatch`;
+- todos os quatro Product Contract Packs estão certificados;
+- V2-10 permanece **EM EXECUÇÃO** somente até a certificação cross-product consolidada e auditoria final do diff.
 
 ## Próxima decisão
 
-**Próximo bloco: `CampaiaFiscalContractPack` + fixtures sintéticas e contract tests, usando `fm.campaia` para faturamento próprio de serviço/SaaS com vertical explícita e sem inferir fatos fiscais ausentes.**
+**Próximo bloco obrigatório do cronograma: Cross-product certification — matriz consolidada, isolamento entre os quatro hosts, regressão completa e auditoria final do diff contra V2-09.**
