@@ -12,6 +12,16 @@ from .base import (
     ProductUseCaseDescriptor,
     ProductUseCaseNotFoundError,
 )
+from .iron import (
+    IRON_CONTRACT_DESCRIPTOR,
+    IRON_FISCAL_CONTRACT_PACK,
+    IRON_HOST_NAMESPACE,
+    IRON_MEMBERSHIP_BILLING,
+    IRON_PACK_ID,
+    IRON_RECURRING_MEMBERSHIP_BILLING,
+    IRON_SERVICE_BILLING,
+    IronFiscalContractPack,
+)
 from .kordena import (
     KORDENA_CONTRACT_DESCRIPTOR,
     KORDENA_FISCAL_CONTRACT_PACK,
@@ -24,6 +34,14 @@ from .kordena import (
 
 __all__ = [
     "DeclarativeProductFiscalContractPack",
+    "IRON_CONTRACT_DESCRIPTOR",
+    "IRON_FISCAL_CONTRACT_PACK",
+    "IRON_HOST_NAMESPACE",
+    "IRON_MEMBERSHIP_BILLING",
+    "IRON_PACK_ID",
+    "IRON_RECURRING_MEMBERSHIP_BILLING",
+    "IRON_SERVICE_BILLING",
+    "IronFiscalContractPack",
     "KORDENA_CONTRACT_DESCRIPTOR",
     "KORDENA_FISCAL_CONTRACT_PACK",
     "KORDENA_HOST_NAMESPACE",
