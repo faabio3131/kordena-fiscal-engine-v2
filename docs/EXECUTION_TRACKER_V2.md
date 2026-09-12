@@ -41,7 +41,6 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 - baseline imediato: `v2/application-durable-persistence`, com V2-07 certificado;
 - branch: `v2/events-webhooks-inbox-outbox`;
 - PR #9 permanece Draft sobre V2-07, sem merge;
-- snapshot pré-fase preservado em `docs/history/EXECUTION_TRACKER_V2_PRE_V2_08.md`;
 - `kordena_fiscal.events` criado como superfície host-neutral para mensagens assíncronas;
 - `FiscalInboxEntry`, `FiscalInboxStatus`, `FiscalInboxStore` e `FiscalInboxService` implementados;
 - estados governados: `RECEIVED -> PROCESSING -> PROCESSED/REJECTED`;
@@ -49,13 +48,12 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 - identidade determinística usa partição fiscal + producer + upstream `event_id`;
 - duplicate intake com conteúdo idêntico retorna replay da entrada original, inclusive após restart;
 - mesma identidade semântica com conteúdo diferente gera `InboxConflictError`;
-- payload persistido com SHA-256 validado;
-- correlation/causation/idempotency preservados;
+- payload persistido com SHA-256 validado e correlation/causation/idempotency preservados;
 - migration SQLite v2 `v2_08_durable_inbox` adiciona `fm_fiscal_inbox`, constraint única de identidade e índice de status;
 - migration testada sobre estado equivalente ao V2-07: somente versão 2 é aplicada e migration 1 é preservada;
-- `FiscalUnitOfWork` passa a expor `inbox` dentro do mesmo `BEGIN IMMEDIATE` de idempotência, outbox, archive, lifecycle e demais stores V2-07;
+- `FiscalUnitOfWork` passa a expor `inbox` dentro do mesmo `BEGIN IMMEDIATE` dos stores V2-07;
 - rollback conjunto inbox + outbox foi comprovado sem commit;
-- `FiscalApplicationService` agora recebe, inicia processamento, conclui, rejeita e consulta eventos da inbox dentro do UoW;
+- `FiscalApplicationService` recebe, inicia processamento, conclui, rejeita e consulta eventos da inbox dentro do UoW;
 - mesma upstream event id permanece isolada entre hosts diferentes;
 - contratos AsyncAPI/Bridge existentes não foram alterados neste bloco;
 - primeira tentativa de CI falhou somente em E501/Ruff e foi corrigida sem mudança semântica;
@@ -63,13 +61,11 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 - Actions run `34662707064`: **SUCCESS**;
 - Install PASS; Ruff PASS; Mypy strict PASS — **62 source files sem issues**; Pytest **316 PASS em 0.85s**;
 - baseline V2-07: 309 testes; Durable Inbox adicionou 7 testes;
-- diff do gate contra V2-07: 17 commits à frente, 0 atrás; alterações limitadas ao bootstrap V2-08, events/inbox, integração application/persistence, testes e CI temporário;
+- diff do gate contra V2-07: 17 commits à frente, 0 atrás, limitado ao bootstrap V2-08, events/inbox, integração application/persistence, testes e CI temporário;
 - CI foi restaurado a `workflow_dispatch` após o checkpoint no commit `c9e26364e2f0925439ac86e146a8ab5668f57c3b`;
 - nenhum merge, deploy ou cutover realizado.
 
 ## Escopo V2-08 ainda pendente
-
-Antes de marcar V2-08 como `CONCLUÍDO` ainda será obrigatório:
 
 - Durable Outbox Delivery sobre o estado persistido do V2-07;
 - dispatcher/worker com claim e lease;
@@ -79,10 +75,7 @@ Antes de marcar V2-08 como `CONCLUÍDO` ainda será obrigatório:
 - webhook delivery assinado usando a segurança certificada no V2-05;
 - auditoria end-to-end de tentativas e resultado;
 - testes de concorrência, duplicate delivery, retry, lease expiry e DLQ;
-- gate final da fase com Install, Ruff, Mypy strict e Pytest completos;
-- CI definitivo verde com run/SHA registrados;
-- auditoria final do diff contra V2-07 e riscos residuais;
-- CI retornado ao modo controlado após a certificação final;
+- gate final da fase e auditoria final do diff contra V2-07;
 - nenhum merge/deploy antes do fechamento formal.
 
 ## Próxima decisão
