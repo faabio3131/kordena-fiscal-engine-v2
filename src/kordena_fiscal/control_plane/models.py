@@ -61,6 +61,7 @@ class ControlPlaneAuditAction(StrEnum):
     ORGANIZATION_ONBOARDED = "organization.onboarded"
     UNIT_ONBOARDED = "unit.onboarded"
     SECRET_REFERENCE_BOUND = "secret_reference.bound"
+    FISCAL_PROFILE_ADDED = "fiscal_profile.added"
 
 
 @dataclass(frozen=True, slots=True)
