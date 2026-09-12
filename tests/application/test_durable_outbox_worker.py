@@ -6,11 +6,12 @@ from threading import Lock
 
 import pytest
 
-from kordena_fiscal.application import DurableFiscalOutboxWorker, FiscalApplicationService
+from kordena_fiscal.application import DurableFiscalOutboxWorker
 from kordena_fiscal.contingency import (
     FiscalDispatchResult,
     FiscalDispatchStatus,
     FiscalOutboxEntry,
+    FiscalOutboxService,
     FiscalOutboxStatus,
     FiscalRetryPolicy,
     OutboxStateError,
@@ -40,14 +41,16 @@ def _database(tmp_path) -> SqliteFiscalDatabase:
 
 
 def _enqueue(database: SqliteFiscalDatabase, key: str = "event-1") -> FiscalOutboxEntry:
-    service = FiscalApplicationService(database)
-    return service.enqueue_outbox_event(
-        scope=_scope(),
-        operation="publish_event",
-        deduplication_key=key,
-        payload=f'{{"event":"{key}"}}'.encode(),
-        created_at=_now(),
-    ).entry
+    with database.unit_of_work() as uow:
+        result = FiscalOutboxService(uow.outbox).enqueue(
+            scope=_scope(),
+            operation="publish_event",
+            deduplication_key=key,
+            payload=f'{{"event":"{key}"}}'.encode(),
+            created_at=_now(),
+        )
+        uow.commit()
+        return result.entry
 
 
 class _SequenceHandler:
