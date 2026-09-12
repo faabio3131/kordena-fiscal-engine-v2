@@ -103,6 +103,8 @@ Compare V2-09 `5d3e06be52a75b60b36640ee8a5d1869b11de928` -> checkpoint pós-gate
 - nenhum OpenAPI, AsyncAPI ou JSON Schema foi alterado pela V2-10;
 - nenhuma migration, persistência, webhook, segurança S2S, provider fiscal, infraestrutura, segredo real, deploy ou cutover foi introduzido.
 
+Auditoria pós-evidência no checkpoint `e4cd46292515e5c10e1b57687dcfdb66b478c85f`: **54 commits à frente, 0 atrás e os mesmos 16 arquivos líquidos**. Os commits adicionais entre os checkpoints são exclusivamente fechamento documental e toggles temporários/restaurações de CI; o escopo líquido não se expandiu.
+
 ## Certificação final de fechamento
 
 Após a atualização do documento da fase e do tracker, a regressão completa foi executada novamente sobre o fechamento documental:
