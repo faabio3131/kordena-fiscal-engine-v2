@@ -12,6 +12,7 @@ from typing import TypeVar
 from kordena_fiscal.domain import FiscalValidationError
 
 from .ports import PersistenceStateError
+from .sqlite_control_plane import SqliteControlPlaneStore
 from .sqlite_core import (
     SqliteBindingRepository,
     SqliteFiscalSequenceStore,
@@ -237,6 +238,98 @@ _MIGRATIONS = (
             """,
         ),
     ),
+    _Migration(
+        version=4,
+        name="v2_11_control_plane_durable_state",
+        statements=(
+            """
+            CREATE TABLE fm_control_plane_organizations (
+                tenant_id TEXT PRIMARY KEY,
+                legal_name TEXT NOT NULL
+            )
+            """,
+            """
+            CREATE TABLE fm_control_plane_units (
+                tenant_id TEXT NOT NULL,
+                unit_id TEXT NOT NULL,
+                display_name TEXT NOT NULL,
+                enabled_environments_json TEXT NOT NULL,
+                PRIMARY KEY (tenant_id, unit_id),
+                FOREIGN KEY (tenant_id)
+                    REFERENCES fm_control_plane_organizations(tenant_id)
+            )
+            """,
+            """
+            CREATE TABLE fm_control_plane_secret_references (
+                reference_id TEXT PRIMARY KEY,
+                kind TEXT NOT NULL,
+                tenant_id TEXT NOT NULL,
+                unit_id TEXT NOT NULL,
+                environment TEXT NOT NULL,
+                UNIQUE (tenant_id, unit_id, environment, kind),
+                FOREIGN KEY (tenant_id, unit_id)
+                    REFERENCES fm_control_plane_units(tenant_id, unit_id)
+            )
+            """,
+            """
+            CREATE TABLE fm_control_plane_fiscal_profiles (
+                profile_id TEXT NOT NULL,
+                version INTEGER NOT NULL,
+                host_namespace TEXT NOT NULL,
+                tenant_id TEXT NOT NULL,
+                unit_id TEXT NOT NULL,
+                environment TEXT NOT NULL,
+                correlation_id TEXT NOT NULL,
+                cnpj TEXT NOT NULL,
+                legal_name TEXT NOT NULL,
+                tax_regime INTEGER NOT NULL,
+                state_registration_state TEXT NOT NULL,
+                state_registration_number TEXT,
+                state_registration_exempt INTEGER NOT NULL,
+                primary_cnae TEXT NOT NULL,
+                street TEXT NOT NULL,
+                address_number TEXT NOT NULL,
+                district TEXT NOT NULL,
+                municipality_name TEXT NOT NULL,
+                state_code TEXT NOT NULL,
+                municipality_ibge_code TEXT,
+                postal_code TEXT NOT NULL,
+                complement TEXT,
+                effective_from TEXT NOT NULL,
+                effective_to TEXT,
+                trade_name TEXT,
+                municipal_registration_number TEXT,
+                PRIMARY KEY (profile_id, version),
+                FOREIGN KEY (tenant_id, unit_id)
+                    REFERENCES fm_control_plane_units(tenant_id, unit_id)
+            )
+            """,
+            """
+            CREATE INDEX fm_control_plane_fiscal_profiles_effective_idx
+            ON fm_control_plane_fiscal_profiles (
+                host_namespace, tenant_id, unit_id, environment,
+                effective_from, effective_to
+            )
+            """,
+            """
+            CREATE TABLE fm_control_plane_audit (
+                event_id TEXT PRIMARY KEY,
+                occurred_at TEXT NOT NULL,
+                actor_id TEXT NOT NULL,
+                action TEXT NOT NULL,
+                target_type TEXT NOT NULL,
+                target_id TEXT NOT NULL,
+                correlation_id TEXT NOT NULL,
+                tenant_id TEXT NOT NULL,
+                unit_id TEXT
+            )
+            """,
+            """
+            CREATE INDEX fm_control_plane_audit_tenant_idx
+            ON fm_control_plane_audit (tenant_id, occurred_at, event_id)
+            """,
+        ),
+    ),
 )
 
 
@@ -257,6 +350,7 @@ class SqliteFiscalUnitOfWork:
         self._bindings: SqliteBindingRepository | None = None
         self._lifecycle: SqliteLifecycleRepository | None = None
         self._reconciliations: SqliteReconciliationRepository | None = None
+        self._control_plane: SqliteControlPlaneStore | None = None
 
     def __enter__(self) -> SqliteFiscalUnitOfWork:
         if self._connection is not None:
@@ -275,6 +369,7 @@ class SqliteFiscalUnitOfWork:
         self._bindings = SqliteBindingRepository(connection)
         self._lifecycle = SqliteLifecycleRepository(connection)
         self._reconciliations = SqliteReconciliationRepository(connection)
+        self._control_plane = SqliteControlPlaneStore(connection)
         return self
 
     def __exit__(
@@ -337,6 +432,10 @@ class SqliteFiscalUnitOfWork:
     @property
     def reconciliations(self) -> SqliteReconciliationRepository:
         return self._require(self._reconciliations, "reconciliations")
+
+    @property
+    def control_plane(self) -> SqliteControlPlaneStore:
+        return self._require(self._control_plane, "control_plane")
 
     def commit(self) -> None:
         if self._connection is None:
