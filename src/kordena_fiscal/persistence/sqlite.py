@@ -18,6 +18,7 @@ from .sqlite_core import (
     SqliteLifecycleRepository,
 )
 from .sqlite_idempotency import SqliteIdempotencyStore
+from .sqlite_inbox import SqliteFiscalInboxStore
 from .sqlite_outbox_archive import SqliteFiscalArchiveStore, SqliteFiscalOutboxStore
 from .sqlite_reconciliation import SqliteReconciliationRepository
 
@@ -156,6 +157,43 @@ _MIGRATIONS = (
             """,
         ),
     ),
+    _Migration(
+        version=2,
+        name="v2_08_durable_inbox",
+        statements=(
+            """
+            CREATE TABLE fm_fiscal_inbox (
+                entry_id TEXT PRIMARY KEY,
+                host_namespace TEXT NOT NULL,
+                tenant_id TEXT NOT NULL,
+                unit_id TEXT NOT NULL,
+                environment TEXT NOT NULL,
+                correlation_id TEXT NOT NULL,
+                producer TEXT NOT NULL,
+                event_id TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                payload BLOB NOT NULL,
+                payload_sha256 TEXT NOT NULL,
+                occurred_at TEXT NOT NULL,
+                received_at TEXT NOT NULL,
+                causation_id TEXT,
+                idempotency_key TEXT,
+                status TEXT NOT NULL,
+                version INTEGER NOT NULL,
+                processed_at TEXT,
+                outcome_reference TEXT,
+                last_error TEXT,
+                UNIQUE (
+                    host_namespace, tenant_id, unit_id, environment, producer, event_id
+                )
+            )
+            """,
+            """
+            CREATE INDEX fm_fiscal_inbox_status_idx
+            ON fm_fiscal_inbox (status, received_at, entry_id)
+            """,
+        ),
+    ),
 )
 
 
@@ -168,6 +206,7 @@ class SqliteFiscalUnitOfWork:
         self._committed = False
         self._idempotency: SqliteIdempotencyStore | None = None
         self._sequences: SqliteFiscalSequenceStore | None = None
+        self._inbox: SqliteFiscalInboxStore | None = None
         self._outbox: SqliteFiscalOutboxStore | None = None
         self._archive: SqliteFiscalArchiveStore | None = None
         self._bindings: SqliteBindingRepository | None = None
@@ -183,6 +222,7 @@ class SqliteFiscalUnitOfWork:
         self._committed = False
         self._idempotency = SqliteIdempotencyStore(connection)
         self._sequences = SqliteFiscalSequenceStore(connection)
+        self._inbox = SqliteFiscalInboxStore(connection)
         self._outbox = SqliteFiscalOutboxStore(connection)
         self._archive = SqliteFiscalArchiveStore(connection)
         self._bindings = SqliteBindingRepository(connection)
@@ -218,6 +258,10 @@ class SqliteFiscalUnitOfWork:
     @property
     def sequences(self) -> SqliteFiscalSequenceStore:
         return self._require(self._sequences, "sequences")
+
+    @property
+    def inbox(self) -> SqliteFiscalInboxStore:
+        return self._require(self._inbox, "inbox")
 
     @property
     def outbox(self) -> SqliteFiscalOutboxStore:
@@ -261,7 +305,7 @@ class SqliteFiscalDatabase:
             raise FiscalValidationError("SQLite database path must not be blank")
         if raw == ":memory:":
             raise FiscalValidationError(
-                "V2-07 durable adapter rejects ':memory:'; use a filesystem database"
+                "durable adapter rejects ':memory:'; use a filesystem database"
             )
         self._path = Path(raw).expanduser().resolve()
 
