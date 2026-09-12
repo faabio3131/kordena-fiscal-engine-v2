@@ -24,7 +24,7 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 | V2-05 | Auth S2S + workload identity + webhook security | **CONCLUÍDO** | PR #6 Draft; gate `196928d1b0cfe896df0c4741839ce72258f8f4d4`; run `34656535435`; 48 source files; Pytest 290 PASS |
 | V2-06 | Capability & Readiness API | **CONCLUÍDO** | PR #7 Draft; gate `e6c7b2b9e507116ef4919812153f8e54f84173f3`; run `34659021574` SUCCESS; 49 source files; Pytest 305 PASS |
 | V2-07 | Application service + persistência durável | **CONCLUÍDO** | PR #8 Draft; gate `999ba84b9c25988441867820bfe8af0571269548`; run `34659892798` SUCCESS; 59 source files; Pytest 309 PASS; CI restaurado a `workflow_dispatch` |
-| V2-08 | Events/Webhooks/Inbox/Outbox | **EM EXECUÇÃO** | branch `v2/events-webhooks-inbox-outbox`; bootstrap documental criado; PR Draft pendente de abertura neste checkpoint |
+| V2-08 | Events/Webhooks/Inbox/Outbox | **EM EXECUÇÃO** | PR #9 Draft; branch `v2/events-webhooks-inbox-outbox`; bootstrap documental/governança concluído; implementação funcional pendente |
 | V2-09 | Modularização de verticais | PENDENTE | após contratos core estabilizados |
 | V2-10 | Contract Packs Kordena/Iron/Vendedor/CampaIA | PENDENTE | depende V2-03..V2-09 |
 | V2-11 | Control Plane independente | PENDENTE | depende core operacional |
@@ -41,12 +41,14 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 - baseline imediato: `v2/application-durable-persistence`, com V2-07 certificado;
 - CI do V2-07 restaurado ao modo controlado `workflow_dispatch` antes da abertura da nova fase;
 - branch criada: `v2/events-webhooks-inbox-outbox`;
+- PR #9 aberta em Draft sobre V2-07, sem merge;
 - snapshot pré-fase preservado em `docs/history/EXECUTION_TRACKER_V2_PRE_V2_08.md`;
 - escopo governado registrado em `docs/V2_08_EVENTS_WEBHOOKS_INBOX_OUTBOX.md`;
 - objetivos centrais: durable inbox, durable outbox delivery, dispatcher/workers, retries/backoff, lease recovery, DLQ, webhook delivery assinado, auditoria e idempotência end-to-end;
 - segurança de webhook deve reutilizar as garantias HMAC-SHA256, `key_id`, timestamp/anti-replay e rotação certificadas no V2-05;
 - persistência deve reutilizar as portas e o estado durável certificados no V2-07;
 - contratos AsyncAPI/Bridge existentes devem ser preservados, salvo mudança explicitamente versionada e auditada;
+- workflow herdado permanece em modo controlado `workflow_dispatch`; ativação temporária do CI de PR será feita somente quando a fase entrar em certificação;
 - nenhuma implementação funcional foi declarada concluída neste bootstrap;
 - nenhum merge, deploy ou cutover realizado.
 
@@ -54,9 +56,9 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 
 Antes de marcar V2-08 como `CONCLUÍDO` será obrigatório:
 
-- PR Draft aberta e mantida;
 - implementação e testes de inbox/outbox/webhook delivery/workers/retries/DLQ;
 - restart/replay/lease-expiry/concurrency testados;
+- ativação controlada do CI de PR para certificação;
 - Install, Ruff, Mypy strict e Pytest completos;
 - CI definitivo verde com run/SHA registrados;
 - diff auditado contra V2-07;
@@ -66,4 +68,4 @@ Antes de marcar V2-08 como `CONCLUÍDO` será obrigatório:
 
 ## Próxima decisão
 
-**V2-08 está EM EXECUÇÃO apenas em bootstrap/governança. A PR Draft deve ser aberta sobre V2-07 antes do início do primeiro bloco funcional.**
+**V2-08 está EM EXECUÇÃO com branch e PR #9 Draft abertas. O próximo passo é iniciar o primeiro bloco funcional, começando pelo contrato/estado da durable inbox e sua integração transacional com a persistência V2-07.**
