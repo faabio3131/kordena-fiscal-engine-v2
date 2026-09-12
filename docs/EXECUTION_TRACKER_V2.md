@@ -24,7 +24,7 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 | V2-05 | Auth S2S + workload identity + webhook security | **CONCLUÍDO** | PR #6 Draft; gate `196928d1b0cfe896df0c4741839ce72258f8f4d4`; run `34656535435`; 48 source files; Pytest 290 PASS |
 | V2-06 | Capability & Readiness API | **CONCLUÍDO** | PR #7 Draft; gate `e6c7b2b9e507116ef4919812153f8e54f84173f3`; run `34659021574` SUCCESS; 49 source files; Pytest 305 PASS |
 | V2-07 | Application service + persistência durável | **CONCLUÍDO** | PR #8 Draft; gate `999ba84b9c25988441867820bfe8af0571269548`; run `34659892798` SUCCESS; 59 source files; Pytest 309 PASS; CI restaurado |
-| V2-08 | Events/Webhooks/Inbox/Outbox | **CONCLUÍDO** | PR #9 Draft; gate final `bc77ee4cf2b7151d06c09cf32ca9168363ece1c7`; run `34666753555` SUCCESS; 67 source files; Pytest 337 PASS |
+| V2-08 | Events/Webhooks/Inbox/Outbox | **CONCLUÍDO** | PR #9 Draft; gate final `bc77ee4cf2b7151d06c09cf32ca9168363ece1c7`; run `34666753555` SUCCESS; 67 source files; Pytest 337 PASS; CI restaurado |
 | V2-09 | Modularização de verticais | PENDENTE | **LIBERADA** após estabilização/certificação dos contratos core V2-08 |
 | V2-10 | Contract Packs Kordena/Iron/Vendedor/CampaIA | PENDENTE | depende V2-03..V2-09 |
 | V2-11 | Control Plane independente | PENDENTE | depende core operacional |
@@ -76,7 +76,7 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 
 ## Gate final consolidado V2-08
 
-- SHA: `bc77ee4cf2b7151d06c09cf32ca9168363ece1c7`;
+- SHA funcional reforçado: `bc77ee4cf2b7151d06c09cf32ca9168363ece1c7`;
 - Actions run: `34666753555` — **SUCCESS**;
 - Install: PASS;
 - Ruff: PASS;
@@ -86,9 +86,11 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 
 A primeira tentativa do fechamento (`34666540502`) passou Install/Ruff/Mypy e falhou apenas porque 22 testes legados ainda esperavam `(1, 2)` após a migration v3. Os asserts e testes de upgrade foram reconciliados para `(1, 2, 3)` sem alteração regressiva do schema.
 
+Após atualização final da documentação/tracker, o SHA `9d7fac0dbe378968298e6a34c61976afbbb155e7` também passou o gate completo no run `34666844318`: Install PASS, Ruff PASS, Mypy PASS em 67 source files e **337 PASS em 1.37s**.
+
 ## Auditoria final de diff
 
-Compare `v2/application-durable-persistence` (`e767ec36290f3304e495ce8fbeee6522f041d599`) -> gate final `bc77ee4...`:
+Compare `v2/application-durable-persistence` (`e767ec36290f3304e495ce8fbeee6522f041d599`) -> gate funcional `bc77ee4...`:
 
 - **65 commits à frente, 0 atrás**;
 - alterações restritas a documentação/tracker V2-08, application/events/persistence da fase, testes e CI temporário de certificação;
@@ -108,7 +110,10 @@ Compare específico do fechamento contra checkpoint pós-Webhooks `04195ca907837
 
 ## Governança
 
-PR #9 permanece Draft. Nenhum merge, deploy, promoção ou cutover foi realizado. Após a certificação/documentação final, o workflow deve ser restaurado novamente para `workflow_dispatch` apenas.
+- PR #9 permanece Draft e sem merge;
+- nenhum deploy, promoção ou cutover foi realizado;
+- CI temporário de PR foi removido após certificação;
+- workflow restaurado a `workflow_dispatch` no commit `10953d0f413ba8a4f06cc97fa924c565cd2f0b29`.
 
 ## Próxima decisão
 
