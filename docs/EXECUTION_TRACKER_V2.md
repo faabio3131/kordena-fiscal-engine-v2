@@ -129,14 +129,12 @@ Após documentação e tracker de encerramento, a matriz completa foi executada 
 - Pytest **397 PASS em 1.47s**;
 - CI restaurado para `workflow_dispatch` no commit `2d651bd380807cad6ad30757ad96f6c6365af709`.
 
-### Auditoria de diff funcional contra V2-09
+### Auditoria de diff contra V2-09
 
-Compare V2-09 `5d3e06be52a75b60b36640ee8a5d1869b11de928` -> checkpoint pós-gate/restauração `fcd3fc69086c46ede94079a48da90a5ec0764572`:
-
-- **48 commits à frente, 0 atrás**;
-- **16 arquivos líquidos alterados**;
-- escopo líquido restrito a documentação/snapshot V2-10, `contract_packs` e testes de contract packs;
-- CI líquido restaurado ao estado governado;
+- checkpoint funcional/restaurado `fcd3fc69086c46ede94079a48da90a5ec0764572`: **48 commits à frente, 0 atrás, 16 arquivos líquidos**;
+- checkpoint pós-evidência `e4cd46292515e5c10e1b57687dcfdb66b478c85f`: **54 commits à frente, 0 atrás, os mesmos 16 arquivos líquidos**;
+- commits adicionais são documentação de fechamento e toggles/restaurações temporárias de CI;
+- escopo líquido permanece restrito a documentação/snapshot V2-10, `contract_packs` e testes de contract packs;
 - nenhum contrato OpenAPI/AsyncAPI/JSON Schema, migration, persistência, segurança S2S, webhook, provider fiscal, infraestrutura, segredo real, deploy ou cutover foi alterado.
 
 ### Riscos residuais / limites
