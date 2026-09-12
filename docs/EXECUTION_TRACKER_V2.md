@@ -25,7 +25,7 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 | V2-06 | Capability & Readiness API | **CONCLUÍDO** | PR #7 Draft; gate `e6c7b2b9e507116ef4919812153f8e54f84173f3`; run `34659021574`; 49 source files; Pytest 305 PASS |
 | V2-07 | Application service + persistência durável | **CONCLUÍDO** | PR #8 Draft; gate `999ba84b9c25988441867820bfe8af0571269548`; run `34659892798`; 59 source files; Pytest 309 PASS; CI restaurado |
 | V2-08 | Events/Webhooks/Inbox/Outbox | **CONCLUÍDO** | PR #9 Draft; gate final `bc77ee4cf2b7151d06c09cf32ca9168363ece1c7`; run `34666753555`; 67 source files; Pytest 337 PASS; CI restaurado |
-| V2-09 | Modularização de verticais | **CONCLUÍDO** | PR #10 Draft; gate `88071fd557199ffd6848312ea5559b0cba415ee1`; run `34668430831`; 71 source files; Pytest 346 PASS |
+| V2-09 | Modularização de verticais | **CONCLUÍDO** | PR #10 Draft; gate `88071fd557199ffd6848312ea5559b0cba415ee1`; run `34668430831`; 71 source files; Pytest 346 PASS; CI restaurado |
 | V2-10 | Contract Packs Kordena/Iron/Vendedor/CampaIA | PENDENTE | **LIBERADA** após certificação da V2-09 |
 | V2-11 | Control Plane independente | PENDENTE | depende core operacional |
 | V2-12 | Gateway/Signer/Vault production adapters | PENDENTE | depende V2-11 |
@@ -84,11 +84,13 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 - Pytest: **346 PASS em 1.35s**;
 - baseline V2-08: 337 testes; incremento líquido V2-09: **+9**.
 
+O fechamento documental/tracker em `9a10d1863868d92462efaecddf5d36792240798e` também passou integralmente no run `34668559367`: Install PASS, Ruff PASS, Mypy strict PASS em 71 source files e **346 PASS em 1.41s**.
+
 ### Auditoria de diff
 
 Compare V2-08 `cc30ec3bddd2f61595c0d869f710e22d83e24743` -> gate V2-09 `88071fd557199ffd6848312ea5559b0cba415ee1`:
 
-- **9 commits à frente, 0 atrás**;
+- **9 commits à frente, 0 atrás** no gate funcional;
 - alterações limitadas a CI temporário, documentação/snapshot da fase, nova superfície `verticals`, shim de compatibilidade e testes;
 - contratos OpenAPI/AsyncAPI/JSON Schema não foram alterados;
 - nenhuma migration/persistência, segurança, webhook, provider fiscal, infraestrutura, segredo real, deploy ou cutover foi introduzido.
@@ -105,7 +107,8 @@ Compare V2-08 `cc30ec3bddd2f61595c0d869f710e22d83e24743` -> gate V2-09 `88071fd5
 
 - PR #10 permanece Draft e sem merge;
 - nenhum deploy, promoção ou cutover foi realizado;
-- o CI de PR foi ativado apenas para certificação e deve ser restaurado a `workflow_dispatch` após o gate documental final.
+- CI temporário de PR removido após certificação;
+- workflow restaurado para `workflow_dispatch` no commit `8e07e5f82df4bd889b5b7fed86707528550ab10e`.
 
 ## Próxima decisão
 
