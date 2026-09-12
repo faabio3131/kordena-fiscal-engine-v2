@@ -1,6 +1,6 @@
 # V2-11 — Control Plane independente
 
-Status: **EM EXECUÇÃO — FOUNDATION ADMINISTRATIVA CERTIFICADA**  
+Status: **EM EXECUÇÃO — BLOCOS 1-2 CERTIFICADOS**  
 Branch: `v2/control-plane`  
 Base certificada: `v2/product-contract-packs` @ `156a945cc8e2708eba21551b128ac3d673bb0cdc`  
 Dependência: V2-10 concluída e certificada.
@@ -32,8 +32,8 @@ Permitir operação autônoma e governada do FM Fiscal por um Control Plane inde
 ## Blocos de execução
 
 1. **Foundation administrativa — CONCLUÍDO/CERTIFICADO:** identidade de organização/unidade fiscal, ator administrativo, RBAC, referências opacas de segredo e audit event; serviço em memória para provar invariantes antes da persistência.
-2. **Persistência durável e perfis fiscais — PRÓXIMO:** onboarding durável, perfis/vigências, ambientes e referências; migration explícita e restart safety.
-3. **Capability/Readiness governance:** associação governada entre configuração administrativa e a Capability & Readiness API sem criar autoridade paralela.
+2. **Persistência durável e perfis fiscais — CONCLUÍDO/CERTIFICADO:** onboarding durável, perfis/vigências, ambientes e referências; migration explícita e restart safety.
+3. **Capability/Readiness governance — PRÓXIMO:** associação governada entre configuração administrativa e a Capability & Readiness API sem criar autoridade paralela.
 4. **Operational Control Plane:** consultas/visões governadas de operações, erros, contingência, archive e reconciliação reutilizando os serviços certificados existentes.
 5. **Certificação end-to-end:** RBAC, isolamento multi-tenant/unidade, audit trail, ausência de segredo bruto, restart/replay, diff completo e regressão integral.
 
@@ -81,6 +81,41 @@ Gate definitivo:
 - baseline V2-10: 397; incremento Foundation V2-11: **+9 testes**;
 - compare bootstrap `f2167b5ac7ca3806287c3fd4abf509a5b698925a` -> gate: **7 commits à frente, 0 atrás**; alterações restritas ao novo `control_plane`, testes e CI temporário;
 - CI restaurado para `workflow_dispatch` no commit `71823391c456b120ae5a4cf35d599caea0df353d`.
+
+## Bloco 2 — Persistência durável e perfis fiscais
+
+A foundation administrativa passou a usar o mesmo boundary transacional SQLite certificado do Core, sem criar banco ou transação paralela.
+
+### Persistência e migration V4
+
+A migration `v2_11_control_plane_durable_state` cria estruturas separadas para organizações, unidades/environments, referências opacas, perfis fiscais versionados e audit trail. `SqliteFiscalUnitOfWork` passou a expor `control_plane`, permitindo que estado administrativo e demais repositórios fiscais participem da mesma transação local quando necessário.
+
+Foram certificados os caminhos históricos de upgrade V2-07 -> V2-08 -> V2-11 e V2-08 final -> V2-11. A migration V4 é idempotente e nunca reaplica V1-V3.
+
+### Perfis e vigências
+
+`DurableControlPlaneService` reutiliza o `FiscalProfile` já certificado no domínio, em vez de introduzir uma segunda verdade fiscal. A persistência conserva CNPJ, regime tributário, inscrições, CNAE, endereço, host/tenant/unidade/environment, versionamento e `effective_from/effective_to`.
+
+Para a mesma partição host/tenant/unidade/environment, períodos sobrepostos são rejeitados fail-closed. Períodos adjacentes são permitidos e a resolução efetiva usa semântica `[effective_from, effective_to)`. Corrupção que resulte em mais de um perfil efetivo é recusada pelo adapter.
+
+### Referências de segredo e restart safety
+
+A tabela de referências contém somente `reference_id`, `kind`, `tenant_id`, `unit_id` e `environment`. Teste estrutural comprova que não existem colunas para `secret`, `value`, `material`, `password`, `token`, `pfx` ou `csc`. Reinício do processo preserva onboarding, environments, referências, perfis e auditoria sem material secreto.
+
+### Certificação Block 2
+
+Durante a implantação da V4, a primeira regressão completa encontrou apenas expectativas legadas de migrations `(1,2,3)`; não houve defeito semântico nos subsistemas antigos. Após reconciliar os testes históricos com a migration V4, duas asserções do novo audit trail ainda assumiam ordem de inserção para eventos com timestamp artificialmente idêntico. As asserções foram corrigidas para validar os fatos de auditoria sem impor ordem inexistente.
+
+Gate definitivo:
+
+- SHA: `fb485d180a2fba689c0465b61fbec206c02c3cf4`;
+- Actions run: `34709564947` — **SUCCESS**;
+- Install: PASS;
+- Ruff: PASS;
+- Mypy strict: PASS — **83 source files**;
+- Pytest: **416 PASS em 1.67s**;
+- baseline Block 1: 406; incremento líquido Block 2: **+10 testes**;
+- CI restaurado para `workflow_dispatch` no commit `7c3177dfe7f95cd7cf472c88d16ae8ac40d605af`.
 
 ## Gate da fase
 
