@@ -19,10 +19,10 @@ from kordena_fiscal.domain import (
     CnaeCode,
     Cnpj,
     ExecutionScope,
+    FiscalAddress,
     FiscalEnvironment,
     FiscalProfile,
     FiscalValidationError,
-    FiscalAddress,
     MunicipalRegistration,
     StateRegistration,
     TaxRegimeCode,
@@ -30,6 +30,16 @@ from kordena_fiscal.domain import (
 
 from ._sqlite_common import dt, integer, iso, one_row, optional_text, text
 from .ports import PersistenceConflictError, PersistenceStateError
+
+_PROFILE_SELECT = """
+    profile_id, version, host_namespace, tenant_id, unit_id,
+    environment, correlation_id, cnpj, legal_name, tax_regime,
+    state_registration_state, state_registration_number,
+    state_registration_exempt, primary_cnae, street, address_number,
+    district, municipality_name, state_code, municipality_ibge_code,
+    postal_code, complement, effective_from, effective_to, trade_name,
+    municipal_registration_number
+"""
 
 
 class SqliteControlPlaneStore:
@@ -123,12 +133,16 @@ class SqliteControlPlaneStore:
         if not isinstance(raw_environments, list) or not all(
             isinstance(item, str) for item in raw_environments
         ):
-            raise PersistenceStateError("persisted enabled environments must be a string list")
+            raise PersistenceStateError(
+                "persisted enabled environments must be a string list"
+            )
         return FiscalUnitRegistration(
             tenant_id=text(row[0], "tenant_id"),
             unit_id=text(row[1], "unit_id"),
             display_name=text(row[2], "display_name"),
-            enabled_environments=frozenset(FiscalEnvironment(item) for item in raw_environments),
+            enabled_environments=frozenset(
+                FiscalEnvironment(item) for item in raw_environments
+            ),
         )
 
     def add_secret_reference(self, reference: SecretReference) -> SecretReference:
@@ -200,9 +214,12 @@ class SqliteControlPlaneStore:
             raise FiscalValidationError("profile must be FiscalProfile")
         host_namespace = profile.scope.host_namespace
         if host_namespace is None:
-            raise FiscalValidationError("durable Control Plane profile requires host_namespace")
+            raise FiscalValidationError(
+                "durable Control Plane profile requires host_namespace"
+            )
         if self.get_profile(profile.profile_id, profile.version) is not None:
             raise PersistenceConflictError("fiscal profile id/version already exists")
+        new_end = None if profile.effective_to is None else iso(profile.effective_to)
         overlapping = one_row(
             self._connection.execute(
                 """
@@ -219,8 +236,8 @@ class SqliteControlPlaneStore:
                     profile.scope.tenant_id,
                     profile.scope.unit_id,
                     profile.scope.environment.value,
-                    None if profile.effective_to is None else iso(profile.effective_to),
-                    None if profile.effective_to is None else iso(profile.effective_to),
+                    new_end,
+                    new_end,
                     iso(profile.effective_from),
                 ),
             )
@@ -268,7 +285,7 @@ class SqliteControlPlaneStore:
                 address.postal_code,
                 address.complement,
                 iso(profile.effective_from),
-                None if profile.effective_to is None else iso(profile.effective_to),
+                new_end,
                 profile.trade_name,
                 None
                 if profile.municipal_registration is None
@@ -314,13 +331,13 @@ class SqliteControlPlaneStore:
                 complement=optional_text(row[21], "complement"),
             ),
             effective_from=dt(text(row[22], "effective_from")),
-            effective_to=None
-            if row[23] is None
-            else dt(text(row[23], "effective_to")),
+            effective_to=(
+                None if row[23] is None else dt(text(row[23], "effective_to"))
+            ),
             trade_name=optional_text(row[24], "trade_name"),
-            municipal_registration=None
-            if municipal is None
-            else MunicipalRegistration(municipal),
+            municipal_registration=(
+                None if municipal is None else MunicipalRegistration(municipal)
+            ),
         )
 
     def get_profile(self, profile_id: str, version: int) -> FiscalProfile | None:
@@ -331,14 +348,8 @@ class SqliteControlPlaneStore:
             raise FiscalValidationError("version must be >= 1")
         row = one_row(
             self._connection.execute(
-                """
-                SELECT profile_id, version, host_namespace, tenant_id, unit_id,
-                       environment, correlation_id, cnpj, legal_name, tax_regime,
-                       state_registration_state, state_registration_number,
-                       state_registration_exempt, primary_cnae, street, address_number,
-                       district, municipality_name, state_code, municipality_ibge_code,
-                       postal_code, complement, effective_from, effective_to, trade_name,
-                       municipal_registration_number
+                f"""
+                SELECT {_PROFILE_SELECT}
                 FROM fm_control_plane_fiscal_profiles
                 WHERE profile_id = ? AND version = ?
                 """,
@@ -358,35 +369,40 @@ class SqliteControlPlaneStore:
     ) -> FiscalProfile | None:
         if not isinstance(environment, FiscalEnvironment):
             raise FiscalValidationError("environment must be FiscalEnvironment")
-        instant_iso = iso(instant)
-        row = one_row(
-            self._connection.execute(
-                """
-                SELECT profile_id, version, host_namespace, tenant_id, unit_id,
-                       environment, correlation_id, cnpj, legal_name, tax_regime,
-                       state_registration_state, state_registration_number,
-                       state_registration_exempt, primary_cnae, street, address_number,
-                       district, municipality_name, state_code, municipality_ibge_code,
-                       postal_code, complement, effective_from, effective_to, trade_name,
-                       municipal_registration_number
-                FROM fm_control_plane_fiscal_profiles
-                WHERE host_namespace = ? AND tenant_id = ? AND unit_id = ?
-                  AND environment = ? AND effective_from <= ?
-                  AND (effective_to IS NULL OR effective_to > ?)
-                ORDER BY effective_from DESC
-                LIMIT 2
-                """,
-                (
-                    host_namespace.strip().lower(),
-                    tenant_id.strip().lower(),
-                    unit_id.strip().lower(),
-                    environment.value,
-                    instant_iso,
-                    instant_iso,
-                ),
+        host = host_namespace.strip().lower()
+        tenant = tenant_id.strip().lower()
+        unit = unit_id.strip().lower()
+        if not host or not tenant or not unit:
+            raise FiscalValidationError(
+                "host_namespace, tenant_id and unit_id must not be blank"
             )
-        )
-        return None if row is None else self._profile(row)
+        instant_iso = iso(instant)
+        rows = self._connection.execute(
+            f"""
+            SELECT {_PROFILE_SELECT}
+            FROM fm_control_plane_fiscal_profiles
+            WHERE host_namespace = ? AND tenant_id = ? AND unit_id = ?
+              AND environment = ? AND effective_from <= ?
+              AND (effective_to IS NULL OR effective_to > ?)
+            ORDER BY effective_from DESC
+            LIMIT 2
+            """,
+            (
+                host,
+                tenant,
+                unit,
+                environment.value,
+                instant_iso,
+                instant_iso,
+            ),
+        ).fetchall()
+        if not rows:
+            return None
+        if len(rows) > 1:
+            raise PersistenceStateError(
+                "multiple effective fiscal profiles found for the same partition"
+            )
+        return self._profile(tuple(rows[0]))
 
     def append_audit(self, event: ControlPlaneAuditEvent) -> ControlPlaneAuditEvent:
         if not isinstance(event, ControlPlaneAuditEvent):
@@ -434,7 +450,10 @@ class SqliteControlPlaneStore:
             unit_id=optional_text(row[8], "unit_id"),
         )
 
-    def list_audit(self, tenant_id: str | None = None) -> tuple[ControlPlaneAuditEvent, ...]:
+    def list_audit(
+        self,
+        tenant_id: str | None = None,
+    ) -> tuple[ControlPlaneAuditEvent, ...]:
         if tenant_id is None:
             cursor = self._connection.execute(
                 """
