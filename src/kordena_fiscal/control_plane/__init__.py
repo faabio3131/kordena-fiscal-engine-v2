@@ -24,6 +24,10 @@ from .service import (
 )
 
 if TYPE_CHECKING:
+    from .capability import (
+        CapabilityControlContext,
+        GovernedCapabilityReadinessService,
+    )
     from .durable import (
         DurableControlPlaneClock,
         DurableControlPlaneService,
@@ -32,6 +36,20 @@ if TYPE_CHECKING:
 
 
 def __getattr__(name: str) -> Any:
+    if name in {
+        "CapabilityControlContext",
+        "GovernedCapabilityReadinessService",
+    }:
+        from .capability import (
+            CapabilityControlContext,
+            GovernedCapabilityReadinessService,
+        )
+
+        capability_values = {
+            "CapabilityControlContext": CapabilityControlContext,
+            "GovernedCapabilityReadinessService": GovernedCapabilityReadinessService,
+        }
+        return capability_values[name]
     if name in {
         "DurableControlPlaneClock",
         "DurableControlPlaneService",
@@ -43,17 +61,18 @@ def __getattr__(name: str) -> Any:
             SystemDurableControlPlaneClock,
         )
 
-        values = {
+        durable_values = {
             "DurableControlPlaneClock": DurableControlPlaneClock,
             "DurableControlPlaneService": DurableControlPlaneService,
             "SystemDurableControlPlaneClock": SystemDurableControlPlaneClock,
         }
-        return values[name]
+        return durable_values[name]
     raise AttributeError(name)
 
 
 __all__ = [
     "AdminPrincipal",
+    "CapabilityControlContext",
     "ControlPlaneAuditAction",
     "ControlPlaneAuditEvent",
     "ControlPlaneAuthorizationError",
@@ -66,6 +85,7 @@ __all__ = [
     "DurableControlPlaneService",
     "FiscalOrganization",
     "FiscalUnitRegistration",
+    "GovernedCapabilityReadinessService",
     "InMemoryControlPlaneState",
     "SecretReference",
     "SecretReferenceKind",
