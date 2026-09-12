@@ -59,6 +59,7 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 - Install PASS; Ruff PASS; Mypy strict PASS — **59 source files sem issues**; Pytest **309 PASS em 0.94s**;
 - baseline V2-06: 305 testes; V2-07 adicionou 4 testes de integração durável;
 - diff auditado contra V2-06: 19 commits à frente, 0 atrás, 15 arquivos alterados, restritos a application/persistence, testes, docs/tracker e CI temporário;
+- após a certificação, `.github/workflows/ci.yml` foi restaurado para `workflow_dispatch` apenas no commit `2fa949f87668f93318b077f7142491673c433714`;
 - nenhum contrato Bridge, provider, segredo, homologação externa, merge ou deploy foi alterado/executado.
 
 ## Riscos residuais governados após V2-07
@@ -71,4 +72,4 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 
 ## Próxima decisão
 
-**V2-07 CONCLUÍDO E CERTIFICADO. V2-08 — Events/Webhooks/Inbox/Outbox está LIBERADO e é o próximo bloco de construção.**
+**V2-07 CONCLUÍDO E CERTIFICADO. CI restaurado ao modo controlado. V2-08 — Events/Webhooks/Inbox/Outbox está LIBERADO e é o próximo bloco de construção.**
