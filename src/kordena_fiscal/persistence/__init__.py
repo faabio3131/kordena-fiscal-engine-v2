@@ -1,6 +1,7 @@
 """Public durable persistence ports and SQLite reference adapter."""
 
 from .ports import (
+    ControlPlaneStore,
     FiscalBindingRepository,
     FiscalLifecycleRepository,
     FiscalPersistenceError,
@@ -11,6 +12,7 @@ from .ports import (
     PersistenceStateError,
 )
 from .sqlite import SqliteFiscalDatabase, SqliteFiscalUnitOfWork
+from .sqlite_control_plane import SqliteControlPlaneStore
 from .sqlite_core import (
     SqliteBindingRepository,
     SqliteFiscalSequenceStore,
@@ -22,6 +24,7 @@ from .sqlite_outbox_archive import SqliteFiscalArchiveStore, SqliteFiscalOutboxS
 from .sqlite_reconciliation import SqliteReconciliationRepository
 
 __all__ = [
+    "ControlPlaneStore",
     "FiscalBindingRepository",
     "FiscalLifecycleRepository",
     "FiscalPersistenceError",
@@ -31,6 +34,7 @@ __all__ = [
     "PersistenceConflictError",
     "PersistenceStateError",
     "SqliteBindingRepository",
+    "SqliteControlPlaneStore",
     "SqliteFiscalArchiveStore",
     "SqliteFiscalDatabase",
     "SqliteFiscalInboxStore",
