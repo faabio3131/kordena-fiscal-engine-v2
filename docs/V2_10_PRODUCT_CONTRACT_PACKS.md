@@ -103,6 +103,19 @@ Compare V2-09 `5d3e06be52a75b60b36640ee8a5d1869b11de928` -> checkpoint pós-gate
 - nenhum OpenAPI, AsyncAPI ou JSON Schema foi alterado pela V2-10;
 - nenhuma migration, persistência, webhook, segurança S2S, provider fiscal, infraestrutura, segredo real, deploy ou cutover foi introduzido.
 
+## Certificação final de fechamento
+
+Após a atualização do documento da fase e do tracker, a regressão completa foi executada novamente sobre o fechamento documental:
+
+- SHA certificado de fechamento: `345652ecbfc18c8bd3511cf5b9083ba0dbc259cb`;
+- Actions run: `34707976358` — **SUCCESS**;
+- Install: PASS;
+- Ruff: PASS;
+- Mypy strict: PASS — **78 source files**;
+- Pytest: **397 PASS em 1.47s**;
+- nenhuma regressão introduzida pelo fechamento documental;
+- CI restaurado novamente para apenas `workflow_dispatch` no commit `2d651bd380807cad6ad30757ad96f6c6365af709`.
+
 ## Riscos residuais / limites
 
 - Product Contract Packs são contratos de integração, não prova de homologação fiscal real;
@@ -114,4 +127,4 @@ Compare V2-09 `5d3e06be52a75b60b36640ee8a5d1869b11de928` -> checkpoint pós-gate
 
 ## Governança
 
-PR #11 permanece Draft. Nenhum merge, deploy, promoção, homologação externa, segredo real ou cutover foi executado. O fechamento documental será submetido a uma última regressão integral antes de liberar formalmente a V2-11.
+PR #11 permanece Draft. Nenhum merge, deploy, promoção, homologação externa, segredo real ou cutover foi executado. A V2-10 está formalmente concluída e certificada; a V2-11 fica liberada para início em branch e PR Draft próprios, conforme o protocolo.
