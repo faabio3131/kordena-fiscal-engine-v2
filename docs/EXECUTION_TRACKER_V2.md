@@ -4,9 +4,9 @@ Data de início: 2026-09-11
 Repositório: `faabio3131/kordena-fiscal-engine-v2`  
 Status global: **EM EXECUÇÃO**  
 Última fase concluída: **V2-10 — Product Contract Packs**  
-Próxima fase: **V2-11 — Control Plane independente — PENDENTE**
+Fase atual: **V2-11 — Control Plane independente — EM EXECUÇÃO**
 
-> O estado imediatamente anterior ao início do V2-10 foi preservado em `docs/history/EXECUTION_TRACKER_V2_PRE_V2_10.md`.
+> O estado imediatamente anterior ao início do V2-11 foi preservado em `docs/history/EXECUTION_TRACKER_V2_PRE_V2_11.md`.
 
 ## Regra de governança
 
@@ -26,8 +26,8 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 | V2-07 | Application service + persistência durável | **CONCLUÍDO** | PR #8 Draft; gate `999ba84b9c25988441867820bfe8af0571269548`; run `34659892798`; 59 source files; Pytest 309 PASS; CI restaurado |
 | V2-08 | Events/Webhooks/Inbox/Outbox | **CONCLUÍDO** | PR #9 Draft; gate `bc77ee4cf2b7151d06c09cf32ca9168363ece1c7`; run `34666753555`; 67 source files; Pytest 337 PASS; CI restaurado |
 | V2-09 | Modularização de verticais | **CONCLUÍDO** | PR #10 Draft; gate `88071fd557199ffd6848312ea5559b0cba415ee1`; run `34668430831`; 71 source files; Pytest 346 PASS; CI restaurado |
-| V2-10 | Contract Packs Kordena/Iron/Vendedor/CampaIA | **CONCLUÍDO** | PR #11 Draft; gate funcional `44941004207d2991fccfd0f28b402bc3cda9357f`; fechamento `345652ecbfc18c8bd3511cf5b9083ba0dbc259cb`; run `34707976358`; 78 source files; Pytest 397 PASS; CI restaurado |
-| V2-11 | Control Plane independente | PENDENTE | próxima fase; depende core operacional multiproduto certificado |
+| V2-10 | Contract Packs Kordena/Iron/Vendedor/CampaIA | **CONCLUÍDO** | PR #11 Draft; fechamento `345652ecbfc18c8bd3511cf5b9083ba0dbc259cb`; run `34707976358`; 78 source files; Pytest 397 PASS; CI restaurado |
+| V2-11 | Control Plane independente | **EM EXECUÇÃO** | branch `v2/control-plane`; snapshot pré-fase preservado; plano `docs/V2_11_CONTROL_PLANE.md`; PR Draft a abrir |
 | V2-12 | Gateway/Signer/Vault production adapters | PENDENTE | depende V2-11 |
 | V2-13 | Observabilidade + Compliance Operations | PENDENTE | depende V2-07/V2-12 |
 | V2-14 | Hardening sistêmico | PENDENTE | regressão/carga/falhas/segurança |
@@ -43,7 +43,7 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 - Signed Webhook Delivery: gate `8321106338aca262a76fe2bdfa76665bdcc57950`, run `34664214273`, 331 PASS.
 - audit + ordering + duplicate delivery: gate `bc77ee4cf2b7151d06c09cf32ca9168363ece1c7`, run `34666753555`, 337 PASS.
 
-## Fechamento V2-09 — Modularização de verticais
+## Fechamento V2-09 — resumo preservado
 
 - `kordena_fiscal.verticals` host-neutral;
 - restaurante explícito com regras preservadas;
@@ -51,107 +51,27 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 - registry explícito/fail-closed e extensão sem fork;
 - gate `88071fd557199ffd6848312ea5559b0cba415ee1`, run `34668430831`, 71 source files, 346 PASS.
 
-## Fechamento V2-10 — Product Contract Packs
+## Fechamento V2-10 — resumo preservado
 
-### Foundation
+- Foundation + Product Contract Packs Kordena, Iron Fit, Vendedor IA e CampaIA;
+- catálogo governado com quatro hosts e matriz derivada de 9 casos de uso;
+- isolamento cross-host/imports certificado;
+- gate funcional cross-product `44941004207d2991fccfd0f28b402bc3cda9357f`, run `34707834828`, 397 PASS;
+- regressão final de fechamento `345652ecbfc18c8bd3511cf5b9083ba0dbc259cb`, run `34707976358`, 397 PASS;
+- diff final documental V2-09 -> V2-10: 56 commits à frente, 0 atrás, 16 arquivos líquidos;
+- nenhum OpenAPI/AsyncAPI/JSON Schema, migration, persistência, S2S/webhook, provider fiscal ou infraestrutura alterado;
+- PR #11 permaneceu Draft e sem merge; CI restaurado.
 
-- descriptors versionados de pack/use case;
-- registry explícito por `pack_id` e `host_namespace`;
-- validação fail-closed de namespace, operation kind e vertical/capability;
-- nenhum pack concede readiness.
+## V2-11 — Control Plane independente
 
-Gate `3af9a6ded0303ca7d591bbfa69b771c4571a9cc0`, run `34672479434`: 73 source files, **354 PASS**.
+### Bootstrap — EM EXECUÇÃO
 
-### Kordena
-
-- `fm.kordena`;
-- SALE + NFC-e/NF-e;
-- vertical `restaurant` explícita, sem duplicar regra tributária.
-
-Gate `6fd934c024736f3d5e23aa4d1172d60caa49fb7c`, run `34672769666`: 74 source files, **362 PASS**.
-
-### Iron Fit
-
-- `fm.iron`;
-- MEMBERSHIP / RECURRING_CHARGE / SERVICE + NFS-e;
-- vertical `fitness` com capability por caso.
-
-Gate `3c3f18dd77663e021424b9f32c9f1a849b001c84`, run `34672919212`: 75 source files, **371 PASS**.
-
-### Vendedor IA
-
-- `fm.vendedor-ia`;
-- SALE + NFC-e/NF-e;
-- sem vertical setorial e sem inferência de pagamento/settlement.
-
-Gate `7be9453e6757784e38e77e83928bc0f828007f90`, run `34674065346`: 76 source files, **380 PASS**.
-
-### CampaIA
-
-- `fm.campaia`;
-- SERVICE + NFS-e / vertical `service`;
-- SAAS_BILLING + NFS-e / vertical `saas`;
-- sem inferência de pagamento, tributo, jurisdição ou readiness.
-
-Gate `1e0558773f7a39b6e5b4156f874fd201d4efdf3c`, run `34707632430`: 77 source files, **389 PASS**.
-
-### Cross-product certification
-
-- catálogo governado com os quatro packs e quatro hosts únicos;
-- matriz derivada com **9 casos de uso**;
-- cada pack aceita seu próprio host e rejeita os outros três;
-- todas as verticais exigidas validam no registry governado;
-- todos os eventos inbound existem no AsyncAPI público;
-- nenhum outbound privado é inventado;
-- nenhum pack ou use case contém autoridade de readiness/production approval;
-- auditoria AST confirma que os módulos individuais de pack não importam packs de outros produtos nem domínios privados de SaaS.
-
-Primeira tentativa `34707799695`: falha somente Ruff/E501 em três linhas de `catalog.py`; correção de formatação sem mudança semântica.
-
-Gate funcional definitivo:
-- SHA `44941004207d2991fccfd0f28b402bc3cda9357f`;
-- run `34707834828` — **SUCCESS**;
-- Install PASS;
-- Ruff PASS;
-- Mypy strict PASS — **78 source files**;
-- Pytest **397 PASS em 1.16s**;
-- baseline V2-09 346 -> V2-10 397: **+51 testes líquidos**.
-
-### Certificação final de fechamento
-
-Após documentação e tracker de encerramento, a matriz completa foi executada novamente:
-
-- SHA `345652ecbfc18c8bd3511cf5b9083ba0dbc259cb`;
-- run `34707976358` — **SUCCESS**;
-- Install PASS;
-- Ruff PASS;
-- Mypy strict PASS — **78 source files**;
-- Pytest **397 PASS em 1.47s**;
-- CI restaurado para `workflow_dispatch` no commit `2d651bd380807cad6ad30757ad96f6c6365af709`.
-
-### Auditoria de diff contra V2-09
-
-- checkpoint funcional/restaurado `fcd3fc69086c46ede94079a48da90a5ec0764572`: **48 commits à frente, 0 atrás, 16 arquivos líquidos**;
-- checkpoint pós-evidência `e4cd46292515e5c10e1b57687dcfdb66b478c85f`: **54 commits à frente, 0 atrás, os mesmos 16 arquivos líquidos**;
-- commits adicionais são documentação de fechamento e toggles/restaurações temporárias de CI;
-- escopo líquido permanece restrito a documentação/snapshot V2-10, `contract_packs` e testes de contract packs;
-- nenhum contrato OpenAPI/AsyncAPI/JSON Schema, migration, persistência, segurança S2S, webhook, provider fiscal, infraestrutura, segredo real, deploy ou cutover foi alterado.
-
-### Riscos residuais / limites
-
-- packs não equivalem a homologação fiscal real;
-- readiness por documento/jurisdição continua sob Capability & Readiness;
-- adapters reais, signer/vault e providers pertencem às fases posteriores;
-- Control Plane e wiring operacional são escopo V2-11;
-- NFS-e não recebe permissões genéricas apenas por pertencer a um produto.
-
-## Governança
-
-- PR #11 permanece Draft e sem merge;
-- nenhum deploy, promoção, homologação externa ou cutover foi realizado;
-- V2-10 está **CONCLUÍDA E CERTIFICADA**;
-- V2-11 está formalmente liberada para ser iniciada em branch e PR Draft próprios.
+- branch `v2/control-plane` criada a partir do fechamento V2-10 `156a945cc8e2708eba21551b128ac3d673bb0cdc`;
+- snapshot pré-fase em `docs/history/EXECUTION_TRACKER_V2_PRE_V2_11.md`;
+- plano da fase em `docs/V2_11_CONTROL_PLANE.md`;
+- escopo segue o Plano Mestre: onboarding empresa/unidade, perfis e vigências, capabilities/ambientes, referências opacas de segredo, operações/erros/contingência/archive/reconciliação, RBAC e audit trail;
+- UI premium/comercial, Vault real, signer real e provider adapters permanecem fora desta fase.
 
 ## Próxima decisão
 
-**V2-11 — Control Plane independente: iniciar somente com snapshot pré-fase, nova branch stacked sobre o fechamento V2-10 e nova PR Draft, preservando os mesmos gates de governança.**
+**Abrir PR Draft stacked sobre `v2/product-contract-packs` e executar o Bloco 1 — Foundation administrativa, com domínio host-neutral, RBAC, secret references opacas e audit trail antes da persistência durável.**
