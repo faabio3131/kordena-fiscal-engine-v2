@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import replace
+from datetime import datetime
 
 from kordena_fiscal.domain import FiscalValidationError
 from kordena_fiscal.events import (
@@ -148,7 +149,7 @@ class SqliteFiscalInboxStore:
         entry_id: str,
         *,
         expected_version: int,
-        processed_at,
+        processed_at: datetime,
         outcome_reference: str | None = None,
     ) -> FiscalInboxEntry:
         current = self._expect(entry_id, expected_version, FiscalInboxStatus.PROCESSING)
@@ -168,7 +169,7 @@ class SqliteFiscalInboxStore:
         entry_id: str,
         *,
         expected_version: int,
-        processed_at,
+        processed_at: datetime,
         error: str,
     ) -> FiscalInboxEntry:
         current = self._expect(entry_id, expected_version, FiscalInboxStatus.PROCESSING)
