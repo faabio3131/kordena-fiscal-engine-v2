@@ -33,6 +33,14 @@ if TYPE_CHECKING:
         DurableControlPlaneService,
         SystemDurableControlPlaneClock,
     )
+    from .operations import (
+        ArchiveReferenceView,
+        DeliveryAttemptView,
+        DeliveryOperationView,
+        OperationalControlPlaneService,
+        ReconciliationControlView,
+        ReconciliationIssueView,
+    )
 
 
 def __getattr__(name: str) -> Any:
@@ -67,11 +75,38 @@ def __getattr__(name: str) -> Any:
             "SystemDurableControlPlaneClock": SystemDurableControlPlaneClock,
         }
         return durable_values[name]
+    if name in {
+        "ArchiveReferenceView",
+        "DeliveryAttemptView",
+        "DeliveryOperationView",
+        "OperationalControlPlaneService",
+        "ReconciliationControlView",
+        "ReconciliationIssueView",
+    }:
+        from .operations import (
+            ArchiveReferenceView,
+            DeliveryAttemptView,
+            DeliveryOperationView,
+            OperationalControlPlaneService,
+            ReconciliationControlView,
+            ReconciliationIssueView,
+        )
+
+        operational_values = {
+            "ArchiveReferenceView": ArchiveReferenceView,
+            "DeliveryAttemptView": DeliveryAttemptView,
+            "DeliveryOperationView": DeliveryOperationView,
+            "OperationalControlPlaneService": OperationalControlPlaneService,
+            "ReconciliationControlView": ReconciliationControlView,
+            "ReconciliationIssueView": ReconciliationIssueView,
+        }
+        return operational_values[name]
     raise AttributeError(name)
 
 
 __all__ = [
     "AdminPrincipal",
+    "ArchiveReferenceView",
     "CapabilityControlContext",
     "ControlPlaneAuditAction",
     "ControlPlaneAuditEvent",
@@ -81,12 +116,17 @@ __all__ = [
     "ControlPlaneFoundationService",
     "ControlPlaneNotFoundError",
     "ControlPlanePermission",
+    "DeliveryAttemptView",
+    "DeliveryOperationView",
     "DurableControlPlaneClock",
     "DurableControlPlaneService",
     "FiscalOrganization",
     "FiscalUnitRegistration",
     "GovernedCapabilityReadinessService",
     "InMemoryControlPlaneState",
+    "OperationalControlPlaneService",
+    "ReconciliationControlView",
+    "ReconciliationIssueView",
     "SecretReference",
     "SecretReferenceKind",
     "SystemDurableControlPlaneClock",
