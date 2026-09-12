@@ -24,7 +24,7 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 | V2-05 | Auth S2S + workload identity + webhook security | **CONCLUÍDO** | PR #6 Draft; gate `196928d1b0cfe896df0c4741839ce72258f8f4d4`; run `34656535435`; 48 source files; Pytest 290 PASS |
 | V2-06 | Capability & Readiness API | **CONCLUÍDO** | PR #7 Draft; gate `e6c7b2b9e507116ef4919812153f8e54f84173f3`; run `34659021574` SUCCESS; 49 source files; Pytest 305 PASS |
 | V2-07 | Application service + persistência durável | **CONCLUÍDO** | PR #8 Draft; gate `999ba84b9c25988441867820bfe8af0571269548`; run `34659892798` SUCCESS; 59 source files; Pytest 309 PASS; CI restaurado a `workflow_dispatch` |
-| V2-08 | Events/Webhooks/Inbox/Outbox | **EM EXECUÇÃO** | PR #9 Draft; Durable Inbox **CONCLUÍDA/CERTIFICADA** no gate `f467d0dafa70e3c0debd3aacccbb183c954c5b35`, run `34662707064`; demais blocos pendentes |
+| V2-08 | Events/Webhooks/Inbox/Outbox | **EM EXECUÇÃO** | PR #9 Draft; Inbox gate `f467d0dafa70e3c0debd3aacccbb183c954c5b35` / run `34662707064`; Outbox Worker gate `56678f730f2e7c3c235530887612a7ee71b5efc8` / run `34663828770`; 322 PASS |
 | V2-09 | Modularização de verticais | PENDENTE | após contratos core estabilizados |
 | V2-10 | Contract Packs Kordena/Iron/Vendedor/CampaIA | PENDENTE | depende V2-03..V2-09 |
 | V2-11 | Control Plane independente | PENDENTE | depende core operacional |
@@ -36,48 +36,54 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 | V2-17 | Convergência/cutover + arquivamento original | PENDENTE | somente após equivalência e integrações certificadas |
 | V2-18 | Produto comercial independente | PENDENTE | posterior ao uso interno certificado |
 
-## Checkpoint V2-08 — Durable Inbox concluída e certificada
+## Checkpoint V2-08 — blocos certificados
 
-- baseline imediato: `v2/application-durable-persistence`, com V2-07 certificado;
-- branch: `v2/events-webhooks-inbox-outbox`;
-- PR #9 permanece Draft sobre V2-07, sem merge;
-- `kordena_fiscal.events` criado como superfície host-neutral para mensagens assíncronas;
+### Bloco 1 — Durable Inbox
+
+- superfície `kordena_fiscal.events` criada;
 - `FiscalInboxEntry`, `FiscalInboxStatus`, `FiscalInboxStore` e `FiscalInboxService` implementados;
-- estados governados: `RECEIVED -> PROCESSING -> PROCESSED/REJECTED`;
-- transições protegidas por versão otimista e falham fechado em versão stale ou estado inválido;
-- identidade determinística usa partição fiscal + producer + upstream `event_id`;
-- duplicate intake com conteúdo idêntico retorna replay da entrada original, inclusive após restart;
-- mesma identidade semântica com conteúdo diferente gera `InboxConflictError`;
-- payload persistido com SHA-256 validado e correlation/causation/idempotency preservados;
-- migration SQLite v2 `v2_08_durable_inbox` adiciona `fm_fiscal_inbox`, constraint única de identidade e índice de status;
-- migration testada sobre estado equivalente ao V2-07: somente versão 2 é aplicada e migration 1 é preservada;
-- `FiscalUnitOfWork` passa a expor `inbox` dentro do mesmo `BEGIN IMMEDIATE` dos stores V2-07;
-- rollback conjunto inbox + outbox foi comprovado sem commit;
-- `FiscalApplicationService` recebe, inicia processamento, conclui, rejeita e consulta eventos da inbox dentro do UoW;
-- mesma upstream event id permanece isolada entre hosts diferentes;
-- contratos AsyncAPI/Bridge existentes não foram alterados neste bloco;
-- primeira tentativa de CI falhou somente em E501/Ruff e foi corrigida sem mudança semântica;
-- gate definitivo da Durable Inbox: `f467d0dafa70e3c0debd3aacccbb183c954c5b35`;
-- Actions run `34662707064`: **SUCCESS**;
-- Install PASS; Ruff PASS; Mypy strict PASS — **62 source files sem issues**; Pytest **316 PASS em 0.85s**;
-- baseline V2-07: 309 testes; Durable Inbox adicionou 7 testes;
-- diff do gate contra V2-07: 17 commits à frente, 0 atrás, limitado ao bootstrap V2-08, events/inbox, integração application/persistence, testes e CI temporário;
-- CI foi restaurado a `workflow_dispatch` após o checkpoint no commit `c9e26364e2f0925439ac86e146a8ab5668f57c3b`;
+- lifecycle `RECEIVED -> PROCESSING -> PROCESSED/REJECTED` com optimistic versioning;
+- identidade determinística por partição fiscal + producer + upstream `event_id`;
+- replay idêntico após restart e conflito semântico fail-closed;
+- payload SHA-256 + correlation/causation/idempotency preservados;
+- migration SQLite v2 `v2_08_durable_inbox` integrada ao mesmo UoW do V2-07;
+- rollback conjunto inbox + outbox, isolamento por host e upgrade V2-07 -> v2 comprovados;
+- gate `f467d0dafa70e3c0debd3aacccbb183c954c5b35`, run `34662707064` SUCCESS;
+- Install PASS; Ruff PASS; Mypy strict PASS — 62 source files; Pytest 316 PASS;
+- baseline V2-07 309 testes; +7 testes.
+
+### Bloco 2 — Durable Outbox Delivery + Dispatcher/Worker
+
+- `DurableFiscalOutboxWorker` criado na camada de aplicação;
+- claim/lease é executado e commitado em transação curta antes do I/O externo;
+- handler roda fora da transação SQLite;
+- success/retry/dead-letter são persistidos em nova Unit of Work;
+- `attempt_count` funciona como fencing token contra worker stale;
+- retry/backoff persiste `RETRY_WAIT` + `available_at` e sobrevive restart;
+- lease expirada após crash é recuperada com nova tentativa;
+- dois workers duráveis concorrentes não despacham a mesma lease ativa;
+- exceções do handler são tratadas como falha retryable limitada e terminam em DLQ quando esgotam tentativas;
+- stale worker não consegue finalizar depois que outra tentativa assumiu autoridade;
+- handler de teste abre outra Unit of Work durante dispatch, comprovando ausência de transação local mantida sobre I/O;
+- nenhuma nova migration necessária: o schema de outbox do V2-07 já contém estado suficiente;
+- gate `56678f730f2e7c3c235530887612a7ee71b5efc8`, run `34663828770` SUCCESS;
+- Install PASS; Ruff PASS; Mypy strict PASS — **63 source files sem issues**; Pytest **322 PASS em 1.16s**;
+- baseline pós-Inbox 316 testes; **+6 testes** de outbox durável;
+- compare no gate contra V2-07: 33 commits à frente, 0 atrás, alterações limitadas ao V2-08 e CI temporário;
+- CI restaurado a `workflow_dispatch` no commit `c533bf65791025dd597f1871ee8f1572e39954ee`;
 - nenhum merge, deploy ou cutover realizado.
 
 ## Escopo V2-08 ainda pendente
 
-- Durable Outbox Delivery sobre o estado persistido do V2-07;
-- dispatcher/worker com claim e lease;
-- retry/backoff limitado e auditável;
-- recovery de lease expirado após crash;
-- DLQ/dead-letter para falha permanente;
-- webhook delivery assinado usando a segurança certificada no V2-05;
-- auditoria end-to-end de tentativas e resultado;
-- testes de concorrência, duplicate delivery, retry, lease expiry e DLQ;
+- webhook delivery assinado usando HMAC-SHA256, `key_id`, timestamp, anti-replay e rotação certificados no V2-05;
+- handler/adaptador de webhook integrado ao `DurableFiscalOutboxWorker`;
+- auditoria end-to-end de tentativas e resultado final além do estado resumido da outbox;
+- ordering governado quando houver chave explícita, sem fila global obrigatória;
+- validação final de aderência aos contratos AsyncAPI/Bridge existentes;
+- testes de duplicate webhook delivery, assinatura, replay, rotação, falha permanente e restart;
 - gate final da fase e auditoria final do diff contra V2-07;
 - nenhum merge/deploy antes do fechamento formal.
 
 ## Próxima decisão
 
-**V2-08 permanece EM EXECUÇÃO. Durable Inbox está CONCLUÍDA E CERTIFICADA. O próximo bloco funcional liberado é Durable Outbox Delivery + Dispatcher/Worker, incluindo claim/lease, retry/backoff e dead-letter.**
+**V2-08 permanece EM EXECUÇÃO. Durable Inbox e Durable Outbox Delivery + Dispatcher/Worker estão CONCLUÍDOS E CERTIFICADOS. O próximo bloco funcional liberado é Webhook Delivery assinado, reutilizando a segurança HMAC/anti-replay/rotação certificada no V2-05.**
