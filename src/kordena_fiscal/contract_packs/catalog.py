@@ -61,9 +61,15 @@ def build_product_contract_matrix(
                     pack_version=descriptor.version,
                     host_namespace=descriptor.host_namespace,
                     use_case_id=use_case.use_case_id,
-                    operation_kinds=tuple(sorted(use_case.operation_kinds, key=lambda item: item.value)),
-                    document_kinds=tuple(sorted(use_case.document_kinds, key=lambda item: item.value)),
-                    fiscal_actions=tuple(sorted(use_case.fiscal_actions, key=lambda item: item.value)),
+                    operation_kinds=tuple(
+                        sorted(use_case.operation_kinds, key=lambda item: item.value)
+                    ),
+                    document_kinds=tuple(
+                        sorted(use_case.document_kinds, key=lambda item: item.value)
+                    ),
+                    fiscal_actions=tuple(
+                        sorted(use_case.fiscal_actions, key=lambda item: item.value)
+                    ),
                     vertical_module_id=use_case.vertical_module_id,
                     required_vertical_capabilities=tuple(
                         sorted(use_case.required_vertical_capabilities)
