@@ -1,10 +1,9 @@
 """Public FM Fiscal Control Plane domain surface."""
 
-from .durable import (
-    DurableControlPlaneClock,
-    DurableControlPlaneService,
-    SystemDurableControlPlaneClock,
-)
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
 from .models import (
     AdminPrincipal,
     ControlPlaneAuditAction,
@@ -23,6 +22,35 @@ from .service import (
     ControlPlaneNotFoundError,
     InMemoryControlPlaneState,
 )
+
+if TYPE_CHECKING:
+    from .durable import (
+        DurableControlPlaneClock,
+        DurableControlPlaneService,
+        SystemDurableControlPlaneClock,
+    )
+
+
+def __getattr__(name: str) -> Any:
+    if name in {
+        "DurableControlPlaneClock",
+        "DurableControlPlaneService",
+        "SystemDurableControlPlaneClock",
+    }:
+        from .durable import (
+            DurableControlPlaneClock,
+            DurableControlPlaneService,
+            SystemDurableControlPlaneClock,
+        )
+
+        values = {
+            "DurableControlPlaneClock": DurableControlPlaneClock,
+            "DurableControlPlaneService": DurableControlPlaneService,
+            "SystemDurableControlPlaneClock": SystemDurableControlPlaneClock,
+        }
+        return values[name]
+    raise AttributeError(name)
+
 
 __all__ = [
     "AdminPrincipal",
