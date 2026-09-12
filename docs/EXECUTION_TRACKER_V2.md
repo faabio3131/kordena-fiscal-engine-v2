@@ -24,7 +24,7 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 | V2-05 | Auth S2S + workload identity + webhook security | **CONCLUÍDO** | PR #6 Draft; gate `196928d1b0cfe896df0c4741839ce72258f8f4d4`; run `34656535435`; 48 source files; Pytest 290 PASS |
 | V2-06 | Capability & Readiness API | **CONCLUÍDO** | PR #7 Draft; gate `e6c7b2b9e507116ef4919812153f8e54f84173f3`; run `34659021574` SUCCESS; 49 source files; Pytest 305 PASS |
 | V2-07 | Application service + persistência durável | **CONCLUÍDO** | PR #8 Draft; gate `999ba84b9c25988441867820bfe8af0571269548`; run `34659892798` SUCCESS; 59 source files; Pytest 309 PASS; CI restaurado a `workflow_dispatch` |
-| V2-08 | Events/Webhooks/Inbox/Outbox | **EM EXECUÇÃO** | PR #9 Draft; Inbox gate `f467d0dafa70e3c0debd3aacccbb183c954c5b35` / run `34662707064`; Outbox Worker gate `56678f730f2e7c3c235530887612a7ee71b5efc8` / run `34663828770`; 322 PASS |
+| V2-08 | Events/Webhooks/Inbox/Outbox | **EM EXECUÇÃO** | PR #9 Draft; Inbox `f467d0d...` / `34662707064`; Outbox Worker `56678f7...` / `34663828770`; Signed Webhook `8321106...` / `34664214273`; 331 PASS |
 | V2-09 | Modularização de verticais | PENDENTE | após contratos core estabilizados |
 | V2-10 | Contract Packs Kordena/Iron/Vendedor/CampaIA | PENDENTE | depende V2-03..V2-09 |
 | V2-11 | Control Plane independente | PENDENTE | depende core operacional |
@@ -36,54 +36,54 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 | V2-17 | Convergência/cutover + arquivamento original | PENDENTE | somente após equivalência e integrações certificadas |
 | V2-18 | Produto comercial independente | PENDENTE | posterior ao uso interno certificado |
 
-## Checkpoint V2-08 — blocos certificados
+## Checkpoint V2-08 — três blocos funcionais certificados
 
 ### Bloco 1 — Durable Inbox
 
-- superfície `kordena_fiscal.events` criada;
-- `FiscalInboxEntry`, `FiscalInboxStatus`, `FiscalInboxStore` e `FiscalInboxService` implementados;
-- lifecycle `RECEIVED -> PROCESSING -> PROCESSED/REJECTED` com optimistic versioning;
-- identidade determinística por partição fiscal + producer + upstream `event_id`;
-- replay idêntico após restart e conflito semântico fail-closed;
-- payload SHA-256 + correlation/causation/idempotency preservados;
-- migration SQLite v2 `v2_08_durable_inbox` integrada ao mesmo UoW do V2-07;
-- rollback conjunto inbox + outbox, isolamento por host e upgrade V2-07 -> v2 comprovados;
+- contrato e estados da inbox implementados com deduplicação, optimistic versioning e persistência SQLite;
+- replay após restart, conflito semântico fail-closed, rollback conjunto e isolamento por host comprovados;
 - gate `f467d0dafa70e3c0debd3aacccbb183c954c5b35`, run `34662707064` SUCCESS;
-- Install PASS; Ruff PASS; Mypy strict PASS — 62 source files; Pytest 316 PASS;
-- baseline V2-07 309 testes; +7 testes.
+- 62 source files; Pytest 316 PASS.
 
 ### Bloco 2 — Durable Outbox Delivery + Dispatcher/Worker
 
-- `DurableFiscalOutboxWorker` criado na camada de aplicação;
-- claim/lease é executado e commitado em transação curta antes do I/O externo;
-- handler roda fora da transação SQLite;
-- success/retry/dead-letter são persistidos em nova Unit of Work;
-- `attempt_count` funciona como fencing token contra worker stale;
-- retry/backoff persiste `RETRY_WAIT` + `available_at` e sobrevive restart;
-- lease expirada após crash é recuperada com nova tentativa;
-- dois workers duráveis concorrentes não despacham a mesma lease ativa;
-- exceções do handler são tratadas como falha retryable limitada e terminam em DLQ quando esgotam tentativas;
-- stale worker não consegue finalizar depois que outra tentativa assumiu autoridade;
-- handler de teste abre outra Unit of Work durante dispatch, comprovando ausência de transação local mantida sobre I/O;
-- nenhuma nova migration necessária: o schema de outbox do V2-07 já contém estado suficiente;
+- `DurableFiscalOutboxWorker` com claim/lease commitado antes do I/O externo;
+- retry/backoff, crash recovery, DLQ e stale-worker fencing por `attempt_count` comprovados;
 - gate `56678f730f2e7c3c235530887612a7ee71b5efc8`, run `34663828770` SUCCESS;
-- Install PASS; Ruff PASS; Mypy strict PASS — **63 source files sem issues**; Pytest **322 PASS em 1.16s**;
-- baseline pós-Inbox 316 testes; **+6 testes** de outbox durável;
-- compare no gate contra V2-07: 33 commits à frente, 0 atrás, alterações limitadas ao V2-08 e CI temporário;
-- CI restaurado a `workflow_dispatch` no commit `c533bf65791025dd597f1871ee8f1572e39954ee`;
+- 63 source files; Pytest 322 PASS.
+
+### Bloco 3 — Signed Webhook Delivery
+
+- `SignedWebhookOutboxHandler` integrado ao worker durável;
+- assinatura usa diretamente `WebhookSecurity` certificada no V2-05, sem criptografia paralela;
+- body assinado é exatamente o payload durável da outbox;
+- header obrigatório permanece `X-FM-Webhook-Signature` no formato certificado;
+- destino exige HTTPS absoluto e não aceita credenciais embutidas nem fragmento;
+- resolver de destino e transporte permanecem host-neutral e injetáveis;
+- 2xx -> sucesso; 408/425/429/5xx/<200 -> retry; demais não-2xx -> fatal/DLQ;
+- ausência de destino falha fechado sem I/O;
+- retry assina novamente com novo timestamp e número de tentativa;
+- overlap de rotação anterior/atual comprovado end-to-end;
+- teste dedicado valida compatibilidade com AsyncAPI v1.1.0 sem breaking change;
+- primeira tentativa run `34664156025` falhou somente por helper de teste chamando método inexistente de conveniência; implementação passou Ruff/Mypy;
+- gate definitivo `8321106338aca262a76fe2bdfa76665bdcc57950`, run `34664214273` **SUCCESS**;
+- Install PASS; Ruff PASS; Mypy strict PASS — **64 source files**; Pytest **331 PASS em 1.05s**;
+- baseline pós-Outbox Worker 322 testes; **+9 testes**;
+- compare específico contra checkpoint anterior `6b90df9021c0f9f6fd725524027333f13f1cd596`: 5 commits à frente, 0 atrás; somente CI temporário, export, handler de webhook e testes;
+- CI restaurado para `workflow_dispatch` no commit `cd1dc973e6502074e173fbc9178d1aedec0a3fe7`;
 - nenhum merge, deploy ou cutover realizado.
 
 ## Escopo V2-08 ainda pendente
 
-- webhook delivery assinado usando HMAC-SHA256, `key_id`, timestamp, anti-replay e rotação certificados no V2-05;
-- handler/adaptador de webhook integrado ao `DurableFiscalOutboxWorker`;
-- auditoria end-to-end de tentativas e resultado final além do estado resumido da outbox;
-- ordering governado quando houver chave explícita, sem fila global obrigatória;
-- validação final de aderência aos contratos AsyncAPI/Bridge existentes;
-- testes de duplicate webhook delivery, assinatura, replay, rotação, falha permanente e restart;
-- gate final da fase e auditoria final do diff contra V2-07;
+- auditoria durável end-to-end de cada tentativa de entrega e resultado;
+- ordering governado por chave explícita sem fila global obrigatória;
+- prova integrada de duplicate webhook delivery com consumer/inbox idempotente;
+- revisão final de aderência AsyncAPI/Bridge e rastreabilidade;
+- gate final consolidado da V2-08;
+- auditoria final do diff completo contra V2-07;
+- riscos residuais e limites de produção documentados;
 - nenhum merge/deploy antes do fechamento formal.
 
 ## Próxima decisão
 
-**V2-08 permanece EM EXECUÇÃO. Durable Inbox e Durable Outbox Delivery + Dispatcher/Worker estão CONCLUÍDOS E CERTIFICADOS. O próximo bloco funcional liberado é Webhook Delivery assinado, reutilizando a segurança HMAC/anti-replay/rotação certificada no V2-05.**
+**V2-08 permanece EM EXECUÇÃO. Durable Inbox, Durable Outbox Worker e Signed Webhook Delivery estão CONCLUÍDOS E CERTIFICADOS. Próximo bloco: auditoria end-to-end + ordering governado + duplicate-delivery idempotente, seguido do gate final consolidado da V2-08.**
