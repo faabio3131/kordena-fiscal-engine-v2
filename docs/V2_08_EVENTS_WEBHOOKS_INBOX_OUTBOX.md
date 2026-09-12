@@ -29,15 +29,7 @@ O primeiro bloco funcional do V2-08 foi implementado sobre a persistência certi
 
 ### Contrato e identidade
 
-Foi criada a superfície `kordena_fiscal.events` com:
-
-- `FiscalInboxEntry`;
-- `FiscalInboxStatus`;
-- `FiscalInboxStore`;
-- `FiscalInboxService`;
-- `FiscalInboxReceiveResult`;
-- `InboxConflictError` e `InboxStateError`;
-- `build_inbox_entry_id(...)`.
+Foi criada a superfície `kordena_fiscal.events` com `FiscalInboxEntry`, `FiscalInboxStatus`, `FiscalInboxStore`, `FiscalInboxService`, `FiscalInboxReceiveResult`, `InboxConflictError`, `InboxStateError` e `build_inbox_entry_id(...)`.
 
 A identidade da mensagem é determinística e particionada por `ExecutionScope` + producer + upstream `event_id`. Assim, o mesmo `event_id` pode existir legitimamente em hosts/contas/unidades diferentes sem colisão, enquanto reutilização da mesma identidade semântica com conteúdo diferente falha fechado.
 
@@ -45,12 +37,7 @@ O payload é persistido junto do SHA-256 e o objeto valida a correspondência en
 
 ### Estados governados
 
-O lifecycle da inbox possui quatro estados:
-
-- `RECEIVED`;
-- `PROCESSING`;
-- `PROCESSED`;
-- `REJECTED`.
+O lifecycle da inbox possui quatro estados: `RECEIVED`, `PROCESSING`, `PROCESSED` e `REJECTED`.
 
 Transições são protegidas por versão otimista. `begin_processing` exige `RECEIVED`; conclusão/rejeição exigem `PROCESSING`; versão stale ou transição inválida gera `InboxStateError`. Estados terminais registram `processed_at` e resultado ou erro conforme o caso.
 
@@ -76,15 +63,7 @@ A suíte comprova a atualização de um banco no estado V2-07, preservando migra
 
 ### Testes do bloco
 
-O bloco acrescentou 7 testes sobre o baseline V2-07 de 309 testes:
-
-- replay após restart sem segunda linha;
-- conflito fail-closed para mesma identidade com payload diferente;
-- lifecycle versionado e persistência de estado terminal após restart;
-- terminal `REJECTED` com erro durável;
-- rollback atômico inbox + outbox;
-- isolamento da mesma upstream event id entre hosts;
-- upgrade controlado do schema V2-07 para a migration da inbox.
+O bloco acrescentou 7 testes sobre o baseline V2-07 de 309 testes: replay após restart, conflito por conteúdo divergente, lifecycle versionado, terminal rejeitado, rollback inbox+outbox, isolamento por host e upgrade de schema V2-07 -> inbox.
 
 ### Gate de certificação do bloco
 
@@ -97,7 +76,7 @@ Gate definitivo da Durable Inbox:
 - Mypy strict: **PASS — 62 source files sem issues**;
 - Pytest completo: **316 PASS em 0.85s**.
 
-O primeiro gate funcional (`ac1854b25c14d7721daac1e7fc678905e6fe1c39`) falhou somente em uma linha E501 do Ruff. A correção foi estritamente de formatação; o run seguinte ficou verde e, após adicionar o teste explícito de upgrade V2-07 -> inbox, o gate definitivo acima permaneceu 100% verde.
+O primeiro gate funcional (`ac1854b25c14d7721daac1e7fc678905e6fe1c39`) falhou somente em uma linha E501 do Ruff. A correção foi estritamente de formatação. Após adicionar o teste explícito de upgrade V2-07 -> inbox, o gate definitivo acima permaneceu 100% verde.
 
 Após a certificação deste bloco, o workflow foi novamente restaurado para `workflow_dispatch` apenas no commit `c9e26364e2f0925439ac86e146a8ab5668f57c3b`.
 
@@ -121,21 +100,7 @@ A certificação da Durable Inbox não conclui o V2-08. Não houve merge, deploy
 
 ## Gate de fechamento futuro
 
-V2-08 somente poderá ser marcado `CONCLUÍDO` após:
-
-- Durable Inbox certificada — **CONCLUÍDO**;
-- dispatcher/outbox com retry/backoff/lease/DLQ;
-- delivery de webhook assinado e verificado;
-- testes de concorrência/restart/replay e falhas permanentes;
-- aderência ao AsyncAPI/Bridge existente;
-- Install PASS;
-- Ruff PASS;
-- Mypy strict PASS;
-- Pytest completo PASS;
-- CI definitivo verde com SHA/run registrados;
-- auditoria do diff contra V2-07;
-- riscos residuais documentados;
-- PR Draft preservada, sem merge e sem deploy.
+V2-08 somente poderá ser marcado `CONCLUÍDO` após Durable Inbox certificada, dispatcher/outbox com retry/backoff/lease/DLQ, delivery de webhook assinado e verificado, testes de concorrência/restart/replay e falhas permanentes, aderência ao AsyncAPI/Bridge existente, gate completo verde, auditoria final do diff e riscos residuais documentados.
 
 ## Próximo bloco
 
