@@ -7,15 +7,25 @@ ports and the unit-of-work boundary keep application coordination transactional.
 
 from __future__ import annotations
 
+from datetime import datetime
 from types import TracebackType
 from typing import Protocol, Self
 
 from kordena_fiscal.archive import FiscalArchiveStore
 from kordena_fiscal.contingency import FiscalOutboxStore
+from kordena_fiscal.control_plane.models import (
+    ControlPlaneAuditEvent,
+    FiscalOrganization,
+    FiscalUnitRegistration,
+    SecretReference,
+    SecretReferenceKind,
+)
 from kordena_fiscal.domain import (
     ExecutionScope,
     FiscalAccountBinding,
     FiscalDomainError,
+    FiscalEnvironment,
+    FiscalProfile,
     HostScope,
     SourceReference,
 )
@@ -82,6 +92,46 @@ class FiscalOutboxOrderingStore(Protocol):
     def get(self, entry_id: str) -> str | None: ...
 
 
+class ControlPlaneStore(Protocol):
+    """Durable administrative state used by the independent FM Fiscal Control Plane."""
+
+    def add_organization(self, organization: FiscalOrganization) -> FiscalOrganization: ...
+
+    def get_organization(self, tenant_id: str) -> FiscalOrganization | None: ...
+
+    def add_unit(self, registration: FiscalUnitRegistration) -> FiscalUnitRegistration: ...
+
+    def get_unit(self, tenant_id: str, unit_id: str) -> FiscalUnitRegistration | None: ...
+
+    def add_secret_reference(self, reference: SecretReference) -> SecretReference: ...
+
+    def get_secret_reference(
+        self,
+        tenant_id: str,
+        unit_id: str,
+        environment: FiscalEnvironment,
+        kind: SecretReferenceKind,
+    ) -> SecretReference | None: ...
+
+    def add_profile(self, profile: FiscalProfile) -> FiscalProfile: ...
+
+    def get_profile(self, profile_id: str, version: int) -> FiscalProfile | None: ...
+
+    def resolve_profile(
+        self,
+        *,
+        host_namespace: str,
+        tenant_id: str,
+        unit_id: str,
+        environment: FiscalEnvironment,
+        instant: datetime,
+    ) -> FiscalProfile | None: ...
+
+    def append_audit(self, event: ControlPlaneAuditEvent) -> ControlPlaneAuditEvent: ...
+
+    def list_audit(self, tenant_id: str | None = None) -> tuple[ControlPlaneAuditEvent, ...]: ...
+
+
 class FiscalUnitOfWork(Protocol):
     """One atomic local transaction spanning all durable fiscal repositories."""
 
@@ -114,6 +164,9 @@ class FiscalUnitOfWork(Protocol):
 
     @property
     def reconciliations(self) -> FiscalReconciliationRepository: ...
+
+    @property
+    def control_plane(self) -> ControlPlaneStore: ...
 
     def __enter__(self) -> Self: ...
 
