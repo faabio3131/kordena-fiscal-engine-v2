@@ -4,9 +4,9 @@ Data de início: 2026-09-11
 Repositório: `faabio3131/kordena-fiscal-engine-v2`  
 Status global: **EM EXECUÇÃO**  
 Última fase concluída: **V2-09 — Modularização de verticais**  
-Fase atual: **V2-10 — Product Contract Packs — LIBERADA / PENDENTE**
+Fase atual: **V2-10 — Product Contract Packs — EM EXECUÇÃO**
 
-> O estado imediatamente anterior ao início do V2-09 foi preservado em `docs/history/EXECUTION_TRACKER_V2_PRE_V2_09.md`.
+> O estado imediatamente anterior ao início do V2-10 foi preservado em `docs/history/EXECUTION_TRACKER_V2_PRE_V2_10.md`.
 
 ## Regra de governança
 
@@ -26,7 +26,7 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 | V2-07 | Application service + persistência durável | **CONCLUÍDO** | PR #8 Draft; gate `999ba84b9c25988441867820bfe8af0571269548`; run `34659892798`; 59 source files; Pytest 309 PASS; CI restaurado |
 | V2-08 | Events/Webhooks/Inbox/Outbox | **CONCLUÍDO** | PR #9 Draft; gate final `bc77ee4cf2b7151d06c09cf32ca9168363ece1c7`; run `34666753555`; 67 source files; Pytest 337 PASS; CI restaurado |
 | V2-09 | Modularização de verticais | **CONCLUÍDO** | PR #10 Draft; gate `88071fd557199ffd6848312ea5559b0cba415ee1`; run `34668430831`; 71 source files; Pytest 346 PASS; CI restaurado |
-| V2-10 | Contract Packs Kordena/Iron/Vendedor/CampaIA | PENDENTE | **LIBERADA** após certificação da V2-09 |
+| V2-10 | Contract Packs Kordena/Iron/Vendedor/CampaIA | **EM EXECUÇÃO** | branch `v2/product-contract-packs`; snapshot pré-fase preservado; PR Draft pendente de bootstrap |
 | V2-11 | Control Plane independente | PENDENTE | depende core operacional |
 | V2-12 | Gateway/Signer/Vault production adapters | PENDENTE | depende V2-11 |
 | V2-13 | Observabilidade + Compliance Operations | PENDENTE | depende V2-07/V2-12 |
@@ -103,13 +103,21 @@ Compare V2-08 `cc30ec3bddd2f61595c0d869f710e22d83e24743` -> gate V2-09 `88071fd5
 - mappings específicos de Kordena, Iron Fit, Vendedor IA e CampaIA não entram no Core nesta fase;
 - não houve homologação externa nem produção.
 
+## Início V2-10 — Product Contract Packs
+
+- branch criada a partir do head final certificado da V2-09: `5d3e06be52a75b60b36640ee8a5d1869b11de928`;
+- snapshot pré-fase salvo em `docs/history/EXECUTION_TRACKER_V2_PRE_V2_10.md`;
+- plano de execução da fase em `docs/V2_10_PRODUCT_CONTRACT_PACKS.md`;
+- escopo vinculante: packs Kordena, Iron Fit, Vendedor IA e CampaIA, fixtures sintéticas, contract tests e matriz de documentos/eventos/capabilities;
+- a fase não concede readiness/homologação e não importa repositórios privados dos SaaS.
+
 ## Governança
 
-- PR #10 permanece Draft e sem merge;
+- PR #10 da V2-09 permanece Draft e sem merge;
 - nenhum deploy, promoção ou cutover foi realizado;
-- CI temporário de PR removido após certificação;
-- workflow restaurado para `workflow_dispatch` no commit `8e07e5f82df4bd889b5b7fed86707528550ab10e`.
+- CI está em `workflow_dispatch`;
+- V2-10 será executada em PR Draft própria e stacked sobre `v2/vertical-modularization`.
 
 ## Próxima decisão
 
-**V2-09 CONCLUÍDO E CERTIFICADO. V2-10 — Product Contract Packs — está LIBERADA, mas permanece PENDENTE até início formal em nova branch/PR Draft.**
+**V2-10 INICIADA. Próximo bloco: Foundation do Product Contract Pack + registry explícito e fail-closed.**
