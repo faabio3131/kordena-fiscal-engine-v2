@@ -55,6 +55,7 @@ def _operator(tenant_id: str = "tenant-a") -> AdminPrincipal:
             {
                 ControlPlanePermission.UNIT_WRITE,
                 ControlPlanePermission.OPERATIONS_READ,
+                ControlPlanePermission.AUDIT_READ,
             }
         ),
         tenant_ids=frozenset({tenant_id}),
