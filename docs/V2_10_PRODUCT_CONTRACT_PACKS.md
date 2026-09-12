@@ -1,6 +1,6 @@
 # V2-10 — Product Contract Packs
 
-Status: **EM EXECUÇÃO — FOUNDATION CERTIFICADA**  
+Status: **EM EXECUÇÃO — FOUNDATION + KORDENA CERTIFICADOS**  
 Branch: `v2/product-contract-packs`  
 Base certificada: `v2/vertical-modularization` @ `5d3e06be52a75b60b36640ee8a5d1869b11de928`  
 Dependência: V2-09 concluída e certificada.
@@ -27,8 +27,8 @@ Provar, por contratos versionados e testes sintéticos, que um único FM Fiscal 
 ## Blocos de execução
 
 1. **Foundation — CONCLUÍDO/CERTIFICADO:** contrato imutável de Product Contract Pack, use-case descriptor e registry fail-closed.
-2. **Kordena — PRÓXIMO:** vendas/PDV com vertical restaurante explícita, sem alterar regras tributárias do restaurante.
-3. **Iron Fit:** mensalidades/serviços/recorrência com vertical fitness e NFS-e como família contratual aplicável, sem promover readiness.
+2. **Kordena — CONCLUÍDO/CERTIFICADO:** vendas/PDV com vertical restaurante explícita, sem alterar regras tributárias do restaurante.
+3. **Iron Fit — PRÓXIMO:** mensalidades/serviços/recorrência com vertical fitness e NFS-e como família contratual aplicável, sem promover readiness.
 4. **Vendedor IA:** vendas genéricas sem dependência de restaurante/fitness/SaaS e sem inferência de pagamento/autoridade ausente.
 5. **CampaIA:** faturamento próprio de serviço/SaaS modelado com vertical SaaS/serviço, sem inferir fatos fiscais não fornecidos.
 6. **Cross-product certification:** isolamento de namespaces, matriz consolidada, fixtures sintéticas, regression completa e auditoria de diff.
@@ -48,17 +48,7 @@ Foi criada a superfície `kordena_fiscal.contract_packs` com:
 
 ### Contract tests da Foundation
 
-Os testes cobrem:
-
-- matriz declarativa do caso de uso;
-- use case desconhecido fail-closed;
-- isolamento por host namespace;
-- operation kind incompatível bloqueado;
-- colisão de `pack_id` e `host_namespace` bloqueada;
-- pack/host não registrado fail-closed;
-- módulo vertical ausente fail-closed;
-- capability vertical sem módulo rejeitada;
-- duplicidade de use case rejeitada.
+Os testes cobrem matriz declarativa, use case desconhecido, isolamento por host namespace, operation kind incompatível, colisão de `pack_id`/host, pack/host não registrado, módulo vertical ausente, capability vertical sem módulo e duplicidade de use case.
 
 ### Gate Foundation V2-10
 
@@ -69,8 +59,47 @@ Os testes cobrem:
 - Mypy strict: PASS — **73 source files**;
 - Pytest: **354 PASS em 1.45s**;
 - baseline V2-09: 346 testes; incremento da Foundation: **+8 testes**;
-- CI temporário removido após o gate;
 - workflow restaurado para apenas `workflow_dispatch` no commit `24b54f47fad9dac11b900194d63f0803b8dfda30`.
+
+## KordenaFiscalContractPack
+
+O primeiro pack concreto usa o namespace canônico certificado `fm.kordena` e não importa nenhum modelo privado do SaaS Kordena.
+
+Casos de uso declarados:
+
+- `restaurant-pos-sale`: `FiscalOperationKind.SALE` + NFC-e, com ações de issue/query/cancel/contingency/reconcile/archive reference;
+- `restaurant-invoice-sale`: `FiscalOperationKind.SALE` + NF-e, com issue/query/cancel/inutilize/contingency/reconcile/archive reference.
+
+Ambos exigem explicitamente o módulo vertical `restaurant` e as capabilities `tax.restaurant.supply-classification` e `tax.restaurant.base-adjustments`. A declaração não executa nem replica regras tributárias; ela apenas exige a vertical V2-09 já certificada.
+
+Os eventos de retorno declarados são exatamente eventos públicos existentes no AsyncAPI v1.1.0: autorização, rejeição, cancelamento, atualização de emissão, reconciliação e archive reference. O pack não inventa evento outbound de pedido; chamadas de emissão permanecem nos contratos públicos do Bridge.
+
+### Contract tests Kordena
+
+A fixture sintética representa uma venda Kordena canônica em homologação, com `host_namespace=fm.kordena`, sem dado real de cliente.
+
+Os testes provam:
+
+- identidade estável do pack e dos dois use cases;
+- NFC-e no PDV e NF-e na venda faturada como famílias contratuais, sem promoção de readiness;
+- vertical restaurante e suas duas capabilities obrigatórias;
+- ausência da vertical falha fechado;
+- operação com `fm.iron` no pack Kordena falha por namespace mismatch;
+- registry resolve Kordena somente pelo pack/host exatos;
+- todos os eventos declarados existem no AsyncAPI público;
+- o descriptor Kordena não expõe namespaces de Iron, Vendedor IA ou CampaIA.
+
+### Gate Kordena V2-10
+
+- SHA funcional/certificação: `6fd934c024736f3d5e23aa4d1172d60caa49fb7c`;
+- Actions run: `34672769666` — **SUCCESS**;
+- Install: PASS;
+- Ruff: PASS;
+- Mypy strict: PASS — **74 source files**;
+- Pytest: **362 PASS em 1.16s**;
+- checkpoint Foundation: 354; incremento Kordena: **+8 testes**;
+- compare contra checkpoint Foundation `532275595a5055a008eb69c46fa19400a3f790c2`: **4 commits à frente, 0 atrás**, restrito ao pack Kordena, exports, testes e CI temporário;
+- CI restaurado para `workflow_dispatch` no commit `6a919ebdcab17b5f7b3215aa8d032abc2411afb0`.
 
 ## Princípios de segurança arquitetural
 
