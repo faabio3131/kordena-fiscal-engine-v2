@@ -12,6 +12,15 @@ from .base import (
     ProductUseCaseDescriptor,
     ProductUseCaseNotFoundError,
 )
+from .campaia import (
+    CAMPAIA_CONTRACT_DESCRIPTOR,
+    CAMPAIA_FISCAL_CONTRACT_PACK,
+    CAMPAIA_HOST_NAMESPACE,
+    CAMPAIA_PACK_ID,
+    CAMPAIA_SAAS_BILLING,
+    CAMPAIA_SERVICE_BILLING,
+    CampaiaFiscalContractPack,
+)
 from .iron import (
     IRON_CONTRACT_DESCRIPTOR,
     IRON_FISCAL_CONTRACT_PACK,
@@ -42,6 +51,13 @@ from .sales import (
 )
 
 __all__ = [
+    "CAMPAIA_CONTRACT_DESCRIPTOR",
+    "CAMPAIA_FISCAL_CONTRACT_PACK",
+    "CAMPAIA_HOST_NAMESPACE",
+    "CAMPAIA_PACK_ID",
+    "CAMPAIA_SAAS_BILLING",
+    "CAMPAIA_SERVICE_BILLING",
+    "CampaiaFiscalContractPack",
     "DeclarativeProductFiscalContractPack",
     "IRON_CONTRACT_DESCRIPTOR",
     "IRON_FISCAL_CONTRACT_PACK",
