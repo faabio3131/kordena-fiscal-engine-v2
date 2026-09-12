@@ -111,6 +111,8 @@ Gate funcional final reforçado:
 - Pytest completo: **337 PASS em 1.35s**;
 - baseline V2-07: 309 testes; V2-08 final: **+28 testes líquidos**.
 
+A versão final de documentação/tracker, SHA `9d7fac0dbe378968298e6a34c61976afbbb155e7`, também foi validada integralmente no run `34666844318`: Install PASS, Ruff PASS, Mypy PASS em 67 source files e **337 PASS em 1.37s**.
+
 ## Auditoria final do diff contra V2-07
 
 Compare do gate `bc77ee4...` contra `v2/application-durable-persistence` (`e767ec36290f3304e495ce8fbeee6522f041d599`): **65 commits à frente, 0 atrás**.
@@ -137,4 +139,4 @@ Não houve alteração em contratos OpenAPI/AsyncAPI/JSON Schema no fechamento, 
 
 ## Fechamento
 
-**V2-08 está CONCLUÍDO E CERTIFICADO.** A PR #9 permanece Draft e sem merge. Nenhum deploy, promoção ou cutover foi realizado. O próximo bloco liberado pelo Plano Mestre é **V2-09 — Modularização de verticais**.
+**V2-08 está CONCLUÍDO E CERTIFICADO.** A PR #9 permanece Draft e sem merge. Nenhum deploy, promoção ou cutover foi realizado. O CI temporário de PR foi removido e o workflow foi restaurado a `workflow_dispatch` no commit `10953d0f413ba8a4f06cc97fa924c565cd2f0b29`. O próximo bloco liberado pelo Plano Mestre é **V2-09 — Modularização de verticais**.
