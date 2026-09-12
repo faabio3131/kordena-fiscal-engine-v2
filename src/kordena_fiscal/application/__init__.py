@@ -20,6 +20,11 @@ from .webhook_delivery import (
     WebhookDestinationResolver,
     WebhookTransport,
 )
+from .webhook_receiving import (
+    FiscalWebhookConsumer,
+    SignedWebhookInboxReceiver,
+    SignedWebhookReceiveResult,
+)
 
 __all__ = [
     "DurableFiscalOutboxWorker",
@@ -29,8 +34,11 @@ __all__ = [
     "FM_WEBHOOK_OUTBOX_ENTRY_HEADER",
     "FM_WEBHOOK_SIGNATURE_HEADER",
     "FiscalApplicationService",
+    "FiscalWebhookConsumer",
     "IssuanceResumeDisposition",
+    "SignedWebhookInboxReceiver",
     "SignedWebhookOutboxHandler",
+    "SignedWebhookReceiveResult",
     "SystemWebhookDeliveryClock",
     "WebhookDeliveryClock",
     "WebhookDeliveryRequest",
