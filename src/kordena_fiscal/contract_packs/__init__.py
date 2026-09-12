@@ -21,6 +21,13 @@ from .campaia import (
     CAMPAIA_SERVICE_BILLING,
     CampaiaFiscalContractPack,
 )
+from .catalog import (
+    FM_PRODUCT_CONTRACT_PACKS,
+    FM_PRODUCT_CONTRACT_REGISTRY,
+    V2_10_PRODUCT_CONTRACT_MATRIX,
+    ProductContractMatrixRow,
+    build_product_contract_matrix,
+)
 from .iron import (
     IRON_CONTRACT_DESCRIPTOR,
     IRON_FISCAL_CONTRACT_PACK,
@@ -59,6 +66,8 @@ __all__ = [
     "CAMPAIA_SERVICE_BILLING",
     "CampaiaFiscalContractPack",
     "DeclarativeProductFiscalContractPack",
+    "FM_PRODUCT_CONTRACT_PACKS",
+    "FM_PRODUCT_CONTRACT_REGISTRY",
     "IRON_CONTRACT_DESCRIPTOR",
     "IRON_FISCAL_CONTRACT_PACK",
     "IRON_HOST_NAMESPACE",
@@ -74,6 +83,7 @@ __all__ = [
     "KORDENA_RESTAURANT_INVOICE_SALE",
     "KORDENA_RESTAURANT_POS_SALE",
     "KordenaFiscalContractPack",
+    "ProductContractMatrixRow",
     "ProductContractPackDescriptor",
     "ProductContractPackError",
     "ProductContractPackNotFoundError",
@@ -90,4 +100,6 @@ __all__ = [
     "SALES_NFE_SALE",
     "SALES_PACK_ID",
     "SalesFiscalContractPack",
+    "V2_10_PRODUCT_CONTRACT_MATRIX",
+    "build_product_contract_matrix",
 ]
