@@ -17,6 +17,7 @@ from .sqlite_core import (
     SqliteFiscalSequenceStore,
     SqliteLifecycleRepository,
 )
+from .sqlite_delivery import SqliteFiscalDeliveryAuditStore, SqliteFiscalOutboxOrderingStore
 from .sqlite_idempotency import SqliteIdempotencyStore
 from .sqlite_inbox import SqliteFiscalInboxStore
 from .sqlite_outbox_archive import SqliteFiscalArchiveStore, SqliteFiscalOutboxStore
@@ -194,6 +195,48 @@ _MIGRATIONS = (
             """,
         ),
     ),
+    _Migration(
+        version=3,
+        name="v2_08_delivery_audit_and_ordering",
+        statements=(
+            """
+            CREATE TABLE fm_fiscal_outbox_ordering (
+                entry_id TEXT PRIMARY KEY,
+                ordering_key TEXT NOT NULL,
+                FOREIGN KEY (entry_id) REFERENCES fm_fiscal_outbox(entry_id)
+            )
+            """,
+            """
+            CREATE INDEX fm_fiscal_outbox_ordering_key_idx
+            ON fm_fiscal_outbox_ordering (ordering_key, entry_id)
+            """,
+            """
+            CREATE TABLE fm_fiscal_delivery_attempts (
+                entry_id TEXT NOT NULL,
+                attempt_count INTEGER NOT NULL,
+                host_namespace TEXT NOT NULL,
+                tenant_id TEXT NOT NULL,
+                unit_id TEXT NOT NULL,
+                environment TEXT NOT NULL,
+                correlation_id TEXT NOT NULL,
+                operation TEXT NOT NULL,
+                ordering_key TEXT,
+                status TEXT NOT NULL,
+                started_at TEXT NOT NULL,
+                finished_at TEXT,
+                next_available_at TEXT,
+                outcome_reference TEXT,
+                last_error TEXT,
+                PRIMARY KEY (entry_id, attempt_count),
+                FOREIGN KEY (entry_id) REFERENCES fm_fiscal_outbox(entry_id)
+            )
+            """,
+            """
+            CREATE INDEX fm_fiscal_delivery_attempts_status_idx
+            ON fm_fiscal_delivery_attempts (status, started_at, entry_id, attempt_count)
+            """,
+        ),
+    ),
 )
 
 
@@ -208,6 +251,8 @@ class SqliteFiscalUnitOfWork:
         self._sequences: SqliteFiscalSequenceStore | None = None
         self._inbox: SqliteFiscalInboxStore | None = None
         self._outbox: SqliteFiscalOutboxStore | None = None
+        self._outbox_ordering: SqliteFiscalOutboxOrderingStore | None = None
+        self._delivery_audit: SqliteFiscalDeliveryAuditStore | None = None
         self._archive: SqliteFiscalArchiveStore | None = None
         self._bindings: SqliteBindingRepository | None = None
         self._lifecycle: SqliteLifecycleRepository | None = None
@@ -224,6 +269,8 @@ class SqliteFiscalUnitOfWork:
         self._sequences = SqliteFiscalSequenceStore(connection)
         self._inbox = SqliteFiscalInboxStore(connection)
         self._outbox = SqliteFiscalOutboxStore(connection)
+        self._outbox_ordering = SqliteFiscalOutboxOrderingStore(connection)
+        self._delivery_audit = SqliteFiscalDeliveryAuditStore(connection)
         self._archive = SqliteFiscalArchiveStore(connection)
         self._bindings = SqliteBindingRepository(connection)
         self._lifecycle = SqliteLifecycleRepository(connection)
@@ -266,6 +313,14 @@ class SqliteFiscalUnitOfWork:
     @property
     def outbox(self) -> SqliteFiscalOutboxStore:
         return self._require(self._outbox, "outbox")
+
+    @property
+    def outbox_ordering(self) -> SqliteFiscalOutboxOrderingStore:
+        return self._require(self._outbox_ordering, "outbox_ordering")
+
+    @property
+    def delivery_audit(self) -> SqliteFiscalDeliveryAuditStore:
+        return self._require(self._delivery_audit, "delivery_audit")
 
     @property
     def archive(self) -> SqliteFiscalArchiveStore:
