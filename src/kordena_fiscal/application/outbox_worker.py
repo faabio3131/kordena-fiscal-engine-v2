@@ -19,9 +19,9 @@ from kordena_fiscal.persistence.ports import FiscalUnitOfWorkFactory
 class DurableFiscalOutboxWorker:
     """Dispatch durable outbox entries without holding a DB transaction over I/O.
 
-    Claim/lease is committed first, provider or transport I/O happens outside the
-    local transaction, and every terminal/retry transition is committed in a new
-    transaction using ``attempt_count`` as the stale-worker fencing token.
+    Claim/lease plus audit start are committed before provider/transport I/O.
+    Every terminal/retry transition and its audit outcome are committed together
+    in a fresh transaction using ``attempt_count`` as the stale-worker fence.
     """
 
     def __init__(
@@ -51,6 +51,7 @@ class DurableFiscalOutboxWorker:
                     self._dead_letter(
                         entry,
                         "maximum retry attempts exceeded before dispatch",
+                        now=now,
                     )
                 )
                 continue
@@ -81,6 +82,13 @@ class DurableFiscalOutboxWorker:
                 limit=limit,
                 lease_duration=lease_duration,
             )
+            for entry in claimed:
+                uow.delivery_audit.expire_prior_attempts(
+                    entry.entry_id,
+                    before_attempt=entry.attempt_count,
+                    expired_at=now,
+                )
+                uow.delivery_audit.start(entry, started_at=now)
             uow.commit()
             return claimed
 
@@ -99,6 +107,12 @@ class DurableFiscalOutboxWorker:
                     expected_attempt=entry.attempt_count,
                     completion_reference=result.reference,
                 )
+                uow.delivery_audit.mark_succeeded(
+                    entry.entry_id,
+                    attempt_count=entry.attempt_count,
+                    finished_at=now,
+                    outcome_reference=result.reference,
+                )
                 uow.commit()
                 return updated
 
@@ -107,7 +121,7 @@ class DurableFiscalOutboxWorker:
             result.status is FiscalDispatchStatus.FATAL_FAILURE
             or entry.attempt_count >= self._policy.max_attempts
         ):
-            return self._dead_letter(entry, result.error)
+            return self._dead_letter(entry, result.error, now=now)
 
         available_at = now + self._policy.delay_for_attempt(entry.attempt_count)
         with self._uow_factory() as uow:
@@ -117,14 +131,33 @@ class DurableFiscalOutboxWorker:
                 available_at=available_at,
                 error=result.error,
             )
+            uow.delivery_audit.mark_retry_scheduled(
+                entry.entry_id,
+                attempt_count=entry.attempt_count,
+                finished_at=now,
+                next_available_at=available_at,
+                error=result.error,
+            )
             uow.commit()
             return updated
 
-    def _dead_letter(self, entry: FiscalOutboxEntry, error: str) -> FiscalOutboxEntry:
+    def _dead_letter(
+        self,
+        entry: FiscalOutboxEntry,
+        error: str,
+        *,
+        now: datetime,
+    ) -> FiscalOutboxEntry:
         with self._uow_factory() as uow:
             updated = uow.outbox.dead_letter(
                 entry.entry_id,
                 expected_attempt=entry.attempt_count,
+                error=error,
+            )
+            uow.delivery_audit.mark_dead_letter(
+                entry.entry_id,
+                attempt_count=entry.attempt_count,
+                finished_at=now,
                 error=error,
             )
             uow.commit()
