@@ -21,9 +21,14 @@ from kordena_fiscal.contingency import (
     FiscalOutboxEntry,
     FiscalOutboxService,
     FiscalOutboxStatus,
+    FiscalRetryPolicy,
 )
 from kordena_fiscal.domain import ExecutionScope, FiscalEnvironment
-from kordena_fiscal.events import DeliveryAttemptStatus, FiscalInboxStatus
+from kordena_fiscal.events import (
+    DeliveryAttemptStatus,
+    FiscalInboxStatus,
+    build_inbox_entry_id,
+)
 from kordena_fiscal.persistence import SqliteFiscalDatabase
 from kordena_fiscal.security import (
     InMemoryWebhookKeyRing,
@@ -120,6 +125,16 @@ class _SuccessHandler:
             FiscalDispatchStatus.SUCCEEDED,
             reference=f"ok:{entry.deduplication_key}:{entry.attempt_count}",
         )
+
+
+class _SequenceHandler:
+    def __init__(self, results: list[FiscalDispatchResult]) -> None:
+        self._results = list(results)
+
+    def dispatch(self, entry: FiscalOutboxEntry) -> FiscalDispatchResult:
+        if not self._results:
+            raise AssertionError(f"unexpected delivery for {entry.entry_id}")
+        return self._results.pop(0)
 
 
 class _DestinationResolver:
@@ -229,7 +244,9 @@ def test_delivery_audit_records_success_and_crash_lease_recovery(tmp_path) -> No
 
     assert outcome.status is FiscalOutboxStatus.SUCCEEDED
     assert outcome.attempt_count == 2
-    with database.unit_of_work() as uow:
+    restarted = SqliteFiscalDatabase(database.path)
+    assert restarted.initialize() == ()
+    with restarted.unit_of_work() as uow:
         audit = uow.delivery_audit.list_for_entry(entry.entry_id)
     assert [record.status for record in audit] == [
         DeliveryAttemptStatus.LEASE_EXPIRED,
@@ -237,6 +254,61 @@ def test_delivery_audit_records_success_and_crash_lease_recovery(tmp_path) -> No
     ]
     assert audit[0].last_error == "delivery lease expired before completion"
     assert audit[1].outcome_reference == "ok:audit-event:2"
+
+
+def test_delivery_audit_persists_retry_then_success_across_restart(tmp_path) -> None:
+    database = _database(tmp_path, "audit-retry.sqlite3")
+    entry = _enqueue(
+        database,
+        key="audit-retry",
+        created_at=NOW,
+        ordering_key="document:doc-audit-retry",
+    )
+    policy = FiscalRetryPolicy(
+        max_attempts=3,
+        initial_delay_seconds=5,
+        multiplier=2,
+        max_delay_seconds=30,
+    )
+    first_worker = DurableFiscalOutboxWorker(
+        uow_factory=database,
+        handler=_SequenceHandler(
+            [
+                FiscalDispatchResult(
+                    FiscalDispatchStatus.RETRYABLE_FAILURE,
+                    error="consumer temporarily unavailable",
+                )
+            ]
+        ),
+        retry_policy=policy,
+    )
+
+    first = first_worker.run_once(now=NOW)[0]
+    assert first.status is FiscalOutboxStatus.RETRY_WAIT
+
+    restarted = SqliteFiscalDatabase(database.path)
+    assert restarted.initialize() == ()
+    second_worker = DurableFiscalOutboxWorker(
+        uow_factory=restarted,
+        handler=_SequenceHandler(
+            [FiscalDispatchResult(FiscalDispatchStatus.SUCCEEDED, reference="retry-ok")]
+        ),
+        retry_policy=policy,
+    )
+    second = second_worker.run_once(now=NOW + timedelta(seconds=5))[0]
+    assert second.status is FiscalOutboxStatus.SUCCEEDED
+
+    with SqliteFiscalDatabase(database.path).unit_of_work() as uow:
+        audit = uow.delivery_audit.list_for_entry(entry.entry_id)
+    assert [record.status for record in audit] == [
+        DeliveryAttemptStatus.RETRY_SCHEDULED,
+        DeliveryAttemptStatus.SUCCEEDED,
+    ]
+    assert audit[0].next_available_at == NOW + timedelta(seconds=5)
+    assert audit[0].last_error == "consumer temporarily unavailable"
+    assert audit[0].ordering_key == "document:doc-audit-retry"
+    assert audit[1].outcome_reference == "retry-ok"
+    assert audit[1].ordering_key == "document:doc-audit-retry"
 
 
 def test_signed_outbox_to_inbox_duplicate_delivery_applies_consumer_effect_once(tmp_path) -> None:
@@ -304,7 +376,8 @@ def test_invalid_signature_is_rejected_before_durable_inbox_acceptance(tmp_path)
         producer="fm-fiscal-sender",
         consumer=consumer,
     )
-    body = _event_body("evt-invalid-signature")
+    event_id = "evt-invalid-signature"
+    body = _event_body(event_id)
     signature = _security().sign(body, now=NOW)
     tampered = signature.header_value[:-1] + ("0" if signature.header_value[-1] != "0" else "1")
 
@@ -317,6 +390,10 @@ def test_invalid_signature_is_rejected_before_durable_inbox_acceptance(tmp_path)
         )
 
     assert consumer.invocations == 0
+    entry_id = build_inbox_entry_id(
+        scope=_scope(),
+        producer="fm-fiscal-sender",
+        event_id=event_id,
+    )
     with database.unit_of_work() as uow:
-        rows = uow.delivery_audit.list_for_entry("0" * 64)
-    assert rows == ()
+        assert uow.inbox.get(entry_id) is None
