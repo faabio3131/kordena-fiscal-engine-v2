@@ -27,7 +27,7 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 | V2-08 | Events/Webhooks/Inbox/Outbox | **CONCLUÍDO** | PR #9 Draft; gate `bc77ee4cf2b7151d06c09cf32ca9168363ece1c7`; run `34666753555`; 67 source files; Pytest 337 PASS; CI restaurado |
 | V2-09 | Modularização de verticais | **CONCLUÍDO** | PR #10 Draft; gate `88071fd557199ffd6848312ea5559b0cba415ee1`; run `34668430831`; 71 source files; Pytest 346 PASS; CI restaurado |
 | V2-10 | Contract Packs Kordena/Iron/Vendedor/CampaIA | **CONCLUÍDO** | PR #11 Draft; fechamento `345652ecbfc18c8bd3511cf5b9083ba0dbc259cb`; run `34707976358`; 78 source files; Pytest 397 PASS; CI restaurado |
-| V2-11 | Control Plane independente | **EM EXECUÇÃO** | PR #12 Draft; Foundation `eaeca06739f756d31085617c1eecabebcc846dd7`; run `34708472525`; 81 source files; Pytest 406 PASS; CI restaurado |
+| V2-11 | Control Plane independente | **EM EXECUÇÃO** | PR #12 Draft; Block 1 `eaeca06739f756d31085617c1eecabebcc846dd7` / `34708472525` / 406 PASS; Block 2 `fb485d180a2fba689c0465b61fbec206c02c3cf4` / `34709564947` / 83 source / 416 PASS; CI restaurado |
 | V2-12 | Gateway/Signer/Vault production adapters | PENDENTE | depende V2-11 |
 | V2-13 | Observabilidade + Compliance Operations | PENDENTE | depende V2-07/V2-12 |
 | V2-14 | Hardening sistêmico | PENDENTE | regressão/carga/falhas/segurança |
@@ -82,18 +82,41 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 - duplicate org/unit e secret binding conflitante falham fechado;
 - audit read é permissionado e isolado por tenant.
 
-Primeiro CI `34708348014`: falha de coleta por basename duplicado de teste; corrigido tornando `tests/control_plane` package. Segundo CI `34708391513`: 405 PASS, 1 FAIL por fixture que misturava duas invariantes RBAC; serviço falhou corretamente primeiro pela permission ausente. Fixture corrigido sem mudança semântica.
+Primeiro CI `34708348014`: falha de coleta por basename duplicado de teste. Segundo CI `34708391513`: 405 PASS, 1 FAIL por fixture que misturava duas invariantes RBAC. Fixture corrigido sem mudança semântica.
 
 Gate definitivo:
 - SHA `eaeca06739f756d31085617c1eecabebcc846dd7`;
 - run `34708472525` — **SUCCESS**;
-- Install PASS;
-- Ruff PASS;
+- Install/Ruff PASS;
 - Mypy strict PASS — **81 source files**;
 - Pytest **406 PASS em 1.46s**;
 - baseline V2-10 397; incremento **+9**;
-- compare bootstrap `f2167b5ac7ca3806287c3fd4abf509a5b698925a` -> gate: **7 commits à frente, 0 atrás**;
 - CI restaurado em `71823391c456b120ae5a4cf35d599caea0df353d`.
+
+### Bloco 2 — Persistência durável + perfis fiscais — CONCLUÍDO/CERTIFICADO
+
+- migration V4 `v2_11_control_plane_durable_state`;
+- `SqliteControlPlaneStore` integrado ao `SqliteFiscalUnitOfWork`;
+- onboarding, environments, secret references, perfis e audit trail duráveis;
+- `DurableControlPlaneService` com RBAC e atomicidade no UoW comum;
+- reutilização do `FiscalProfile` já certificado, sem segunda fonte de verdade;
+- vigências sobrepostas na mesma partição falham fechado; intervalos adjacentes são aceitos;
+- resolução de perfil efetivo falha fechado se persistência estiver ambígua;
+- restart safety para organização/unidade/referências/perfil/auditoria;
+- schema de secret references certificado sem campos de segredo/material;
+- caminhos históricos V2-07/V2-08 -> V2-11 testados.
+
+Tentativas intermediárias localizaram apenas: Ruff/import order, ciclo de import provocado por export eager e expectativas legadas de migrations V1-V3; todos foram corrigidos sem regressão semântica. A última falha antes do gate foi restrita a duas asserções que presumiam ordem de eventos com timestamp sintético idêntico.
+
+Gate definitivo:
+- SHA `fb485d180a2fba689c0465b61fbec206c02c3cf4`;
+- run `34709564947` — **SUCCESS**;
+- Install PASS;
+- Ruff PASS;
+- Mypy strict PASS — **83 source files**;
+- Pytest **416 PASS em 1.67s**;
+- baseline Block 1 406; incremento líquido **+10**;
+- CI restaurado em `7c3177dfe7f95cd7cf472c88d16ae8ac40d605af`.
 
 ## Governança
 
@@ -103,4 +126,4 @@ Gate definitivo:
 
 ## Próxima decisão
 
-**Bloco 2 obrigatório: persistência durável + perfis fiscais/vigências/ambientes/referências, com migration explícita, restart safety, sobreposição de vigência fail-closed e nenhum material secreto persistido.**
+**Bloco 3 obrigatório: Capability/Readiness governance, associando configuração administrativa à autoridade certificada de Capability & Readiness sem criar readiness paralelo ou conceder `PRODUCTION_APPROVED`.**
