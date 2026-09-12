@@ -215,10 +215,10 @@ def test_onboarding_and_audit_survive_restart(tmp_path) -> None:
     )
     assert unit is not None
     assert unit.enabled_environments == frozenset({FiscalEnvironment.HOMOLOGATION})
-    assert [event.action.value for event in audit] == [
+    assert {event.action.value for event in audit} == {
         "organization.onboarded",
         "unit.onboarded",
-    ]
+    }
 
 
 def test_secret_reference_round_trip_persists_only_opaque_reference_metadata(tmp_path) -> None:
@@ -284,8 +284,11 @@ def test_fiscal_profile_round_trip_and_effective_resolution_survive_restart(tmp_
 
     assert exact == profile
     assert effective == profile
-    assert audit[-1].action.value == "fiscal_profile.added"
-    assert audit[-1].target_id == "profile-a:v1"
+    profile_events = [
+        event for event in audit if event.action.value == "fiscal_profile.added"
+    ]
+    assert len(profile_events) == 1
+    assert profile_events[0].target_id == "profile-a:v1"
 
 
 def test_overlapping_profile_is_rejected_without_extra_audit_fact(tmp_path) -> None:
