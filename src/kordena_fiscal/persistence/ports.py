@@ -19,7 +19,7 @@ from kordena_fiscal.domain import (
     HostScope,
     SourceReference,
 )
-from kordena_fiscal.events import FiscalInboxStore
+from kordena_fiscal.events import FiscalDeliveryAuditStore, FiscalInboxStore
 from kordena_fiscal.lifecycle import FiscalStateSnapshot, IdempotencyStore
 from kordena_fiscal.numbering import FiscalSequenceStore
 from kordena_fiscal.reconciliation import FiscalReconciliationResult
@@ -74,6 +74,14 @@ class FiscalReconciliationRepository(Protocol):
     ) -> FiscalReconciliationResult | None: ...
 
 
+class FiscalOutboxOrderingStore(Protocol):
+    """Optional explicit ordering metadata; no key means no ordering dependency."""
+
+    def register(self, entry_id: str, ordering_key: str) -> str: ...
+
+    def get(self, entry_id: str) -> str | None: ...
+
+
 class FiscalUnitOfWork(Protocol):
     """One atomic local transaction spanning all durable fiscal repositories."""
 
@@ -88,6 +96,12 @@ class FiscalUnitOfWork(Protocol):
 
     @property
     def outbox(self) -> FiscalOutboxStore: ...
+
+    @property
+    def outbox_ordering(self) -> FiscalOutboxOrderingStore: ...
+
+    @property
+    def delivery_audit(self) -> FiscalDeliveryAuditStore: ...
 
     @property
     def archive(self) -> FiscalArchiveStore: ...
