@@ -81,10 +81,15 @@ def test_global_admin_onboards_organization_and_generates_audit_fact() -> None:
 
 def test_organization_onboarding_requires_global_scope_and_permission() -> None:
     service = ControlPlaneFoundationService(clock=_FixedClock())
+    scoped_org_writer = AdminPrincipal(
+        actor_id="tenant-org-writer",
+        permissions=frozenset({ControlPlanePermission.ORGANIZATION_WRITE}),
+        tenant_ids=frozenset({"tenant-a"}),
+    )
 
     with pytest.raises(ControlPlaneAuthorizationError, match="global-scope"):
         service.onboard_organization(
-            actor=_tenant_admin(),
+            actor=scoped_org_writer,
             tenant_id="tenant-a",
             legal_name="Synthetic Company",
             correlation_id="cp-org-002",
