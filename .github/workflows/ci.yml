@@ -1,7 +1,6 @@
 name: FM Fiscal Core V2 CI
 
 on:
-  pull_request:
   workflow_dispatch:
 
 permissions:
