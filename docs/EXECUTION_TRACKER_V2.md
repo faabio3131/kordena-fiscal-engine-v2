@@ -26,7 +26,7 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 | V2-07 | Application service + persistência durável | **CONCLUÍDO** | PR #8 Draft; gate `999ba84b9c25988441867820bfe8af0571269548`; run `34659892798`; 59 source files; Pytest 309 PASS; CI restaurado |
 | V2-08 | Events/Webhooks/Inbox/Outbox | **CONCLUÍDO** | PR #9 Draft; gate final `bc77ee4cf2b7151d06c09cf32ca9168363ece1c7`; run `34666753555`; 67 source files; Pytest 337 PASS; CI restaurado |
 | V2-09 | Modularização de verticais | **CONCLUÍDO** | PR #10 Draft; gate `88071fd557199ffd6848312ea5559b0cba415ee1`; run `34668430831`; 71 source files; Pytest 346 PASS; CI restaurado |
-| V2-10 | Contract Packs Kordena/Iron/Vendedor/CampaIA | **EM EXECUÇÃO** | branch `v2/product-contract-packs`; snapshot pré-fase preservado; PR Draft pendente de bootstrap |
+| V2-10 | Contract Packs Kordena/Iron/Vendedor/CampaIA | **EM EXECUÇÃO** | PR #11 Draft; Foundation gate `3af9a6ded0303ca7d591bbfa69b771c4571a9cc0`; run `34672479434`; 73 source files; Pytest 354 PASS; CI restaurado |
 | V2-11 | Control Plane independente | PENDENTE | depende core operacional |
 | V2-12 | Gateway/Signer/Vault production adapters | PENDENTE | depende V2-11 |
 | V2-13 | Observabilidade + Compliance Operations | PENDENTE | depende V2-07/V2-12 |
@@ -103,21 +103,42 @@ Compare V2-08 `cc30ec3bddd2f61595c0d869f710e22d83e24743` -> gate V2-09 `88071fd5
 - mappings específicos de Kordena, Iron Fit, Vendedor IA e CampaIA não entram no Core nesta fase;
 - não houve homologação externa nem produção.
 
-## Início V2-10 — Product Contract Packs
+## V2-10 — Product Contract Packs
 
-- branch criada a partir do head final certificado da V2-09: `5d3e06be52a75b60b36640ee8a5d1869b11de928`;
+### Bootstrap
+
+- branch `v2/product-contract-packs` criada a partir do head final certificado da V2-09: `5d3e06be52a75b60b36640ee8a5d1869b11de928`;
 - snapshot pré-fase salvo em `docs/history/EXECUTION_TRACKER_V2_PRE_V2_10.md`;
-- plano de execução da fase em `docs/V2_10_PRODUCT_CONTRACT_PACKS.md`;
-- escopo vinculante: packs Kordena, Iron Fit, Vendedor IA e CampaIA, fixtures sintéticas, contract tests e matriz de documentos/eventos/capabilities;
-- a fase não concede readiness/homologação e não importa repositórios privados dos SaaS.
+- plano em `docs/V2_10_PRODUCT_CONTRACT_PACKS.md`;
+- PR #11 criada em Draft, stacked sobre `v2/vertical-modularization`.
+
+### Bloco 1 — Foundation — CONCLUÍDO/CERTIFICADO
+
+- criada a superfície `kordena_fiscal.contract_packs`;
+- `ProductUseCaseDescriptor` declara operation kinds, document kinds, ações fiscais, vertical/capabilities e eventos;
+- `ProductContractPackDescriptor` valida `host_namespace` exato e operation kind por caso de uso;
+- `ProductContractPackRegistry` impede colisão de pack id e host namespace e resolve fail-closed;
+- contrato de vertical é validado explicitamente contra `VerticalModuleRegistry` V2-09;
+- nenhum pack/foundation promove readiness ou substitui a Capability & Readiness API;
+- testes cobrem isolamento, colisão, use case ausente, operation kind inválido, vertical ausente e invariantes do descriptor.
+
+Gate:
+- SHA: `3af9a6ded0303ca7d591bbfa69b771c4571a9cc0`;
+- run `34672479434` — **SUCCESS**;
+- Install PASS;
+- Ruff PASS;
+- Mypy strict PASS — **73 source files**;
+- Pytest **354 PASS em 1.45s**;
+- baseline V2-09: 346; incremento Foundation: **+8**;
+- CI restaurado a `workflow_dispatch` no commit `24b54f47fad9dac11b900194d63f0803b8dfda30`.
 
 ## Governança
 
-- PR #10 da V2-09 permanece Draft e sem merge;
-- nenhum deploy, promoção ou cutover foi realizado;
-- CI está em `workflow_dispatch`;
-- V2-10 será executada em PR Draft própria e stacked sobre `v2/vertical-modularization`.
+- PR #11 permanece Draft e sem merge;
+- nenhum deploy, promoção, homologação externa ou cutover foi realizado;
+- CI voltou a `workflow_dispatch` após o gate;
+- V2-10 permanece **EM EXECUÇÃO** até concluir os quatro packs e a certificação cross-product.
 
 ## Próxima decisão
 
-**V2-10 INICIADA. Próximo bloco: Foundation do Product Contract Pack + registry explícito e fail-closed.**
+**Próximo bloco: `KordenaFiscalContractPack` + fixtures sintéticas e contract tests Kordena, mantendo restaurante como vertical explícita e sem alterar regra tributária.**
