@@ -105,7 +105,11 @@ class FiscalInboxEntry:
             raise FiscalValidationError("scope must be ExecutionScope")
         object.__setattr__(self, "producer", _required(self.producer, "producer", 128).lower())
         object.__setattr__(self, "event_id", _required(self.event_id, "event_id", 256))
-        object.__setattr__(self, "event_type", _required(self.event_type, "event_type", 128).lower())
+        object.__setattr__(
+            self,
+            "event_type",
+            _required(self.event_type, "event_type", 128).lower(),
+        )
         if not isinstance(self.payload, bytes) or not self.payload:
             raise FiscalValidationError("payload must be non-empty bytes")
         digest = _sha256_hex(self.payload_sha256, "payload_sha256")
