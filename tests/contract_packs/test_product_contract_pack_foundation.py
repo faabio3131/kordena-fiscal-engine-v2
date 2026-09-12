@@ -27,7 +27,11 @@ from kordena_fiscal.operations import (
     FiscalOperationSnapshot,
     FiscalOperationTotals,
 )
-from kordena_fiscal.verticals import SERVICE_VERTICAL, VerticalModuleRegistry
+from kordena_fiscal.verticals import (
+    SERVICE_VERTICAL,
+    VerticalModuleNotFoundError,
+    VerticalModuleRegistry,
+)
 
 
 def _use_case(**overrides: object) -> ProductUseCaseDescriptor:
@@ -154,7 +158,7 @@ def test_vertical_contract_is_explicitly_validated() -> None:
     descriptor = _pack().descriptor
     descriptor.validate_vertical_contracts(VerticalModuleRegistry((SERVICE_VERTICAL,)))
 
-    with pytest.raises(Exception, match="not registered"):
+    with pytest.raises(VerticalModuleNotFoundError, match="not registered"):
         descriptor.validate_vertical_contracts(VerticalModuleRegistry())
 
 
