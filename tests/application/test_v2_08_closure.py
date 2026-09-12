@@ -52,7 +52,7 @@ def _scope(correlation_id: str = "corr-v2-08-final") -> ExecutionScope:
 
 def _database(tmp_path, name: str) -> SqliteFiscalDatabase:
     database = SqliteFiscalDatabase(tmp_path / name)
-    assert database.initialize() == (1, 2, 3)
+    assert database.initialize() == (1, 2, 3, 4)
     return database
 
 
@@ -379,7 +379,9 @@ def test_invalid_signature_is_rejected_before_durable_inbox_acceptance(tmp_path)
     event_id = "evt-invalid-signature"
     body = _event_body(event_id)
     signature = _security().sign(body, now=NOW)
-    tampered = signature.header_value[:-1] + ("0" if signature.header_value[-1] != "0" else "1")
+    tampered = signature.header_value[:-1] + (
+        "0" if signature.header_value[-1] != "0" else "1"
+    )
 
     with pytest.raises(WebhookSignatureError):
         receiver.receive(
