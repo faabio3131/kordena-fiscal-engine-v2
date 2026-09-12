@@ -1,5 +1,11 @@
-"""Public asynchronous event and durable inbox surface."""
+"""Public asynchronous event, inbox and delivery-audit surface."""
 
+from .delivery_audit import (
+    DeliveryAttemptStatus,
+    DeliveryAuditError,
+    FiscalDeliveryAttempt,
+    FiscalDeliveryAuditStore,
+)
 from .inbox import (
     FiscalInboxEntry,
     FiscalInboxError,
@@ -13,6 +19,10 @@ from .inbox import (
 )
 
 __all__ = [
+    "DeliveryAttemptStatus",
+    "DeliveryAuditError",
+    "FiscalDeliveryAttempt",
+    "FiscalDeliveryAuditStore",
     "FiscalInboxEntry",
     "FiscalInboxError",
     "FiscalInboxReceiveResult",
