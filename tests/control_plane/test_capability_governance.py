@@ -211,7 +211,10 @@ def test_governed_query_delegates_to_certified_readiness_authority(tmp_path) -> 
         readiness=authority,
     )
 
-    snapshot = governed.query(actor=_tenant_admin(), context=_context(FiscalEnvironment.HOMOLOGATION))
+    snapshot = governed.query(
+        actor=_tenant_admin(),
+        context=_context(FiscalEnvironment.HOMOLOGATION),
+    )
     direct = authority.query(
         jurisdiction=BrazilianJurisdiction("SP", "3550308"),
         document_kind=FiscalDocumentKind.NFCE,
