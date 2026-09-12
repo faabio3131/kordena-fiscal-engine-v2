@@ -1,5 +1,10 @@
 """Public FM Fiscal Control Plane domain surface."""
 
+from .durable import (
+    DurableControlPlaneClock,
+    DurableControlPlaneService,
+    SystemDurableControlPlaneClock,
+)
 from .models import (
     AdminPrincipal,
     ControlPlaneAuditAction,
@@ -29,9 +34,12 @@ __all__ = [
     "ControlPlaneFoundationService",
     "ControlPlaneNotFoundError",
     "ControlPlanePermission",
+    "DurableControlPlaneClock",
+    "DurableControlPlaneService",
     "FiscalOrganization",
     "FiscalUnitRegistration",
     "InMemoryControlPlaneState",
     "SecretReference",
     "SecretReferenceKind",
+    "SystemDurableControlPlaneClock",
 ]
