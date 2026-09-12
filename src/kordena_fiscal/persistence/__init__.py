@@ -17,6 +17,7 @@ from .sqlite_core import (
     SqliteLifecycleRepository,
 )
 from .sqlite_idempotency import SqliteIdempotencyStore
+from .sqlite_inbox import SqliteFiscalInboxStore
 from .sqlite_outbox_archive import SqliteFiscalArchiveStore, SqliteFiscalOutboxStore
 from .sqlite_reconciliation import SqliteReconciliationRepository
 
@@ -32,6 +33,7 @@ __all__ = [
     "SqliteBindingRepository",
     "SqliteFiscalArchiveStore",
     "SqliteFiscalDatabase",
+    "SqliteFiscalInboxStore",
     "SqliteFiscalOutboxStore",
     "SqliteFiscalSequenceStore",
     "SqliteFiscalUnitOfWork",
