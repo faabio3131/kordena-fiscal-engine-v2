@@ -16,6 +16,11 @@ from kordena_fiscal.domain import (
     HostScope,
     SourceReference,
 )
+from kordena_fiscal.events import (
+    FiscalInboxEntry,
+    FiscalInboxReceiveResult,
+    FiscalInboxService,
+)
 from kordena_fiscal.lifecycle import (
     FiscalDocumentState,
     FiscalStateMachine,
@@ -105,6 +110,90 @@ class FiscalApplicationService:
                 environment=environment,
                 correlation_id=correlation_id,
             )
+
+    def receive_inbox_event(
+        self,
+        *,
+        scope: ExecutionScope,
+        producer: str,
+        event_id: str,
+        event_type: str,
+        payload: bytes,
+        occurred_at: datetime,
+        received_at: datetime,
+        causation_id: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> FiscalInboxReceiveResult:
+        """Atomically persist one inbound event before any application processing."""
+
+        with self._uow_factory() as uow:
+            result = FiscalInboxService(uow.inbox).receive(
+                scope=scope,
+                producer=producer,
+                event_id=event_id,
+                event_type=event_type,
+                payload=payload,
+                occurred_at=occurred_at,
+                received_at=received_at,
+                causation_id=causation_id,
+                idempotency_key=idempotency_key,
+            )
+            uow.commit()
+            return result
+
+    def begin_inbox_processing(
+        self,
+        entry_id: str,
+        *,
+        expected_version: int,
+    ) -> FiscalInboxEntry:
+        with self._uow_factory() as uow:
+            entry = uow.inbox.begin_processing(
+                entry_id,
+                expected_version=expected_version,
+            )
+            uow.commit()
+            return entry
+
+    def complete_inbox_event(
+        self,
+        entry_id: str,
+        *,
+        expected_version: int,
+        processed_at: datetime,
+        outcome_reference: str | None = None,
+    ) -> FiscalInboxEntry:
+        with self._uow_factory() as uow:
+            entry = uow.inbox.mark_processed(
+                entry_id,
+                expected_version=expected_version,
+                processed_at=processed_at,
+                outcome_reference=outcome_reference,
+            )
+            uow.commit()
+            return entry
+
+    def reject_inbox_event(
+        self,
+        entry_id: str,
+        *,
+        expected_version: int,
+        processed_at: datetime,
+        error: str,
+    ) -> FiscalInboxEntry:
+        with self._uow_factory() as uow:
+            entry = uow.inbox.mark_rejected(
+                entry_id,
+                expected_version=expected_version,
+                processed_at=processed_at,
+                error=error,
+            )
+            uow.commit()
+            return entry
+
+    def get_inbox_event(self, entry_id: str) -> FiscalInboxEntry | None:
+        with self._uow_factory() as uow:
+            return uow.inbox.get(entry_id)
 
     def reserve_issuance(
         self,
