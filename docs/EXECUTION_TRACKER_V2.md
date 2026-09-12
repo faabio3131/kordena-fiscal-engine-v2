@@ -26,7 +26,7 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 | V2-07 | Application service + persistência durável | **CONCLUÍDO** | PR #8 Draft; gate `999ba84b9c25988441867820bfe8af0571269548`; run `34659892798`; 59 source files; Pytest 309 PASS; CI restaurado |
 | V2-08 | Events/Webhooks/Inbox/Outbox | **CONCLUÍDO** | PR #9 Draft; gate `bc77ee4cf2b7151d06c09cf32ca9168363ece1c7`; run `34666753555`; 67 source files; Pytest 337 PASS; CI restaurado |
 | V2-09 | Modularização de verticais | **CONCLUÍDO** | PR #10 Draft; gate `88071fd557199ffd6848312ea5559b0cba415ee1`; run `34668430831`; 71 source files; Pytest 346 PASS; CI restaurado |
-| V2-10 | Contract Packs Kordena/Iron/Vendedor/CampaIA | **CONCLUÍDO** | PR #11 Draft; gate funcional `44941004207d2991fccfd0f28b402bc3cda9357f`; run `34707834828`; 78 source files; Pytest 397 PASS; CI restaurado |
+| V2-10 | Contract Packs Kordena/Iron/Vendedor/CampaIA | **CONCLUÍDO** | PR #11 Draft; gate funcional `44941004207d2991fccfd0f28b402bc3cda9357f`; fechamento `345652ecbfc18c8bd3511cf5b9083ba0dbc259cb`; run `34707976358`; 78 source files; Pytest 397 PASS; CI restaurado |
 | V2-11 | Control Plane independente | PENDENTE | próxima fase; depende core operacional multiproduto certificado |
 | V2-12 | Gateway/Signer/Vault production adapters | PENDENTE | depende V2-11 |
 | V2-13 | Observabilidade + Compliance Operations | PENDENTE | depende V2-07/V2-12 |
@@ -115,12 +115,23 @@ Gate funcional definitivo:
 - Ruff PASS;
 - Mypy strict PASS — **78 source files**;
 - Pytest **397 PASS em 1.16s**;
-- baseline V2-09 346 -> V2-10 397: **+51 testes líquidos**;
-- CI restaurado a `workflow_dispatch` no commit `fcd3fc69086c46ede94079a48da90a5ec0764572`.
+- baseline V2-09 346 -> V2-10 397: **+51 testes líquidos**.
+
+### Certificação final de fechamento
+
+Após documentação e tracker de encerramento, a matriz completa foi executada novamente:
+
+- SHA `345652ecbfc18c8bd3511cf5b9083ba0dbc259cb`;
+- run `34707976358` — **SUCCESS**;
+- Install PASS;
+- Ruff PASS;
+- Mypy strict PASS — **78 source files**;
+- Pytest **397 PASS em 1.47s**;
+- CI restaurado para `workflow_dispatch` no commit `2d651bd380807cad6ad30757ad96f6c6365af709`.
 
 ### Auditoria de diff funcional contra V2-09
 
-Compare V2-09 `5d3e06be52a75b60b36640ee8a5d1869b11de928` -> `fcd3fc69086c46ede94079a48da90a5ec0764572`:
+Compare V2-09 `5d3e06be52a75b60b36640ee8a5d1869b11de928` -> checkpoint pós-gate/restauração `fcd3fc69086c46ede94079a48da90a5ec0764572`:
 
 - **48 commits à frente, 0 atrás**;
 - **16 arquivos líquidos alterados**;
@@ -140,9 +151,9 @@ Compare V2-09 `5d3e06be52a75b60b36640ee8a5d1869b11de928` -> `fcd3fc69086c46ede94
 
 - PR #11 permanece Draft e sem merge;
 - nenhum deploy, promoção, homologação externa ou cutover foi realizado;
-- fechamento documental será submetido a regressão integral final;
-- V2-11 permanece PENDENTE até essa última certificação verde.
+- V2-10 está **CONCLUÍDA E CERTIFICADA**;
+- V2-11 está formalmente liberada para ser iniciada em branch e PR Draft próprios.
 
 ## Próxima decisão
 
-**Após a regressão final de fechamento da V2-10, iniciar formalmente V2-11 — Control Plane independente, em nova branch/PR Draft conforme o protocolo.**
+**V2-11 — Control Plane independente: iniciar somente com snapshot pré-fase, nova branch stacked sobre o fechamento V2-10 e nova PR Draft, preservando os mesmos gates de governança.**
