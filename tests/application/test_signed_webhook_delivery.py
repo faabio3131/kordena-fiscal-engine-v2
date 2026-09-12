@@ -12,13 +12,17 @@ from kordena_fiscal.application import (
     FM_WEBHOOK_OUTBOX_ENTRY_HEADER,
     FM_WEBHOOK_SIGNATURE_HEADER,
     DurableFiscalOutboxWorker,
-    FiscalApplicationService,
     SignedWebhookOutboxHandler,
     WebhookDeliveryRequest,
     WebhookDeliveryResponse,
     WebhookDestination,
 )
-from kordena_fiscal.contingency import FiscalOutboxEntry, FiscalOutboxStatus, FiscalRetryPolicy
+from kordena_fiscal.contingency import (
+    FiscalOutboxEntry,
+    FiscalOutboxService,
+    FiscalOutboxStatus,
+    FiscalRetryPolicy,
+)
 from kordena_fiscal.domain import ExecutionScope, FiscalEnvironment, FiscalValidationError
 from kordena_fiscal.persistence import SqliteFiscalDatabase
 from kordena_fiscal.security import InMemoryWebhookKeyRing, WebhookSecurity, WebhookSignature
@@ -113,13 +117,16 @@ class _StaticTransport:
 
 
 def _enqueue(database: SqliteFiscalDatabase, key: str = "evt-webhook-1") -> FiscalOutboxEntry:
-    return FiscalApplicationService(database).enqueue_outbox_event(
-        scope=_scope(),
-        operation="webhook_event",
-        deduplication_key=key,
-        payload=b'{"event_id":"evt-webhook-1","event_type":"fiscal.document.authorized"}',
-        created_at=NOW,
-    ).entry
+    with database.unit_of_work() as uow:
+        result = FiscalOutboxService(uow.outbox).enqueue(
+            scope=_scope(),
+            operation="webhook_event",
+            deduplication_key=key,
+            payload=b'{"event_id":"evt-webhook-1","event_type":"fiscal.document.authorized"}',
+            created_at=NOW,
+        )
+        uow.commit()
+        return result.entry
 
 
 def _destination() -> WebhookDestination:
