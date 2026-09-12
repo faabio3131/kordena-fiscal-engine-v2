@@ -43,19 +43,9 @@ Um teste em processo Python novo prova que importar `kordena_fiscal.verticals` e
 
 A suíte registra uma vertical sintética `future-commerce` apenas através do contrato `VerticalModuleDescriptor` + `VerticalModuleRegistry`, sem alteração no Core. Isso prova o ponto de extensão exigido pelo Plano Mestre para futuras verticais.
 
-## Testes e gate
+## Testes e gates
 
-Foram adicionados 9 testes dirigidos para:
-
-- fail-closed de vertical desconhecida;
-- rejeição de registro duplicado;
-- resolução explícita por capability;
-- neutralidade de service/fitness/SaaS;
-- ausência de import eager do restaurante;
-- extensão futura sem fork;
-- registro e uso explícito do módulo restaurante;
-- identidade entre a superfície legada e a implementação vertical;
-- validação fail-closed dos descriptors.
+Foram adicionados 9 testes dirigidos para fail-closed de vertical desconhecida, registro duplicado, resolução por capability, neutralidade de service/fitness/SaaS, ausência de import eager do restaurante, extensão futura sem fork, módulo restaurante explícito, compatibilidade da superfície legada e validação dos descriptors.
 
 Gate funcional definitivo:
 
@@ -67,11 +57,13 @@ Gate funcional definitivo:
 - Pytest completo: **346 PASS em 1.35s**;
 - baseline V2-08: 337 testes; incremento líquido V2-09: **+9 testes**.
 
+A versão documental/tracker consolidada em `9a10d1863868d92462efaecddf5d36792240798e` também passou integralmente no run `34668559367`: Install PASS, Ruff PASS, Mypy strict PASS em 71 source files e **346 PASS em 1.41s**.
+
 ## Auditoria do diff
 
 Compare V2-08 `cc30ec3bddd2f61595c0d869f710e22d83e24743` -> gate V2-09 `88071fd557199ffd6848312ea5559b0cba415ee1`:
 
-- **9 commits à frente, 0 atrás**;
+- **9 commits à frente, 0 atrás** no gate funcional;
 - mudanças limitadas ao CI temporário, documentação da fase, snapshot do tracker, nova superfície `verticals`, shim de compatibilidade do restaurante e testes V2-09;
 - nenhum arquivo OpenAPI, AsyncAPI ou JSON Schema foi alterado;
 - nenhuma persistência, migration, segurança, webhook, provider, infraestrutura, segredo real ou deploy foi introduzido.
@@ -86,6 +78,6 @@ Compare V2-08 `cc30ec3bddd2f61595c0d869f710e22d83e24743` -> gate V2-09 `88071fd5
 
 ## Governança e decisão
 
-PR #10 permanece Draft. A fase está tecnicamente concluída após o gate completo e a auditoria do diff. O CI temporário de PR deve ser restaurado para `workflow_dispatch` após a certificação documental final.
+PR #10 permanece Draft. O CI temporário de PR foi removido após a certificação e o workflow voltou a aceitar apenas `workflow_dispatch` no commit `8e07e5f82df4bd889b5b7fed86707528550ab10e`.
 
 **V2-09 CONCLUÍDO E CERTIFICADO. V2-10 — Product Contract Packs — está LIBERADA / PENDENTE.**
