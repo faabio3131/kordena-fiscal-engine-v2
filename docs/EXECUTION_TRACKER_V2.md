@@ -27,7 +27,7 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 | V2-08 | Events/Webhooks/Inbox/Outbox | **CONCLUÍDO** | PR #9 Draft; gate `bc77ee4cf2b7151d06c09cf32ca9168363ece1c7`; run `34666753555`; 67 source files; Pytest 337 PASS; CI restaurado |
 | V2-09 | Modularização de verticais | **CONCLUÍDO** | PR #10 Draft; gate `88071fd557199ffd6848312ea5559b0cba415ee1`; run `34668430831`; 71 source files; Pytest 346 PASS; CI restaurado |
 | V2-10 | Contract Packs Kordena/Iron/Vendedor/CampaIA | **CONCLUÍDO** | PR #11 Draft; fechamento `345652ecbfc18c8bd3511cf5b9083ba0dbc259cb`; run `34707976358`; 78 source files; Pytest 397 PASS; CI restaurado |
-| V2-11 | Control Plane independente | **EM EXECUÇÃO** | PR #12 Draft; Block 1 `eaeca06739f756d31085617c1eecabebcc846dd7` / `34708472525` / 406 PASS; Block 2 `fb485d180a2fba689c0465b61fbec206c02c3cf4` / `34709564947` / 83 source / 416 PASS; CI restaurado |
+| V2-11 | Control Plane independente | **EM EXECUÇÃO** | PR #12 Draft; Block 1 `eaeca06739f756d31085617c1eecabebcc846dd7` / `34708472525` / 406 PASS; Block 2 `fb485d180a2fba689c0465b61fbec206c02c3cf4` / `34709564947` / 83 source / 416 PASS; Block 3 `292abfda6ffa02c599b5b01d0ec2ba766267f994` / `34709912172` / 84 source / 424 PASS; CI restaurado |
 | V2-12 | Gateway/Signer/Vault production adapters | PENDENTE | depende V2-11 |
 | V2-13 | Observabilidade + Compliance Operations | PENDENTE | depende V2-07/V2-12 |
 | V2-14 | Hardening sistêmico | PENDENTE | regressão/carga/falhas/segurança |
@@ -78,45 +78,42 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 - environments explicitamente habilitados, default somente HOMOLOGATION;
 - `SecretReference` armazena apenas referências opacas `ref:...`, nunca segredo bruto;
 - `ControlPlaneAuditEvent` sem payload livre e audit trail para mutações;
-- serviço in-memory certifica invariantes antes da persistência durável;
-- duplicate org/unit e secret binding conflitante falham fechado;
-- audit read é permissionado e isolado por tenant.
+- serviço in-memory certifica invariantes antes da persistência durável.
 
-Primeiro CI `34708348014`: falha de coleta por basename duplicado de teste. Segundo CI `34708391513`: 405 PASS, 1 FAIL por fixture que misturava duas invariantes RBAC. Fixture corrigido sem mudança semântica.
-
-Gate definitivo:
-- SHA `eaeca06739f756d31085617c1eecabebcc846dd7`;
-- run `34708472525` — **SUCCESS**;
-- Install/Ruff PASS;
-- Mypy strict PASS — **81 source files**;
-- Pytest **406 PASS em 1.46s**;
-- baseline V2-10 397; incremento **+9**;
-- CI restaurado em `71823391c456b120ae5a4cf35d599caea0df353d`.
+Gate: SHA `eaeca06739f756d31085617c1eecabebcc846dd7`, run `34708472525`, 81 source files, **406 PASS**, CI restaurado.
 
 ### Bloco 2 — Persistência durável + perfis fiscais — CONCLUÍDO/CERTIFICADO
 
 - migration V4 `v2_11_control_plane_durable_state`;
-- `SqliteControlPlaneStore` integrado ao `SqliteFiscalUnitOfWork`;
+- `SqliteControlPlaneStore` no UoW comum;
 - onboarding, environments, secret references, perfis e audit trail duráveis;
-- `DurableControlPlaneService` com RBAC e atomicidade no UoW comum;
-- reutilização do `FiscalProfile` já certificado, sem segunda fonte de verdade;
-- vigências sobrepostas na mesma partição falham fechado; intervalos adjacentes são aceitos;
-- resolução de perfil efetivo falha fechado se persistência estiver ambígua;
-- restart safety para organização/unidade/referências/perfil/auditoria;
-- schema de secret references certificado sem campos de segredo/material;
-- caminhos históricos V2-07/V2-08 -> V2-11 testados.
+- `FiscalProfile` reutilizado como fonte fiscal única;
+- overlap de vigência fail-closed e resolução efetiva determinística;
+- restart safety e upgrade histórico V2-07/V2-08 certificados;
+- schema de referências sem secret material.
 
-Tentativas intermediárias localizaram apenas: Ruff/import order, ciclo de import provocado por export eager e expectativas legadas de migrations V1-V3; todos foram corrigidos sem regressão semântica. A última falha antes do gate foi restrita a duas asserções que presumiam ordem de eventos com timestamp sintético idêntico.
+Gate: SHA `fb485d180a2fba689c0465b61fbec206c02c3cf4`, run `34709564947`, 83 source files, **416 PASS**, CI restaurado.
+
+### Bloco 3 — Capability/Readiness governance — CONCLUÍDO/CERTIFICADO
+
+- novo `capability.read` explícito;
+- `CapabilityControlContext` host/tenant/unidade/environment/document/instant;
+- `GovernedCapabilityReadinessService` valida RBAC/onboarding/environment/perfil e delega à autoridade V2-06;
+- nenhuma tabela, registry ou nível paralelo de readiness foi criado;
+- produção administrativa habilitada não concede `PRODUCTION_APPROVED`;
+- `require_action` conserva fail-closed da autoridade central;
+- leituras de capability não alteram audit trail.
+
+Primeira tentativa `34709796266`: falhou somente Ruff/E501; Mypy/Pytest não executaram. Correção estritamente de formatação e remoção de audit action futuro não utilizado.
 
 Gate definitivo:
-- SHA `fb485d180a2fba689c0465b61fbec206c02c3cf4`;
-- run `34709564947` — **SUCCESS**;
-- Install PASS;
-- Ruff PASS;
-- Mypy strict PASS — **83 source files**;
-- Pytest **416 PASS em 1.67s**;
-- baseline Block 1 406; incremento líquido **+10**;
-- CI restaurado em `7c3177dfe7f95cd7cf472c88d16ae8ac40d605af`.
+- SHA `292abfda6ffa02c599b5b01d0ec2ba766267f994`;
+- run `34709912172` — **SUCCESS**;
+- Install/Ruff PASS;
+- Mypy strict PASS — **84 source files**;
+- Pytest **424 PASS em 1.37s**;
+- baseline Block 2 416; incremento **+8**;
+- CI restaurado em `78f66cdca4415bf2caf81e1fa25dff99b910f068`.
 
 ## Governança
 
@@ -126,4 +123,4 @@ Gate definitivo:
 
 ## Próxima decisão
 
-**Bloco 3 obrigatório: Capability/Readiness governance, associando configuração administrativa à autoridade certificada de Capability & Readiness sem criar readiness paralelo ou conceder `PRODUCTION_APPROVED`.**
+**Bloco 4 obrigatório: Operational Control Plane, expondo visões administrativas governadas e sanitizadas de delivery/outbox, erros, archive e reconciliação sem duplicar autoridade operacional e sem expor payload/content bytes.**
