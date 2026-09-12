@@ -1,6 +1,6 @@
 # V2-10 — Product Contract Packs
 
-Status: **EM EXECUÇÃO — FOUNDATION + KORDENA + IRON FIT + VENDEDOR IA CERTIFICADOS**  
+Status: **EM EXECUÇÃO — QUATRO PRODUCT PACKS CERTIFICADOS; CROSS-PRODUCT PENDENTE**  
 Branch: `v2/product-contract-packs`  
 Base certificada: `v2/vertical-modularization` @ `5d3e06be52a75b60b36640ee8a5d1869b11de928`  
 Dependência: V2-09 concluída e certificada.
@@ -26,114 +26,86 @@ Provar, por contratos versionados e testes sintéticos, que um único FM Fiscal 
 
 ## Blocos de execução
 
-1. **Foundation — CONCLUÍDO/CERTIFICADO:** contrato imutável de Product Contract Pack, use-case descriptor e registry fail-closed.
-2. **Kordena — CONCLUÍDO/CERTIFICADO:** vendas/PDV com vertical restaurante explícita, sem alterar regras tributárias do restaurante.
-3. **Iron Fit — CONCLUÍDO/CERTIFICADO:** mensalidades/serviços/recorrência com vertical fitness e NFS-e como família contratual, sem promover readiness.
-4. **Vendedor IA — CONCLUÍDO/CERTIFICADO:** venda genérica NFC-e/NF-e, sem vertical específica e sem inferir pagamento, settlement ou autoridade fiscal ausente.
-5. **CampaIA — PRÓXIMO:** faturamento próprio de serviço/SaaS modelado com vertical SaaS/serviço, sem inferir fatos fiscais não fornecidos.
-6. **Cross-product certification:** isolamento de namespaces, matriz consolidada, fixtures sintéticas, regression completa e auditoria de diff.
+1. **Foundation — CONCLUÍDO/CERTIFICADO**.
+2. **Kordena — CONCLUÍDO/CERTIFICADO**.
+3. **Iron Fit — CONCLUÍDO/CERTIFICADO**.
+4. **Vendedor IA — CONCLUÍDO/CERTIFICADO**.
+5. **CampaIA — CONCLUÍDO/CERTIFICADO**.
+6. **Cross-product certification — PRÓXIMO:** matriz consolidada, isolamento entre os quatro namespaces, regressão completa e auditoria final do diff.
 
 ## Foundation
 
-Foi criada a superfície `kordena_fiscal.contract_packs` com descriptors versionados de casos de uso/packs, registry único por pack e host namespace, validação exata de `host_namespace`, operation kind e vertical/capabilities, sempre fail-closed e sem substituir a Capability & Readiness API.
+`kordena_fiscal.contract_packs` fornece descriptors versionados de pack/use case, registry único por `pack_id` e `host_namespace`, validação exata de namespace, operation kind e vertical/capabilities, sempre fail-closed e sem substituir a Capability & Readiness API.
 
-### Gate Foundation
-
-- SHA `3af9a6ded0303ca7d591bbfa69b771c4571a9cc0`;
-- run `34672479434` — **SUCCESS**;
-- Install/Ruff PASS;
-- Mypy strict PASS — **73 source files**;
-- Pytest **354 PASS em 1.45s**;
-- baseline V2-09: 346; incremento **+8**;
-- CI restaurado no commit `24b54f47fad9dac11b900194d63f0803b8dfda30`.
+Gate Foundation: SHA `3af9a6ded0303ca7d591bbfa69b771c4571a9cc0`, run `34672479434`, 73 source files, **354 PASS**. CI restaurado em `24b54f47fad9dac11b900194d63f0803b8dfda30`.
 
 ## KordenaFiscalContractPack
 
-Namespace canônico `fm.kordena`, sem modelos privados do Kordena. `restaurant-pos-sale` declara SALE + NFC-e e `restaurant-invoice-sale` declara SALE + NF-e. Ambos exigem explicitamente a vertical `restaurant` e as capabilities `tax.restaurant.supply-classification` e `tax.restaurant.base-adjustments`, sem copiar regra tributária nem conceder readiness.
+Namespace `fm.kordena`. `restaurant-pos-sale` declara SALE + NFC-e e `restaurant-invoice-sale` declara SALE + NF-e. Ambos exigem explicitamente a vertical `restaurant` e capabilities já certificadas na V2-09, sem copiar regra tributária nem conceder readiness.
 
-### Gate Kordena
-
-- SHA `6fd934c024736f3d5e23aa4d1172d60caa49fb7c`;
-- run `34672769666` — **SUCCESS**;
-- Install/Ruff PASS;
-- Mypy strict PASS — **74 source files**;
-- Pytest **362 PASS em 1.16s**;
-- incremento **+8**;
-- CI restaurado no commit `6a919ebdcab17b5f7b3215aa8d032abc2411afb0`.
+Gate Kordena: SHA `6fd934c024736f3d5e23aa4d1172d60caa49fb7c`, run `34672769666`, 74 source files, **362 PASS**. CI restaurado em `6a919ebdcab17b5f7b3215aa8d032abc2411afb0`.
 
 ## IronFiscalContractPack
 
-O pack Iron Fit usa `fm.iron`, sem modelos privados do Iron Fit e sem dependência de restaurante/Kordena/SaaS.
+Namespace `fm.iron`. Casos `membership-billing`, `recurring-membership-billing` e `fitness-service-billing` usam NFS-e e a vertical `fitness` com capability específica por operação. `INUTILIZE` e `CONTINGENCY` não são concedidos genericamente para NFS-e.
 
-Casos de uso:
-
-- `membership-billing`: `MEMBERSHIP` + NFS-e + `fitness/operation.membership`;
-- `recurring-membership-billing`: `RECURRING_CHARGE` + NFS-e + `fitness/operation.recurring`;
-- `fitness-service-billing`: `SERVICE` + NFS-e + `fitness/operation.service`.
-
-As ações genéricas de NFS-e ficam limitadas a issue/query/cancel/reconcile/archive reference. `INUTILIZE` e `CONTINGENCY` não são concedidos genericamente pelo pack.
-
-### Gate Iron Fit
-
-- SHA `3c3f18dd77663e021424b9f32c9f1a849b001c84`;
-- run `34672919212` — **SUCCESS**;
-- Install/Ruff PASS;
-- Mypy strict PASS — **75 source files**;
-- Pytest **371 PASS em 1.41s**;
-- incremento **+9**;
-- CI restaurado no commit `270a602316423f928ed10124fc8e9688fb38904c`.
+Gate Iron Fit: SHA `3c3f18dd77663e021424b9f32c9f1a849b001c84`, run `34672919212`, 75 source files, **371 PASS**. CI restaurado em `270a602316423f928ed10124fc8e9688fb38904c`.
 
 ## SalesFiscalContractPack — Vendedor IA
 
-O pack de vendas usa o namespace canônico `fm.vendedor-ia` e permanece totalmente horizontal: não exige `restaurant`, `fitness`, `saas` ou qualquer outra vertical específica.
+Namespace `fm.vendedor-ia`. `nfce-sale` e `nfe-sale` aceitam somente `SALE`, sem vertical setorial e sem inferir `payments`, `settled_at` ou autoridade de pagamento. Cross-host e operation kind incompatível falham fechado.
+
+Gate Vendedor IA: SHA `7be9453e6757784e38e77e83928bc0f828007f90`, run `34674065346`, 76 source files, **380 PASS**. CI restaurado em `40fb0a83574bffeab1981656dfa3f90c44762b9a`.
+
+## CampaiaFiscalContractPack
+
+O pack CampaIA usa o namespace canônico `fm.campaia` e modela somente fatos de faturamento próprios do produto. Nenhum modelo privado da CampaIA é importado.
 
 Casos de uso declarados:
 
-- `nfce-sale`: `FiscalOperationKind.SALE` + NFC-e, com issue/query/cancel/contingency/reconcile/archive reference;
-- `nfe-sale`: `FiscalOperationKind.SALE` + NF-e, com issue/query/cancel/inutilize/contingency/reconcile/archive reference.
+- `service-billing`: `FiscalOperationKind.SERVICE` + NFS-e, exigindo vertical `service` e capability `operation.service`;
+- `saas-billing`: `FiscalOperationKind.SAAS_BILLING` + NFS-e, exigindo vertical `saas` e capabilities `operation.service` + `operation.subscription`.
 
-O pack não cria nem infere fatos de pagamento. Uma operação sem `payments` e sem `settled_at` continua válida como contrato de venda, desde que os demais fatos canônicos existam; autoridade de pagamento, settlement e suficiência de dados fiscais permanecem responsabilidades externas. O pack também não contém readiness, homologação ou `PRODUCTION_APPROVED`.
+Os dois casos declaram somente issue/query/cancel/reconcile/archive reference. `INUTILIZE` e `CONTINGENCY` não são concedidos genericamente para NFS-e. O pack não infere pagamento, settlement, fatos tributários municipais, jurisdição, readiness ou `PRODUCTION_APPROVED`.
 
-### Contract tests Vendedor IA
+### Contract tests CampaIA
 
 Os testes provam:
 
-- identidade estável `sales` / `fm.vendedor-ia` e dois casos de uso explícitos;
-- ambos aceitam apenas `FiscalOperationKind.SALE`;
-- NFC-e e NF-e permanecem famílias contratuais distintas, com ações específicas sem overclaim;
-- nenhum módulo vertical é necessário;
-- operação `SERVICE` no use case de venda falha fechado;
-- namespace `fm.kordena` contra o pack Sales falha fechado;
-- fixture sem pagamento/settlement não sofre inferência nem mutação pelo pack;
-- registry resolve apenas o namespace exato `fm.vendedor-ia`;
-- eventos inbound existem no AsyncAPI público e nenhum evento outbound privado é inventado;
-- descriptor não contém restaurante, fitness, SaaS ou namespaces dos demais produtos.
+- identidade estável `campaia` / `fm.campaia` e dois use cases explícitos;
+- SERVICE e SAAS_BILLING permanecem contratos distintos;
+- NFS-e é apenas família contratual, sem promoção de readiness;
+- as verticais `service` e `saas` são exigidas explicitamente e ausência de qualquer uma falha fechado;
+- `SUBSCRIPTION` não é silenciosamente aceito no use case `saas-billing`;
+- namespace `fm.vendedor-ia` contra CampaIA falha fechado;
+- fixture sem `payments` e sem `settled_at` não sofre inferência ou mutação;
+- eventos inbound existem no AsyncAPI público e nenhum outbound privado é inventado;
+- descriptor não contém restaurante, fitness nem namespaces dos outros produtos.
 
-### Gate Vendedor IA V2-10
+### Gate CampaIA V2-10
 
-- SHA funcional/certificação: `7be9453e6757784e38e77e83928bc0f828007f90`;
-- Actions run: `34674065346` — **SUCCESS**;
+- SHA funcional/certificação: `1e0558773f7a39b6e5b4156f874fd201d4efdf3c`;
+- Actions run: `34707632430` — **SUCCESS**;
 - Install: PASS;
 - Ruff: PASS;
-- Mypy strict: PASS — **76 source files**;
-- Pytest: **380 PASS em 1.29s**;
-- checkpoint Iron Fit: 371; incremento Vendedor IA: **+9 testes**;
-- compare contra checkpoint Iron `364d743c8aef40299b7a4855da02edf75a5a3b02`: **4 commits à frente, 0 atrás**, restrito ao pack Sales, exports, testes e CI temporário;
-- CI restaurado para `workflow_dispatch` no commit `40fb0a83574bffeab1981656dfa3f90c44762b9a`.
+- Mypy strict: PASS — **77 source files**;
+- Pytest: **389 PASS em 2.14s**;
+- checkpoint Vendedor IA: 380; incremento CampaIA: **+9 testes**;
+- compare `def50ae4d8914ec88821309a5a31990cfdc0b879` -> `1e0558773f7a39b6e5b4156f874fd201d4efdf3c`: **4 commits à frente, 0 atrás**, restrito ao pack CampaIA, exports, testes e CI temporário;
+- CI restaurado para `workflow_dispatch` no commit `e4918e8471a3e710daab897d32ffe000bcba5212`.
 
 ## Princípios de segurança arquitetural
 
-- pack é declaração de integração, não nova autoridade fiscal;
+- pack é declaração de integração, não autoridade fiscal;
 - document kind permitido não equivale a homologação nem `PRODUCTION_APPROVED`;
 - ativação de vertical é explícita quando necessária;
-- ausência de vertical no Sales é intencional e testada;
-- pagamento/settlement nunca são inferidos a partir do nome do produto ou do use case;
-- caso de uso não declarado e cross-host falham fechado;
+- pagamento, settlement, tributos e jurisdição nunca são inferidos pelo nome do produto;
+- caso de uso não declarado, operation kind incompatível e cross-host falham fechado;
 - contratos públicos V2-04 permanecem language-neutral.
 
 ## Gate da fase
 
-A V2-10 somente será `CONCLUÍDA` após os quatro packs, fixtures sintéticas, matriz consolidada, isolamento cross-product, PR Draft, SHA de evidência, CI verde, Ruff, Mypy strict, Pytest, auditoria do diff e riscos residuais documentados.
+A V2-10 somente será `CONCLUÍDA` após a certificação cross-product consolidada, matriz final de documentos/eventos/capabilities, isolamento entre os quatro hosts, regressão completa, auditoria do diff contra V2-09 e riscos residuais documentados.
 
 ## Governança
 
