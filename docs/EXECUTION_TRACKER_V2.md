@@ -26,7 +26,7 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 | V2-07 | Application service + persistência durável | **CONCLUÍDO** | PR #8 Draft; gate `999ba84b9c25988441867820bfe8af0571269548`; run `34659892798`; 59 source files; Pytest 309 PASS; CI restaurado |
 | V2-08 | Events/Webhooks/Inbox/Outbox | **CONCLUÍDO** | PR #9 Draft; gate final `bc77ee4cf2b7151d06c09cf32ca9168363ece1c7`; run `34666753555`; 67 source files; Pytest 337 PASS; CI restaurado |
 | V2-09 | Modularização de verticais | **CONCLUÍDO** | PR #10 Draft; gate `88071fd557199ffd6848312ea5559b0cba415ee1`; run `34668430831`; 71 source files; Pytest 346 PASS; CI restaurado |
-| V2-10 | Contract Packs Kordena/Iron/Vendedor/CampaIA | **EM EXECUÇÃO** | PR #11 Draft; Foundation gate `3af9a6ded0303ca7d591bbfa69b771c4571a9cc0`; run `34672479434`; 73 source files; Pytest 354 PASS; CI restaurado |
+| V2-10 | Contract Packs Kordena/Iron/Vendedor/CampaIA | **EM EXECUÇÃO** | PR #11 Draft; Foundation `3af9a6d...` / run `34672479434` / 354 PASS; Kordena `6fd934c...` / run `34672769666` / 362 PASS; CI restaurado |
 | V2-11 | Control Plane independente | PENDENTE | depende core operacional |
 | V2-12 | Gateway/Signer/Vault production adapters | PENDENTE | depende V2-11 |
 | V2-13 | Observabilidade + Compliance Operations | PENDENTE | depende V2-07/V2-12 |
@@ -46,62 +46,13 @@ Nenhum bloco é `CONCLUÍDO` sem branch, SHA, PR Draft, CI, testes/gates, audito
 
 ## Fechamento V2-09 — Modularização de verticais
 
-### Arquitetura
-
-- criada a superfície host-neutral `kordena_fiscal.verticals`;
-- `VerticalModuleDescriptor` define identidade, versão e capabilities imutáveis;
-- `VerticalModuleRegistry` exige registro e resolução explícitos e falha fechado para módulo/capability ausente;
-- nenhuma inferência silenciosa de vertical foi adicionada ao Core.
-
-### Restaurante
-
-- implementação normativa migrada para `kordena_fiscal.verticals.restaurant`;
-- `RestaurantVerticalModule` declara `tax.restaurant.supply-classification` e `tax.restaurant.base-adjustments`;
-- `kordena_fiscal.tax.restaurant` permanece como shim de compatibilidade;
-- a suíte legada do classificador de restaurante permaneceu integralmente verde;
-- nenhuma regra tributária de restaurante foi alterada.
-
-### Serviço / Fitness / SaaS
-
-- `service` declara `operation.service`;
-- `fitness` declara `operation.service`, `operation.membership` e `operation.recurring`;
-- `saas` declara `operation.service`, `operation.subscription` e `operation.recurring`;
-- esses módulos não importam o classificador de restaurante e não conferem readiness fiscal por si próprios;
-- teste em processo Python isolado comprova que o import neutro não carrega módulos de restaurante.
-
-### Extensibilidade
-
-- uma vertical sintética `future-commerce` é registrada via contrato/registry, sem alteração do Core;
-- isso prova extensão futura por vertical sem fork do motor fiscal.
-
-### Gate V2-09
-
-- SHA funcional: `88071fd557199ffd6848312ea5559b0cba415ee1`;
-- Actions run: `34668430831` — **SUCCESS**;
-- Install: PASS;
-- Ruff: PASS;
-- Mypy strict: PASS — **71 source files**;
-- Pytest: **346 PASS em 1.35s**;
-- baseline V2-08: 337 testes; incremento líquido V2-09: **+9**.
-
-O fechamento documental/tracker em `9a10d1863868d92462efaecddf5d36792240798e` também passou integralmente no run `34668559367`: Install PASS, Ruff PASS, Mypy strict PASS em 71 source files e **346 PASS em 1.41s**.
-
-### Auditoria de diff
-
-Compare V2-08 `cc30ec3bddd2f61595c0d869f710e22d83e24743` -> gate V2-09 `88071fd557199ffd6848312ea5559b0cba415ee1`:
-
-- **9 commits à frente, 0 atrás** no gate funcional;
-- alterações limitadas a CI temporário, documentação/snapshot da fase, nova superfície `verticals`, shim de compatibilidade e testes;
-- contratos OpenAPI/AsyncAPI/JSON Schema não foram alterados;
-- nenhuma migration/persistência, segurança, webhook, provider fiscal, infraestrutura, segredo real, deploy ou cutover foi introduzido.
-
-### Riscos residuais / limites
-
-- composição operacional do registry ainda pertence às camadas superiores;
-- service/fitness/SaaS ainda não são Product Contract Packs — isso é escopo V2-10;
-- o shim legado de restaurante permanece intencionalmente por compatibilidade;
-- mappings específicos de Kordena, Iron Fit, Vendedor IA e CampaIA não entram no Core nesta fase;
-- não houve homologação externa nem produção.
+- superfície host-neutral `kordena_fiscal.verticals`;
+- restaurante como módulo explícito com classificador/regra preservados;
+- `service`, `fitness` e `saas` neutros, sem import de restaurante;
+- registry explícito/fail-closed e extensão futura sem fork;
+- gate `88071fd557199ffd6848312ea5559b0cba415ee1`, run `34668430831`, 71 source files, 346 PASS;
+- fechamento documental também verde no run `34668559367`;
+- CI restaurado para `workflow_dispatch`.
 
 ## V2-10 — Product Contract Packs
 
@@ -119,26 +70,48 @@ Compare V2-08 `cc30ec3bddd2f61595c0d869f710e22d83e24743` -> gate V2-09 `88071fd5
 - `ProductContractPackDescriptor` valida `host_namespace` exato e operation kind por caso de uso;
 - `ProductContractPackRegistry` impede colisão de pack id e host namespace e resolve fail-closed;
 - contrato de vertical é validado explicitamente contra `VerticalModuleRegistry` V2-09;
-- nenhum pack/foundation promove readiness ou substitui a Capability & Readiness API;
-- testes cobrem isolamento, colisão, use case ausente, operation kind inválido, vertical ausente e invariantes do descriptor.
+- nenhum pack/foundation promove readiness ou substitui a Capability & Readiness API.
 
-Gate:
-- SHA: `3af9a6ded0303ca7d591bbfa69b771c4571a9cc0`;
+Gate Foundation:
+- SHA `3af9a6ded0303ca7d591bbfa69b771c4571a9cc0`;
 - run `34672479434` — **SUCCESS**;
+- Install/Ruff/Mypy PASS; **73 source files**;
+- Pytest **354 PASS em 1.45s**;
+- baseline V2-09 346; incremento **+8**;
+- CI restaurado no commit `24b54f47fad9dac11b900194d63f0803b8dfda30`.
+
+### Bloco 2 — KordenaFiscalContractPack — CONCLUÍDO/CERTIFICADO
+
+- namespace canônico obrigatório `fm.kordena`, conforme V2-02;
+- classe concreta `KordenaFiscalContractPack` e singleton exportado;
+- `restaurant-pos-sale`: SALE + NFC-e;
+- `restaurant-invoice-sale`: SALE + NF-e;
+- ambos exigem módulo `restaurant` e capabilities `tax.restaurant.supply-classification` + `tax.restaurant.base-adjustments`;
+- nenhuma regra tributária foi copiada ou alterada;
+- nenhum readiness/homologação é concedido pelo pack;
+- eventos inbound são validados contra o AsyncAPI público v1.1.0;
+- fixture sintética usa apenas dados fictícios;
+- cross-host `fm.iron` contra Kordena falha fechado;
+- descriptor não expõe namespaces dos demais produtos.
+
+Gate Kordena:
+- SHA `6fd934c024736f3d5e23aa4d1172d60caa49fb7c`;
+- run `34672769666` — **SUCCESS**;
 - Install PASS;
 - Ruff PASS;
-- Mypy strict PASS — **73 source files**;
-- Pytest **354 PASS em 1.45s**;
-- baseline V2-09: 346; incremento Foundation: **+8**;
-- CI restaurado a `workflow_dispatch` no commit `24b54f47fad9dac11b900194d63f0803b8dfda30`.
+- Mypy strict PASS — **74 source files**;
+- Pytest **362 PASS em 1.16s**;
+- checkpoint Foundation 354; incremento Kordena **+8**;
+- compare `532275595a5055a008eb69c46fa19400a3f790c2` -> `6fd934c...`: **4 commits à frente, 0 atrás**;
+- CI restaurado a `workflow_dispatch` no commit `6a919ebdcab17b5f7b3215aa8d032abc2411afb0`.
 
 ## Governança
 
 - PR #11 permanece Draft e sem merge;
 - nenhum deploy, promoção, homologação externa ou cutover foi realizado;
-- CI voltou a `workflow_dispatch` após o gate;
-- V2-10 permanece **EM EXECUÇÃO** até concluir os quatro packs e a certificação cross-product.
+- CI voltou a `workflow_dispatch` após o gate Kordena;
+- V2-10 permanece **EM EXECUÇÃO** até concluir Iron Fit, Vendedor IA, CampaIA e certificação cross-product.
 
 ## Próxima decisão
 
-**Próximo bloco: `KordenaFiscalContractPack` + fixtures sintéticas e contract tests Kordena, mantendo restaurante como vertical explícita e sem alterar regra tributária.**
+**Próximo bloco: `IronFiscalContractPack` + fixtures sintéticas e contract tests Iron Fit, usando `fm.iron`, vertical `fitness` e NFS-e como família contratual sem promover readiness.**
