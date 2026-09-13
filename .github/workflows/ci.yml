@@ -17,30 +17,125 @@ jobs:
         with:
           ref: v2/homologation-controlled-pilots
 
-      - name: Apply V2-15 compatibility formatting once
+      - name: Reconcile V5 regression fixtures once
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          path = Path("tests/control_plane/test_v2_12_closure.py")
-          text = path.read_text(encoding="utf-8")
-          old = (
-              "    vault = _vault(certificate, credentials, nfse_credentials, csc, "
-              "pkcs12_bytes=_synthetic_pkcs12())\n"
+          def rewrite(path_name: str, transform) -> None:
+              path = Path(path_name)
+              before = path.read_text(encoding="utf-8")
+              after = transform(before)
+              if after != before:
+                  path.write_text(after, encoding="utf-8")
+
+          def patch_v211(text: str) -> str:
+              text = text.replace(
+                  '''                environment=FiscalEnvironment.HOMOLOGATION,\n            ),\n            correlation_id="corr-denied-reference",''',
+                  '''                environment=FiscalEnvironment.HOMOLOGATION,\n                provider_id="provider-denied",\n            ),\n            correlation_id="corr-denied-reference",''',
+              )
+              text = text.replace(
+                  'assert columns == {"reference_id", "kind", "tenant_id", "unit_id", "environment"}',
+                  'assert columns == {\n        "reference_id",\n        "kind",\n        "tenant_id",\n        "unit_id",\n        "environment",\n        "provider_id",\n    }',
+              )
+              text = text.replace(
+                  '''        (4, "v2_11_control_plane_durable_state"),\n    ]''',
+                  '''        (4, "v2_11_control_plane_durable_state"),\n        (5, "v2_15_zero_code_commercial_configuration"),\n    ]''',
+              )
+              return text
+
+          rewrite("tests/control_plane/test_v2_11_end_to_end.py", patch_v211)
+
+          def patch_v212(text: str) -> str:
+              text = text.replace(
+                  '''    response = _resilient(service).execute(request, provider_id=NFSE_PROVIDER)\n\n    assert response.status is ProviderResponseStatus.ACCEPTED\n    assert transport.observations[0].credentials_reference_id == CREDENTIAL_REF''',
+                  '''    response = _resilient(service).execute(request, provider_id=NFSE_PROVIDER)\n\n    assert response.status is ProviderResponseStatus.ACCEPTED\n    assert transport.observations[0].credentials_reference_id == NFSE_CREDENTIAL_REF''',
+              )
+              text = text.replace(
+                  'assert columns == {"reference_id", "kind", "tenant_id", "unit_id", "environment"}',
+                  'assert columns == {\n        "reference_id",\n        "kind",\n        "tenant_id",\n        "unit_id",\n        "environment",\n        "provider_id",\n    }',
+              )
+              return text
+
+          rewrite("tests/control_plane/test_v2_12_closure.py", patch_v212)
+
+          def patch_migrations(text: str) -> str:
+              marker = "\ndef _remove_v4(connection: sqlite3.Connection) -> None:\n"
+              helper = '''\ndef _remove_v5(connection: sqlite3.Connection) -> None:\n    for table in (\n        "fm_commercial_provider_runtime_policies",\n        "fm_commercial_webhook_destinations",\n        "fm_commercial_unit_modules",\n        "fm_commercial_product_profiles",\n        "fm_commercial_provider_bindings",\n    ):\n        connection.execute(f"DROP TABLE {table}")\n    connection.execute("DROP TABLE fm_control_plane_secret_references")\n    connection.execute(\n        """\n        CREATE TABLE fm_control_plane_secret_references (\n            reference_id TEXT PRIMARY KEY,\n            kind TEXT NOT NULL,\n            tenant_id TEXT NOT NULL,\n            unit_id TEXT NOT NULL,\n            environment TEXT NOT NULL,\n            UNIQUE (tenant_id, unit_id, environment, kind),\n            FOREIGN KEY (tenant_id, unit_id)\n                REFERENCES fm_control_plane_units(tenant_id, unit_id)\n        )\n        """\n    )\n    connection.execute("DELETE FROM fm_schema_migrations WHERE version = 5")\n\n'''
+              if "def _remove_v5" not in text:
+                  text = text.replace(marker, helper + marker)
+              text = text.replace(
+                  "with sqlite3.connect(database.path) as connection:\n        _remove_v4(connection)",
+                  "with sqlite3.connect(database.path) as connection:\n        _remove_v5(connection)\n        _remove_v4(connection)",
+              )
+              text = text.replace(
+                  "assert database.initialize() == (2, 3, 4)",
+                  "assert database.initialize() == (2, 3, 4, 5)",
+              )
+              text = text.replace(
+                  "assert database.initialize() == (3, 4)",
+                  "assert database.initialize() == (3, 4, 5)",
+              )
+              text = text.replace(
+                  "assert database.initialize() == (4,)",
+                  "assert database.initialize() == (4, 5)",
+              )
+              return text
+
+          rewrite("tests/events/test_inbox_migration.py", patch_migrations)
+
+          def patch_gateway(text: str) -> str:
+              text = text.replace(
+                  "def _onboard(database: SqliteFiscalDatabase) -> tuple[SecretReference, SecretReference]:",
+                  '''def _onboard(\n    database: SqliteFiscalDatabase,\n    *,\n    provider_id: str = "synthetic-sp",\n) -> tuple[SecretReference, SecretReference]:''',
+              )
+              text = text.replace(
+                  '''        environment=FiscalEnvironment.HOMOLOGATION,\n    )\n    csc = SecretReference(''',
+                  '''        environment=FiscalEnvironment.HOMOLOGATION,\n        provider_id=provider_id,\n    )\n    csc = SecretReference(''',
+                  1,
+              )
+              text = text.replace(
+                  '''        environment=FiscalEnvironment.HOMOLOGATION,\n    )\n    for reference in (credentials, csc):''',
+                  '''        environment=FiscalEnvironment.HOMOLOGATION,\n        provider_id=provider_id,\n    )\n    for reference in (credentials, csc):''',
+                  1,
+              )
+              text = text.replace(
+                  "credentials, csc = _onboard(database)\n    vault = _vault(credentials, csc, provider_id=provider_id)",
+                  "credentials, csc = _onboard(database, provider_id=provider_id)\n    vault = _vault(credentials, csc, provider_id=provider_id)",
+              )
+              text = text.replace(
+                  "credentials, csc = _onboard(database)\n    resolution = SecretResolutionService(\n        unit_of_work_factory=database,\n        vault=_vault(credentials, csc, provider_id=\"provider-a\"),",
+                  "credentials, csc = _onboard(database, provider_id=\"provider-a\")\n    resolution = SecretResolutionService(\n        unit_of_work_factory=database,\n        vault=_vault(credentials, csc, provider_id=\"provider-a\"),",
+              )
+              text = text.replace(
+                  "credentials, csc = _onboard(database)\n    vault = _vault(credentials, csc, provider_id=\"provider-a\")",
+                  "credentials, csc = _onboard(database, provider_id=\"provider-a\")\n    vault = _vault(credentials, csc, provider_id=\"provider-a\")",
+              )
+              return text
+
+          rewrite("tests/gateway/test_provider_runtime.py", patch_gateway)
+
+          rewrite(
+              "tests/hardening/test_v2_14_closure.py",
+              lambda text: text.replace(
+                  "assert restarted.applied_migrations() == (1, 2, 3, 4)",
+                  "assert restarted.applied_migrations() == (1, 2, 3, 4, 5)",
+              ),
           )
-          new = (
-              "    vault = _vault(\n"
-              "        certificate,\n"
-              "        credentials,\n"
-              "        nfse_credentials,\n"
-              "        csc,\n"
-              "        pkcs12_bytes=_synthetic_pkcs12(),\n"
-              "    )\n"
-          )
-          updated = text.replace(old, new)
-          if updated != text:
-              path.write_text(updated, encoding="utf-8")
+
+          def patch_signing(text: str) -> str:
+              text = text.replace(
+                  '''        environment=FiscalEnvironment.HOMOLOGATION,\n    )\n\n    with pytest.raises(FiscalValidationError, match="certificate"):\n        _request(csc_reference)''',
+                  '''        environment=FiscalEnvironment.HOMOLOGATION,\n        provider_id="synthetic-signing-provider",\n    )\n\n    with pytest.raises(FiscalValidationError, match="certificate"):\n        _request(csc_reference)''',
+              )
+              text = text.replace(
+                  'assert columns == {"reference_id", "kind", "tenant_id", "unit_id", "environment"}',
+                  'assert columns == {\n        "reference_id",\n        "kind",\n        "tenant_id",\n        "unit_id",\n        "environment",\n        "provider_id",\n    }',
+              )
+              return text
+
+          rewrite("tests/signing/test_signing_boundary.py", patch_signing)
           PY
 
           git diff --check
@@ -48,7 +143,7 @@ jobs:
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add tests
-            git commit -m "test(v2-15): format provider-scoped closure fixtures"
+            git commit -m "test(v2-15): reconcile V5 regression fixtures"
             git push origin HEAD:v2/homologation-controlled-pilots
           fi
 
