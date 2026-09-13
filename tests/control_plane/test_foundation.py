@@ -188,6 +188,7 @@ def test_secret_reference_is_opaque_and_never_contains_secret_material_field() -
         "tenant_id",
         "unit_id",
         "environment",
+        "provider_id",
     }
     assert not ({"secret", "value", "material", "password", "token", "pfx"} & names)
 
@@ -198,6 +199,7 @@ def test_secret_reference_is_opaque_and_never_contains_secret_material_field() -
             tenant_id="tenant-a",
             unit_id="unit-01",
             environment=FiscalEnvironment.HOMOLOGATION,
+            provider_id="provider-a",
         )
 
 
@@ -220,6 +222,7 @@ def test_secret_reference_binding_requires_enabled_environment() -> None:
         tenant_id="tenant-a",
         unit_id="unit-01",
         environment=FiscalEnvironment.PRODUCTION,
+        provider_id="provider-a",
     )
     with pytest.raises(ControlPlaneAuthorizationError, match="environment"):
         service.bind_secret_reference(
@@ -269,6 +272,59 @@ def test_secret_reference_binding_is_scoped_unique_and_audited() -> None:
                 environment=FiscalEnvironment.HOMOLOGATION,
             ),
             correlation_id="cp-secret-003",
+        )
+
+
+def test_provider_scoped_credentials_can_coexist_for_same_unit_environment() -> None:
+    service = _service_with_org()
+    actor = _tenant_admin()
+    service.onboard_unit(
+        actor=actor,
+        registration=FiscalUnitRegistration(
+            tenant_id="tenant-a",
+            unit_id="unit-01",
+            display_name="Synthetic Unit 01",
+        ),
+        correlation_id="cp-unit-provider-scope",
+    )
+
+    for provider in ("provider-a", "provider-b"):
+        service.bind_secret_reference(
+            actor=actor,
+            reference=SecretReference(
+                reference_id=f"ref:fm-fiscal/tenant-a/unit-01/{provider}/credentials",
+                kind=SecretReferenceKind.CREDENTIALS,
+                tenant_id="tenant-a",
+                unit_id="unit-01",
+                environment=FiscalEnvironment.HOMOLOGATION,
+                provider_id=provider,
+            ),
+            correlation_id=f"cp-secret-{provider}",
+        )
+
+    keys = set(service.state.secret_references)
+    assert len(keys) == 2
+    assert {key[-1] for key in keys} == {"provider-a", "provider-b"}
+
+
+def test_provider_scoped_secret_requires_provider_and_certificate_forbids_it() -> None:
+    with pytest.raises(FiscalValidationError, match="provider_id is required"):
+        SecretReference(
+            reference_id="ref:fm-fiscal/tenant-a/unit-01/credentials",
+            kind=SecretReferenceKind.CREDENTIALS,
+            tenant_id="tenant-a",
+            unit_id="unit-01",
+            environment=FiscalEnvironment.HOMOLOGATION,
+        )
+
+    with pytest.raises(FiscalValidationError, match="provider_id is not allowed"):
+        SecretReference(
+            reference_id="ref:fm-fiscal/tenant-a/unit-01/certificate",
+            kind=SecretReferenceKind.CERTIFICATE,
+            tenant_id="tenant-a",
+            unit_id="unit-01",
+            environment=FiscalEnvironment.HOMOLOGATION,
+            provider_id="provider-a",
         )
 
 
