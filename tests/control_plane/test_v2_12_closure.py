@@ -59,6 +59,7 @@ from kordena_fiscal.signing import (
     CertificateUnavailableError,
     CryptographyFiscalDocumentSigner,
     FiscalSignatureRequest,
+    FiscalSignatureResult,
 )
 from kordena_fiscal.vault import (
     EphemeralCertificateMaterial,
@@ -160,7 +161,9 @@ def _scope(
     )
 
 
-def _onboard(database: SqliteFiscalDatabase) -> tuple[SecretReference, SecretReference, SecretReference]:
+def _onboard(
+    database: SqliteFiscalDatabase,
+) -> tuple[SecretReference, SecretReference, SecretReference]:
     service = DurableControlPlaneService(database)
     service.onboard_organization(
         actor=_global_admin(),
@@ -334,7 +337,7 @@ def _sign(
     signer: CryptographyFiscalDocumentSigner,
     reference: SecretReference,
     kind: FiscalDocumentKind,
-) -> tuple[FiscalSignatureRequest, object]:
+) -> tuple[FiscalSignatureRequest, FiscalSignatureResult]:
     request = FiscalSignatureRequest(
         scope=_scope(),
         document_kind=kind,
@@ -397,7 +400,10 @@ def _resilient(executor: ProviderGatewayService) -> ResilientProviderGateway:
     )
 
 
-def _authorize_request(kind: FiscalDocumentKind, signed_artifact) -> ProviderRequest:
+def _authorize_request(
+    kind: FiscalDocumentKind,
+    signed_artifact: FiscalSignatureResult,
+) -> ProviderRequest:
     return ProviderRequest(
         scope=_scope(),
         document_kind=kind,
@@ -512,7 +518,9 @@ def test_v2_12_provider_credentials_are_partitioned_and_never_fall_back(tmp_path
     assert transport.observations == []
 
 
-def test_v2_12_nfse_remains_municipality_and_provider_specific_without_fake_signer(tmp_path) -> None:
+def test_v2_12_nfse_remains_municipality_and_provider_specific(
+    tmp_path,
+) -> None:
     database = _database(tmp_path)
     certificate, credentials, csc = _onboard(database)
     vault = _vault(certificate, credentials, csc, pkcs12_bytes=_synthetic_pkcs12())
