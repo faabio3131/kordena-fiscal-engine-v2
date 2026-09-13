@@ -1,13 +1,13 @@
 # V2-12 — Gateway / Signer / Vault Production Adapters
 
-Status: **EM EXECUÇÃO — BLOCOS 1 E 2 CERTIFICADOS**  
+Status: **EM EXECUÇÃO — BLOCOS 1, 2 E 3 CERTIFICADOS**  
 Branch: `v2/production-adapters`  
 Base certificada: `v2/control-plane` @ `0439246151c7edc959615361c0275961e11c3af0`  
 Dependência: V2-11 concluída e certificada.
 
 ## Objetivo
 
-Preparar a operação real do FM Fiscal sem acoplar o Core a fornecedor único, introduzindo ports/adapters para resolução segura de segredo, assinatura fiscal e, nos blocos posteriores, providers/gateways, resiliência e homologation gates por documento/jurisdição.
+Preparar a operação real do FM Fiscal sem acoplar o Core a fornecedor único, introduzindo ports/adapters para resolução segura de segredo, assinatura fiscal, providers/gateways, resiliência e homologation gates por documento/jurisdição.
 
 ## Princípios vinculantes
 
@@ -21,144 +21,79 @@ Preparar a operação real do FM Fiscal sem acoplar o Core a fornecedor único, 
 - provider adapter não decide autorização administrativa;
 - nenhum deploy, produção real, homologação externa, promoção ou cutover nesta fase sem autorização humana explícita.
 
-## Blocos desta execução autorizada
+## Blocos
 
 1. **Vault/KMS abstraction + Secret Resolution Boundary — CONCLUÍDO/CERTIFICADO.**
 2. **Signer Boundary + assinatura por SecretReference — CONCLUÍDO/CERTIFICADO.**
+3. **Provider/Gateway adapters + CSC/Credentials — CONCLUÍDO/CERTIFICADO.**
+4. **Resilience Runtime — PRÓXIMO.**
+5. **Homologation Gates + cross-provider — PENDENTE.**
+6. **Certificação end-to-end + fechamento V2-12 — PENDENTE.**
 
 ## Bloco 1 — Vault/KMS abstraction + Secret Resolution Boundary
 
-Foi criado o package `kordena_fiscal.vault` fora do domínio fiscal, preservando dependency inversion. `SecretResolutionService` lê somente a `SecretReference` governada no Control Plane e delega material runtime ao port `FiscalSecretVault`.
+Foi criado `kordena_fiscal.vault` fora do domínio fiscal. `SecretResolutionService` lê somente `SecretReference` governada no Control Plane e delega material runtime ao port `FiscalSecretVault`.
 
-### Contratos e isolamento
+Tipos efêmeros explícitos: `EphemeralCertificateMaterial`, `EphemeralCscMaterial` e `EphemeralProviderCredentialsMaterial`. Todos são redigidos em `repr`, não possuem repository/serializer e não entram no UoW.
 
-- `SecretResolutionContext` exige `ExecutionScope` com `host_namespace`, purpose, kind e workload explícitos;
-- purpose determina o kind permitido: document signing -> certificate, CSC authentication -> CSC, provider authentication -> credentials;
-- tenant, unit e environment são validados contra onboarding e binding persistido;
-- o adapter sintético indexa material por host + reference, impedindo reutilização cross-host;
-- scopes desconhecidos não revelam existência administrativa: falham como referência indisponível;
-- environment não habilitado falha por autorização;
-- não existe fallback silencioso.
-
-### Material efêmero
-
-Foram introduzidos tipos explícitos e não persistentes:
-
-- `EphemeralCertificateMaterial`;
-- `EphemeralCscMaterial`;
-- `EphemeralProviderCredentialsMaterial`.
-
-Todos usam `slots`, `repr=False`, `eq=False` e representação redigida. Não possuem repository, serializer ou integração com UoW. O material fica exclusivamente no adapter runtime.
-
-### Adapter sintético
-
-`InMemorySyntheticFiscalSecretVault` existe apenas para contract tests e não lê filesystem, environment variables ou store externo. Os fixtures usam bytes declaradamente sintéticos e não utilizáveis como segredo real.
-
-### Segurança e persistência
-
-Os testes comprovam que:
-
-- resolução válida funciona por reference;
-- cross-host, cross-tenant, cross-unit e cross-environment falham fechado;
-- kind/purpose incompatível é rejeitado;
-- Vault indisponível/material ausente falham fechado;
-- repr não contém material;
-- resolução não acrescenta material ao audit trail;
-- schema `fm_control_plane_secret_references` continua somente com reference metadata;
-- restart preserva a reference, mas não o material efêmero.
-
-### Certificação Bloco 1
-
-Primeira tentativa: run `34758852638`, job `103727925782`. Install/Ruff/Mypy passaram e Mypy validou 88 source files; Pytest terminou com 446 PASS e 1 FAIL porque o teste esperava `SecretUnavailableError` em scope não onboarded enquanto o serviço retornava `SecretAuthorizationError`. A correção tornou scopes inexistentes indistinguíveis de reference ausente, reduzindo enumeração administrativa e preservando fail-closed.
-
-Gate definitivo:
-
-- SHA: `961ee84aa28f58ce933d2dd899bfd013c801da1c`;
-- run: `34758902465` — **SUCCESS**;
-- job: `103728060621`;
-- Install: PASS;
-- Ruff: PASS;
-- Mypy strict: PASS — **88 source files**;
-- Pytest: **447 PASS em 2.15s**;
-- baseline V2-11: 437; incremento líquido: **+10 testes**;
-- diff bootstrap -> gate: 7 commits à frente, 0 atrás, restrito ao Vault boundary, testes e CI temporário;
-- CI restaurado para `workflow_dispatch` no commit `cb399d0c74ae5925c4d89412a4760472fe7ab430`.
+Gate definitivo: SHA `961ee84aa28f58ce933d2dd899bfd013c801da1c`, run `34758902465`, job `103728060621`, **88 source files, 447 PASS em 2.15s**. CI restaurado em `cb399d0c74ae5925c4d89412a4760472fe7ab430`.
 
 ## Bloco 2 — Signer Boundary + assinatura por SecretReference
 
-Foi criado `kordena_fiscal.signing` como boundary independente de provider e de regra tributária. O signer recebe conteúdo canônico pronto para assinatura, escopo fiscal explícito e `SecretReference` de certificado. O material criptográfico nunca vem diretamente do caller: ele é obtido exclusivamente por `SecretResolutionService` -> `FiscalSecretVault`.
+Foi criado `kordena_fiscal.signing`. O signer recebe bytes canônicos, contexto fiscal explícito e `SecretReference`; o material PKCS#12 é obtido exclusivamente por `SecretResolutionService` -> `FiscalSecretVault`.
 
-### Contratos
+`CryptographyFiscalDocumentSigner` usa `cryptography>=44,<48` para PKCS#12, RSA/ECDSA e verificação. NF-e/NFC-e são explícitos; NFS-e permanece fail-closed até adapter/provider específico. Nenhum PFX/P12/PEM/KEY é persistido.
 
-- `FiscalSignatureRequest` exige host/tenant/unit/environment explícitos, document kind, canonical bytes, certificate reference e workload;
-- certificate reference precisa ser `CERTIFICATE` e coincidir exatamente com tenant/unit/environment do scope;
-- `FiscalSignatureResult` expõe somente conteúdo assinado, assinatura, algoritmo, referência opaca, fingerprint SHA-256, timestamp e document kind;
-- request/result possuem `repr` sanitizado e não expõem conteúdo canônico, password ou material de chave.
+Gate definitivo: SHA `f27ae85ac1dbf0b5cf47eea96d1437585b37cb92`, run `34759157421`, job `103728746009`, **91 source files, 459 PASS em 3.05s**. CI restaurado em `750dbb7e2e7f34fd55fe8a79fbda7dd422af9fb7`.
 
-### Adapter criptográfico
+## Bloco 3 — Provider/Gateway adapters + CSC/Credentials
 
-`CryptographyFiscalDocumentSigner` usa `cryptography` para PKCS#12, RSA/ECDSA e verificação. O adapter não implementa criptografia própria, parser de PFX próprio ou canonicalização XML improvisada.
+Foi introduzida uma camada provider-neutral sobre o gateway existente, sem substituir o contrato certificado de autorização V1.
 
-O signer trabalha sobre bytes canônicos fornecidos pelo adapter de documento/provider. Embedding XML, transformações XMLDSig e variantes municipais/provider-specific ficam para adapters posteriores, evitando declarar uma assinatura universal falsa.
+### Provider identity e routing
 
-Capacidades atuais do boundary:
+`ProviderDescriptor` declara explicitamente `provider_id`, document kinds, jurisdictions, environments, operations e combinações que exigem CSC. `ProviderRegistry` resolve exatamente um provider; ausência ou ambiguidade falham fechado. Não existe seleção implícita por nome de tenant, produto FM ou host privado.
 
-- NF-e e NFC-e: RSA-SHA256 ou ECDSA-SHA256 conforme a chave presente no certificado;
-- NFS-e: fail-closed por padrão, pois assinatura e formato podem variar por provider/município; um adapter posterior deve habilitar explicitamente o modelo suportado;
-- verification re-resolve o certificado, compara referência/fingerprint e valida a assinatura;
-- alteração de conteúdo ou assinatura é detectada;
-- Vault indisponível, certificado ausente, PKCS#12 inválido, signer indisponível ou capability não suportada produzem erros canônicos sanitizados.
+### Provider request/response
 
-### Dependência `cryptography`
+`ProviderRequest` transporta apenas escopo, document kind, jurisdiction, operação, payload/signed artifact, correlation e workload. Credencial e CSC não fazem parte do contrato persistível. `ProviderResponse` normaliza a resposta sem expor headers/token/material privado.
 
-Foi adicionada a faixa `cryptography>=44,<48`. O CI resolveu `cryptography 47.0.0`. A dependência foi adotada para evitar implementação manual de RSA/ECDSA e parsing PKCS#12. A metadata pública do PyPI classifica o projeto como Production/Stable e informa licença `Apache-2.0 OR BSD-3-Clause`; a faixa está deliberadamente limitada e futuras atualizações devem passar pelos mesmos gates antes de ampliação.
+### Secret runtime
 
-### Testes e zero secret persistence
+`ConfiguredProviderAdapter` resolve sempre credenciais via `SecretReferenceKind.CREDENTIALS` e, somente quando a capability declarada exigir, CSC via `SecretReferenceKind.CSC`. Ambos passam pelo `SecretResolutionService` certificado. Cross-tenant, cross-unit e cross-environment não reutilizam material.
 
-Os testes geram chave RSA, certificado X.509 autoassinado e PKCS#12 sintéticos exclusivamente em memória durante a execução. Nenhum `.pfx`, `.p12`, `.pem` ou `.key` é comitado.
+### Transport
 
-A suíte certifica:
+`FiscalProviderTransport` é injetável. `SyntheticProviderTransport` não usa socket/endpoints externos e armazena apenas observações não secretas (reference ids e hashes). O adapter não possui SDK de provider e nenhuma chamada produtiva foi realizada.
 
-- assinatura e verificação válidas;
-- tampering de conteúdo e assinatura detectado;
-- cross-tenant, cross-unit e cross-environment bloqueados;
-- CSC não entra no signer como identidade de certificado;
-- Vault e signer indisponíveis falham fechado;
-- PKCS#12 inválido não vaza material ou password na exceção;
-- NFS-e não é tratada falsamente como NF-e/NFC-e;
-- schema de `SecretReference` permanece sem segredo;
-- restart conserva somente reference, não material criptográfico;
-- signer não possui UoW próprio nem autoridade de readiness.
+### Readiness
 
-### Certificação Bloco 2
+`ProviderGatewayService` chama a autoridade existente `CapabilityReadinessService.require_action` antes do routing. O provider não cria, promove ou altera readiness.
+
+### Falhas encontradas e correções
+
+- run `34759978765` falhou no Ruff por oito ocorrências de formatação/teste genérico; foram corrigidas sem alterar semântica;
+- run `34760070032` passou Ruff/Mypy, mas a coleta do Pytest detectou ciclo de importação `gateway -> signing -> vault -> persistence -> operations -> gateway`;
+- a correção tornou os novos exports de provider em `kordena_fiscal.gateway` lazy, preservando o contrato público antigo e eliminando o ciclo.
+
+### Certificação Bloco 3
 
 Gate definitivo:
 
-- SHA: `f27ae85ac1dbf0b5cf47eea96d1437585b37cb92`;
-- run: `34759157421` — **SUCCESS**;
-- job: `103728746009`;
+- SHA: `42f27c67145d2d4469374596d869ffc3ba05f013`;
+- run: `34760113452` — **SUCCESS**;
+- job: `103731343836`;
 - Install: PASS;
 - Ruff: PASS;
-- Mypy strict: PASS — **91 source files**;
-- Pytest: **459 PASS em 3.05s**;
-- baseline Bloco 1: 447; incremento líquido: **+12 testes**;
-- diff do checkpoint documental do Bloco 1 -> gate: 8 commits à frente, 0 atrás; alterações restritas ao signer boundary, dependency, testes e CI temporário;
-- CI restaurado para `workflow_dispatch` no commit `750dbb7e2e7f34fd55fe8a79fbda7dd422af9fb7`.
+- Mypy strict: PASS — **93 source files**;
+- Pytest: **471 PASS em 3.27s**;
+- baseline Bloco 2: 459; incremento líquido: **+12 testes**;
+- diff B2 documental -> gate B3: 8 commits à frente, 0 atrás; gateway/provider, synthetic transport, tests e CI temporário;
+- CI restaurado para `workflow_dispatch` no commit `9e5019d64b5174ad9fe138e52c566ec3df73af84`.
 
-## Blocos posteriores da V2-12
+## Próximos blocos
 
-Permanecem deliberadamente pendentes após esta execução:
-
-- adapters concretos de providers/gateways;
-- CSC/provider credentials por unidade/ambiente conforme provider;
-- timeout/retry/circuit breaker;
-- homologation gates por documento/jurisdição;
-- certificação cross-provider;
-- fechamento end-to-end da V2-12.
-
-## Gate por bloco
-
-Cada bloco exige: implementação, Ruff, Mypy strict, Pytest completo, diff auditado, SHA/run/job registrados, documentação reconciliada e CI restaurado para `workflow_dispatch`.
+Bloco 4: timeout/retry/backoff/circuit breaker/unknown outcome. Depois, homologation gates + cross-provider e certificação end-to-end com fechamento integral da V2-12.
 
 ## Governança
 
