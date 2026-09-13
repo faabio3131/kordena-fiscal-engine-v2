@@ -27,11 +27,21 @@ from .metrics import (
     MetricRecorder,
     MetricSink,
 )
+from .tracing import (
+    InMemoryTraceSpanSink,
+    TraceContext,
+    TracePropagation,
+    TraceRecorder,
+    TraceSpan,
+    TraceSpanSink,
+    TraceStatus,
+)
 
 __all__ = [
     "CONTINGENCY_ACTIVE",
     "InMemoryMetricSink",
     "InMemoryStructuredEventSink",
+    "InMemoryTraceSpanSink",
     "MetricDefinition",
     "MetricKind",
     "MetricPoint",
@@ -49,6 +59,12 @@ __all__ = [
     "StructuredObservabilityEvent",
     "StructuredObservabilityService",
     "SystemObservabilityClock",
+    "TraceContext",
+    "TracePropagation",
+    "TraceRecorder",
+    "TraceSpan",
+    "TraceSpanSink",
+    "TraceStatus",
     "UNKNOWN_OUTCOME_TOTAL",
     "sanitize_observability_attributes",
     "sanitize_observability_value",
