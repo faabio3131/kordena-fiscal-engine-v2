@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Protocol
 
+from cryptography import x509
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec, padding, rsa
@@ -184,7 +185,9 @@ class CryptographyFiscalDocumentSigner:
         return material
 
     @staticmethod
-    def _load_identity(material: EphemeralCertificateMaterial):
+    def _load_identity(
+        material: EphemeralCertificateMaterial,
+    ) -> tuple[object, x509.Certificate]:
         try:
             private_key, certificate, _ = pkcs12.load_key_and_certificates(
                 material.pkcs12_bytes,
