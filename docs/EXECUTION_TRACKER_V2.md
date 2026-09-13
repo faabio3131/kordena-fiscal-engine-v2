@@ -26,7 +26,7 @@ Estados permitidos: `PENDENTE`, `EM EXECUÇÃO`, `BLOQUEADO`, `CONCLUÍDO`. Nenh
 | V2-09 | Modularização de verticais | **CONCLUÍDO** | PR #10 Draft; `88071fd557199ffd6848312ea5559b0cba415ee1`; 346 PASS |
 | V2-10 | Contract Packs multiproduto | **CONCLUÍDO** | PR #11 Draft; `345652ecbfc18c8bd3511cf5b9083ba0dbc259cb`; 397 PASS |
 | V2-11 | Control Plane independente | **CONCLUÍDO** | PR #12 Draft; gate `eed6b056e9d1941da435179c5eaf805c261f6622`; run `34736942613`; 85 source files; 437 PASS |
-| V2-12 | Gateway/Signer/Vault production adapters | **EM EXECUÇÃO** | branch `v2/production-adapters`; base `0439246151c7edc959615361c0275961e11c3af0`; bootstrap iniciado |
+| V2-12 | Gateway/Signer/Vault production adapters | **EM EXECUÇÃO** | PR #13 Draft; Block 1 `961ee84aa28f58ce933d2dd899bfd013c801da1c` / run `34758902465` / job `103728060621` / 88 source / 447 PASS; CI restaurado |
 | V2-13 | Observabilidade + Compliance Operations | PENDENTE | depende V2-12 |
 | V2-14 | Hardening sistêmico | PENDENTE | regressão/carga/falhas/segurança |
 | V2-15 | Homologação + pilotos controlados | PENDENTE | depende V2-14 |
@@ -34,34 +34,34 @@ Estados permitidos: `PENDENTE`, `EM EXECUÇÃO`, `BLOQUEADO`, `CONCLUÍDO`. Nenh
 | V2-17 | Convergência/cutover + arquivamento original | PENDENTE | depende de equivalência e integrações certificadas |
 | V2-18 | Produto comercial independente | PENDENTE | posterior ao uso interno certificado |
 
-## Fechamento V2-11
-
-- Bloco 1 — Foundation administrativa: `eaeca06739f756d31085617c1eecabebcc846dd7` / run `34708472525` / 406 PASS.
-- Bloco 2 — Persistência durável + perfis fiscais: `fb485d180a2fba689c0465b61fbec206c02c3cf4` / run `34709564947` / 416 PASS.
-- Bloco 3 — Capability/Readiness governance: `292abfda6ffa02c599b5b01d0ec2ba766267f994` / run `34709912172` / 424 PASS.
-- Bloco 4 — Operational Control Plane: `a0b0ddd101942c2e1fa68550575b20a11470dcfe` / run `34710207596` / 430 PASS.
-- Bloco 5 — Certificação end-to-end: `eed6b056e9d1941da435179c5eaf805c261f6622` / run `34736942613` / job `103669941388` / 437 PASS em 1.99s.
-- CI final V2-11 restaurado para `workflow_dispatch`.
-- PR #12 permaneceu Draft e sem merge.
-
 ## V2-12 — Gateway/Signer/Vault Production Adapters
 
 ### Bootstrap — CONCLUÍDO
 
-- autorização explícita registrada em 2026-09-13;
 - branch `v2/production-adapters` criada exatamente de `0439246151c7edc959615361c0275961e11c3af0`;
-- snapshot pré-fase preservado em `docs/history/EXECUTION_TRACKER_V2_PRE_V2_12.md`;
-- plano da fase criado em `docs/V2_12_PRODUCTION_ADAPTERS.md`;
-- execução autorizada nesta rodada: Bloco 1 e Bloco 2 completos, cada um com gate próprio e CI restaurado.
+- snapshot pré-fase em `docs/history/EXECUTION_TRACKER_V2_PRE_V2_12.md`;
+- plano da fase em `docs/V2_12_PRODUCTION_ADAPTERS.md`;
+- PR #13 Draft stacked sobre `v2/control-plane`.
 
-### Bloco 1 — Vault/KMS abstraction + Secret Resolution Boundary — EM EXECUÇÃO
+### Bloco 1 — Vault/KMS abstraction + Secret Resolution Boundary — CONCLUÍDO/CERTIFICADO
 
-Objetivo: resolver material sensível apenas em runtime a partir de `SecretReference` opaca, com isolamento host/tenant/unidade/ambiente/kind/purpose, zero persistência de segredo e adapter sintético para contract tests.
+- package `kordena_fiscal.vault` provider-neutral;
+- `SecretResolutionContext` explícito por host/tenant/unit/environment/kind/purpose/workload;
+- `FiscalSecretVault` port e `SecretResolutionService` sobre SecretReference persistida;
+- material efêmero tipado e redigido em repr;
+- adapter sintético em memória, sem filesystem/env/persistência;
+- cross-host/cross-tenant/cross-unit/cross-environment fail-closed;
+- schema Control Plane permanece reference-only;
+- restart preserva reference, nunca material runtime.
 
-### Bloco 2 — Signer Boundary + assinatura por SecretReference — PENDENTE
+Primeira tentativa `34758852638` / job `103727925782`: Ruff/Mypy verdes, 446 PASS + 1 FAIL por expectativa de erro cross-tenant. Correção passou a ocultar scopes inexistentes como reference indisponível, reduzindo enumeração administrativa.
 
-Objetivo: signer provider-neutral consumindo exclusivamente o Vault boundary certificado, com request/result tipados, verificação de assinatura/tampering e sem segredo persistido.
+Gate definitivo: SHA `961ee84aa28f58ce933d2dd899bfd013c801da1c`, run `34758902465`, job `103728060621`, **88 source files, 447 PASS em 2.15s**. CI restaurado em `cb399d0c74ae5925c4d89412a4760472fe7ab430`.
+
+### Bloco 2 — Signer Boundary + assinatura por SecretReference — EM EXECUÇÃO
+
+Próximo objetivo autorizado: signer provider-neutral consumindo exclusivamente o Vault boundary certificado, com request/result tipados, assinatura/verificação, tamper detection, isolamento de escopo e zero secret persistence.
 
 ## Governança preservada
 
-PR V2-12 deve permanecer Draft. Nenhum merge, deploy, produção real, homologação externa, promoção ou cutover é autorizado nesta execução.
+PR #13 permanece Draft. Nenhum merge, deploy, produção real, homologação externa, promoção ou cutover é autorizado nesta execução.
