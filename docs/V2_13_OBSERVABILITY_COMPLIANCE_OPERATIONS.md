@@ -1,6 +1,6 @@
 # V2-13 — Observabilidade + Compliance Operations
 
-Status: **EM EXECUÇÃO — BLOCOS 1-2 CERTIFICADOS / BLOCO 3 EM EXECUÇÃO**  
+Status: **EM EXECUÇÃO — BLOCOS 1-3 CERTIFICADOS / BLOCO 4 EM EXECUÇÃO**  
 Branch: `v2/observability-compliance-operations`  
 Base certificada: `v2/production-adapters` @ `1242ce74d874ffb87783401ce1abaabb350c948c`  
 Dependência: V2-12 concluída e certificada.
@@ -26,57 +26,46 @@ Tornar o FM Fiscal operável e auditável em produção futura, com observabilid
 
 1. **Structured Observability Boundary + Sanitization — CONCLUÍDO/CERTIFICADO.**
 2. **Metrics + Cardinality Governance — CONCLUÍDO/CERTIFICADO.**
-3. **Tracing / Correlation / Causation — EM EXECUÇÃO.**
-4. **Operational & Compliance Alerts — PENDENTE.**
+3. **Tracing / Correlation / Causation — CONCLUÍDO/CERTIFICADO.**
+4. **Operational & Compliance Alerts — EM EXECUÇÃO.**
 5. **Regulatory Watcher Governado — PENDENTE.**
 6. **End-to-End Certification + fechamento V2-13 — PENDENTE.**
 
 ## Bloco 1 — Structured Observability Boundary + Sanitization — CONCLUÍDO/CERTIFICADO
 
-Foi criado `kordena_fiscal.observability` fora do domínio fiscal, com `ObservabilityContext`, `StructuredObservabilityEvent`, `StructuredObservabilityService`, `StructuredEventSink` e sink sintético in-memory sem rede/filesystem.
+Foi criado `kordena_fiscal.observability` fora do domínio fiscal, com eventos estruturados, contexto fiscal explícito, sanitização recursiva fail-closed, bounded text/collections e sink sintético sem rede/filesystem. Falha do sink é best-effort e não altera execução fiscal.
 
-A sanitização é recursiva e fail-closed: bytes e objetos desconhecidos são redigidos sem `repr`; chaves sensíveis como password/token/credential/CSC/PFX/payload/XML/body/signature/certificate são redigidas por padrão; apenas referências, hashes e fingerprints explicitamente seguros sobrevivem. Mensagens contendo Bearer/Basic auth, material PEM/XML ou padrões de segredo são redigidas. Texto e coleções são bounded.
+Primeira tentativa do gate: run `34763491466`, job `103740272028`; Install PASS, Ruff falhou somente por duas ocorrências UP035 de import `Mapping`; Mypy/Pytest ficaram bloqueados.
 
-`StructuredObservabilityService.emit()` é best-effort: falha do sink retorna `False` e não escapa para a execução fiscal. O domínio permanece sem dependência de observabilidade.
-
-Primeira tentativa do gate: run `34763491466`, job `103740272028`; Install PASS, Ruff falhou somente por duas ocorrências UP035 de import `Mapping` em `typing`; Mypy/Pytest ficaram bloqueados. Correção aplicada sem alterar semântica.
-
-Gate definitivo B1: SHA `11aa2fa9a63d624235ba90619d853aa3d38e2bb3`, run `34763558714`, job `103740454991`, **Install PASS / Ruff PASS / Mypy strict PASS — 99 source files / 518 PASS em 4.52s**. Baseline V2-12: 508; incremento líquido +10. CI restaurado em `e18af325808c53637492680b17219db0deea49cc`.
+Gate definitivo B1: SHA `11aa2fa9a63d624235ba90619d853aa3d38e2bb3`, run `34763558714`, job `103740454991`, **99 source files / 518 PASS em 4.52s**. CI restaurado em `e18af325808c53637492680b17219db0deea49cc`.
 
 ## Bloco 2 — Metrics + Cardinality Governance — CONCLUÍDO/CERTIFICADO
 
-Foi criado `observability.metrics`, provider-neutral e sem SDK específico. `MetricDefinition`, `MetricPoint`, `MetricRecorder`, `MetricSink` e `InMemoryMetricSink` modelam counters, gauges e histograms com labels governadas.
+`MetricDefinition`, `MetricPoint`, `MetricRecorder`, `MetricSink` e `InMemoryMetricSink` modelam counters, gauges e histograms sem SDK específico. Scope fiscal é derivado exclusivamente de `ObservabilityContext`, labels opcionais são whitelist fechada, labels de alta cardinalidade/sensíveis falham fechado e `max_series` limita novas séries sem impedir atualização das existentes.
 
-As dimensões base são derivadas exclusivamente de `ObservabilityContext`: host, tenant, unidade, ambiente e, quando presentes, document kind, operação e provider. Labels opcionais são whitelist fechada (`queue`, `reason_code`, `status`, `contingency_mode`) e não podem sobrescrever o scope. Labels de alta cardinalidade ou sensíveis — correlation/document ids, references arbitrárias, payload, secret, token, credential, password, message/XML/body — falham fechado.
+Catálogo certificado: queue depth, retries, rejeições, unknown provider outcomes, contingência e duração de operação.
 
-Cada métrica tem `max_series` explícito; novas séries além do limite são recusadas sem impedir atualização de série já conhecida. Falha do sink é best-effort e não registra série fantasma. O catálogo cobre queue depth, retries, rejeições, unknown provider outcomes, contingência e duração de operação.
+Gate definitivo B2: SHA `832cdddcc0653ead483ca42a6c93c7966ad9e67f`, run `34763739929`, job `103740927942`, **100 source files / 528 PASS em 5.02s**. CI restaurado em `bd300c3e92cf344f91d74976ae235c909ba65ced`.
 
-Gate definitivo B2:
+## Bloco 3 — Tracing / Correlation / Causation — CONCLUÍDO/CERTIFICADO
 
-- SHA: `832cdddcc0653ead483ca42a6c93c7966ad9e67f`;
-- run: `34763739929` — **SUCCESS**;
-- job: `103740927942`;
+Foi criado `observability.tracing` com `TraceContext`, `TracePropagation`, `TraceSpan`, `TraceRecorder`, `TraceSpanSink` e sink sintético. Trace IDs usam 32 hex, span IDs 16 hex, correlation/causation são referências bounded e carrier possui allowlist fixa de headers.
+
+A cadeia application -> outbox -> provider -> reconciliation preserva `trace_id` e `correlation_id`, com parent spans e causation explícitos. Replay pode reidratar carrier e criar novo child span sem persistir trace como estado fiscal. Attributes reutilizam a sanitização fail-closed do Bloco 1. Correlação do trace deve corresponder ao `ExecutionScope`; mismatch falha fechado. Falha do trace sink é best-effort.
+
+Gate definitivo B3:
+
+- SHA: `f23df8625c78aafa3284c00515376d5174b7892e`;
+- run: `34763939319` — **SUCCESS**;
+- job: `103741455008`;
 - Install: PASS;
 - Ruff: PASS;
-- Mypy strict: PASS — **100 source files**;
-- Pytest: **528 PASS em 5.02s**;
-- baseline B1: 518; incremento líquido: **+10 testes**;
-- CI restaurado para `workflow_dispatch` no commit `bd300c3e92cf344f91d74976ae235c909ba65ced`.
+- Mypy strict: PASS — **101 source files**;
+- Pytest: **537 PASS em 5.46s**;
+- baseline B2: 528; incremento líquido: **+9 testes**;
+- CI restaurado em `838a20f6b5e597bd8fd6263ff5406ad833c257df`.
 
-## Bloco 3 — Tracing / Correlation / Causation — EM EXECUÇÃO
-
-Entregas:
-
-- propagation contract para correlation/causation/trace ids;
-- spans sintéticos provider-neutral;
-- continuidade de trace entre application/outbox/provider/reconciliation;
-- scope fiscal explícito no trace context;
-- sanitização e limites de tamanho;
-- telemetria opcional não altera semantics de execução.
-
-Gate: replay/restart preserva referências operacionais permitidas sem transformar trace em estado fiscal.
-
-## Bloco 4 — Operational & Compliance Alerts
+## Bloco 4 — Operational & Compliance Alerts — EM EXECUÇÃO
 
 Entregas:
 
@@ -93,16 +82,7 @@ Gate: cenários sintéticos reproduzíveis e isolamento por scope/provider/juris
 
 ## Bloco 5 — Regulatory Watcher Governado
 
-Entregas:
-
-- `RegulatoryObservation` com fonte/proveniência, jurisdição, assunto, effective dates e hash de evidência;
-- estados separados para observado, triado, proposta de mudança, aprovado/rejeitado;
-- comparação com capability/rule version vigente sem mutação automática;
-- `RegulatoryChangeProposal` explicitamente não executável;
-- promoção normativa exige revisão humana + testes + aprovação registrada;
-- conflito/contradição de fontes é representado, não ocultado.
-
-Gate: watcher nunca altera `CapabilityReadinessService` nem rule matrix sozinho.
+Entregas: observações normativas com proveniência/evidência, triagem, propostas não executáveis, revisão humana/testes/aprovação e conflitos explícitos. O watcher nunca altera readiness/rules sozinho.
 
 ## Bloco 6 — End-to-End Certification + fechamento V2-13
 
