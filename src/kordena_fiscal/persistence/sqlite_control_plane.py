@@ -153,16 +153,17 @@ class SqliteControlPlaneStore:
             reference.unit_id,
             reference.environment,
             reference.kind,
+            provider_id=reference.provider_id,
         )
         if existing is not None:
             raise PersistenceConflictError(
-                "secret reference kind is already bound for unit/environment"
+                "secret reference kind/provider is already bound for unit/environment"
             )
         self._connection.execute(
             """
             INSERT INTO fm_control_plane_secret_references (
-                reference_id, kind, tenant_id, unit_id, environment
-            ) VALUES (?, ?, ?, ?, ?)
+                reference_id, kind, tenant_id, unit_id, environment, provider_id
+            ) VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
                 reference.reference_id,
@@ -170,6 +171,7 @@ class SqliteControlPlaneStore:
                 reference.tenant_id,
                 reference.unit_id,
                 reference.environment.value,
+                reference.provider_scope,
             ),
         )
         return reference
@@ -180,6 +182,8 @@ class SqliteControlPlaneStore:
         unit_id: str,
         environment: FiscalEnvironment,
         kind: SecretReferenceKind,
+        *,
+        provider_id: str | None = None,
     ) -> SecretReference | None:
         if not isinstance(environment, FiscalEnvironment):
             raise FiscalValidationError("environment must be FiscalEnvironment")
@@ -187,26 +191,32 @@ class SqliteControlPlaneStore:
             raise FiscalValidationError("kind must be SecretReferenceKind")
         tenant = tenant_id.strip().lower()
         unit = unit_id.strip().lower()
+        provider = "" if provider_id is None else provider_id.strip().lower()
         if not tenant or not unit:
             raise FiscalValidationError("tenant_id and unit_id must not be blank")
+        if provider_id is not None and not provider:
+            raise FiscalValidationError("provider_id must not be blank")
         row = one_row(
             self._connection.execute(
                 """
-                SELECT reference_id, kind, tenant_id, unit_id, environment
+                SELECT reference_id, kind, tenant_id, unit_id, environment, provider_id
                 FROM fm_control_plane_secret_references
-                WHERE tenant_id = ? AND unit_id = ? AND environment = ? AND kind = ?
+                WHERE tenant_id = ? AND unit_id = ? AND environment = ?
+                  AND kind = ? AND provider_id = ?
                 """,
-                (tenant, unit, environment.value, kind.value),
+                (tenant, unit, environment.value, kind.value, provider),
             )
         )
         if row is None:
             return None
+        persisted_provider = text(row[5], "provider_id")
         return SecretReference(
             reference_id=text(row[0], "reference_id"),
             kind=SecretReferenceKind(text(row[1], "kind")),
             tenant_id=text(row[2], "tenant_id"),
             unit_id=text(row[3], "unit_id"),
             environment=FiscalEnvironment(text(row[4], "environment")),
+            provider_id=persisted_provider or None,
         )
 
     def add_profile(self, profile: FiscalProfile) -> FiscalProfile:
