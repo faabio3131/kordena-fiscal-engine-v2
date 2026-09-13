@@ -3,6 +3,9 @@ name: FM Fiscal Core V2 CI
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   quality:
     runs-on: ubuntu-latest
