@@ -12,6 +12,7 @@ from typing import TypeVar
 from kordena_fiscal.domain import FiscalValidationError
 
 from .ports import PersistenceStateError
+from .sqlite_commercial import SqliteCommercialConfigurationStore
 from .sqlite_control_plane import SqliteControlPlaneStore
 from .sqlite_core import (
     SqliteBindingRepository,
@@ -330,6 +331,134 @@ _MIGRATIONS = (
             """,
         ),
     ),
+    _Migration(
+        version=5,
+        name="v2_15_zero_code_commercial_configuration",
+        statements=(
+            """
+            CREATE TABLE fm_control_plane_secret_references_v2 (
+                reference_id TEXT PRIMARY KEY,
+                kind TEXT NOT NULL,
+                tenant_id TEXT NOT NULL,
+                unit_id TEXT NOT NULL,
+                environment TEXT NOT NULL,
+                provider_id TEXT NOT NULL DEFAULT '',
+                UNIQUE (tenant_id, unit_id, environment, kind, provider_id),
+                FOREIGN KEY (tenant_id, unit_id)
+                    REFERENCES fm_control_plane_units(tenant_id, unit_id)
+            )
+            """,
+            """
+            INSERT INTO fm_control_plane_secret_references_v2 (
+                reference_id, kind, tenant_id, unit_id, environment, provider_id
+            )
+            SELECT reference_id, kind, tenant_id, unit_id, environment, ''
+            FROM fm_control_plane_secret_references
+            """,
+            "DROP TABLE fm_control_plane_secret_references",
+            "ALTER TABLE fm_control_plane_secret_references_v2 RENAME TO fm_control_plane_secret_references",
+            """
+            CREATE TABLE fm_commercial_provider_bindings (
+                binding_id TEXT NOT NULL UNIQUE,
+                tenant_id TEXT NOT NULL,
+                unit_id TEXT NOT NULL,
+                environment TEXT NOT NULL,
+                document_kind TEXT NOT NULL,
+                state_code TEXT NOT NULL,
+                municipality_ibge_code TEXT NOT NULL DEFAULT '',
+                operation TEXT NOT NULL,
+                provider_id TEXT NOT NULL,
+                enabled INTEGER NOT NULL,
+                PRIMARY KEY (
+                    tenant_id, unit_id, environment, document_kind,
+                    state_code, municipality_ibge_code, operation
+                ),
+                FOREIGN KEY (tenant_id, unit_id)
+                    REFERENCES fm_control_plane_units(tenant_id, unit_id)
+            )
+            """,
+            """
+            CREATE TABLE fm_commercial_product_profiles (
+                profile_id TEXT NOT NULL,
+                version INTEGER NOT NULL,
+                product_id TEXT NOT NULL,
+                host_namespace TEXT NOT NULL,
+                tenant_id TEXT NOT NULL,
+                unit_id TEXT NOT NULL,
+                environment TEXT NOT NULL,
+                correlation_id TEXT NOT NULL,
+                commercial_code TEXT NOT NULL,
+                description TEXT NOT NULL,
+                ncm TEXT NOT NULL,
+                commercial_unit TEXT NOT NULL,
+                taxable_unit TEXT NOT NULL,
+                origin INTEGER NOT NULL,
+                cest TEXT,
+                gtin TEXT,
+                fiscal_benefit_code TEXT,
+                ibs_cbs_classification_code TEXT,
+                effective_from TEXT NOT NULL,
+                effective_to TEXT,
+                PRIMARY KEY (profile_id, version),
+                FOREIGN KEY (tenant_id, unit_id)
+                    REFERENCES fm_control_plane_units(tenant_id, unit_id)
+            )
+            """,
+            """
+            CREATE INDEX fm_commercial_product_profiles_effective_idx
+            ON fm_commercial_product_profiles (
+                tenant_id, unit_id, environment, product_id,
+                effective_from, effective_to
+            )
+            """,
+            """
+            CREATE TABLE fm_commercial_unit_modules (
+                tenant_id TEXT NOT NULL,
+                unit_id TEXT NOT NULL,
+                environment TEXT NOT NULL,
+                module_id TEXT NOT NULL,
+                enabled INTEGER NOT NULL,
+                PRIMARY KEY (tenant_id, unit_id, environment, module_id),
+                FOREIGN KEY (tenant_id, unit_id)
+                    REFERENCES fm_control_plane_units(tenant_id, unit_id)
+            )
+            """,
+            """
+            CREATE TABLE fm_commercial_webhook_destinations (
+                tenant_id TEXT NOT NULL,
+                unit_id TEXT NOT NULL,
+                environment TEXT NOT NULL,
+                destination_id TEXT NOT NULL,
+                url TEXT NOT NULL,
+                enabled INTEGER NOT NULL,
+                PRIMARY KEY (tenant_id, unit_id, environment, destination_id),
+                FOREIGN KEY (tenant_id, unit_id)
+                    REFERENCES fm_control_plane_units(tenant_id, unit_id)
+            )
+            """,
+            """
+            CREATE TABLE fm_commercial_provider_runtime_policies (
+                tenant_id TEXT NOT NULL,
+                unit_id TEXT NOT NULL,
+                environment TEXT NOT NULL,
+                provider_id TEXT NOT NULL,
+                policy_id TEXT NOT NULL,
+                connect_timeout_seconds REAL NOT NULL,
+                read_timeout_seconds REAL NOT NULL,
+                max_attempts INTEGER NOT NULL,
+                base_delay_seconds REAL NOT NULL,
+                max_delay_seconds REAL NOT NULL,
+                jitter_ratio REAL NOT NULL,
+                circuit_failure_threshold INTEGER NOT NULL,
+                circuit_recovery_seconds REAL NOT NULL,
+                circuit_success_threshold INTEGER NOT NULL,
+                PRIMARY KEY (tenant_id, unit_id, environment, provider_id),
+                FOREIGN KEY (tenant_id, unit_id)
+                    REFERENCES fm_control_plane_units(tenant_id, unit_id)
+            )
+            """,
+        ),
+    ),
 )
 
 
@@ -351,6 +480,7 @@ class SqliteFiscalUnitOfWork:
         self._lifecycle: SqliteLifecycleRepository | None = None
         self._reconciliations: SqliteReconciliationRepository | None = None
         self._control_plane: SqliteControlPlaneStore | None = None
+        self._commercial: SqliteCommercialConfigurationStore | None = None
 
     def __enter__(self) -> SqliteFiscalUnitOfWork:
         if self._connection is not None:
@@ -370,6 +500,7 @@ class SqliteFiscalUnitOfWork:
         self._lifecycle = SqliteLifecycleRepository(connection)
         self._reconciliations = SqliteReconciliationRepository(connection)
         self._control_plane = SqliteControlPlaneStore(connection)
+        self._commercial = SqliteCommercialConfigurationStore(connection)
         return self
 
     def __exit__(
@@ -436,6 +567,10 @@ class SqliteFiscalUnitOfWork:
     @property
     def control_plane(self) -> SqliteControlPlaneStore:
         return self._require(self._control_plane, "control_plane")
+
+    @property
+    def commercial(self) -> SqliteCommercialConfigurationStore:
+        return self._require(self._commercial, "commercial")
 
     def commit(self) -> None:
         if self._connection is None:
