@@ -4,9 +4,9 @@ Data de início: 2026-09-11
 Repositório: `faabio3131/kordena-fiscal-engine-v2`  
 Status global: **EM EXECUÇÃO**  
 Última fase concluída: **V2-12 — Gateway/Signer/Vault production adapters**  
-Fase atual: **V2-13 — Observabilidade + Compliance Operations — EM EXECUÇÃO**
+Fase atual: **V2-13 — Observabilidade + Compliance Operations — EM FECHAMENTO DOCUMENTAL**
 
-> Snapshot imediatamente anterior à V2-13: `docs/history/EXECUTION_TRACKER_V2_PRE_V2_13.md`. Plano da fase: `docs/V2_13_OBSERVABILITY_COMPLIANCE_OPERATIONS.md`.
+> Snapshot imediatamente anterior à V2-13: `docs/history/EXECUTION_TRACKER_V2_PRE_V2_13.md`. Plano da fase: `docs/V2_13_OBSERVABILITY_COMPLIANCE_OPERATIONS.md`. Certificação: `docs/V2_13_CLOSURE_CERTIFICATION.md`.
 
 ## Regra de governança
 
@@ -27,8 +27,8 @@ Estados permitidos: `PENDENTE`, `EM EXECUÇÃO`, `BLOQUEADO`, `CONCLUÍDO`. Nenh
 | V2-10 | Contract Packs multiproduto | **CONCLUÍDO** | PR #11 Draft; `345652ecbfc18c8bd3511cf5b9083ba0dbc259cb`; 397 PASS |
 | V2-11 | Control Plane independente | **CONCLUÍDO** | PR #12 Draft; `eed6b056e9d1941da435179c5eaf805c261f6622`; 437 PASS |
 | V2-12 | Gateway/Signer/Vault production adapters | **CONCLUÍDO** | PR #13 Draft; B6 `b7bccf2babed336941d920eed73cd0699e6939d4`; 508 PASS; CI final dispatch-only |
-| V2-13 | Observabilidade + Compliance Operations | **EM EXECUÇÃO** | PR #14 Draft; B1 518; B2 528; B3 537; B4 547; B5 `9174b461b13d6a8b26c76cfa1a9cc877fbc18895` / run `34764440273` / job `103742791023` / 103 source / 557 PASS; B6 em execução |
-| V2-14 | Hardening sistêmico | PENDENTE | depende V2-13 |
+| V2-13 | Observabilidade + Compliance Operations | **EM EXECUÇÃO** | PR #14 Draft; B1 518; B2 528; B3 537; B4 547; B5 557; B6 funcional `0b919fa8fc2bd0203774a0b487e46a94fe6dfda1` / run `34765368461` / job `103745272017` / 103 source / 563 PASS; gate documental pendente |
+| V2-14 | Hardening sistêmico | PENDENTE | depende do fechamento documental V2-13 e autorização humana explícita |
 | V2-15 | Homologação + pilotos controlados | PENDENTE | depende V2-14 |
 | V2-16 | Integração produtos FM | BLOQUEADO PARCIAL | depende do Core universal certificado e readiness dos produtos |
 | V2-17 | Convergência/cutover + arquivamento original | PENDENTE | depende de equivalência e integrações certificadas |
@@ -58,8 +58,6 @@ Gate `f23df8625c78aafa3284c00515376d5174b7892e` / run `34763939319` / job `10374
 
 ### B4 — Operational & Compliance Alerts — CONCLUÍDO/CERTIFICADO
 
-Alertas sanitizados e deduplicados para certificado, fila/dead-letter, rejeição, gap de numeração, contingência e unknown provider outcome. Dedup é particionado por scope/provider/jurisdição; sink failure não cria active alert.
-
 Primeira tentativa: run `34764107470` / job `103741903144`; Ruff falhou apenas por import não usado. Gate definitivo: `79e83cf34b6b7d6bf71b98036d20cdd0b3364cfd` / run `34764162846` / job `103742057522` / **102 source / 547 PASS em 4.45s**. CI restaurado `dba2173c4ba0c23d5791b96ae6e381333d63a2b2`.
 
 ### B5 — Regulatory Watcher Governado — CONCLUÍDO/CERTIFICADO
@@ -68,10 +66,14 @@ Watcher governado com observação normativa, proveniência, jurisdição, vigê
 
 Gate `9174b461b13d6a8b26c76cfa1a9cc877fbc18895` / run `34764440273` / job `103742791023` / **103 source / 557 PASS em 4.44s**. CI restaurado para dispatch-only em `2c113de637277732a695e18a3ab5ffd4d0e92773`.
 
-### B6 — End-to-End Certification + fechamento — EM EXECUÇÃO
+### B6 — End-to-End Certification + fechamento — FUNCIONALMENTE CERTIFICADO
 
-Objetivo: regressão integrada B1-B5, ausência estrutural de raw secrets/payloads, fail-open da telemetria, isolamento cross-host/cross-tenant/cross-provider, replay/restart, diff V2-12 -> V2-13, riscos residuais, gate funcional e gate documental final.
+Gate funcional `0b919fa8fc2bd0203774a0b487e46a94fe6dfda1` / run `34765368461` / job `103745272017` / **Install PASS / Ruff PASS / Mypy strict PASS — 103 source / 563 PASS em 4.10s**. CI restaurado em `615a9db4e205cc0ad115552cf7045d6b6ed247a7` para o blob dispatch-only governado.
+
+Auditoria de diff V2-12 -> pós-gate funcional/restauração: **45 commits à frente, 0 atrás, 17 arquivos líquidos, 3.526 adições e 51 remoções**; nenhuma alteração em `src/kordena_fiscal/domain`, nenhuma migration nova e CI sem diff líquido.
+
+Certificação detalhada: `docs/V2_13_CLOSURE_CERTIFICATION.md`. Falta somente o gate documental final e restauração final do CI para marcar a fase **CONCLUÍDA/CERTIFICADA**.
 
 ## Governança preservada
 
-PR #14 permanece Draft. Nenhum merge, deploy, produção real, homologação oficial externa, segredo real, promoção normativa automática ou cutover foi autorizado. V2-14 permanece PENDENTE.
+PR #14 permanece Draft. Nenhum merge, deploy, produção real, homologação oficial externa, segredo real, promoção normativa automática ou cutover foi autorizado. V2-14 permanece PENDENTE e não deve iniciar sem autorização humana explícita.
