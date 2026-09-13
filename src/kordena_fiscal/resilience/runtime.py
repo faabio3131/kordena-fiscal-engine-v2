@@ -98,7 +98,7 @@ class RetryPolicy:
         )
         spread = base * self.jitter_ratio
         shifted = base - spread + (2 * spread * jitter_value)
-        return min(max(shifted, 0.0), self.max_delay_seconds)
+        return float(min(max(shifted, 0.0), self.max_delay_seconds))
 
 
 @dataclass(frozen=True, slots=True)
