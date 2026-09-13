@@ -1,6 +1,6 @@
 # V2-13 — Observabilidade + Compliance Operations
 
-Status: **EM EXECUÇÃO — BLOCOS 1-4 CERTIFICADOS / BLOCO 5 EM EXECUÇÃO**  
+Status: **EM EXECUÇÃO — BLOCOS 1-5 CERTIFICADOS / BLOCO 6 EM EXECUÇÃO**  
 Branch: `v2/observability-compliance-operations`  
 Base certificada: `v2/production-adapters` @ `1242ce74d874ffb87783401ce1abaabb350c948c`  
 Dependência: V2-12 concluída e certificada.
@@ -28,8 +28,8 @@ Tornar o FM Fiscal operável e auditável em produção futura, com observabilid
 2. **Metrics + Cardinality Governance — CONCLUÍDO/CERTIFICADO.**
 3. **Tracing / Correlation / Causation — CONCLUÍDO/CERTIFICADO.**
 4. **Operational & Compliance Alerts — CONCLUÍDO/CERTIFICADO.**
-5. **Regulatory Watcher Governado — EM EXECUÇÃO.**
-6. **End-to-End Certification + fechamento V2-13 — PENDENTE.**
+5. **Regulatory Watcher Governado — CONCLUÍDO/CERTIFICADO.**
+6. **End-to-End Certification + fechamento V2-13 — EM EXECUÇÃO.**
 
 ## Bloco 1 — Structured Observability Boundary + Sanitization — CONCLUÍDO/CERTIFICADO
 
@@ -71,19 +71,27 @@ Gate definitivo B4:
 - baseline B3: 537; incremento líquido: **+10 testes**;
 - CI restaurado em `dba2173c4ba0c23d5791b96ae6e381333d63a2b2`.
 
-## Bloco 5 — Regulatory Watcher Governado — EM EXECUÇÃO
+## Bloco 5 — Regulatory Watcher Governado — CONCLUÍDO/CERTIFICADO
 
-Entregas:
+Foi criado `compliance.regulatory_watcher` com observações normativas imutáveis, fonte/proveniência, jurisdição, assunto, vigência, hash de evidência, conflitos explícitos e estados separados de observação, triagem, proposta e decisão.
 
-- observação normativa com fonte/proveniência, jurisdição, assunto, effective dates e hash de evidência;
-- estados separados para observado, triado, proposta de mudança, aprovado/rejeitado;
-- comparação com rule/capability vigente sem mutação automática;
-- proposta explicitamente não executável;
-- revisão humana e evidência de testes obrigatórias para aprovação;
-- conflitos/contradições de fontes representados explicitamente;
-- nenhuma alteração autônoma de `CapabilityReadinessService` ou rule matrix.
+A comparação com capability/rule vigente é somente leitura. `RegulatoryChangeProposal` é explicitamente não executável e aprovação exige revisão humana identificada e evidência de testes. Mesmo aprovada, a proposta não altera `CapabilityReadinessService`, `JurisdictionCapabilityMatrix`, readiness, rule matrix ou qualquer adapter de produção.
 
-## Bloco 6 — End-to-End Certification + fechamento V2-13
+O fluxo representa contradições entre fontes em vez de ocultá-las e rejeita transições inválidas, impedindo promoção normativa autônoma.
+
+Gate definitivo B5:
+
+- SHA: `9174b461b13d6a8b26c76cfa1a9cc877fbc18895`;
+- run: `34764440273` — **SUCCESS**;
+- job: `103742791023`;
+- Install: PASS;
+- Ruff: PASS;
+- Mypy strict: PASS — **103 source files**;
+- Pytest: **557 PASS em 4.44s**;
+- baseline B4: 547; incremento líquido: **+10 testes**;
+- CI restaurado para dispatch-only em `2c113de637277732a695e18a3ab5ffd4d0e92773`.
+
+## Bloco 6 — End-to-End Certification + fechamento V2-13 — EM EXECUÇÃO
 
 Certificar structured logs, metrics/cardinalidade, tracing/correlation, alertas, Regulatory Watcher, ausência de raw secrets/payloads, fail-open controlado da telemetria, isolamento cross-host/cross-tenant/cross-provider, restart/replay, regressão mestre e diff completo V2-12 -> V2-13.
 
