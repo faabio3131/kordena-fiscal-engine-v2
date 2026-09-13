@@ -145,7 +145,9 @@ class ProviderDescriptor:
         if not self.jurisdictions or not all(
             isinstance(item, BrazilianJurisdiction) for item in self.jurisdictions
         ):
-            raise FiscalValidationError("jurisdictions must contain BrazilianJurisdiction values")
+            raise FiscalValidationError(
+                "jurisdictions must contain BrazilianJurisdiction values"
+            )
         if not self.environments or not all(
             isinstance(item, FiscalEnvironment) for item in self.environments
         ):
@@ -158,7 +160,9 @@ class ProviderDescriptor:
             raise FiscalValidationError("csc_required_for must be a frozenset")
         for document_kind, operation in self.csc_required_for:
             if document_kind not in self.document_kinds or operation not in self.operations:
-                raise FiscalValidationError("CSC requirement must reference a supported capability")
+                raise FiscalValidationError(
+                    "CSC requirement must reference a supported capability"
+                )
 
     def supports(
         self,
@@ -295,6 +299,19 @@ class ProviderClock(Protocol):
     def now(self) -> datetime: ...
 
 
+class ProviderSelectionResolver(Protocol):
+    """Resolve provider identity from customer configuration without gateway coupling."""
+
+    def resolve_provider_id(
+        self,
+        *,
+        scope: ExecutionScope,
+        document_kind: FiscalDocumentKind,
+        jurisdiction: BrazilianJurisdiction,
+        operation: str,
+    ) -> str: ...
+
+
 class SystemProviderClock:
     def now(self) -> datetime:
         return datetime.now(UTC)
@@ -347,7 +364,9 @@ class ConfiguredProviderAdapter:
             timeout=self.timeout_policy,
         )
         if not isinstance(response, ProviderTransportResponse):
-            raise MalformedProviderResponseError("provider transport returned invalid response")
+            raise MalformedProviderResponseError(
+                "provider transport returned invalid response"
+            )
         return ProviderResponse(
             provider_id=self.descriptor.provider_id,
             operation=request.operation,
@@ -378,7 +397,9 @@ class ConfiguredProviderAdapter:
                 "provider credentials are unavailable"
             ) from None
         if not isinstance(material, EphemeralProviderCredentialsMaterial):
-            raise ProviderCredentialsUnavailableError("provider credentials are unavailable")
+            raise ProviderCredentialsUnavailableError(
+                "provider credentials are unavailable"
+            )
         return material
 
     def _resolve_csc(self, request: ProviderRequest) -> EphemeralCscMaterial:
@@ -447,7 +468,7 @@ class ProviderRegistry:
 
 
 class ProviderGatewayService:
-    """Readiness-governed provider routing; adapters never promote readiness."""
+    """Readiness-governed routing with optional zero-code provider selection."""
 
     def __init__(
         self,
@@ -455,10 +476,12 @@ class ProviderGatewayService:
         registry: ProviderRegistry,
         readiness: CapabilityReadinessService,
         clock: ProviderClock | None = None,
+        provider_selector: ProviderSelectionResolver | None = None,
     ) -> None:
         self._registry = registry
         self._readiness = readiness
         self._clock = clock or SystemProviderClock()
+        self._provider_selector = provider_selector
 
     def execute(
         self,
@@ -475,11 +498,19 @@ class ProviderGatewayService:
             instant=self._clock.now(),
             action=_OPERATION_ACTION[request.operation],
         )
+        selected_provider = provider_id
+        if selected_provider is None and self._provider_selector is not None:
+            selected_provider = self._provider_selector.resolve_provider_id(
+                scope=request.scope,
+                document_kind=request.document_kind,
+                jurisdiction=request.jurisdiction,
+                operation=request.operation.value,
+            )
         adapter = self._registry.resolve(
             document_kind=request.document_kind,
             jurisdiction=request.jurisdiction,
             environment=request.scope.environment,
             operation=request.operation,
-            provider_id=provider_id,
+            provider_id=selected_provider,
         )
         return adapter.execute(request)
