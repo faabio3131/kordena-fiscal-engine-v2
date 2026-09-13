@@ -29,6 +29,7 @@ from kordena_fiscal.vault import (
 HOST = "fm.kordena"
 TENANT = "tenant-vault"
 UNIT = "unit-vault"
+PROVIDER = "synthetic-provider"
 CERT_REF = "ref:fm-fiscal/tenant-vault/unit-vault/hml-certificate"
 CSC_REF = "ref:fm-fiscal/tenant-vault/unit-vault/hml-csc"
 CREDENTIALS_REF = "ref:fm-fiscal/tenant-vault/unit-vault/hml-provider-credentials"
@@ -94,6 +95,7 @@ def _context(
     environment: FiscalEnvironment = FiscalEnvironment.HOMOLOGATION,
     purpose: SecretUsagePurpose = SecretUsagePurpose.DOCUMENT_SIGNING,
     kind: SecretReferenceKind = SecretReferenceKind.CERTIFICATE,
+    provider_id: str | None = None,
 ) -> SecretResolutionContext:
     return SecretResolutionContext(
         scope=_scope(
@@ -105,6 +107,7 @@ def _context(
         purpose=purpose,
         kind=kind,
         workload_id="fiscal-runtime",
+        provider_id=provider_id,
     )
 
 
@@ -184,6 +187,7 @@ def _registered_vault(
             reference_id=CSC_REF,
             code=b"SYNTHETIC-CSC",
         ),
+        provider_id=PROVIDER,
     )
     vault.register(
         host_namespace=HOST,
@@ -192,6 +196,7 @@ def _registered_vault(
             reference_id=CREDENTIALS_REF,
             credential_bytes=b"SYNTHETIC-PROVIDER-CREDENTIAL",
         ),
+        provider_id=PROVIDER,
     )
     return vault
 
@@ -252,6 +257,65 @@ def test_purpose_and_kind_mismatch_is_rejected_before_resolution() -> None:
             purpose=SecretUsagePurpose.DOCUMENT_SIGNING,
             kind=SecretReferenceKind.CSC,
         )
+
+
+def test_provider_scoped_purposes_require_explicit_provider_identity() -> None:
+    with pytest.raises(FiscalValidationError, match="provider_id"):
+        _context(
+            purpose=SecretUsagePurpose.PROVIDER_AUTHENTICATION,
+            kind=SecretReferenceKind.CREDENTIALS,
+        )
+    with pytest.raises(FiscalValidationError, match="provider_id"):
+        _context(
+            purpose=SecretUsagePurpose.CSC_AUTHENTICATION,
+            kind=SecretReferenceKind.CSC,
+        )
+
+
+def test_provider_scoped_material_isolated_under_same_opaque_reference(tmp_path) -> None:
+    database = _database(tmp_path)
+    _, _, credentials = _onboard_and_bind(database)
+    vault = InMemorySyntheticFiscalSecretVault()
+    vault.register(
+        host_namespace=HOST,
+        reference=credentials,
+        material=EphemeralProviderCredentialsMaterial(
+            reference_id=CREDENTIALS_REF,
+            credential_bytes=b"PROVIDER-A-SYNTHETIC",
+        ),
+        provider_id="provider-a",
+    )
+    vault.register(
+        host_namespace=HOST,
+        reference=credentials,
+        material=EphemeralProviderCredentialsMaterial(
+            reference_id=CREDENTIALS_REF,
+            credential_bytes=b"PROVIDER-B-SYNTHETIC",
+        ),
+        provider_id="provider-b",
+    )
+    service = SecretResolutionService(unit_of_work_factory=database, vault=vault)
+
+    material_a = service.resolve(
+        _context(
+            purpose=SecretUsagePurpose.PROVIDER_AUTHENTICATION,
+            kind=SecretReferenceKind.CREDENTIALS,
+            provider_id="provider-a",
+        )
+    )
+    material_b = service.resolve(
+        _context(
+            purpose=SecretUsagePurpose.PROVIDER_AUTHENTICATION,
+            kind=SecretReferenceKind.CREDENTIALS,
+            provider_id="provider-b",
+        )
+    )
+
+    assert isinstance(material_a, EphemeralProviderCredentialsMaterial)
+    assert isinstance(material_b, EphemeralProviderCredentialsMaterial)
+    assert material_a.credential_bytes == b"PROVIDER-A-SYNTHETIC"
+    assert material_b.credential_bytes == b"PROVIDER-B-SYNTHETIC"
+    assert material_a.credential_bytes != material_b.credential_bytes
 
 
 def test_vault_unavailable_and_missing_material_fail_closed(tmp_path) -> None:
