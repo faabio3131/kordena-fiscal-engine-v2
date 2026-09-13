@@ -4,9 +4,9 @@ Data de início: 2026-09-11
 Repositório: `faabio3131/kordena-fiscal-engine-v2`  
 Status global: **EM EXECUÇÃO CONTROLADA — V2-15 externa pendente; V2-16 parcialmente certificada**  
 Última fase integralmente concluída sem bloqueio externo: **V2-14 — Hardening sistêmico**  
-Fase atual: **V2-16 — BLOQUEADA PARCIAL; B1 E B3 INTERNAMENTE CERTIFICADOS; B2 KORDENA BLOQUEADO POR PRÉ-REQUISITO WEB PREMIUM/FISC-20**
+Fase atual: **V2-16 — BLOQUEADA PARCIAL; B1/B3 CERTIFICADOS; B2 KORDENA BLOQUEADO; B4/B5 INTERNAMENTE CERTIFICADOS COM BLOQUEIOS DE DOMÍNIO; B6 EM CERTIFICAÇÃO**
 
-> Snapshot pré-V2-15: `docs/history/EXECUTION_TRACKER_V2_PRE_V2_15.md`. Plano V2-15: `docs/V2_15_HOMOLOGATION_CONTROLLED_PILOTS.md`. Fechamento V2-15: `docs/V2_15_CLOSURE_CERTIFICATION.md`. Execução V2-16 B1-B3: `docs/V2_16_PRODUCT_INTEGRATION_EXECUTION.md`.
+> Snapshot pré-V2-15: `docs/history/EXECUTION_TRACKER_V2_PRE_V2_15.md`. Plano V2-15: `docs/V2_15_HOMOLOGATION_CONTROLLED_PILOTS.md`. Fechamento V2-15: `docs/V2_15_CLOSURE_CERTIFICATION.md`. Execução V2-16: `docs/V2_16_PRODUCT_INTEGRATION_EXECUTION.md`.
 
 ## Regra de governança
 
@@ -18,7 +18,7 @@ Estados permitidos: `PENDENTE`, `EM EXECUÇÃO`, `BLOQUEADO`, `CONCLUÍDO`. A PR
 | V2-13 | Observabilidade + Compliance Operations | **CONCLUÍDO** | PR #14 Draft; 563 PASS |
 | V2-14 | Hardening sistêmico | **CONCLUÍDO** | PR #15 Draft; 582 PASS; doc gate 582 PASS |
 | V2-15 | Homologação + pilotos controlados | **BLOQUEADO PARCIAL — INTERNO CERTIFICADO** | PR #16 Draft; B0-B6 internos verdes; B6 final 620 PASS; externo oficial pendente |
-| V2-16 | Integração produtos FM | **BLOQUEADO PARCIAL — B1/B3 CERTIFICADOS; B2 KORDENA BLOQUEADO** | PR #17 Draft no Core; Iron PR #48 Draft; Kordena PR #118 ainda OPEN/DRAFT |
+| V2-16 | Integração produtos FM | **BLOQUEADO PARCIAL / EM CERTIFICAÇÃO B6** | Core PR #17 Draft; Kordena bloqueado; Iron certificado; Vendedor/CampaIA parciais; B6 em gate |
 | V2-17 | Convergência/cutover | PENDENTE | NÃO AUTORIZADO |
 | V2-18 | Produto comercial independente | PENDENTE | posterior ao uso interno certificado |
 
@@ -58,40 +58,58 @@ Gate: SHA `d7fa063c8a842480179b178a1e45f37061fe8e18`, run `34777597412`, job `10
 
 Suíte: `tests/homologation/test_v2_15_closure.py`. Gate final SHA `a1c539081236bb3f8df9afb096c4e78efcb8374f`, run `34777811652`, job `103779032887`: Install PASS, Ruff PASS, Mypy PASS em **111 source files**, Pytest **620 PASS em 21.21s**.
 
-CI restaurado após o gate no commit `bca2b21103e0cc9232daa33f492535cd9c0fb93e` ao blob governado exato `b161340d7164afcbf3da0eb0327135528a39450c`: `workflow_dispatch` only + `permissions: contents: read`.
+CI restaurado após o gate ao blob governado `b161340d7164afcbf3da0eb0327135528a39450c`: `workflow_dispatch` only + `permissions: contents: read`.
 
-## V2-16 — execução autorizada dos blocos B1-B3
+## V2-16 — execução acumulada
 
 ### B1 — Contrato de integração — CONCLUÍDO/CERTIFICADO INTERNAMENTE
 
-Fronteira `kordena_fiscal.integrations` ligada aos Product Contract Packs certificados e ao OpenAPI atual do FM Fiscal Bridge v1. Readiness continua obrigatório e nenhuma resolução de pack concede homologação ou produção.
-
-Primeiro gate detectou drift de rotas/cabeçalhos contra o OpenAPI vigente; a implementação foi corrigida sem enfraquecer o teste. Gate certificado: SHA `c23d49997a4344363720436374a8d9476e665262`, run `34779681157`: Install PASS, Ruff PASS, Mypy PASS, Pytest PASS.
+Fronteira `kordena_fiscal.integrations` ligada aos Product Contract Packs certificados e ao OpenAPI atual do FM Fiscal Bridge v1. Gate certificado: SHA `c23d49997a4344363720436374a8d9476e665262`, run `34779681157`: Install/Ruff/Mypy/Pytest PASS.
 
 ### B2 — Integração Kordena — BLOQUEADA POR PRÉ-REQUISITO REAL
 
-O Plano Mestre exige V1 Web Premium liberada para FISC-20. A PR Kordena #118 permanece OPEN/DRAFT e em estado funcional parcial. Nenhum acoplamento runtime foi introduzido e nenhum verde artificial foi declarado. O bloqueio é do pré-requisito do produto, não do FM Fiscal Core.
+O Plano Mestre exige V1 Web Premium liberada para FISC-20. A PR Kordena #118 permanece OPEN/DRAFT. Nenhum acoplamento runtime foi introduzido e nenhum verde artificial foi declarado.
 
 ### B3 — Integração Iron Fit — CONCLUÍDO/CERTIFICADO INTERNAMENTE
 
-Integração ancorada no fato autoritativo `FinancialService.payCharge`, após quitação idempotente da `Charge`. O Iron produz handoff fiscal `PENDING_CAPABILITY`, determinístico e auditável, mas não seleciona provider, município, alíquota nem prontidão. O Core Fiscal continua autoridade de binding/readiness/regras/emissão.
+Branch `feat/fisc-v2-16-iron-integration`, PR #48 OPEN/DRAFT. Gate final SHA `2be8321eeb066f0296ba812faab0a098c32f0632`, run `34780329013`: npm ci, dependency audit, Prisma generate, lint/typecheck, build e smoke tests PASS.
 
-Branch Iron: `feat/fisc-v2-16-iron-integration`. PR #48 OPEN/DRAFT e não mergeada. Gate canônico final: SHA `2be8321eeb066f0296ba812faab0a098c32f0632`, run `34780329013`: npm ci PASS, dependency audit PASS, Prisma generate PASS, lint/typecheck PASS, build PASS e smoke regression tests PASS.
+### B4 — Integração Vendedor IA — BLOQUEADO PARCIAL / INTERNO CERTIFICADO
 
-O gate inicialmente encontrou vulnerabilidade alta transitiva em `multer 2.2.0`; o audit não foi desabilitado. A dependência foi corrigida para `2.3.0`, o lockfile foi atualizado e o workflow canônico foi restaurado antes do gate final.
+Autoridade de liquidação: `Payment.status = CONFIRMED`, com Quote ACCEPTED e snapshot de itens como fonte comercial. Handoff `fm.vendedor-ia` + pack `sales` implementado sem adivinhar NF-e/NFC-e. Produtos liquidados ficam `PENDING_FISCAL_CLASSIFICATION`; SERVICE fica `BLOCKED_UNSUPPORTED_SALE_CONTENT`.
 
-### Decisão formal V2-16 após B1-B3
+Bloqueio real: Customer não possui CPF/CNPJ/endereço fiscal e o domínio atual não contém fatos suficientes para escolher NF-e versus NFC-e.
 
-**V2-16 — BLOQUEADA PARCIAL — B1 E B3 INTERNAMENTE CONCLUÍDOS/CERTIFICADOS; B2 KORDENA BLOQUEADA POR PRÉ-REQUISITO WEB PREMIUM/FISC-20.**
+Branch `feat/fisc-v2-16-vendedor-integration`, PR Vendedor IA #1 OPEN/DRAFT. HEAD `b4b7fb05236c481d5626de5386864ae6f5227418`, run `34783831679`, job `103795573887`: install/build/typecheck PASS; **34 arquivos / 157 testes PASS**; runtime security PASS; Docker smoke PASS.
 
-A autorização de 2026-09-13 cobriu os três blocos acima. Nenhum bloco posterior à V2-16.3 foi iniciado nesta execução.
+### B5 — Integração CampaIA — BLOQUEADO PARCIAL / INTERNO CERTIFICADO
+
+O produto não possui ainda autoridade de faturamento/assinatura/pagamento próprio. Campanha, orçamento e media spend não foram convertidos artificialmente em receita. Foi implementada seam fail-closed `SettledOwnBillingFact` para futuro evento autoritativo, mapeando somente service-billing/saas-billing para NFS-e com idempotência, binding e readiness obrigatórios.
+
+Branch `feat/fisc-v2-16-campaia-integration`, PR CampaIA #1 OPEN/DRAFT. HEAD `bdebbc3558ff8b07c1a38e0cb728be0dc3635c4b`, run `34784021431`, job `103796103296`: **267 core tests PASS + 80 API tests PASS = 347 PASS**; AsyncAPI PASS com 24 eventos verificados end-to-end.
+
+### B6 — Adapter Contract Pack / novos produtos FM — EM CERTIFICAÇÃO
+
+A fundação existente foi reutilizada; não foi criado framework paralelo. Foram adicionados:
+
+- `ProductOnboardingDeclaration` + `certify_product_onboarding(...)`;
+- `ProductMutationPreflight` + `validate_product_mutation_preflight(...)`;
+- fail-closed para pack/host/use case/operação/documento/ação/escopo/idempotência/binding/capability/readiness;
+- prova sintética não registrada no catálogo real;
+- `docs/V2_16_ADAPTER_PACK_ONBOARDING.md`.
+
+O primeiro gate de B6, run `34784287287`, encontrou Ruff vermelho por cinco violações de qualidade (import de Mapping, duas linhas longas e duas assertions genéricas de Exception). O código/testes foram corrigidos sem relaxar regra ou gate. Um segundo run intermediário ainda avaliou commit anterior à correção completa; a certificação final permanece pendente do próximo gate sobre o HEAD integral corrigido.
+
+## Estado formal provisório da V2-16
+
+**V2-16 — BLOQUEADA PARCIAL — B1/B3 INTERNAMENTE CONCLUÍDOS; B2 KORDENA BLOQUEADO; B4/B5 INTERNAMENTE CERTIFICADOS COM BLOQUEIOS REAIS DE DOMÍNIO; B6 EM CERTIFICAÇÃO.**
 
 ## Evidência externa / bloqueios reais
 
 Nenhum provider, UF, município ou operação foi declarado oficialmente homologado. Não foram fornecidos/consumidos segredos reais, certificados privados reais, CSC real, provider credentials reais, endpoints produtivos ou respostas externas oficiais. Nenhum piloto externo real foi executado.
 
-A V2-15 continua formalmente: **BLOQUEADA PARCIAL — TRABALHO INTERNO CONCLUÍDO/CERTIFICADO; DEPENDÊNCIAS EXTERNAS PENDENTES.** Na V2-16, o bloqueio adicional atual é o pré-requisito Kordena Web Premium/FISC-20.
+A V2-15 continua formalmente **BLOQUEADA PARCIAL — TRABALHO INTERNO CONCLUÍDO/CERTIFICADO; DEPENDÊNCIAS EXTERNAS PENDENTES**.
 
 ## Governança preservada
 
-**SEM MERGE da PR #16. SEM MERGE da PR #17. SEM MERGE da PR Iron #48. SEM Ready/auto-merge. SEM deploy. SEM produção real. SEM cutover. SEM segredo real no repositório. SEM homologação externa inventada. SEM promoção de `PRODUCTION_APPROVED`. V2-17 NÃO INICIADA.**
+**SEM MERGE da PR #16, PR #17, Iron #48, Vendedor IA #1 ou CampaIA #1. SEM Ready/auto-merge. SEM deploy. SEM produção real. SEM cutover. SEM segredo real no repositório. SEM homologação externa inventada. SEM promoção de `PRODUCTION_APPROVED`. V2-17 NÃO INICIADA.**
