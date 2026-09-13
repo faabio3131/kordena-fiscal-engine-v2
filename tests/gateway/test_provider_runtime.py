@@ -37,6 +37,7 @@ from kordena_fiscal.gateway import (
     ProviderRegistry,
     ProviderRequest,
     ProviderResponseStatus,
+    ProviderTimeoutPolicy,
     ProviderTransportResponse,
     SyntheticProviderTransport,
     UnsupportedProviderError,
@@ -55,6 +56,7 @@ TENANT = "tenant-provider"
 UNIT = "unit-provider"
 JURISDICTION = BrazilianJurisdiction("SP")
 NOW = datetime(2026, 9, 13, 13, 0, tzinfo=UTC)
+TIMEOUT = ProviderTimeoutPolicy(connect_seconds=1.0, read_seconds=2.0)
 CREDENTIAL_REF = "ref:fm-fiscal/tenant-provider/unit-provider/hml-provider-credentials"
 CSC_REF = "ref:fm-fiscal/tenant-provider/unit-provider/hml-csc"
 
@@ -256,15 +258,29 @@ def _descriptor(provider_id: str = "synthetic-sp") -> ProviderDescriptor:
     )
 
 
+def _adapter(
+    *,
+    descriptor: ProviderDescriptor,
+    resolution: SecretResolutionService,
+    transport: SyntheticProviderTransport,
+) -> ConfiguredProviderAdapter:
+    return ConfiguredProviderAdapter(
+        descriptor=descriptor,
+        secret_resolution=resolution,
+        transport=transport,
+        timeout_policy=TIMEOUT,
+    )
+
+
 def _runtime(tmp_path, *, provider_id: str = "synthetic-sp"):
     database = _database(tmp_path)
     credentials, csc = _onboard(database)
     vault = _vault(credentials, csc)
     resolution = SecretResolutionService(unit_of_work_factory=database, vault=vault)
     transport = SyntheticProviderTransport()
-    adapter = ConfiguredProviderAdapter(
+    adapter = _adapter(
         descriptor=_descriptor(provider_id),
-        secret_resolution=resolution,
+        resolution=resolution,
         transport=transport,
     )
     service = ProviderGatewayService(
@@ -290,18 +306,19 @@ def test_routes_supported_nfe_and_normalizes_response(tmp_path) -> None:
     assert response.provider_id == "synthetic-sp"
     assert response.status is ProviderResponseStatus.ACCEPTED
     assert response.external_reference == "protocol-1"
-    assert transport.observations[0].credentials_reference_id == CREDENTIAL_REF
-    assert transport.observations[0].csc_reference_id is None
+    observation = transport.observations[0]
+    assert observation.credentials_reference_id == CREDENTIAL_REF
+    assert observation.csc_reference_id is None
+    assert observation.connect_timeout_seconds == 1.0
+    assert observation.read_timeout_seconds == 2.0
 
 
 def test_nfce_resolves_csc_only_when_descriptor_requires_it(tmp_path) -> None:
     _, _, transport, service, _ = _runtime(tmp_path)
-
     response = service.execute(
         _request(kind=FiscalDocumentKind.NFCE),
         provider_id="synthetic-sp",
     )
-
     assert response.status is ProviderResponseStatus.ACCEPTED
     assert transport.observations[0].credentials_reference_id == CREDENTIAL_REF
     assert transport.observations[0].csc_reference_id == CSC_REF
@@ -309,7 +326,6 @@ def test_nfce_resolves_csc_only_when_descriptor_requires_it(tmp_path) -> None:
 
 def test_unknown_provider_fails_closed(tmp_path) -> None:
     _, _, _, service, _ = _runtime(tmp_path)
-
     with pytest.raises(UnsupportedProviderError, match="exactly one"):
         service.execute(_request(), provider_id="missing-provider")
 
@@ -321,14 +337,14 @@ def test_ambiguous_provider_resolution_never_selects_default(tmp_path) -> None:
         unit_of_work_factory=database,
         vault=_vault(credentials, csc),
     )
-    first = ConfiguredProviderAdapter(
+    first = _adapter(
         descriptor=_descriptor("provider-a"),
-        secret_resolution=resolution,
+        resolution=resolution,
         transport=SyntheticProviderTransport(),
     )
-    second = ConfiguredProviderAdapter(
+    second = _adapter(
         descriptor=_descriptor("provider-b"),
-        secret_resolution=resolution,
+        resolution=resolution,
         transport=SyntheticProviderTransport(),
     )
     service = ProviderGatewayService(
@@ -336,14 +352,12 @@ def test_ambiguous_provider_resolution_never_selects_default(tmp_path) -> None:
         readiness=_readiness(),
         clock=_Clock(),
     )
-
     with pytest.raises(UnsupportedProviderError, match="exactly one"):
         service.execute(_request())
 
 
 def test_unsupported_jurisdiction_fails_before_transport(tmp_path) -> None:
     _, _, transport, service, _ = _runtime(tmp_path)
-
     with pytest.raises(JurisdictionCapabilityError, match="no explicit"):
         service.execute(
             _request(jurisdiction=BrazilianJurisdiction("RJ")),
@@ -354,7 +368,6 @@ def test_unsupported_jurisdiction_fails_before_transport(tmp_path) -> None:
 
 def test_cross_tenant_and_cross_unit_credentials_fail_closed(tmp_path) -> None:
     _, _, transport, service, _ = _runtime(tmp_path)
-
     with pytest.raises(ProviderCredentialsUnavailableError, match="unavailable"):
         service.execute(
             _request(scope=_scope(tenant="tenant-other")),
@@ -370,7 +383,6 @@ def test_cross_tenant_and_cross_unit_credentials_fail_closed(tmp_path) -> None:
 
 def test_cross_environment_never_reuses_homologation_credentials(tmp_path) -> None:
     _, _, transport, service, _ = _runtime(tmp_path)
-
     with pytest.raises(JurisdictionCapabilityError, match="no explicit"):
         service.execute(
             _request(scope=_scope(environment=FiscalEnvironment.PRODUCTION)),
@@ -388,15 +400,11 @@ def test_missing_credentials_cannot_be_replaced_by_csc(tmp_path) -> None:
         reference=csc,
         material=EphemeralCscMaterial(reference_id=CSC_REF, code=b"SYNTHETIC-CSC"),
     )
-    adapter = ConfiguredProviderAdapter(
+    adapter = _adapter(
         descriptor=_descriptor(),
-        secret_resolution=SecretResolutionService(
-            unit_of_work_factory=database,
-            vault=empty,
-        ),
+        resolution=SecretResolutionService(unit_of_work_factory=database, vault=empty),
         transport=SyntheticProviderTransport(),
     )
-
     with pytest.raises(ProviderCredentialsUnavailableError, match="unavailable"):
         adapter.execute(_request())
 
@@ -413,15 +421,11 @@ def test_missing_csc_fails_closed_for_nfce(tmp_path) -> None:
             credential_bytes=b"SYNTHETIC-CREDENTIAL",
         ),
     )
-    adapter = ConfiguredProviderAdapter(
+    adapter = _adapter(
         descriptor=_descriptor(),
-        secret_resolution=SecretResolutionService(
-            unit_of_work_factory=database,
-            vault=vault,
-        ),
+        resolution=SecretResolutionService(unit_of_work_factory=database, vault=vault),
         transport=SyntheticProviderTransport(),
     )
-
     with pytest.raises(CscUnavailableError, match="unavailable"):
         adapter.execute(_request(kind=FiscalDocumentKind.NFCE))
 
@@ -429,9 +433,7 @@ def test_missing_csc_fails_closed_for_nfce(tmp_path) -> None:
 def test_request_and_transport_observation_never_expose_secret_material(tmp_path) -> None:
     _, _, transport, service, _ = _runtime(tmp_path)
     request = _request(kind=FiscalDocumentKind.NFCE)
-
     service.execute(request, provider_id="synthetic-sp")
-
     assert "SYNTHETIC" not in repr(request)
     observation = transport.observations[0]
     assert "CREDENTIAL-NOT-REAL" not in repr(observation)
@@ -443,7 +445,6 @@ def test_request_and_transport_observation_never_expose_secret_material(tmp_path
 def test_registry_uses_jurisdiction_and_capability_not_host_product_name(tmp_path) -> None:
     _, _, _, _, adapter = _runtime(tmp_path)
     registry = ProviderRegistry((adapter,))
-
     selected = registry.resolve(
         document_kind=FiscalDocumentKind.NFE,
         jurisdiction=JURISDICTION,
@@ -451,7 +452,6 @@ def test_registry_uses_jurisdiction_and_capability_not_host_product_name(tmp_pat
         operation=ProviderOperation.QUERY,
         provider_id="synthetic-sp",
     )
-
     assert selected.descriptor.provider_id == "synthetic-sp"
     assert not hasattr(selected.descriptor, "product_name")
     assert not hasattr(selected.descriptor, "host_namespace")
@@ -463,7 +463,6 @@ def test_synthetic_transport_performs_no_network_and_persists_no_secret(tmp_path
         _request(kind=FiscalDocumentKind.NFCE),
         provider_id="synthetic-sp",
     )
-
     restarted = SqliteFiscalDatabase(database.path)
     assert restarted.initialize() == ()
     assert len(transport.observations) == 1
