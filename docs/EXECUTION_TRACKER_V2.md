@@ -3,10 +3,10 @@
 Data de início: 2026-09-11  
 Repositório: `faabio3131/kordena-fiscal-engine-v2`  
 Status global: **EM EXECUÇÃO**  
-Última fase concluída: **V2-11 — Control Plane independente**  
-Fase atual: **V2-12 — Gateway/Signer/Vault production adapters — EM EXECUÇÃO**
+Última fase concluída: **V2-12 — Gateway/Signer/Vault production adapters**  
+Fase atual: **V2-12 — CONCLUÍDA/CERTIFICADA; V2-13 aguardando autorização**
 
-> Snapshot imediatamente anterior à V2-12: `docs/history/EXECUTION_TRACKER_V2_PRE_V2_12.md`. Fechamento V2-11: `docs/V2_11_CLOSURE_CERTIFICATION.md`.
+> Snapshot imediatamente anterior à V2-12: `docs/history/EXECUTION_TRACKER_V2_PRE_V2_12.md`. Fechamento V2-11: `docs/V2_11_CLOSURE_CERTIFICATION.md`. Fechamento V2-12: `docs/V2_12_CLOSURE_CERTIFICATION.md`.
 
 ## Regra de governança
 
@@ -25,9 +25,9 @@ Estados permitidos: `PENDENTE`, `EM EXECUÇÃO`, `BLOQUEADO`, `CONCLUÍDO`. Nenh
 | V2-08 | Events/Webhooks/Inbox/Outbox | **CONCLUÍDO** | PR #9 Draft; `bc77ee4cf2b7151d06c09cf32ca9168363ece1c7`; 337 PASS |
 | V2-09 | Modularização de verticais | **CONCLUÍDO** | PR #10 Draft; `88071fd557199ffd6848312ea5559b0cba415ee1`; 346 PASS |
 | V2-10 | Contract Packs multiproduto | **CONCLUÍDO** | PR #11 Draft; `345652ecbfc18c8bd3511cf5b9083ba0dbc259cb`; 397 PASS |
-| V2-11 | Control Plane independente | **CONCLUÍDO** | PR #12 Draft; gate `eed6b056e9d1941da435179c5eaf805c261f6622`; run `34736942613`; 85 source files; 437 PASS |
-| V2-12 | Gateway/Signer/Vault production adapters | **EM EXECUÇÃO** | PR #13 Draft; B1 447 PASS; B2 459 PASS; B3 471 PASS; B4 483 PASS; B5 `ae9347b2f97f6984e22f6a719eec5e4b1ea8a3db` / run `34760988165` / job `103733669977` / 97 source / 497 PASS; CI restaurado |
-| V2-13 | Observabilidade + Compliance Operations | PENDENTE | depende V2-12 |
+| V2-11 | Control Plane independente | **CONCLUÍDO** | PR #12 Draft; gate `eed6b056e9d1941da435179c5eaf805c261f6622`; run `34736942613`; 85 source; 437 PASS |
+| V2-12 | Gateway/Signer/Vault production adapters | **CONCLUÍDO** | PR #13 Draft; gate funcional B6 `b7bccf2babed336941d920eed73cd0699e6939d4`; run `34762735800`; job `103738293942`; 97 source; 508 PASS |
+| V2-13 | Observabilidade + Compliance Operations | PENDENTE | depende V2-12; aguardando autorização |
 | V2-14 | Hardening sistêmico | PENDENTE | regressão/carga/falhas/segurança |
 | V2-15 | Homologação + pilotos controlados | PENDENTE | depende V2-14 |
 | V2-16 | Integração produtos FM | BLOQUEADO PARCIAL | depende do Core universal certificado e readiness dos produtos |
@@ -53,7 +53,7 @@ Gate: `f27ae85ac1dbf0b5cf47eea96d1437585b37cb92` / run `34759157421` / job `1037
 
 ### Bloco 3 — Provider/Gateway adapters + CSC/Credentials — CONCLUÍDO/CERTIFICADO
 
-Gate: `42f27c67145d2d4469374596d869ffc3ba05f013` / run `34760113452` / job `103731343836` / **93 source / 471 PASS**. CI restaurado em `9e5019d64b5174ad9fe138e52c566ec3df73af84`.
+Gate: `42f27c67145d2d4469374596d869ffc3ba05f013` / run `34760113452` / job `103731343836` / **93 source / 471 PASS em 3.27s**. CI restaurado em `9e5019d64b5174ad9fe138e52c566ec3df73af84`.
 
 ### Bloco 4 — Resilience Runtime — CONCLUÍDO/CERTIFICADO
 
@@ -66,23 +66,35 @@ Gate: `42f27c67145d2d4469374596d869ffc3ba05f013` / run `34760113452` / job `1037
 
 Falhas intermediárias: run `34760512225` (Ruff E501) e `34760572581` (Mypy retorno Any no delay), ambas corrigidas sem relaxar gates.
 
-Gate definitivo: `a3db491049d6058753ebad18d6fb62026310b1b8` / run `34760627774` / job `103732719543` / **95 source files / 483 PASS em 3.03s**. CI restaurado em `dd7d3eb5a6c718bf9576b377112b0c4a812e6159`.
+Gate definitivo: `a3db491049d6058753ebad18d6fb62026310b1b8` / run `34760627774` / job `103732719543` / **95 source / 483 PASS em 3.03s**. CI restaurado em `dd7d3eb5a6c718bf9576b377112b0c4a812e6159`.
 
 ### Bloco 5 — Homologation Gates + Cross-provider — CONCLUÍDO/CERTIFICADO
 
-- matriz técnica explícita por provider/document/jurisdiction/environment/operation;
-- evidência técnica não substitui a autoridade central de Capability/Readiness;
-- configuração parcial permanece não autorizada;
-- NFS-e exige município IBGE explícito e não assume cobertura universal;
-- combinação desconhecida falha fechado, sem provider default silencioso;
-- dois providers coexistem com evidência, credenciais e circuitos isolados.
+Gate definitivo: `ae9347b2f97f6984e22f6a719eec5e4b1ea8a3db` / run `34760988165` / job `103733669977` / **97 source / 497 PASS em 3.41s**. CI restaurado em `e2c89a602c85c104e668f8bb3cc469161ed4b408`.
 
-Gate definitivo: `ae9347b2f97f6984e22f6a719eec5e4b1ea8a3db` / run `34760988165` / job `103733669977` / **97 source files / 497 PASS em 3.41s**. Baseline B4: 483; incremento líquido +14. Diff checkpoint B4 documental -> gate B5: 7 commits à frente, 0 atrás. CI restaurado em `e2c89a602c85c104e668f8bb3cc469161ed4b408`.
+### Bloco 6 — Certificação End-to-End + fechamento V2-12 — CONCLUÍDO/CERTIFICADO
 
-### Bloco 6 — Certificação End-to-End + fechamento V2-12 — EM EXECUÇÃO
+A auditoria B6 identificou e corrigiu, antes do fechamento, um gap de isolamento cross-provider no Vault runtime. `provider_id` passou a ser obrigatório para credenciais/CSC, os slots runtime são indexados por `(host, reference_id, provider_id)` e não existe fallback entre providers. O Control Plane continua persistindo apenas `SecretReference`, sem migration nova e sem material sensível.
 
-Objetivo: certificar o fluxo completo Control Plane -> SecretReference -> Vault -> Signer -> Provider Router -> Provider Adapter -> Resilience -> resposta normalizada/estado operacional, executar failure matrix, structural secret scan, dependency/architecture audit, cross-product neutrality, regressão mestre e auditoria completa V2-11 -> V2-12. Somente após gate integral verde a fase poderá ser marcada CONCLUÍDA/CERTIFICADA.
+A suíte de fechamento certifica NF-e/NFC-e end-to-end, NFS-e municipal/provider-specific, unknown outcome sem retry de autorização, restart sem persistência de material efêmero, SQLite reference-only, secret scan estrutural, architecture boundaries, dependências e neutralidade cross-product.
+
+Primeira tentativa B6: run `34762578767` / job `103737871189`; Install PASS, Ruff falhou apenas por duas ocorrências E501 na suíte nova; Mypy/Pytest ficaram bloqueados. Correção somente de formatação.
+
+Gate funcional definitivo B6: `b7bccf2babed336941d920eed73cd0699e6939d4` / run `34762735800` / job `103738293942` / **Install PASS / Ruff PASS / Mypy strict PASS — 97 source / 508 PASS em 5.06s**. Baseline B5: 497; incremento líquido +11. CI restaurado em `0e232f63d052db6ca2a7c8cd6ef5d97e3fdf0032`.
+
+### Auditoria V2-11 -> V2-12
+
+Compare funcional `0439246151c7edc959615361c0275961e11c3af0` -> `b7bccf2babed336941d920eed73cd0699e6939d4`:
+
+- 68 commits à frente, 0 atrás;
+- 29 arquivos líquidos no gate funcional;
+- 5.046 adições / 15 remoções;
+- nenhum arquivo de domínio alterado;
+- nenhuma migration nova;
+- nenhum segredo real, arquivo PFX/P12/PEM/KEY ou endpoint produtivo;
+- alterações de runtime restritas a `vault`, `signing`, `gateway`, `resilience`, `homologation` e contratos/testes associados;
+- dependências produtivas: `cryptography>=44,<48` e `lxml>=5.3,<7`.
 
 ## Governança preservada
 
-PR #13 permanece Draft. Nenhum merge, deploy, produção real, homologação externa, promoção ou cutover foi executado.
+PR #13 deve permanecer **OPEN / DRAFT / não mergeada**. Nenhum merge, deploy, produção real, homologação oficial externa, promoção ou cutover foi executado. V2-13 permanece PENDENTE e não foi iniciada.
