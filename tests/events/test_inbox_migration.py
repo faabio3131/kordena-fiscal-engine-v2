@@ -7,6 +7,9 @@ from kordena_fiscal.persistence import SqliteFiscalDatabase
 
 def _remove_v5(connection: sqlite3.Connection) -> None:
     for table in (
+        "fm_commercial_homologation_evidence",
+        "fm_commercial_workload_credentials",
+        "fm_commercial_numbering_configurations",
         "fm_commercial_provider_runtime_policies",
         "fm_commercial_webhook_destinations",
         "fm_commercial_unit_modules",

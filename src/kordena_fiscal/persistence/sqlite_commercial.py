@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import datetime
 
@@ -12,9 +13,14 @@ from kordena_fiscal.control_plane.commercial import (
     UnitModuleBinding,
     WebhookDestinationConfig,
 )
+from kordena_fiscal.control_plane.commercial_models import (
+    HomologationEvidenceRecord,
+    NumberingConfiguration,
+)
 from kordena_fiscal.domain import (
     BrazilianJurisdiction,
     CestCode,
+    ElectronicInvoiceModel,
     ExecutionScope,
     FiscalDocumentKind,
     FiscalEnvironment,
@@ -22,9 +28,17 @@ from kordena_fiscal.domain import (
     FiscalUnitCode,
     FiscalValidationError,
     Gtin,
+    HostNamespace,
     NcmCode,
     ProductOrigin,
     TaxClassificationHints,
+)
+
+from kordena_fiscal.security import (
+    CallerIdentity,
+    FiscalCapability,
+    HostScopeGrant,
+    WorkloadCredentialRecord,
 )
 
 from ._sqlite_common import dt, integer, iso, one_row, optional_text, text
@@ -499,4 +513,328 @@ class SqliteCommercialConfigurationStore:
             circuit_failure_threshold=integer(row[11], "circuit_failure_threshold"),
             circuit_recovery_seconds=_real(row[12], "circuit_recovery_seconds"),
             circuit_success_threshold=integer(row[13], "circuit_success_threshold"),
+        )
+
+
+    def put_numbering_configuration(
+        self,
+        config: NumberingConfiguration,
+    ) -> NumberingConfiguration:
+        if not isinstance(config, NumberingConfiguration):
+            raise FiscalValidationError("config must be NumberingConfiguration")
+        self._connection.execute(
+            """
+            INSERT INTO fm_commercial_numbering_configurations (
+                tenant_id, unit_id, environment, model, series,
+                first_number, max_number, enabled
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (tenant_id, unit_id, environment, model)
+            DO UPDATE SET
+                series = excluded.series,
+                first_number = excluded.first_number,
+                max_number = excluded.max_number,
+                enabled = excluded.enabled
+            """,
+            (
+                config.tenant_id,
+                config.unit_id,
+                config.environment.value,
+                config.model.value,
+                config.series,
+                config.first_number,
+                config.max_number,
+                int(config.enabled),
+            ),
+        )
+        return config
+
+    def get_numbering_configuration(
+        self,
+        *,
+        tenant_id: str,
+        unit_id: str,
+        environment: FiscalEnvironment,
+        model: object,
+    ) -> NumberingConfiguration | None:
+        if not isinstance(model, ElectronicInvoiceModel):
+            raise FiscalValidationError("model must be ElectronicInvoiceModel")
+        row = one_row(
+            self._connection.execute(
+                """
+                SELECT tenant_id, unit_id, environment, model, series,
+                       first_number, max_number, enabled
+                FROM fm_commercial_numbering_configurations
+                WHERE tenant_id = ? AND unit_id = ?
+                  AND environment = ? AND model = ?
+                """,
+                (
+                    _normalized(tenant_id, "tenant_id"),
+                    _normalized(unit_id, "unit_id"),
+                    environment.value,
+                    model.value,
+                ),
+            )
+        )
+        if row is None:
+            return None
+        max_number = None if row[6] is None else integer(row[6], "max_number")
+        return NumberingConfiguration(
+            tenant_id=text(row[0], "tenant_id"),
+            unit_id=text(row[1], "unit_id"),
+            environment=FiscalEnvironment(text(row[2], "environment")),
+            model=ElectronicInvoiceModel(integer(row[3], "model")),
+            series=integer(row[4], "series"),
+            first_number=integer(row[5], "first_number"),
+            max_number=max_number,
+            enabled=bool(integer(row[7], "enabled")),
+        )
+
+    def put_workload_credential(
+        self,
+        record: WorkloadCredentialRecord,
+    ) -> WorkloadCredentialRecord:
+        if not isinstance(record, WorkloadCredentialRecord):
+            raise FiscalValidationError("record must be WorkloadCredentialRecord")
+        capabilities_json = json.dumps(
+            sorted(capability.value for capability in record.caller.capabilities),
+            separators=(",", ":"),
+        )
+        grants_json = json.dumps(
+            [
+                {"tenant_id": grant.tenant_id, "unit_id": grant.unit_id}
+                for grant in record.caller.scope_grants
+            ],
+            separators=(",", ":"),
+            sort_keys=True,
+        )
+        self._connection.execute(
+            """
+            INSERT INTO fm_commercial_workload_credentials (
+                credential_id, caller_id, host_namespace, capabilities_json,
+                grants_json, secret_sha256, valid_from, expires_at, revoked
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (credential_id) DO UPDATE SET
+                caller_id = excluded.caller_id,
+                host_namespace = excluded.host_namespace,
+                capabilities_json = excluded.capabilities_json,
+                grants_json = excluded.grants_json,
+                secret_sha256 = excluded.secret_sha256,
+                valid_from = excluded.valid_from,
+                expires_at = excluded.expires_at,
+                revoked = excluded.revoked
+            """,
+            (
+                record.credential_id,
+                record.caller.caller_id,
+                record.caller.host_namespace.value,
+                capabilities_json,
+                grants_json,
+                record.secret_sha256,
+                iso(record.valid_from),
+                iso(record.expires_at),
+                int(record.revoked),
+            ),
+        )
+        return record
+
+    def get_workload_credential(
+        self,
+        credential_id: str,
+    ) -> WorkloadCredentialRecord | None:
+        row = one_row(
+            self._connection.execute(
+                """
+                SELECT credential_id, caller_id, host_namespace,
+                       capabilities_json, grants_json, secret_sha256,
+                       valid_from, expires_at, revoked
+                FROM fm_commercial_workload_credentials
+                WHERE credential_id = ?
+                """,
+                (_required(credential_id, "credential_id"),),
+            )
+        )
+        if row is None:
+            return None
+        raw_capabilities = json.loads(text(row[3], "capabilities_json"))
+        raw_grants = json.loads(text(row[4], "grants_json"))
+        if not isinstance(raw_capabilities, list) or not all(
+            isinstance(item, str) for item in raw_capabilities
+        ):
+            raise PersistenceStateError(
+                "persisted workload capabilities must be a string list"
+            )
+        if not isinstance(raw_grants, list) or not all(
+            isinstance(item, dict) for item in raw_grants
+        ):
+            raise PersistenceStateError(
+                "persisted workload grants must be an object list"
+            )
+        grants: list[HostScopeGrant] = []
+        for raw_grant in raw_grants:
+            tenant = raw_grant.get("tenant_id")
+            unit = raw_grant.get("unit_id")
+            if tenant is not None and not isinstance(tenant, str):
+                raise PersistenceStateError(
+                    "persisted workload grant tenant_id must be text or null"
+                )
+            if unit is not None and not isinstance(unit, str):
+                raise PersistenceStateError(
+                    "persisted workload grant unit_id must be text or null"
+                )
+            grants.append(HostScopeGrant(tenant_id=tenant, unit_id=unit))
+        caller = CallerIdentity(
+            caller_id=text(row[1], "caller_id"),
+            host_namespace=HostNamespace(text(row[2], "host_namespace")),
+            capabilities=frozenset(
+                FiscalCapability(item) for item in raw_capabilities
+            ),
+            scope_grants=tuple(grants),
+        )
+        return WorkloadCredentialRecord(
+            credential_id=text(row[0], "credential_id"),
+            caller=caller,
+            secret_sha256=text(row[5], "secret_sha256"),
+            valid_from=dt(text(row[6], "valid_from")),
+            expires_at=dt(text(row[7], "expires_at")),
+            revoked=bool(integer(row[8], "revoked")),
+        )
+
+    def put_homologation_evidence(
+        self,
+        record: HomologationEvidenceRecord,
+    ) -> HomologationEvidenceRecord:
+        if not isinstance(record, HomologationEvidenceRecord):
+            raise FiscalValidationError("record must be HomologationEvidenceRecord")
+        municipality = record.jurisdiction.municipality_ibge_code or ""
+        self._connection.execute(
+            """
+            INSERT INTO fm_commercial_homologation_evidence (
+                tenant_id, unit_id, environment, provider_id, document_kind,
+                state_code, municipality_ibge_code, operation,
+                provider_adapter_available,
+                credentials_reference_configured, signer_capability,
+                csc_reference_configured, transport_configured,
+                resilience_certified, contract_tests_certified,
+                jurisdiction_mapping, operation_supported,
+                requires_signer, requires_csc, external_evidence_id,
+                external_official, recorded_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (
+                tenant_id, unit_id, environment, provider_id, document_kind,
+                state_code, municipality_ibge_code, operation
+            ) DO UPDATE SET
+                provider_adapter_available = excluded.provider_adapter_available,
+                credentials_reference_configured = excluded.credentials_reference_configured,
+                signer_capability = excluded.signer_capability,
+                csc_reference_configured = excluded.csc_reference_configured,
+                transport_configured = excluded.transport_configured,
+                resilience_certified = excluded.resilience_certified,
+                contract_tests_certified = excluded.contract_tests_certified,
+                jurisdiction_mapping = excluded.jurisdiction_mapping,
+                operation_supported = excluded.operation_supported,
+                requires_signer = excluded.requires_signer,
+                requires_csc = excluded.requires_csc,
+                external_evidence_id = excluded.external_evidence_id,
+                external_official = excluded.external_official,
+                recorded_at = excluded.recorded_at
+            """,
+            (
+                record.tenant_id,
+                record.unit_id,
+                record.environment.value,
+                record.provider_id,
+                record.document_kind.value,
+                record.jurisdiction.state_code,
+                municipality,
+                record.operation,
+                int(record.provider_adapter_available),
+                int(record.credentials_reference_configured),
+                int(record.signer_capability),
+                int(record.csc_reference_configured),
+                int(record.transport_configured),
+                int(record.resilience_certified),
+                int(record.contract_tests_certified),
+                int(record.jurisdiction_mapping),
+                int(record.operation_supported),
+                int(record.requires_signer),
+                int(record.requires_csc),
+                record.external_evidence_id,
+                int(record.external_official),
+                None if record.recorded_at is None else iso(record.recorded_at),
+            ),
+        )
+        return record
+
+    def get_homologation_evidence(
+        self,
+        *,
+        tenant_id: str,
+        unit_id: str,
+        environment: FiscalEnvironment,
+        provider_id: str,
+        document_kind: FiscalDocumentKind,
+        jurisdiction: BrazilianJurisdiction,
+        operation: str,
+    ) -> HomologationEvidenceRecord | None:
+        municipality = jurisdiction.municipality_ibge_code or ""
+        row = one_row(
+            self._connection.execute(
+                """
+                SELECT tenant_id, unit_id, environment, provider_id,
+                       document_kind, state_code, municipality_ibge_code,
+                       operation, provider_adapter_available,
+                       credentials_reference_configured, signer_capability,
+                       csc_reference_configured, transport_configured,
+                       resilience_certified, contract_tests_certified,
+                       jurisdiction_mapping, operation_supported,
+                       requires_signer, requires_csc, external_evidence_id,
+                       external_official, recorded_at
+                FROM fm_commercial_homologation_evidence
+                WHERE tenant_id = ? AND unit_id = ? AND environment = ?
+                  AND provider_id = ? AND document_kind = ?
+                  AND state_code = ? AND municipality_ibge_code = ?
+                  AND operation = ?
+                """,
+                (
+                    _normalized(tenant_id, "tenant_id"),
+                    _normalized(unit_id, "unit_id"),
+                    environment.value,
+                    _normalized(provider_id, "provider_id"),
+                    document_kind.value,
+                    jurisdiction.state_code,
+                    municipality,
+                    _normalized(operation, "operation"),
+                ),
+            )
+        )
+        if row is None:
+            return None
+        persisted_municipality = text(row[6], "municipality_ibge_code") or None
+        recorded = None if row[21] is None else dt(text(row[21], "recorded_at"))
+        return HomologationEvidenceRecord(
+            tenant_id=text(row[0], "tenant_id"),
+            unit_id=text(row[1], "unit_id"),
+            environment=FiscalEnvironment(text(row[2], "environment")),
+            provider_id=text(row[3], "provider_id"),
+            document_kind=FiscalDocumentKind(text(row[4], "document_kind")),
+            jurisdiction=BrazilianJurisdiction(
+                text(row[5], "state_code"), persisted_municipality
+            ),
+            operation=text(row[7], "operation"),
+            provider_adapter_available=bool(integer(row[8], "provider_adapter_available")),
+            credentials_reference_configured=bool(
+                integer(row[9], "credentials_reference_configured")
+            ),
+            signer_capability=bool(integer(row[10], "signer_capability")),
+            csc_reference_configured=bool(integer(row[11], "csc_reference_configured")),
+            transport_configured=bool(integer(row[12], "transport_configured")),
+            resilience_certified=bool(integer(row[13], "resilience_certified")),
+            contract_tests_certified=bool(integer(row[14], "contract_tests_certified")),
+            jurisdiction_mapping=bool(integer(row[15], "jurisdiction_mapping")),
+            operation_supported=bool(integer(row[16], "operation_supported")),
+            requires_signer=bool(integer(row[17], "requires_signer")),
+            requires_csc=bool(integer(row[18], "requires_csc")),
+            external_evidence_id=optional_text(row[19], "external_evidence_id"),
+            external_official=bool(integer(row[20], "external_official")),
+            recorded_at=recorded,
         )

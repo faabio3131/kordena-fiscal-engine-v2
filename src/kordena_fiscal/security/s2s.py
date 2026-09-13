@@ -12,11 +12,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
 from threading import Lock
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from kordena_fiscal.domain import (
     ExecutionScope,
-    FiscalBindingRegistry,
     FiscalEnvironment,
     FiscalValidationError,
     HostNamespace,
@@ -284,6 +283,17 @@ class SecurityAuditRecord:
             raise FiscalValidationError("outcome must be SecurityAuditOutcome")
 
 
+@runtime_checkable
+class FiscalExecutionScopeResolver(Protocol):
+    def execution_scope(
+        self,
+        host_scope: HostScope,
+        *,
+        environment: FiscalEnvironment,
+        correlation_id: str,
+    ) -> ExecutionScope: ...
+
+
 class SecurityAuditSink(Protocol):
     def record(self, record: SecurityAuditRecord) -> None: ...
 
@@ -378,12 +388,14 @@ class S2SAuthorizer:
     def __init__(
         self,
         *,
-        bindings: FiscalBindingRegistry,
+        bindings: FiscalExecutionScopeResolver,
         audit_sink: SecurityAuditSink,
         rate_limiter: FixedWindowRateLimiter | None = None,
     ) -> None:
-        if not isinstance(bindings, FiscalBindingRegistry):
-            raise FiscalValidationError("bindings must be FiscalBindingRegistry")
+        if not isinstance(bindings, FiscalExecutionScopeResolver):
+            raise FiscalValidationError(
+                "bindings must implement FiscalExecutionScopeResolver"
+            )
         self._bindings = bindings
         self._audit_sink = audit_sink
         self._rate_limiter = rate_limiter

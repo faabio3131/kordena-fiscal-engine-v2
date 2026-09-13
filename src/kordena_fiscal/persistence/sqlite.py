@@ -460,6 +460,66 @@ _MIGRATIONS = (
                     REFERENCES fm_control_plane_units(tenant_id, unit_id)
             )
             """,
+            """
+            CREATE TABLE fm_commercial_numbering_configurations (
+                tenant_id TEXT NOT NULL,
+                unit_id TEXT NOT NULL,
+                environment TEXT NOT NULL,
+                model INTEGER NOT NULL,
+                series INTEGER NOT NULL,
+                first_number INTEGER NOT NULL,
+                max_number INTEGER,
+                enabled INTEGER NOT NULL,
+                PRIMARY KEY (tenant_id, unit_id, environment, model),
+                FOREIGN KEY (tenant_id, unit_id)
+                    REFERENCES fm_control_plane_units(tenant_id, unit_id)
+            )
+            """,
+            """
+            CREATE TABLE fm_commercial_workload_credentials (
+                credential_id TEXT PRIMARY KEY,
+                caller_id TEXT NOT NULL,
+                host_namespace TEXT NOT NULL,
+                capabilities_json TEXT NOT NULL,
+                grants_json TEXT NOT NULL,
+                secret_sha256 TEXT NOT NULL,
+                valid_from TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                revoked INTEGER NOT NULL
+            )
+            """,
+            """
+            CREATE TABLE fm_commercial_homologation_evidence (
+                tenant_id TEXT NOT NULL,
+                unit_id TEXT NOT NULL,
+                environment TEXT NOT NULL,
+                provider_id TEXT NOT NULL,
+                document_kind TEXT NOT NULL,
+                state_code TEXT NOT NULL,
+                municipality_ibge_code TEXT NOT NULL DEFAULT '',
+                operation TEXT NOT NULL,
+                provider_adapter_available INTEGER NOT NULL,
+                credentials_reference_configured INTEGER NOT NULL,
+                signer_capability INTEGER NOT NULL,
+                csc_reference_configured INTEGER NOT NULL,
+                transport_configured INTEGER NOT NULL,
+                resilience_certified INTEGER NOT NULL,
+                contract_tests_certified INTEGER NOT NULL,
+                jurisdiction_mapping INTEGER NOT NULL,
+                operation_supported INTEGER NOT NULL,
+                requires_signer INTEGER NOT NULL,
+                requires_csc INTEGER NOT NULL,
+                external_evidence_id TEXT,
+                external_official INTEGER NOT NULL,
+                recorded_at TEXT,
+                PRIMARY KEY (
+                    tenant_id, unit_id, environment, provider_id, document_kind,
+                    state_code, municipality_ibge_code, operation
+                ),
+                FOREIGN KEY (tenant_id, unit_id)
+                    REFERENCES fm_control_plane_units(tenant_id, unit_id)
+            )
+            """,
         ),
     ),
 )

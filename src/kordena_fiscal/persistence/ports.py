@@ -45,6 +45,11 @@ if TYPE_CHECKING:
         UnitModuleBinding,
         WebhookDestinationConfig,
     )
+    from kordena_fiscal.control_plane.commercial_models import (
+        HomologationEvidenceRecord,
+        NumberingConfiguration,
+    )
+    from kordena_fiscal.security import WorkloadCredentialRecord
 
 
 class FiscalPersistenceError(FiscalDomainError):
@@ -210,6 +215,47 @@ class CommercialConfigurationStore(Protocol):
         environment: FiscalEnvironment,
         provider_id: str,
     ) -> ProviderRuntimePolicyConfig | None: ...
+
+    def put_numbering_configuration(
+        self,
+        config: NumberingConfiguration,
+    ) -> NumberingConfiguration: ...
+
+    def get_numbering_configuration(
+        self,
+        *,
+        tenant_id: str,
+        unit_id: str,
+        environment: FiscalEnvironment,
+        model: object,
+    ) -> NumberingConfiguration | None: ...
+
+    def put_workload_credential(
+        self,
+        record: WorkloadCredentialRecord,
+    ) -> WorkloadCredentialRecord: ...
+
+    def get_workload_credential(
+        self,
+        credential_id: str,
+    ) -> WorkloadCredentialRecord | None: ...
+
+    def put_homologation_evidence(
+        self,
+        record: HomologationEvidenceRecord,
+    ) -> HomologationEvidenceRecord: ...
+
+    def get_homologation_evidence(
+        self,
+        *,
+        tenant_id: str,
+        unit_id: str,
+        environment: FiscalEnvironment,
+        provider_id: str,
+        document_kind: FiscalDocumentKind,
+        jurisdiction: BrazilianJurisdiction,
+        operation: str,
+    ) -> HomologationEvidenceRecord | None: ...
 
 
 class FiscalUnitOfWork(Protocol):

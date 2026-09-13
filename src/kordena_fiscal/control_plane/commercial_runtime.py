@@ -7,11 +7,11 @@ outside this module.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime
-from typing import Protocol
 
 from kordena_fiscal.domain import (
+    BrazilianJurisdiction,
+    ElectronicInvoiceModel,
     ExecutionScope,
     FiscalDocumentKind,
     FiscalEnvironment,
@@ -255,7 +255,7 @@ class DurableNumberingConfigurationResolver:
         self,
         *,
         scope: ExecutionScope,
-        model,
+        model: ElectronicInvoiceModel,
     ) -> NumberingConfiguration:
         with self._unit_of_work_factory() as uow:
             config = uow.commercial.get_numbering_configuration(
@@ -283,7 +283,12 @@ class DurableConfiguredSequenceManager:
         self._store = store
         self._resolver = resolver
 
-    def reserve(self, scope: ExecutionScope, *, model) -> FiscalNumberReservation:
+    def reserve(
+        self,
+        scope: ExecutionScope,
+        *,
+        model: ElectronicInvoiceModel,
+    ) -> FiscalNumberReservation:
         config = self._resolver.resolve(scope=scope, model=model)
         key = FiscalSequenceKey.from_scope(
             scope,
@@ -356,7 +361,7 @@ class DurableHomologationEvidenceResolver:
         environment: FiscalEnvironment,
         provider_id: str,
         document_kind: FiscalDocumentKind,
-        jurisdiction,
+        jurisdiction: BrazilianJurisdiction,
         operation: str,
     ) -> HomologationEvidenceRecord:
         with self._unit_of_work_factory() as uow:
@@ -375,8 +380,26 @@ class DurableHomologationEvidenceResolver:
             )
         return record
 
-    def technical_rule(self, **kwargs) -> TechnicalHomologationRule:
-        record = self.resolve_record(**kwargs)
+    def technical_rule(
+        self,
+        *,
+        tenant_id: str,
+        unit_id: str,
+        environment: FiscalEnvironment,
+        provider_id: str,
+        document_kind: FiscalDocumentKind,
+        jurisdiction: BrazilianJurisdiction,
+        operation: str,
+    ) -> TechnicalHomologationRule:
+        record = self.resolve_record(
+            tenant_id=tenant_id,
+            unit_id=unit_id,
+            environment=environment,
+            provider_id=provider_id,
+            document_kind=document_kind,
+            jurisdiction=jurisdiction,
+            operation=operation,
+        )
         from kordena_fiscal.gateway import ProviderOperation
 
         return TechnicalHomologationRule(
