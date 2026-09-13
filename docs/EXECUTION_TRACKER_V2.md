@@ -26,7 +26,7 @@ Estados permitidos: `PENDENTE`, `EM EXECUÇÃO`, `BLOQUEADO`, `CONCLUÍDO`. Nenh
 | V2-09 | Modularização de verticais | **CONCLUÍDO** | PR #10 Draft; `88071fd557199ffd6848312ea5559b0cba415ee1`; 346 PASS |
 | V2-10 | Contract Packs multiproduto | **CONCLUÍDO** | PR #11 Draft; `345652ecbfc18c8bd3511cf5b9083ba0dbc259cb`; 397 PASS |
 | V2-11 | Control Plane independente | **CONCLUÍDO** | PR #12 Draft; gate `eed6b056e9d1941da435179c5eaf805c261f6622`; run `34736942613`; 85 source files; 437 PASS |
-| V2-12 | Gateway/Signer/Vault production adapters | **EM EXECUÇÃO** | PR #13 Draft; B1 447 PASS; B2 459 PASS; B3 471 PASS; B4 `a3db491049d6058753ebad18d6fb62026310b1b8` / run `34760627774` / job `103732719543` / 95 source / 483 PASS; CI restaurado |
+| V2-12 | Gateway/Signer/Vault production adapters | **EM EXECUÇÃO** | PR #13 Draft; B1 447 PASS; B2 459 PASS; B3 471 PASS; B4 483 PASS; B5 `ae9347b2f97f6984e22f6a719eec5e4b1ea8a3db` / run `34760988165` / job `103733669977` / 97 source / 497 PASS; CI restaurado |
 | V2-13 | Observabilidade + Compliance Operations | PENDENTE | depende V2-12 |
 | V2-14 | Hardening sistêmico | PENDENTE | regressão/carga/falhas/segurança |
 | V2-15 | Homologação + pilotos controlados | PENDENTE | depende V2-14 |
@@ -57,7 +57,7 @@ Gate: `42f27c67145d2d4469374596d869ffc3ba05f013` / run `34760113452` / job `1037
 
 ### Bloco 4 — Resilience Runtime — CONCLUÍDO/CERTIFICADO
 
-- transport exige connect/read timeout explícitos;
+- timeout connect/read explícito;
 - retry por operação com bounded exponential backoff e jitter injetável;
 - autorização com outcome desconhecido exige query/reconciliation e não é repetida automaticamente;
 - fiscal rejection/auth/validation não são classificados como indisponibilidade;
@@ -68,9 +68,20 @@ Falhas intermediárias: run `34760512225` (Ruff E501) e `34760572581` (Mypy reto
 
 Gate definitivo: `a3db491049d6058753ebad18d6fb62026310b1b8` / run `34760627774` / job `103732719543` / **95 source files / 483 PASS em 3.03s**. CI restaurado em `dd7d3eb5a6c718bf9576b377112b0c4a812e6159`.
 
-### Bloco 5 — Homologation Gates + Cross-provider — EM EXECUÇÃO
+### Bloco 5 — Homologation Gates + Cross-provider — CONCLUÍDO/CERTIFICADO
 
-Próximo objetivo: matriz técnica explícita por provider/document/jurisdiction/environment/operation, baseada em evidências, sem duplicar a autoridade central de Capability/Readiness, com certificação cross-provider e NFS-e municipality-aware.
+- matriz técnica explícita por provider/document/jurisdiction/environment/operation;
+- evidência técnica não substitui a autoridade central de Capability/Readiness;
+- configuração parcial permanece não autorizada;
+- NFS-e exige município IBGE explícito e não assume cobertura universal;
+- combinação desconhecida falha fechado, sem provider default silencioso;
+- dois providers coexistem com evidência, credenciais e circuitos isolados.
+
+Gate definitivo: `ae9347b2f97f6984e22f6a719eec5e4b1ea8a3db` / run `34760988165` / job `103733669977` / **97 source files / 497 PASS em 3.41s**. Baseline B4: 483; incremento líquido +14. Diff checkpoint B4 documental -> gate B5: 7 commits à frente, 0 atrás. CI restaurado em `e2c89a602c85c104e668f8bb3cc469161ed4b408`.
+
+### Bloco 6 — Certificação End-to-End + fechamento V2-12 — EM EXECUÇÃO
+
+Objetivo: certificar o fluxo completo Control Plane -> SecretReference -> Vault -> Signer -> Provider Router -> Provider Adapter -> Resilience -> resposta normalizada/estado operacional, executar failure matrix, structural secret scan, dependency/architecture audit, cross-product neutrality, regressão mestre e auditoria completa V2-11 -> V2-12. Somente após gate integral verde a fase poderá ser marcada CONCLUÍDA/CERTIFICADA.
 
 ## Governança preservada
 
