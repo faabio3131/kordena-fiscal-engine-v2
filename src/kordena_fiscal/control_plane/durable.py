@@ -162,11 +162,12 @@ class DurableControlPlaneService:
                     reference.unit_id,
                     reference.environment,
                     reference.kind,
+                    provider_id=reference.provider_id,
                 )
                 is not None
             ):
                 raise ControlPlaneConflictError(
-                    "secret reference kind is already bound for unit/environment"
+                    "secret reference kind/provider is already bound for unit/environment"
                 )
             try:
                 uow.control_plane.add_secret_reference(reference)
