@@ -10,6 +10,7 @@ from kordena_fiscal.vault import EphemeralCscMaterial, EphemeralProviderCredenti
 from .provider import (
     ProviderRequest,
     ProviderResponseStatus,
+    ProviderTimeoutPolicy,
     ProviderTransportError,
     ProviderTransportResponse,
 )
@@ -27,6 +28,8 @@ class SyntheticTransportObservation:
     credentials_reference_id: str
     csc_reference_id: str | None
     payload_sha256: str
+    connect_timeout_seconds: float
+    read_timeout_seconds: float
 
 
 class SyntheticProviderTransport:
@@ -50,6 +53,7 @@ class SyntheticProviderTransport:
         request: ProviderRequest,
         credentials: EphemeralProviderCredentialsMaterial,
         csc: EphemeralCscMaterial | None,
+        timeout: ProviderTimeoutPolicy,
     ) -> ProviderTransportResponse:
         self.observations.append(
             SyntheticTransportObservation(
@@ -61,6 +65,8 @@ class SyntheticProviderTransport:
                 credentials_reference_id=credentials.reference_id,
                 csc_reference_id=csc.reference_id if csc is not None else None,
                 payload_sha256=sha256(request.payload).hexdigest(),
+                connect_timeout_seconds=timeout.connect_seconds,
+                read_timeout_seconds=timeout.read_seconds,
             )
         )
         if self._errors:
