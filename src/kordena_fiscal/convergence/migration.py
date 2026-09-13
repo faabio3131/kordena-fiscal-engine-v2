@@ -51,27 +51,117 @@ class MigrationInventoryItem:
             raise MigrationValidationError("migration rationale must not be blank")
 
 
+def _inventory(
+    category: str,
+    disposition: MigrationDisposition,
+    rationale: str,
+) -> MigrationInventoryItem:
+    return MigrationInventoryItem(category, disposition, rationale)
+
+
 DEFAULT_MIGRATION_INVENTORY: tuple[MigrationInventoryItem, ...] = (
-    MigrationInventoryItem("fiscal-documents", MigrationDisposition.REFERENCE, "Preserve canonical references and lifecycle identity; do not duplicate signed payloads."),
-    MigrationInventoryItem("document-lifecycle", MigrationDisposition.MIGRATE, "Lifecycle authority must continue without state loss."),
-    MigrationInventoryItem("numbering-sequence", MigrationDisposition.MIGRATE, "Sequence floors must never regress or be reissued."),
-    MigrationInventoryItem("idempotency", MigrationDisposition.MIGRATE, "Historical keys prevent duplicate fiscal side effects after cutover."),
-    MigrationInventoryItem("provider-operation-references", MigrationDisposition.MIGRATE, "Provider correlation remains necessary for query and reconciliation."),
-    MigrationInventoryItem("archive-metadata", MigrationDisposition.MIGRATE, "Metadata and integrity references remain queryable."),
-    MigrationInventoryItem("xml-document-references", MigrationDisposition.ARCHIVE_ONLY, "Archive remains immutable; migration carries references rather than raw payload duplication."),
-    MigrationInventoryItem("fiscal-account-bindings", MigrationDisposition.MIGRATE, "Host/tenant/unit fiscal ownership must remain explicit."),
-    MigrationInventoryItem("fiscal-profiles", MigrationDisposition.MIGRATE, "Effective-dated fiscal profiles remain governed state."),
-    MigrationInventoryItem("environment-state", MigrationDisposition.MIGRATE, "Homologation and production scopes cannot be inferred or collapsed."),
-    MigrationInventoryItem("capability-readiness-evidence", MigrationDisposition.RECONCILE, "Evidence must be revalidated; migration never promotes readiness."),
-    MigrationInventoryItem("outbox", MigrationDisposition.RECONCILE, "Pending delivery state must be drained or reconciled at the authority boundary."),
-    MigrationInventoryItem("inbox", MigrationDisposition.RECONCILE, "Inbound deduplication state must prevent replay side effects."),
-    MigrationInventoryItem("webhook-delivery-state", MigrationDisposition.RECONCILE, "Pending deliveries require explicit reconciliation."),
-    MigrationInventoryItem("reconciliation-state", MigrationDisposition.MIGRATE, "Unknown outcomes and pending reconciliation cannot be discarded."),
-    MigrationInventoryItem("contingencies", MigrationDisposition.RECONCILE, "Open contingency state must be resolved before authority transfer."),
-    MigrationInventoryItem("cancel-inutilization-references", MigrationDisposition.MIGRATE, "Downstream lifecycle operations require original references."),
-    MigrationInventoryItem("correlation-causation", MigrationDisposition.MIGRATE, "Trace continuity must survive convergence."),
-    MigrationInventoryItem("audit-trail", MigrationDisposition.ARCHIVE_ONLY, "Historical audit is immutable and remains evidence."),
-    MigrationInventoryItem("regulatory-provenance", MigrationDisposition.MIGRATE, "Rule provenance remains required for deterministic historical explanation."),
+    _inventory(
+        "fiscal-documents",
+        MigrationDisposition.REFERENCE,
+        "Preserve canonical references and lifecycle identity; "
+        "do not duplicate signed payloads.",
+    ),
+    _inventory(
+        "document-lifecycle",
+        MigrationDisposition.MIGRATE,
+        "Lifecycle authority must continue without state loss.",
+    ),
+    _inventory(
+        "numbering-sequence",
+        MigrationDisposition.MIGRATE,
+        "Sequence floors must never regress or be reissued.",
+    ),
+    _inventory(
+        "idempotency",
+        MigrationDisposition.MIGRATE,
+        "Historical keys prevent duplicate fiscal side effects after cutover.",
+    ),
+    _inventory(
+        "provider-operation-references",
+        MigrationDisposition.MIGRATE,
+        "Provider correlation remains necessary for query and reconciliation.",
+    ),
+    _inventory(
+        "archive-metadata",
+        MigrationDisposition.MIGRATE,
+        "Metadata and integrity references remain queryable.",
+    ),
+    _inventory(
+        "xml-document-references",
+        MigrationDisposition.ARCHIVE_ONLY,
+        "Archive remains immutable; migration carries references rather than "
+        "raw payload duplication.",
+    ),
+    _inventory(
+        "fiscal-account-bindings",
+        MigrationDisposition.MIGRATE,
+        "Host/tenant/unit fiscal ownership must remain explicit.",
+    ),
+    _inventory(
+        "fiscal-profiles",
+        MigrationDisposition.MIGRATE,
+        "Effective-dated fiscal profiles remain governed state.",
+    ),
+    _inventory(
+        "environment-state",
+        MigrationDisposition.MIGRATE,
+        "Homologation and production scopes cannot be inferred or collapsed.",
+    ),
+    _inventory(
+        "capability-readiness-evidence",
+        MigrationDisposition.RECONCILE,
+        "Evidence must be revalidated; migration never promotes readiness.",
+    ),
+    _inventory(
+        "outbox",
+        MigrationDisposition.RECONCILE,
+        "Pending delivery state must be drained or reconciled at the authority boundary.",
+    ),
+    _inventory(
+        "inbox",
+        MigrationDisposition.RECONCILE,
+        "Inbound deduplication state must prevent replay side effects.",
+    ),
+    _inventory(
+        "webhook-delivery-state",
+        MigrationDisposition.RECONCILE,
+        "Pending deliveries require explicit reconciliation.",
+    ),
+    _inventory(
+        "reconciliation-state",
+        MigrationDisposition.MIGRATE,
+        "Unknown outcomes and pending reconciliation cannot be discarded.",
+    ),
+    _inventory(
+        "contingencies",
+        MigrationDisposition.RECONCILE,
+        "Open contingency state must be resolved before authority transfer.",
+    ),
+    _inventory(
+        "cancel-inutilization-references",
+        MigrationDisposition.MIGRATE,
+        "Downstream lifecycle operations require original references.",
+    ),
+    _inventory(
+        "correlation-causation",
+        MigrationDisposition.MIGRATE,
+        "Trace continuity must survive convergence.",
+    ),
+    _inventory(
+        "audit-trail",
+        MigrationDisposition.ARCHIVE_ONLY,
+        "Historical audit is immutable and remains evidence.",
+    ),
+    _inventory(
+        "regulatory-provenance",
+        MigrationDisposition.MIGRATE,
+        "Rule provenance remains required for deterministic historical explanation.",
+    ),
 )
 
 
