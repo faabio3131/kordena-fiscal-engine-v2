@@ -1,6 +1,6 @@
 # V2-11 — Control Plane independente
 
-Status: **EM EXECUÇÃO — BLOCOS 1-3 CERTIFICADOS**  
+Status: **EM EXECUÇÃO — BLOCOS 1-4 CERTIFICADOS**  
 Branch: `v2/control-plane`  
 Base certificada: `v2/product-contract-packs` @ `156a945cc8e2708eba21551b128ac3d673bb0cdc`  
 Dependência: V2-10 concluída e certificada.
@@ -34,8 +34,8 @@ Permitir operação autônoma e governada do FM Fiscal por um Control Plane inde
 1. **Foundation administrativa — CONCLUÍDO/CERTIFICADO:** identidade de organização/unidade fiscal, ator administrativo, RBAC, referências opacas de segredo e audit event; serviço em memória para provar invariantes antes da persistência.
 2. **Persistência durável e perfis fiscais — CONCLUÍDO/CERTIFICADO:** onboarding durável, perfis/vigências, ambientes e referências; migration explícita e restart safety.
 3. **Capability/Readiness governance — CONCLUÍDO/CERTIFICADO:** associação governada entre configuração administrativa e a Capability & Readiness API sem criar autoridade paralela.
-4. **Operational Control Plane — PRÓXIMO:** consultas/visões governadas de operações, erros, contingência, archive e reconciliação reutilizando os serviços certificados existentes.
-5. **Certificação end-to-end:** RBAC, isolamento multi-tenant/unidade, audit trail, ausência de segredo bruto, restart/replay, diff completo e regressão integral.
+4. **Operational Control Plane — CONCLUÍDO/CERTIFICADO:** consultas/visões governadas e sanitizadas de delivery/outbox, erros, archive e reconciliação reutilizando os serviços e stores certificados existentes.
+5. **Certificação end-to-end — PRÓXIMO:** RBAC, isolamento multi-tenant/unidade, audit trail, ausência de segredo bruto, restart/replay, diff completo e regressão integral.
 
 ## Bloco 1 — Foundation administrativa
 
@@ -141,9 +141,46 @@ Gate definitivo:
 - baseline Block 2: 416; incremento líquido Block 3: **+8 testes**;
 - CI restaurado para `workflow_dispatch` no commit `78f66cdca4415bf2caf81e1fa25dff99b910f068`.
 
+## Bloco 4 — Operational Control Plane
+
+Foi criada uma camada de leitura administrativa governada sobre os repositórios operacionais certificados, sem novo estado shadow, sem nova fila, sem novo archive, sem novo lifecycle e sem segunda fonte de reconciliação.
+
+### Superfície e limites
+
+`OperationalControlPlaneService` reutiliza `outbox`, `outbox_ordering`, `delivery_audit`, `archive`, `reconciliations` e o estado administrativo do `control_plane` dentro do UoW comum. A autorização exige `operations.read`, tenant permitido, organização/unidade onboarded e environment explicitamente habilitado.
+
+As views são deliberadamente sanitizadas:
+
+- delivery expõe status, tentativas, timestamps, ordering metadata, hashes, correlation e erros operacionais, mas não expõe payload bytes nem deduplication key interna;
+- archive expõe referência, kind, hash, media type e retenção, mas não expõe conteúdo/XML bytes;
+- reconciliation expõe status, fingerprint, documento selecionado e issues, reutilizando o resultado persistido certificado;
+- `audit.read` permanece permissionamento separado de `operations.read`;
+- entry IDs de outra partição host/tenant/unidade/environment retornam not-found, evitando vazamento cross-scope.
+
+### Restart safety e leitura sem efeito colateral
+
+Os contract tests reinicializam `SqliteFiscalDatabase` e comprovam que delivery, archive e reconciliation permanecem visíveis após restart. As leituras operacionais não acrescentam eventos ao audit trail administrativo.
+
+O diff do checkpoint do Bloco 3 até o gate do Bloco 4 ficou 8 commits à frente e 0 atrás, restrito ao novo `control_plane/operations.py`, exports, testes do bloco, documentação e CI temporário.
+
+### Certificação Block 4
+
+A primeira regressão do bloco (`34710152169`) passou Ruff e Mypy strict em 85 source files, com 429 PASS e 1 FAIL. A única falha era do fixture de certificação: ele tentava usar um ator com `operations.read` para também ler o audit trail sem possuir `audit.read`. O serviço bloqueou corretamente. O fixture foi corrigido para separar as duas permissões, sem mudança semântica na implementação.
+
+Gate definitivo:
+
+- SHA: `a0b0ddd101942c2e1fa68550575b20a11470dcfe`;
+- Actions run: `34710207596` — **SUCCESS**;
+- job: `103597482579`;
+- Install: PASS;
+- Ruff: PASS;
+- Mypy strict: PASS — **85 source files**;
+- Pytest: **430 PASS em 2.01s**;
+- baseline Block 3: 424; incremento líquido Block 4: **+6 testes**.
+
 ## Gate da fase
 
-A V2-11 somente será marcada `CONCLUÍDA` após todos os blocos, documentação, PR Draft, CI verde, Ruff, Mypy strict, Pytest, auditoria de diff contra V2-10, riscos residuais e restauração do CI para `workflow_dispatch`.
+A V2-11 somente será marcada `CONCLUÍDA` após o Bloco 5, documentação, PR Draft, CI verde, Ruff, Mypy strict, Pytest, auditoria de diff contra V2-10, riscos residuais e restauração do CI para `workflow_dispatch`.
 
 ## Governança
 
