@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 PORTAL_ROOT = Path(__file__).resolve().parents[2] / "portal"
 
 
