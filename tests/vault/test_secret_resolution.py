@@ -67,7 +67,7 @@ def _tenant_admin(tenant_id: str = TENANT) -> AdminPrincipal:
 
 def _database(tmp_path, name: str = "vault-boundary.sqlite3") -> SqliteFiscalDatabase:
     database = SqliteFiscalDatabase(tmp_path / name)
-    assert database.initialize() == (1, 2, 3, 4)
+    assert database.initialize() == (1, 2, 3, 4, 5)
     return database
 
 
@@ -148,6 +148,7 @@ def _onboard_and_bind(
         tenant_id=TENANT,
         unit_id=UNIT,
         environment=FiscalEnvironment.HOMOLOGATION,
+        provider_id=PROVIDER,
     )
     credentials = SecretReference(
         reference_id=CREDENTIALS_REF,
@@ -155,6 +156,7 @@ def _onboard_and_bind(
         tenant_id=TENANT,
         unit_id=UNIT,
         environment=FiscalEnvironment.HOMOLOGATION,
+        provider_id=PROVIDER,
     )
     for reference in (certificate, csc, credentials):
         service.bind_secret_reference(
@@ -272,24 +274,38 @@ def test_provider_scoped_purposes_require_explicit_provider_identity() -> None:
         )
 
 
-def test_provider_scoped_material_isolated_under_same_opaque_reference(tmp_path) -> None:
+def test_provider_scoped_material_uses_distinct_control_plane_references(tmp_path) -> None:
     database = _database(tmp_path)
-    _, _, credentials = _onboard_and_bind(database)
+    _, _, credentials_a = _onboard_and_bind(database)
+    credentials_b = SecretReference(
+        reference_id="ref:fm-fiscal/tenant-vault/unit-vault/provider-b-credentials",
+        kind=SecretReferenceKind.CREDENTIALS,
+        tenant_id=TENANT,
+        unit_id=UNIT,
+        environment=FiscalEnvironment.HOMOLOGATION,
+        provider_id="provider-b",
+    )
+    DurableControlPlaneService(database).bind_secret_reference(
+        actor=_tenant_admin(),
+        reference=credentials_b,
+        correlation_id="corr-bind-provider-b",
+    )
+
     vault = InMemorySyntheticFiscalSecretVault()
     vault.register(
         host_namespace=HOST,
-        reference=credentials,
+        reference=credentials_a,
         material=EphemeralProviderCredentialsMaterial(
             reference_id=CREDENTIALS_REF,
             credential_bytes=b"PROVIDER-A-SYNTHETIC",
         ),
-        provider_id="provider-a",
+        provider_id=PROVIDER,
     )
     vault.register(
         host_namespace=HOST,
-        reference=credentials,
+        reference=credentials_b,
         material=EphemeralProviderCredentialsMaterial(
-            reference_id=CREDENTIALS_REF,
+            reference_id=credentials_b.reference_id,
             credential_bytes=b"PROVIDER-B-SYNTHETIC",
         ),
         provider_id="provider-b",
@@ -300,7 +316,7 @@ def test_provider_scoped_material_isolated_under_same_opaque_reference(tmp_path)
         _context(
             purpose=SecretUsagePurpose.PROVIDER_AUTHENTICATION,
             kind=SecretReferenceKind.CREDENTIALS,
-            provider_id="provider-a",
+            provider_id=PROVIDER,
         )
     )
     material_b = service.resolve(
@@ -313,9 +329,9 @@ def test_provider_scoped_material_isolated_under_same_opaque_reference(tmp_path)
 
     assert isinstance(material_a, EphemeralProviderCredentialsMaterial)
     assert isinstance(material_b, EphemeralProviderCredentialsMaterial)
+    assert material_a.reference_id != material_b.reference_id
     assert material_a.credential_bytes == b"PROVIDER-A-SYNTHETIC"
     assert material_b.credential_bytes == b"PROVIDER-B-SYNTHETIC"
-    assert material_a.credential_bytes != material_b.credential_bytes
 
 
 def test_vault_unavailable_and_missing_material_fail_closed(tmp_path) -> None:
@@ -389,7 +405,14 @@ def test_control_plane_schema_remains_reference_only(tmp_path) -> None:
             ).fetchall()
         }
 
-    assert columns == {"reference_id", "kind", "tenant_id", "unit_id", "environment"}
+    assert columns == {
+        "reference_id",
+        "kind",
+        "tenant_id",
+        "unit_id",
+        "environment",
+        "provider_id",
+    }
     forbidden = {
         "secret",
         "value",
