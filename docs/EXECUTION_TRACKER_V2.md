@@ -4,21 +4,21 @@ Data de início: 2026-09-11
 Repositório: `faabio3131/kordena-fiscal-engine-v2`  
 Status global: **EM EXECUÇÃO**  
 Última fase concluída: **V2-14 — Hardening sistêmico**  
-Fase atual: **V2-15 — REMEDIAÇÃO DE CONFIGURABILIDADE COMERCIAL / ZERO-CODE ONBOARDING**
+Fase atual: **V2-15 — B0 CERTIFICADO / B1 HOMOLOGATION ENVIRONMENT READINESS EM EXECUÇÃO**
 
 > Snapshot pré-V2-15: `docs/history/EXECUTION_TRACKER_V2_PRE_V2_15.md`. Plano: `docs/V2_15_HOMOLOGATION_CONTROLLED_PILOTS.md`. Auditoria vinculante: `docs/V2_15_COMMERCIAL_CONFIGURABILITY_AUDIT.md`.
 
 ## Regra de governança
 
-Estados permitidos: `PENDENTE`, `EM EXECUÇÃO`, `BLOQUEADO`, `CONCLUÍDO`. Nenhum merge, deploy, promoção ou cutover é automático.
+Estados permitidos: `PENDENTE`, `EM EXECUÇÃO`, `BLOQUEADO`, `CONCLUÍDO`. Merge está autorizado somente para escopo integralmente concluído e 100% verde; deploy, produção real e cutover continuam proibidos nesta execução.
 
 | Bloco | Escopo | Status | Evidência / Gate |
 |---|---|---|---|
 | V2-12 | Gateway/Signer/Vault adapters | **CONCLUÍDO** | PR #13 Draft; 508 PASS |
 | V2-13 | Observabilidade + Compliance Operations | **CONCLUÍDO** | PR #14 Draft; 563 PASS |
 | V2-14 | Hardening sistêmico | **CONCLUÍDO** | PR #15 Draft; B6 582 PASS; doc gate 582 PASS; CI final dispatch-only |
-| V2-15 | Homologação + pilotos controlados | **EM EXECUÇÃO** | PR #16 Draft; B0 Commercial Configurability audit concluída; remediação Zero-Code obrigatória antes de B1 |
-| V2-16 | Integração produtos FM | BLOQUEADO PARCIAL | AUTORIZADA; depende de Core configurável/homologação e readiness real dos produtos |
+| V2-15 | Homologação + pilotos controlados | **EM EXECUÇÃO** | PR #16 Draft; B0 Zero-Code CERTIFICADO; B1 EM EXECUÇÃO |
+| V2-16 | Integração produtos FM | BLOQUEADO PARCIAL | depende de Core configurável/homologação e readiness real dos produtos |
 | V2-17 | Convergência/cutover | PENDENTE | NÃO AUTORIZADO nesta execução |
 | V2-18 | Produto comercial independente | PENDENTE | posterior ao uso interno certificado |
 
@@ -39,30 +39,39 @@ Fechamento: `docs/V2_14_CLOSURE_CERTIFICATION.md`. Branch `v2/system-hardening`,
 
 Um cliente novo não pode exigir alteração de código para diferenças fiscais já suportadas pela plataforma. Host/tenant/unidade/ambiente/perfil fiscal/documentos/jurisdição/provider/SecretReferences/módulos/policies devem ser resolvidos por configuração durável e governada. Regras legais continuam em catálogos governados, não em campos normativos livres do cliente.
 
-### B0 — Commercial Configurability Audit + Zero-Code Onboarding — EM EXECUÇÃO
-
-**Auditoria: CONCLUÍDA. Remediação: EM EXECUÇÃO.**
+### B0 — Commercial Configurability Audit + Zero-Code Onboarding — CONCLUÍDO/CERTIFICADO
 
 Documento: `docs/V2_15_COMMERCIAL_CONFIGURABILITY_AUDIT.md`.
 
-Achados bloqueantes principais:
+Remediações concluídas:
 
-- Control Plane permite somente uma SecretReference por kind/tenant/unit/environment e precisa distinguir provider para CREDENTIALS/CSC;
-- falta ProviderBinding/FiscalCapabilityBinding durável por cliente;
-- `FiscalProductProfile` existe no domínio, mas falta persistence/CRUD comercial;
-- falta enablement durável de documento/operação/módulo por unidade;
-- falta configuração durável de webhook destination;
-- workload identities/grants ainda dependem de composição em memória;
-- homologation evidence/gates não possuem registro operacional durável por tenant/unit;
-- numeração e resilience/runtime policies são parametrizadas mas ainda precisam de configuration/policy profiles apropriados;
-- legal/tax/readiness rules devem ser catálogos governados e versionados, não tenant-editable.
+- SecretReference provider-scoped para CREDENTIALS/CSC;
+- ProviderBinding durável por cliente/capacidade/jurisdição/operação;
+- `FiscalProductProfile` persistente;
+- enablement durável de módulos/operações;
+- webhook destination config;
+- workload identity/grants duráveis;
+- homologation evidence durável;
+- numbering config durável;
+- timeout/retry/circuit policy profiles duráveis;
+- runtime concreto separado do núcleo do Control Plane.
 
-Gate de saída B0: três clientes sintéticos fiscalmente diferentes devem ser onboardados e persistidos com o mesmo source/binário, sobreviver a restart, resolver providers/SecretReferences/módulos corretos e falhar fechado em qualquer tentativa cross-tenant/unit/provider/environment.
+Gate B0: SHA `0cc8eeb8ed82fd40cf9c307cf4c24873bdf11bb2`, run `34775807228`, job `103773578619`: Install PASS, Ruff PASS, Mypy PASS em **109 source files**, Pytest **592 PASS em 5.54s**. A separação arquitetural verde foi persistida em `4fbe0f962a8df0c0b44c43b6d70b8636ec965f7d`.
 
-### B1 — Homologation Environment Readiness — AGUARDANDO B0
+O gate Zero-Code certifica clientes sintéticos fiscalmente distintos usando o mesmo source/binário, persistência/restart e isolamento fail-closed entre tenant/unit/provider/environment.
 
-O B1 original permanece no plano, mas não deve avançar antes do gate Zero-Code ficar verde. Depois, auditar ambiente HOMOLOGATION, provider descriptors/bindings, Vault refs, signer, CSC, credentials, transport/TLS/schema/jurisdiction/readiness/telemetria e distinguir evidência técnica interna de evidência oficial externa.
+### B1 — Homologation Environment Readiness — EM EXECUÇÃO
+
+Auditar ambiente HOMOLOGATION, provider descriptors/bindings, Vault refs, signer, CSC, credentials, transport/TLS/schema/jurisdiction/readiness/telemetria e distinguir evidência técnica interna de evidência oficial externa.
+
+### B2 — NF-e Homologation Matrix — PENDENTE
+
+Aguardando B1 verde.
+
+### B3 — NFC-e Homologation Matrix — PENDENTE
+
+Aguardando B2 verde.
 
 ## Governança preservada
 
-Nenhum endpoint produtivo, emissão de produção, merge, deploy ou cutover é autorizado. Se evidência/credencial/certificado/CSC/provider externo não estiver disponível, concluir todo o trabalho interno e registrar bloqueio parcial preciso. V2-17 não iniciar.
+Nenhum endpoint produtivo, emissão de produção, deploy ou cutover é autorizado. Homologação oficial externa só pode ser registrada com evidência externa real. Se evidência/credencial/certificado/CSC/provider externo não estiver disponível, concluir todo o trabalho interno e registrar bloqueio externo preciso. B4-B6 não iniciar nesta autorização específica; V2-17 não iniciar.
