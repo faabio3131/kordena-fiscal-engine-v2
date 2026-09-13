@@ -119,7 +119,8 @@ class ProviderDescriptor:
     csc_required_for: frozenset[tuple[FiscalDocumentKind, ProviderOperation]] = frozenset()
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "provider_id", _required(self.provider_id, "provider_id", 128).lower())
+        provider_id = _required(self.provider_id, "provider_id", 128).lower()
+        object.__setattr__(self, "provider_id", provider_id)
         if not self.document_kinds or not all(
             isinstance(item, FiscalDocumentKind) for item in self.document_kinds
         ):
@@ -189,8 +190,16 @@ class ProviderRequest:
             raise FiscalValidationError("operation must be ProviderOperation")
         if not isinstance(self.payload, bytes) or not self.payload:
             raise FiscalValidationError("payload must be non-empty bytes")
-        object.__setattr__(self, "correlation_id", _required(self.correlation_id, "correlation_id"))
-        object.__setattr__(self, "workload_id", _required(self.workload_id, "workload_id", 128))
+        object.__setattr__(
+            self,
+            "correlation_id",
+            _required(self.correlation_id, "correlation_id"),
+        )
+        object.__setattr__(
+            self,
+            "workload_id",
+            _required(self.workload_id, "workload_id", 128),
+        )
         if self.operation is ProviderOperation.AUTHORIZE:
             if not isinstance(self.signed_artifact, FiscalSignatureResult):
                 raise FiscalValidationError("authorize requires FiscalSignatureResult")
@@ -238,12 +247,17 @@ class ProviderResponse:
     message: str | None = None
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "provider_id", _required(self.provider_id, "provider_id", 128).lower())
+        provider_id = _required(self.provider_id, "provider_id", 128).lower()
+        object.__setattr__(self, "provider_id", provider_id)
         if not isinstance(self.operation, ProviderOperation):
             raise FiscalValidationError("operation must be ProviderOperation")
         if not isinstance(self.status, ProviderResponseStatus):
             raise FiscalValidationError("status must be ProviderResponseStatus")
-        object.__setattr__(self, "correlation_id", _required(self.correlation_id, "correlation_id"))
+        object.__setattr__(
+            self,
+            "correlation_id",
+            _required(self.correlation_id, "correlation_id"),
+        )
 
 
 class FiscalProviderTransport(Protocol):
@@ -290,13 +304,19 @@ class ConfiguredProviderAdapter:
             operation=request.operation,
         ):
             if request.jurisdiction not in self.descriptor.jurisdictions:
-                raise UnsupportedJurisdictionError("provider does not support requested jurisdiction")
-            raise UnsupportedProviderError("provider does not support requested fiscal capability")
+                raise UnsupportedJurisdictionError(
+                    "provider does not support requested jurisdiction"
+                )
+            raise UnsupportedProviderError(
+                "provider does not support requested fiscal capability"
+            )
 
         credentials = self._resolve_credentials(request)
-        csc = self._resolve_csc(request) if self.descriptor.requires_csc(
-            request.document_kind, request.operation
-        ) else None
+        csc = (
+            self._resolve_csc(request)
+            if self.descriptor.requires_csc(request.document_kind, request.operation)
+            else None
+        )
         response = self._transport.exchange(
             provider_id=self.descriptor.provider_id,
             request=request,
@@ -316,7 +336,10 @@ class ConfiguredProviderAdapter:
             message=response.message,
         )
 
-    def _resolve_credentials(self, request: ProviderRequest) -> EphemeralProviderCredentialsMaterial:
+    def _resolve_credentials(
+        self,
+        request: ProviderRequest,
+    ) -> EphemeralProviderCredentialsMaterial:
         try:
             material = self._secret_resolution.resolve(
                 SecretResolutionContext(
@@ -327,7 +350,9 @@ class ConfiguredProviderAdapter:
                 )
             )
         except SecretResolutionError:
-            raise ProviderCredentialsUnavailableError("provider credentials are unavailable") from None
+            raise ProviderCredentialsUnavailableError(
+                "provider credentials are unavailable"
+            ) from None
         if not isinstance(material, EphemeralProviderCredentialsMaterial):
             raise ProviderCredentialsUnavailableError("provider credentials are unavailable")
         return material
@@ -353,8 +378,12 @@ class ProviderRegistry:
     """Resolve exactly one configured provider or fail closed on none/ambiguity."""
 
     def __init__(self, adapters: tuple[ConfiguredProviderAdapter, ...]) -> None:
-        if not adapters or not all(isinstance(item, ConfiguredProviderAdapter) for item in adapters):
-            raise FiscalValidationError("adapters must contain ConfiguredProviderAdapter values")
+        if not adapters or not all(
+            isinstance(item, ConfiguredProviderAdapter) for item in adapters
+        ):
+            raise FiscalValidationError(
+                "adapters must contain ConfiguredProviderAdapter values"
+            )
         ids = [item.descriptor.provider_id for item in adapters]
         if len(ids) != len(set(ids)):
             raise FiscalValidationError("provider ids must be unique")
