@@ -1,6 +1,6 @@
 # V2-12 — Gateway / Signer / Vault Production Adapters
 
-Status: **EM EXECUÇÃO — BLOCOS 1, 2 E 3 CERTIFICADOS**  
+Status: **EM EXECUÇÃO — BLOCOS 1 A 4 CERTIFICADOS**  
 Branch: `v2/production-adapters`  
 Base certificada: `v2/control-plane` @ `0439246151c7edc959615361c0275961e11c3af0`  
 Dependência: V2-11 concluída e certificada.
@@ -19,6 +19,7 @@ Preparar a operação real do FM Fiscal sem acoplar o Core a fornecedor único, 
 - signer não decide regra fiscal nem readiness;
 - Vault não decide readiness;
 - provider adapter não decide autorização administrativa;
+- resilience não decide rejeição fiscal;
 - nenhum deploy, produção real, homologação externa, promoção ou cutover nesta fase sem autorização humana explícita.
 
 ## Blocos
@@ -26,8 +27,8 @@ Preparar a operação real do FM Fiscal sem acoplar o Core a fornecedor único, 
 1. **Vault/KMS abstraction + Secret Resolution Boundary — CONCLUÍDO/CERTIFICADO.**
 2. **Signer Boundary + assinatura por SecretReference — CONCLUÍDO/CERTIFICADO.**
 3. **Provider/Gateway adapters + CSC/Credentials — CONCLUÍDO/CERTIFICADO.**
-4. **Resilience Runtime — PRÓXIMO.**
-5. **Homologation Gates + cross-provider — PENDENTE.**
+4. **Resilience Runtime — CONCLUÍDO/CERTIFICADO.**
+5. **Homologation Gates + cross-provider — PRÓXIMO.**
 6. **Certificação end-to-end + fechamento V2-12 — PENDENTE.**
 
 ## Bloco 1 — Vault/KMS abstraction + Secret Resolution Boundary
@@ -48,52 +49,54 @@ Gate definitivo: SHA `f27ae85ac1dbf0b5cf47eea96d1437585b37cb92`, run `3475915742
 
 ## Bloco 3 — Provider/Gateway adapters + CSC/Credentials
 
-Foi introduzida uma camada provider-neutral sobre o gateway existente, sem substituir o contrato certificado de autorização V1.
+`ProviderDescriptor` declara `provider_id`, document kinds, jurisdictions, environments, operations e requisitos de CSC. `ProviderRegistry` resolve exatamente um provider e falha fechado em ausência/ambiguidade. `ProviderRequest`/`ProviderResponse` não transportam segredo persistível.
 
-### Provider identity e routing
+`ConfiguredProviderAdapter` resolve credenciais via `SecretReferenceKind.CREDENTIALS` e CSC via `SecretReferenceKind.CSC`, sempre através do Vault boundary. `SyntheticProviderTransport` é no-network e registra somente reference ids e hashes. `ProviderGatewayService` consulta `CapabilityReadinessService` sem promover readiness.
 
-`ProviderDescriptor` declara explicitamente `provider_id`, document kinds, jurisdictions, environments, operations e combinações que exigem CSC. `ProviderRegistry` resolve exatamente um provider; ausência ou ambiguidade falham fechado. Não existe seleção implícita por nome de tenant, produto FM ou host privado.
+Falhas intermediárias: run `34759978765` (Ruff) e run `34760070032` (ciclo de importação). A correção adotou exports lazy no novo provider runtime.
 
-### Provider request/response
+Gate definitivo: SHA `42f27c67145d2d4469374596d869ffc3ba05f013`, run `34760113452`, job `103731343836`, **93 source files, 471 PASS em 3.27s**. CI restaurado em `9e5019d64b5174ad9fe138e52c566ec3df73af84`.
 
-`ProviderRequest` transporta apenas escopo, document kind, jurisdiction, operação, payload/signed artifact, correlation e workload. Credencial e CSC não fazem parte do contrato persistível. `ProviderResponse` normaliza a resposta sem expor headers/token/material privado.
+## Bloco 4 — Resilience Runtime
 
-### Secret runtime
+Foi criado `kordena_fiscal.resilience` e o contrato de transport do provider passou a exigir `ProviderTimeoutPolicy` explícita com connect/read timeout, eliminando dependência de defaults ocultos de SDK.
 
-`ConfiguredProviderAdapter` resolve sempre credenciais via `SecretReferenceKind.CREDENTIALS` e, somente quando a capability declarada exigir, CSC via `SecretReferenceKind.CSC`. Ambos passam pelo `SecretResolutionService` certificado. Cross-tenant, cross-unit e cross-environment não reutilizam material.
+### Retry e backoff
 
-### Transport
+`RetryPolicy` oferece máximo de tentativas, exponential backoff, jitter e delay máximo, todos limitados e testáveis por `Sleeper`/`JitterSource` injetáveis. QUERY/STATUS são `SAFE_RETRY`; AUTHORIZE/CANCEL/INUTILIZE são `CONDITIONAL_RETRY`.
 
-`FiscalProviderTransport` é injetável. `SyntheticProviderTransport` não usa socket/endpoints externos e armazena apenas observações não secretas (reference ids e hashes). O adapter não possui SDK de provider e nenhuma chamada produtiva foi realizada.
+Uma autorização com `delivery_unknown=True` nunca é repetida automaticamente: produz `UnknownProviderOutcomeError` e exige query/reconciliation. Rejeição fiscal e erro de autenticação/validação não são tratados como indisponibilidade transitória.
 
-### Readiness
+### Circuit breaker
 
-`ProviderGatewayService` chama a autoridade existente `CapabilityReadinessService.require_action` antes do routing. O provider não cria, promove ou altera readiness.
+`CircuitBreakerRegistry` implementa `CLOSED`, `OPEN` e `HALF_OPEN`, com thresholds configuráveis. A chave é particionada por provider + environment + UF + município opcional, impedindo falha de um provider/jurisdição de derrubar toda a malha.
+
+O estado do breaker é deliberadamente runtime/in-memory neste bloco: restart começa fechado. Estado de negócio, idempotência, reconciliation e delivery permanecem nos stores duráveis já certificados; o breaker não cria shadow state fiscal.
 
 ### Falhas encontradas e correções
 
-- run `34759978765` falhou no Ruff por oito ocorrências de formatação/teste genérico; foram corrigidas sem alterar semântica;
-- run `34760070032` passou Ruff/Mypy, mas a coleta do Pytest detectou ciclo de importação `gateway -> signing -> vault -> persistence -> operations -> gateway`;
-- a correção tornou os novos exports de provider em `kordena_fiscal.gateway` lazy, preservando o contrato público antigo e eliminando o ciclo.
+- run `34760512225`: Ruff encontrou uma linha acima do limite de 100 caracteres; corrigido;
+- run `34760572581`: Ruff passou e Mypy apontou retorno `Any` na aritmética de delay; o retorno foi tipado explicitamente como `float`;
+- nenhum teste foi removido, skipado ou marcado xfail para obter verde.
 
-### Certificação Bloco 3
+### Certificação Bloco 4
 
 Gate definitivo:
 
-- SHA: `42f27c67145d2d4469374596d869ffc3ba05f013`;
-- run: `34760113452` — **SUCCESS**;
-- job: `103731343836`;
+- SHA: `a3db491049d6058753ebad18d6fb62026310b1b8`;
+- run: `34760627774` — **SUCCESS**;
+- job: `103732719543`;
 - Install: PASS;
 - Ruff: PASS;
-- Mypy strict: PASS — **93 source files**;
-- Pytest: **471 PASS em 3.27s**;
-- baseline Bloco 2: 459; incremento líquido: **+12 testes**;
-- diff B2 documental -> gate B3: 8 commits à frente, 0 atrás; gateway/provider, synthetic transport, tests e CI temporário;
-- CI restaurado para `workflow_dispatch` no commit `9e5019d64b5174ad9fe138e52c566ec3df73af84`.
+- Mypy strict: PASS — **95 source files**;
+- Pytest: **483 PASS em 3.03s**;
+- baseline Bloco 3: 471; incremento líquido: **+12 testes**;
+- diff checkpoint B3 -> gate B4: 12 commits à frente, 0 atrás; provider timeout, resilience runtime, tests e CI temporário;
+- CI restaurado para `workflow_dispatch` no commit `dd7d3eb5a6c718bf9576b377112b0c4a812e6159`.
 
 ## Próximos blocos
 
-Bloco 4: timeout/retry/backoff/circuit breaker/unknown outcome. Depois, homologation gates + cross-provider e certificação end-to-end com fechamento integral da V2-12.
+Bloco 5: homologation gates técnicos + cross-provider, sem duplicar a autoridade central de Capability/Readiness. Bloco 6: certificação end-to-end, auditorias finais e fechamento integral da V2-12.
 
 ## Governança
 
