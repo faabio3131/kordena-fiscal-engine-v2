@@ -27,7 +27,7 @@ Estados permitidos: `PENDENTE`, `EM EXECUÇÃO`, `BLOQUEADO`, `CONCLUÍDO`. Nenh
 | V2-10 | Contract Packs multiproduto | **CONCLUÍDO** | PR #11 Draft; `345652ecbfc18c8bd3511cf5b9083ba0dbc259cb`; 397 PASS |
 | V2-11 | Control Plane independente | **CONCLUÍDO** | PR #12 Draft; `eed6b056e9d1941da435179c5eaf805c261f6622`; 437 PASS |
 | V2-12 | Gateway/Signer/Vault production adapters | **CONCLUÍDO** | PR #13 Draft; B6 `b7bccf2babed336941d920eed73cd0699e6939d4`; 508 PASS; CI final dispatch-only |
-| V2-13 | Observabilidade + Compliance Operations | **EM EXECUÇÃO** | PR #14 Draft; B1 518 PASS; B2 528 PASS; B3 `f23df8625c78aafa3284c00515376d5174b7892e` / run `34763939319` / job `103741455008` / 101 source / 537 PASS; B4 em execução |
+| V2-13 | Observabilidade + Compliance Operations | **EM EXECUÇÃO** | PR #14 Draft; B1 518; B2 528; B3 537; B4 `79e83cf34b6b7d6bf71b98036d20cdd0b3364cfd` / run `34764162846` / job `103742057522` / 102 source / 547 PASS; B5 em execução |
 | V2-14 | Hardening sistêmico | PENDENTE | depende V2-13 |
 | V2-15 | Homologação + pilotos controlados | PENDENTE | depende V2-14 |
 | V2-16 | Integração produtos FM | BLOQUEADO PARCIAL | depende do Core universal certificado e readiness dos produtos |
@@ -36,42 +36,37 @@ Estados permitidos: `PENDENTE`, `EM EXECUÇÃO`, `BLOQUEADO`, `CONCLUÍDO`. Nenh
 
 ## V2-12 — Gateway/Signer/Vault Production Adapters — CONCLUÍDA/CERTIFICADA
 
-Fechamento oficial: `docs/V2_12_CLOSURE_CERTIFICATION.md`.
-
-Gate funcional definitivo B6: `b7bccf2babed336941d920eed73cd0699e6939d4` / run `34762735800` / job `103738293942` / **97 source / 508 PASS em 5.06s**.
+Fechamento oficial: `docs/V2_12_CLOSURE_CERTIFICATION.md`. Gate funcional B6: `b7bccf2babed336941d920eed73cd0699e6939d4` / **508 PASS**.
 
 ## V2-13 — Observabilidade + Compliance Operations
 
 ### Bootstrap — CONCLUÍDO
 
-- autorização humana explícita recebida em 2026-09-13;
-- branch `v2/observability-compliance-operations` criada exatamente de `1242ce74d874ffb87783401ce1abaabb350c948c`;
-- snapshot pré-fase salvo em `docs/history/EXECUTION_TRACKER_V2_PRE_V2_13.md`;
-- plano formal salvo em `docs/V2_13_OBSERVABILITY_COMPLIANCE_OPERATIONS.md`;
-- PR #14 Draft stacked sobre `v2/production-adapters`.
+Branch `v2/observability-compliance-operations` criada de `1242ce74d874ffb87783401ce1abaabb350c948c`; snapshot pré-fase e plano formal salvos; PR #14 Draft stacked sobre `v2/production-adapters`.
 
 ### B1 — Structured Observability Boundary + Sanitization — CONCLUÍDO/CERTIFICADO
 
-Gate: `11aa2fa9a63d624235ba90619d853aa3d38e2bb3` / run `34763558714` / job `103740454991` / **99 source / 518 PASS em 4.52s**. CI restaurado em `e18af325808c53637492680b17219db0deea49cc`.
+Gate `11aa2fa9a63d624235ba90619d853aa3d38e2bb3` / run `34763558714` / job `103740454991` / **99 source / 518 PASS em 4.52s**. CI restaurado `e18af325808c53637492680b17219db0deea49cc`.
 
 ### B2 — Metrics + Cardinality Governance — CONCLUÍDO/CERTIFICADO
 
-Gate: `832cdddcc0653ead483ca42a6c93c7966ad9e67f` / run `34763739929` / job `103740927942` / **100 source / 528 PASS em 5.02s**. CI restaurado em `bd300c3e92cf344f91d74976ae235c909ba65ced`.
+Gate `832cdddcc0653ead483ca42a6c93c7966ad9e67f` / run `34763739929` / job `103740927942` / **100 source / 528 PASS em 5.02s**. CI restaurado `bd300c3e92cf344f91d74976ae235c909ba65ced`.
 
 ### B3 — Tracing / Correlation / Causation — CONCLUÍDO/CERTIFICADO
 
-Carrier com allowlist fixa, trace/span IDs bounded, correlation/causation explícitos, parent chain application/outbox/provider/reconciliation, replay por reidratação do carrier, sanitização de attributes e mismatch de correlation fail-closed.
+Gate `f23df8625c78aafa3284c00515376d5174b7892e` / run `34763939319` / job `103741455008` / **101 source / 537 PASS em 5.46s**. CI restaurado `838a20f6b5e597bd8fd6263ff5406ad833c257df`.
 
-Gate: `f23df8625c78aafa3284c00515376d5174b7892e` / run `34763939319` / job `103741455008` / **101 source / 537 PASS em 5.46s**. Baseline B2: 528; incremento +9. CI restaurado em `838a20f6b5e597bd8fd6263ff5406ad833c257df`.
+### B4 — Operational & Compliance Alerts — CONCLUÍDO/CERTIFICADO
 
-### B4 — Operational & Compliance Alerts — EM EXECUÇÃO
+Alertas sanitizados e deduplicados para certificado, fila/dead-letter, rejeição, gap de numeração, contingência e unknown provider outcome. Dedup é particionado por scope/provider/jurisdição; sink failure não cria active alert.
 
-Objetivo: alertas sanitizados/deduplicados para certificado, filas, rejeições, gap de numeração, contingência e unknown provider outcome, isolados por scope/provider/jurisdição.
+Primeira tentativa: run `34764107470` / job `103741903144`; Ruff falhou apenas por import não usado. Gate definitivo: `79e83cf34b6b7d6bf71b98036d20cdd0b3364cfd` / run `34764162846` / job `103742057522` / **102 source / 547 PASS em 4.45s**. CI restaurado `dba2173c4ba0c23d5791b96ae6e381333d63a2b2`.
 
-### Blocos seguintes
+### B5 — Regulatory Watcher Governado — EM EXECUÇÃO
 
-- B5 Regulatory Watcher Governado — PENDENTE;
-- B6 End-to-End Certification + fechamento — PENDENTE.
+Objetivo: observar, triar e propor mudanças normativas com proveniência/evidência, revisão humana e testes obrigatórios, sem mutação automática de readiness/rules.
+
+### B6 — End-to-End Certification + fechamento — PENDENTE
 
 ## Governança preservada
 
