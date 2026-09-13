@@ -17,30 +17,151 @@ jobs:
         with:
           ref: v2/homologation-controlled-pilots
 
-      - name: Clean temporary patch helper and lint-fix imports
+      - name: Preserve control-plane architecture boundary
         shell: bash
         run: |
-          rm -f scripts/v2_15_b0_runtime_patch.py
           python - <<'PY'
           from pathlib import Path
-          path = Path("tests/control_plane/test_v2_15_commercial_runtime.py")
-          text = path.read_text(encoding="utf-8")
-          text = text.replace(
-              "def test_homologation_evidence_is_durable_exact_and_does_not_imply_official_status(tmp_path) -> None:\n",
-              "def test_homologation_evidence_is_durable_exact_and_does_not_imply_official_status(\n"
-              "    tmp_path,\n"
-              ") -> None:\n",
+
+          source_path = Path("src/kordena_fiscal/control_plane/commercial_runtime.py")
+          source = source_path.read_text(encoding="utf-8")
+          marker = "\n\nclass CommercialRuntimeConfigurationService:"
+          if marker not in source:
+              raise SystemExit("commercial runtime split marker not found")
+          runtime_part, admin_part = source.split(marker, 1)
+
+          runtime_part = runtime_part.replace(
+              "from .commercial import ProviderBindingResolver, ProviderRuntimePolicyConfig\n",
+              "from kordena_fiscal.control_plane.commercial import (\n"
+              "    ProviderBindingResolver,\n"
+              "    ProviderRuntimePolicyConfig,\n"
+              ")\n",
           )
-          path.write_text(text, encoding="utf-8")
+          runtime_part = runtime_part.replace(
+              "from .commercial_models import HomologationEvidenceRecord, NumberingConfiguration\n",
+              "from kordena_fiscal.control_plane.commercial_models import (\n"
+              "    HomologationEvidenceRecord,\n"
+              "    NumberingConfiguration,\n"
+              ")\n",
+          )
+          runtime_part = runtime_part.replace(
+              "from .models import AdminPrincipal, ControlPlanePermission\n",
+              "",
+          )
+          runtime_part = runtime_part.replace(
+              "from .service import (\n"
+              "    ControlPlaneAuthorizationError,\n"
+              "    ControlPlaneNotFoundError,\n"
+              ")\n",
+              "from kordena_fiscal.control_plane.service import ControlPlaneNotFoundError\n",
+          )
+          runtime_part = runtime_part.replace(
+              '"""Runtime consumers for durable commercial configuration.\n\n'
+              "The classes in this module turn persisted customer configuration into runtime\n"
+              "policies without customer-specific branching. Legal/readiness authority remains\n"
+              'outside this module.\n"""',
+              '"""Runtime consumers for durable commercial configuration outside Control Plane.\n\n'
+              "Provider, vault and resilience dependencies deliberately live here so the Control\n"
+              "Plane remains a product-neutral configuration authority.\n"
+              '"""',
+          )
+
+          runtime_dir = Path("src/kordena_fiscal/runtime")
+          runtime_dir.mkdir(parents=True, exist_ok=True)
+          (runtime_dir / "commercial.py").write_text(runtime_part + "\n", encoding="utf-8")
+          (runtime_dir / "__init__.py").write_text(
+              '"""Runtime composition for durable customer configuration."""\n',
+              encoding="utf-8",
+          )
+
+          admin_source = '''"""Governed writes for durable commercial runtime configuration."""
+
+          from __future__ import annotations
+
+          from kordena_fiscal.control_plane.commercial_models import (
+              HomologationEvidenceRecord,
+              NumberingConfiguration,
+          )
+          from kordena_fiscal.domain import FiscalEnvironment, FiscalValidationError
+          from kordena_fiscal.persistence.ports import FiscalUnitOfWorkFactory
+          from kordena_fiscal.security import WorkloadCredentialRecord
+
+          from .models import AdminPrincipal, ControlPlanePermission
+          from .service import (
+              ControlPlaneAuthorizationError,
+              ControlPlaneNotFoundError,
+          )
+
+
+          class CommercialRuntimeConfigurationService:''' + admin_part
+          admin_source = "\n".join(
+              line[10:] if line.startswith("          ") else line
+              for line in admin_source.splitlines()
+          ) + "\n"
+          Path("src/kordena_fiscal/control_plane/commercial_admin.py").write_text(
+              admin_source,
+              encoding="utf-8",
+          )
+          source_path.unlink()
+
+          test_path = Path("tests/control_plane/test_v2_15_commercial_runtime.py")
+          test_text = test_path.read_text(encoding="utf-8")
+          old_import = '''from kordena_fiscal.control_plane.commercial_runtime import (
+              CommercialRuntimeConfigurationService,
+              DurableConfiguredSequenceManager,
+              DurableFiscalBindingResolver,
+              DurableHomologationEvidenceResolver,
+              DurableNumberingConfigurationResolver,
+              DurablePolicyResilientProviderGateway,
+              DurableProviderRuntimePolicyResolver,
+              DurableWorkloadAuthenticator,
+              PolicyBoundFiscalProviderTransport,
+          )'''
+          new_import = '''from kordena_fiscal.control_plane.commercial_admin import (
+              CommercialRuntimeConfigurationService,
+          )
+          from kordena_fiscal.runtime.commercial import (
+              DurableConfiguredSequenceManager,
+              DurableFiscalBindingResolver,
+              DurableHomologationEvidenceResolver,
+              DurableNumberingConfigurationResolver,
+              DurablePolicyResilientProviderGateway,
+              DurableProviderRuntimePolicyResolver,
+              DurableWorkloadAuthenticator,
+              PolicyBoundFiscalProviderTransport,
+          )'''
+          new_import = "\n".join(
+              line[10:] if line.startswith("          ") else line
+              for line in new_import.splitlines()
+          )
+          if old_import not in test_text:
+              raise SystemExit("runtime test import marker not found")
+          test_text = test_text.replace(old_import, new_import, 1)
+          test_path.write_text(test_text, encoding="utf-8")
+
+          migration_test = Path("tests/control_plane/test_durable_persistence.py")
+          migration_text = migration_test.read_text(encoding="utf-8")
+          if '"fm_commercial_homologation_evidence"' not in migration_text:
+              migration_text = migration_text.replace(
+                  '''    for table in (
+              "fm_commercial_provider_runtime_policies",''',
+                  '''    for table in (
+              "fm_commercial_homologation_evidence",
+              "fm_commercial_workload_credentials",
+              "fm_commercial_numbering_configurations",
+              "fm_commercial_provider_runtime_policies",''',
+                  1,
+              )
+          migration_test.write_text(migration_text, encoding="utf-8")
           PY
           python -m pip install ruff==0.16.7
           ruff check src tests --fix
           git diff --check
-          if ! git diff --quiet -- src tests scripts; then
+          if ! git diff --quiet -- src tests; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add src tests scripts
-            git commit -m "fix(v2-15): clean B0 runtime certification surface"
+            git add src tests
+            git commit -m "refactor(v2-15): keep provider runtime outside control plane"
             git push origin HEAD:v2/homologation-controlled-pilots
           fi
 
