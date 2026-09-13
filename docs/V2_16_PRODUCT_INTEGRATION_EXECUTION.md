@@ -6,7 +6,7 @@ Data: 2026-09-13
 
 A V2-15 permanece preservada no checkpoint certificado `33e34866bc6e8c736c585c45101ce214816e0594`, com a PR #16 OPEN/DRAFT e não mergeada. Esta execução não altera aquele checkpoint, não realiza merge/deploy/cutover e não usa segredos reais.
 
-A primeira janela da V2-16 executou B1-B3. A segunda autorização executa sequencialmente B4-B6, com correção de falhas internas até verde e registro explícito de bloqueios reais sem falsificação de estado.
+A primeira janela da V2-16 executou B1-B3. A segunda autorização executou sequencialmente B4-B6, com correção de falhas internas até verde e registro explícito de bloqueios reais sem falsificação de estado.
 
 ## V2-16.1 — Contrato de integração
 
@@ -90,7 +90,7 @@ HEAD `bdebbc3558ff8b07c1a38e0cb728be0dc3635c4b`, run `34784021431`, job `1037961
 
 ## V2-16.6 — Adapter Contract Pack / novos produtos FM
 
-Status: **EM CERTIFICAÇÃO**.
+Status: **CONCLUÍDO / CERTIFICADO INTERNAMENTE**.
 
 A avaliação concluiu que a fundação existente já cobria descriptors, registry, host namespace, use cases, operation/document kinds e vertical capabilities. Para evitar overengineering, foram adicionadas somente as lacunas reais:
 
@@ -101,9 +101,13 @@ A avaliação concluiu que a fundação existente já cobria descriptors, regist
 
 A certificação estrutural produz explicitamente `readiness_granted = False`. Binding, capability e readiness continuam vindo de suas autoridades próprias; o helper apenas verifica que já foram resolvidos antes da mutação.
 
-## Decisão provisória desta janela
+O primeiro gate B6 encontrou cinco violações Ruff e foi mantido vermelho. As violações foram corrigidas no código/testes sem remover cobertura nem relaxar assertions. Um run intermediário ainda avaliou um commit anterior; o gate integral corrigido no SHA `878738c172ab31e3f81618a95986370b17d0e602`, run `34784375685`, job `103797066379`, concluiu: Install PASS, Ruff PASS, Mypy PASS em **114 source files** e Pytest **639 PASS em 16.83s**.
 
-B4 e B5 foram tecnicamente certificados, mas permanecem **BLOQUEADOS PARCIALMENTE** pelas lacunas reais de domínio descritas acima. B6 somente poderá ser promovido a CONCLUÍDO/CERTIFICADO após Install/Ruff/Mypy/Pytest verdes no Core.
+## Decisão formal após B1-B6
+
+**V2-16 — BLOQUEADA PARCIAL — B1, B3 E B6 INTERNAMENTE CONCLUÍDOS/CERTIFICADOS; B2 KORDENA BLOQUEADO POR PRÉ-REQUISITO WEB PREMIUM/FISC-20; B4 VENDEDOR IA E B5 CAMPAIA INTERNAMENTE CERTIFICADOS, MAS BLOQUEADOS PARCIALMENTE POR LACUNAS REAIS DE DOMÍNIO DOS PRODUTOS.**
+
+A segunda autorização B4-B6 está concluída. Nenhum bloqueio foi convertido artificialmente em verde. A arquitetura para futuros produtos está certificada, mas V2-16 não pode ser declarada integralmente concluída enquanto os bloqueios obrigatórios acima persistirem.
 
 ## Guardrails preservados
 
