@@ -26,7 +26,7 @@ Estados permitidos: `PENDENTE`, `EM EXECUÇÃO`, `BLOQUEADO`, `CONCLUÍDO`. Nenh
 | V2-09 | Modularização de verticais | **CONCLUÍDO** | PR #10 Draft; `88071fd557199ffd6848312ea5559b0cba415ee1`; 346 PASS |
 | V2-10 | Contract Packs multiproduto | **CONCLUÍDO** | PR #11 Draft; `345652ecbfc18c8bd3511cf5b9083ba0dbc259cb`; 397 PASS |
 | V2-11 | Control Plane independente | **CONCLUÍDO** | PR #12 Draft; gate `eed6b056e9d1941da435179c5eaf805c261f6622`; run `34736942613`; 85 source files; 437 PASS |
-| V2-12 | Gateway/Signer/Vault production adapters | **EM EXECUÇÃO** | PR #13 Draft; B1 `961ee84aa28f58ce933d2dd899bfd013c801da1c` / `34758902465` / 447 PASS; B2 `f27ae85ac1dbf0b5cf47eea96d1437585b37cb92` / `34759157421` / 91 source / 459 PASS; CI restaurado |
+| V2-12 | Gateway/Signer/Vault production adapters | **EM EXECUÇÃO** | PR #13 Draft; B1 447 PASS; B2 459 PASS; B3 `42f27c67145d2d4469374596d869ffc3ba05f013` / run `34760113452` / job `103731343836` / 93 source / 471 PASS; CI restaurado |
 | V2-13 | Observabilidade + Compliance Operations | PENDENTE | depende V2-12 |
 | V2-14 | Hardening sistêmico | PENDENTE | regressão/carga/falhas/segurança |
 | V2-15 | Homologação + pilotos controlados | PENDENTE | depende V2-14 |
@@ -45,44 +45,30 @@ Estados permitidos: `PENDENTE`, `EM EXECUÇÃO`, `BLOQUEADO`, `CONCLUÍDO`. Nenh
 
 ### Bloco 1 — Vault/KMS abstraction + Secret Resolution Boundary — CONCLUÍDO/CERTIFICADO
 
-- package `kordena_fiscal.vault` provider-neutral;
-- `SecretResolutionContext` explícito por host/tenant/unit/environment/kind/purpose/workload;
-- `FiscalSecretVault` port e `SecretResolutionService` sobre SecretReference persistida;
-- material efêmero tipado e redigido em repr;
-- adapter sintético em memória, sem filesystem/env/persistência;
-- cross-host/cross-tenant/cross-unit/cross-environment fail-closed;
-- schema Control Plane permanece reference-only;
-- restart preserva reference, nunca material runtime.
-
-Primeira tentativa `34758852638` / job `103727925782`: Ruff/Mypy verdes, 446 PASS + 1 FAIL por expectativa de erro cross-tenant. Correção passou a ocultar scopes inexistentes como reference indisponível, reduzindo enumeração administrativa.
-
-Gate definitivo: SHA `961ee84aa28f58ce933d2dd899bfd013c801da1c`, run `34758902465`, job `103728060621`, **88 source files, 447 PASS em 2.15s**. CI restaurado em `cb399d0c74ae5925c4d89412a4760472fe7ab430`.
+Gate: `961ee84aa28f58ce933d2dd899bfd013c801da1c` / run `34758902465` / job `103728060621` / **88 source files / 447 PASS em 2.15s**. CI restaurado em `cb399d0c74ae5925c4d89412a4760472fe7ab430`.
 
 ### Bloco 2 — Signer Boundary + assinatura por SecretReference — CONCLUÍDO/CERTIFICADO
 
-- package `kordena_fiscal.signing` provider-neutral;
-- `FiscalSignatureRequest` e `FiscalSignatureResult` tipados, com representações sanitizadas;
-- signer recebe conteúdo canônico e `SecretReference`, nunca segredo direto;
-- `CryptographyFiscalDocumentSigner` resolve PKCS#12 somente através de `SecretResolutionService`/Vault;
-- RSA-SHA256 e ECDSA-SHA256 suportados conforme chave; NF-e/NFC-e explícitos;
-- NFS-e permanece fail-closed até adapter/provider específico declarar capability adequada;
-- verificação detecta tampering e valida referência/fingerprint;
-- cross-tenant/cross-unit/cross-environment/kind bloqueados;
-- nenhum PFX/P12/PEM/KEY persistido em fixture;
-- signer sem UoW próprio e sem autoridade de readiness;
-- dependência adicionada: `cryptography>=44,<48`, resolvida como 47.0.0 no gate, para evitar criptografia/PFX artesanal.
+Gate: `f27ae85ac1dbf0b5cf47eea96d1437585b37cb92` / run `34759157421` / job `103728746009` / **91 source files / 459 PASS em 3.05s**. CI restaurado em `750dbb7e2e7f34fd55fe8a79fbda7dd422af9fb7`.
 
-Gate definitivo: SHA `f27ae85ac1dbf0b5cf47eea96d1437585b37cb92`, run `34759157421`, job `103728746009`, **91 source files, 459 PASS em 3.05s**. Bloco 1 -> Bloco 2: +12 testes; diff do checkpoint documental do B1 ao gate B2: 8 commits à frente, 0 atrás. CI restaurado em `750dbb7e2e7f34fd55fe8a79fbda7dd422af9fb7`.
+### Bloco 3 — Provider/Gateway adapters + CSC/Credentials — CONCLUÍDO/CERTIFICADO
 
-### Próximos blocos V2-12 — PENDENTES
+- `ProviderDescriptor`/`ProviderRegistry` explícitos e fail-closed;
+- routing por document kind + jurisdiction + environment + operation + provider opcional explícito;
+- `ProviderRequest`/`ProviderResponse` não carregam segredo;
+- credentials via `SecretReferenceKind.CREDENTIALS` e CSC via `SecretReferenceKind.CSC` somente por Vault;
+- transport injetável e synthetic/no-network;
+- `ProviderGatewayService` consulta a autoridade `CapabilityReadinessService` sem promover readiness;
+- cross-tenant/unit/environment e ambiguidade bloqueados.
 
-- adapters concretos de providers/gateways;
-- CSC/provider credentials por unidade/ambiente conforme provider;
-- timeout/retry/circuit breaker;
-- homologation gates por documento/jurisdição;
-- certificação cross-provider;
-- fechamento end-to-end da V2-12.
+Falhas intermediárias: run `34759978765` (Ruff) e run `34760070032` (ciclo de importação detectado na coleta). Correções: lint/testes específicos e exports lazy em `gateway.__init__`.
+
+Gate definitivo: `42f27c67145d2d4469374596d869ffc3ba05f013` / run `34760113452` / job `103731343836` / **93 source files / 471 PASS em 3.27s**. CI restaurado em `9e5019d64b5174ad9fe138e52c566ec3df73af84`.
+
+### Bloco 4 — Resilience Runtime — EM EXECUÇÃO
+
+Próximo objetivo: timeout explícito, retry governado, backoff/jitter determinístico, circuit breaker particionado e unknown-delivery outcome sem duplicar autorização.
 
 ## Governança preservada
 
-PR #13 permanece Draft. V2-12 permanece **EM EXECUÇÃO — BLOCOS 1 E 2 CERTIFICADOS**. Nenhum merge, deploy, produção real, homologação externa, promoção ou cutover foi executado.
+PR #13 permanece Draft. Nenhum merge, deploy, produção real, homologação externa, promoção ou cutover foi executado.
