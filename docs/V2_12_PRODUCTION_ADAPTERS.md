@@ -1,6 +1,6 @@
 # V2-12 — Gateway / Signer / Vault Production Adapters
 
-Status: **EM EXECUÇÃO — BLOCOS 1 A 4 CERTIFICADOS**  
+Status: **EM EXECUÇÃO — BLOCOS 1 A 5 CERTIFICADOS**  
 Branch: `v2/production-adapters`  
 Base certificada: `v2/control-plane` @ `0439246151c7edc959615361c0275961e11c3af0`  
 Dependência: V2-11 concluída e certificada.
@@ -20,6 +20,7 @@ Preparar a operação real do FM Fiscal sem acoplar o Core a fornecedor único, 
 - Vault não decide readiness;
 - provider adapter não decide autorização administrativa;
 - resilience não decide rejeição fiscal;
+- homologation gates técnicos não substituem a autoridade central de `CapabilityReadinessService`;
 - nenhum deploy, produção real, homologação externa, promoção ou cutover nesta fase sem autorização humana explícita.
 
 ## Blocos
@@ -28,8 +29,8 @@ Preparar a operação real do FM Fiscal sem acoplar o Core a fornecedor único, 
 2. **Signer Boundary + assinatura por SecretReference — CONCLUÍDO/CERTIFICADO.**
 3. **Provider/Gateway adapters + CSC/Credentials — CONCLUÍDO/CERTIFICADO.**
 4. **Resilience Runtime — CONCLUÍDO/CERTIFICADO.**
-5. **Homologation Gates + cross-provider — PRÓXIMO.**
-6. **Certificação end-to-end + fechamento V2-12 — PENDENTE.**
+5. **Homologation Gates + cross-provider — CONCLUÍDO/CERTIFICADO.**
+6. **Certificação end-to-end + fechamento V2-12 — PRÓXIMO.**
 
 ## Bloco 1 — Vault/KMS abstraction + Secret Resolution Boundary
 
@@ -61,42 +62,44 @@ Gate definitivo: SHA `42f27c67145d2d4469374596d869ffc3ba05f013`, run `3476011345
 
 Foi criado `kordena_fiscal.resilience` e o contrato de transport do provider passou a exigir `ProviderTimeoutPolicy` explícita com connect/read timeout, eliminando dependência de defaults ocultos de SDK.
 
-### Retry e backoff
-
 `RetryPolicy` oferece máximo de tentativas, exponential backoff, jitter e delay máximo, todos limitados e testáveis por `Sleeper`/`JitterSource` injetáveis. QUERY/STATUS são `SAFE_RETRY`; AUTHORIZE/CANCEL/INUTILIZE são `CONDITIONAL_RETRY`.
 
 Uma autorização com `delivery_unknown=True` nunca é repetida automaticamente: produz `UnknownProviderOutcomeError` e exige query/reconciliation. Rejeição fiscal e erro de autenticação/validação não são tratados como indisponibilidade transitória.
 
-### Circuit breaker
-
 `CircuitBreakerRegistry` implementa `CLOSED`, `OPEN` e `HALF_OPEN`, com thresholds configuráveis. A chave é particionada por provider + environment + UF + município opcional, impedindo falha de um provider/jurisdição de derrubar toda a malha.
 
-O estado do breaker é deliberadamente runtime/in-memory neste bloco: restart começa fechado. Estado de negócio, idempotência, reconciliation e delivery permanecem nos stores duráveis já certificados; o breaker não cria shadow state fiscal.
+Falhas intermediárias: run `34760512225` (Ruff E501) e run `34760572581` (Mypy retorno Any no delay), ambas corrigidas sem relaxar gates.
 
-### Falhas encontradas e correções
+Gate definitivo: SHA `a3db491049d6058753ebad18d6fb62026310b1b8`, run `34760627774`, job `103732719543`, **95 source files, 483 PASS em 3.03s**. CI restaurado em `dd7d3eb5a6c718bf9576b377112b0c4a812e6159`.
 
-- run `34760512225`: Ruff encontrou uma linha acima do limite de 100 caracteres; corrigido;
-- run `34760572581`: Ruff passou e Mypy apontou retorno `Any` na aritmética de delay; o retorno foi tipado explicitamente como `float`;
-- nenhum teste foi removido, skipado ou marcado xfail para obter verde.
+## Bloco 5 — Homologation Gates + Cross-provider
 
-### Certificação Bloco 4
+Foi criado `kordena_fiscal.homologation` como camada técnica de evidência. Ela não cria uma segunda autoridade de readiness: `HomologationGateEvaluator` consulta `CapabilityReadinessService.require_action` e combina o snapshot central com evidência técnica explícita.
+
+`HomologationGateKey` é particionado por provider, document kind, jurisdiction, environment e operation. A matriz é fail-closed e exige correspondência exata, sem provider default silencioso. Para NFS-e, município IBGE explícito é obrigatório; não existe cobertura municipal universal inferida.
+
+`HomologationEvidence` cobre adapter disponível, credential reference, signer capability, CSC quando aplicável, transport, resilience, contract tests, jurisdiction mapping e operação suportada. Configuração parcial permanece `CONTRACT_READY`; somente evidência completa produz `TECHNICALLY_CERTIFIED`, e mesmo assim a execução depende do readiness central.
+
+A certificação cross-provider prova coexistência de providers com isolamento de evidência, credenciais e circuit breaker. Falha/circuito de provider A não altera gate ou circuito de provider B.
+
+### Certificação Bloco 5
 
 Gate definitivo:
 
-- SHA: `a3db491049d6058753ebad18d6fb62026310b1b8`;
-- run: `34760627774` — **SUCCESS**;
-- job: `103732719543`;
+- SHA: `ae9347b2f97f6984e22f6a719eec5e4b1ea8a3db`;
+- run: `34760988165` — **SUCCESS**;
+- job: `103733669977`;
 - Install: PASS;
 - Ruff: PASS;
-- Mypy strict: PASS — **95 source files**;
-- Pytest: **483 PASS em 3.03s**;
-- baseline Bloco 3: 471; incremento líquido: **+12 testes**;
-- diff checkpoint B3 -> gate B4: 12 commits à frente, 0 atrás; provider timeout, resilience runtime, tests e CI temporário;
-- CI restaurado para `workflow_dispatch` no commit `dd7d3eb5a6c718bf9576b377112b0c4a812e6159`.
+- Mypy strict: PASS — **97 source files**;
+- Pytest: **497 PASS em 3.41s**;
+- baseline Bloco 4: 483; incremento líquido: **+14 testes**;
+- diff checkpoint B4 documental -> gate B5: **7 commits à frente, 0 atrás**, adicionando somente homologation gates/tests e CI temporário;
+- CI restaurado para `workflow_dispatch` no commit `e2c89a602c85c104e668f8bb3cc469161ed4b408`.
 
-## Próximos blocos
+## Próximo bloco
 
-Bloco 5: homologation gates técnicos + cross-provider, sem duplicar a autoridade central de Capability/Readiness. Bloco 6: certificação end-to-end, auditorias finais e fechamento integral da V2-12.
+Bloco 6: certificação end-to-end, failure matrix, structural secret scan, dependency/architecture audit, cross-product neutrality, regressão mestre, auditoria completa V2-11 -> V2-12 e fechamento documental integral da V2-12.
 
 ## Governança
 
