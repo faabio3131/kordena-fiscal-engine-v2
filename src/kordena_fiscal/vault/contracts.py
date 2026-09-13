@@ -192,6 +192,7 @@ class SecretResolutionService:
                 scope.unit_id,
                 scope.environment,
                 context.kind,
+                provider_id=context.provider_id,
             )
 
         if reference is None:
@@ -216,3 +217,5 @@ class SecretResolutionService:
             raise SecretAuthorizationError("secret reference environment mismatch")
         if reference.kind is not context.kind:
             raise SecretAuthorizationError("secret reference kind mismatch")
+        if reference.provider_id != context.provider_id:
+            raise SecretAuthorizationError("secret reference provider mismatch")
