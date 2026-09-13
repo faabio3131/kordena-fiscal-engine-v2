@@ -28,6 +28,7 @@ Blocos certificados:
 | B4 | `a3db491049d6058753ebad18d6fb62026310b1b8` | `34760627774` / `103732719543` | 95 source / 483 PASS |
 | B5 | `ae9347b2f97f6984e22f6a719eec5e4b1ea8a3db` | `34760988165` / `103733669977` | 97 source / 497 PASS |
 | B6 funcional | `b7bccf2babed336941d920eed73cd0699e6939d4` | `34762735800` / `103738293942` | Ruff/Mypy PASS; 97 source / 508 PASS em 5.06s |
+| Fechamento documental | `8cbd4f974a6e72e3f99557d6481c9267a3e8ef81` | `34762972272` / `103738907041` | Install/Ruff/Mypy PASS; 97 source / 508 PASS em 4.12s |
 
 ## Achado de auditoria B6 e correção
 
@@ -84,7 +85,7 @@ Base V2-11 `0439246151c7edc959615361c0275961e11c3af0` -> gate B6 `b7bccf2babed33
 
 Após o gate funcional, o CI foi restaurado no commit `0e232f63d052db6ca2a7c8cd6ef5d97e3fdf0032` para o blob governado dispatch-only `b161340d7164afcbf3da0eb0327135528a39450c`.
 
-A documentação de fechamento será submetida a um último gate de regressão e, após esse gate, o CI será novamente restaurado para dispatch-only. Esse gate documental não autoriza merge, deploy ou promoção.
+O fechamento documental recebeu um gate adicional no SHA `8cbd4f974a6e72e3f99557d6481c9267a3e8ef81`, run `34762972272`, job `103738907041`: **Install PASS, Ruff PASS, Mypy strict PASS em 97 source files e 508 PASS em 4.12s**. Em seguida o CI foi restaurado novamente no commit `75dece2ed83d323834617857f943e3373bc6ecb8`, retornando ao mesmo blob governado dispatch-only `b161340d7164afcbf3da0eb0327135528a39450c`.
 
 ## Limites e riscos residuais
 
