@@ -99,7 +99,11 @@ def _database(tmp_path) -> SqliteFiscalDatabase:
     return database
 
 
-def _onboard(database: SqliteFiscalDatabase) -> tuple[SecretReference, SecretReference]:
+def _onboard(
+    database: SqliteFiscalDatabase,
+    *,
+    provider_id: str = "synthetic-sp",
+) -> tuple[SecretReference, SecretReference]:
     control = DurableControlPlaneService(database)
     control.onboard_organization(
         actor=_global_admin(),
@@ -125,6 +129,7 @@ def _onboard(database: SqliteFiscalDatabase) -> tuple[SecretReference, SecretRef
         tenant_id=TENANT,
         unit_id=UNIT,
         environment=FiscalEnvironment.HOMOLOGATION,
+        provider_id=provider_id,
     )
     csc = SecretReference(
         reference_id=CSC_REF,
@@ -132,6 +137,7 @@ def _onboard(database: SqliteFiscalDatabase) -> tuple[SecretReference, SecretRef
         tenant_id=TENANT,
         unit_id=UNIT,
         environment=FiscalEnvironment.HOMOLOGATION,
+        provider_id=provider_id,
     )
     for reference in (credentials, csc):
         control.bind_secret_reference(
@@ -278,7 +284,7 @@ def _adapter(
 
 def _runtime(tmp_path, *, provider_id: str = "synthetic-sp"):
     database = _database(tmp_path)
-    credentials, csc = _onboard(database)
+    credentials, csc = _onboard(database, provider_id=provider_id)
     vault = _vault(credentials, csc, provider_id=provider_id)
     resolution = SecretResolutionService(unit_of_work_factory=database, vault=vault)
     transport = SyntheticProviderTransport()
@@ -336,7 +342,7 @@ def test_unknown_provider_fails_closed(tmp_path) -> None:
 
 def test_ambiguous_provider_resolution_never_selects_default(tmp_path) -> None:
     database = _database(tmp_path)
-    credentials, csc = _onboard(database)
+    credentials, csc = _onboard(database, provider_id="provider-a")
     resolution = SecretResolutionService(
         unit_of_work_factory=database,
         vault=_vault(credentials, csc, provider_id="provider-a"),
@@ -362,7 +368,7 @@ def test_ambiguous_provider_resolution_never_selects_default(tmp_path) -> None:
 
 def test_provider_a_credentials_never_fall_back_to_provider_b(tmp_path) -> None:
     database = _database(tmp_path)
-    credentials, csc = _onboard(database)
+    credentials, csc = _onboard(database, provider_id="provider-a")
     vault = _vault(credentials, csc, provider_id="provider-a")
     resolution = SecretResolutionService(unit_of_work_factory=database, vault=vault)
     transport_a = SyntheticProviderTransport()

@@ -301,6 +301,7 @@ def test_non_certificate_reference_cannot_enter_signer_boundary() -> None:
         tenant_id=TENANT,
         unit_id=UNIT,
         environment=FiscalEnvironment.HOMOLOGATION,
+        provider_id="synthetic-signing-provider",
     )
 
     with pytest.raises(FiscalValidationError, match="certificate"):
@@ -366,7 +367,14 @@ def test_signing_adds_no_secret_columns_or_pfx_fixtures(tmp_path) -> None:
                 "PRAGMA table_info(fm_control_plane_secret_references)"
             ).fetchall()
         }
-    assert columns == {"reference_id", "kind", "tenant_id", "unit_id", "environment"}
+    assert columns == {
+        "reference_id",
+        "kind",
+        "tenant_id",
+        "unit_id",
+        "environment",
+        "provider_id",
+    }
     assert not ({"secret", "password", "private_key", "pfx", "token", "material"} & columns)
 
     test_root = Path(__file__).resolve().parents[1]

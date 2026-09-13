@@ -451,6 +451,7 @@ def test_every_administrative_permission_fails_closed_when_missing(tmp_path) -> 
                 tenant_id="tenant-a",
                 unit_id="unit-01",
                 environment=FiscalEnvironment.HOMOLOGATION,
+                provider_id="provider-denied",
             ),
             correlation_id="corr-denied-reference",
         )
@@ -607,7 +608,14 @@ def test_secret_reference_schema_and_views_exclude_raw_material(tmp_path) -> Non
                 "PRAGMA table_info(fm_control_plane_secret_references)"
             ).fetchall()
         }
-    assert columns == {"reference_id", "kind", "tenant_id", "unit_id", "environment"}
+    assert columns == {
+        "reference_id",
+        "kind",
+        "tenant_id",
+        "unit_id",
+        "environment",
+        "provider_id",
+    }
     assert not {
         "secret",
         "value",
@@ -649,6 +657,7 @@ def test_migration_v4_is_idempotent_and_preserves_certified_history(tmp_path) ->
         (2, "v2_08_durable_inbox"),
         (3, "v2_08_delivery_audit_and_ordering"),
         (4, "v2_11_control_plane_durable_state"),
+        (5, "v2_15_zero_code_commercial_configuration"),
     ]
     assert {
         "fm_control_plane_organizations",

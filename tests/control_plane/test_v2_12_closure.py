@@ -597,7 +597,7 @@ def test_v2_12_nfse_remains_municipality_and_provider_specific(
     response = _resilient(service).execute(request, provider_id=NFSE_PROVIDER)
 
     assert response.status is ProviderResponseStatus.ACCEPTED
-    assert transport.observations[0].credentials_reference_id == CREDENTIAL_REF
+    assert transport.observations[0].credentials_reference_id == NFSE_CREDENTIAL_REF
     assert transport.observations[0].csc_reference_id is None
 
 
@@ -659,7 +659,14 @@ def test_v2_12_sqlite_contains_references_but_no_runtime_secret_material(tmp_pat
                 "SELECT name FROM sqlite_master WHERE type = 'table'"
             ).fetchall()
         }
-    assert columns == {"reference_id", "kind", "tenant_id", "unit_id", "environment"}
+    assert columns == {
+        "reference_id",
+        "kind",
+        "tenant_id",
+        "unit_id",
+        "environment",
+        "provider_id",
+    }
     assert not any(
         token in name.lower()
         for name in tables

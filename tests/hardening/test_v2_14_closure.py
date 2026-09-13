@@ -39,7 +39,7 @@ def test_v2_14_migrations_and_restart_are_idempotent(tmp_path) -> None:
 
     restarted = SqliteFiscalDatabase(database.path)
     assert restarted.initialize() == ()
-    assert restarted.applied_migrations() == (1, 2, 3, 4)
+    assert restarted.applied_migrations() == (1, 2, 3, 4, 5)
 
 
 def test_v2_14_archive_tampering_fails_closed() -> None:
