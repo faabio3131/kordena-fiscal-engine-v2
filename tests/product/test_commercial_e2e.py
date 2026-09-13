@@ -1,6 +1,6 @@
-from datetime import datetime, timedelta, timezone
 import hashlib
 import hmac
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -46,7 +46,7 @@ def _complete_homologation_onboarding() -> SelfServiceOnboarding:
 
 
 def _subscription() -> CommercialSubscription:
-    start = datetime(2026, 9, 13, tzinfo=timezone.utc)
+    start = datetime(2026, 9, 13, tzinfo=UTC)
     plan = CommercialPlan(
         "growth-synthetic",
         (
@@ -107,12 +107,13 @@ def test_complete_synthetic_commercial_journey() -> None:
         causation_id="cause-syn-2",
     )
 
-    assert [capability.status_code, issuance.status_code, query.status_code, reconciliation.status_code] == [
-        200,
-        202,
-        200,
-        202,
+    status_codes = [
+        capability.status_code,
+        issuance.status_code,
+        query.status_code,
+        reconciliation.status_code,
     ]
+    assert status_codes == [200, 202, 200, 202]
     assert subscription.record_usage("documents.issue") == 1
     assert transport.requests[1].headers["Idempotency-Key"] == "idem-syn-1"
     assert transport.requests[1].headers["X-Correlation-Id"] == "corr-syn-2"
