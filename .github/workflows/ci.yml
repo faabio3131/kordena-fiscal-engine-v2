@@ -35,47 +35,24 @@ jobs:
                   raise SystemExit("commercial runtime split marker not found")
               runtime_part, admin_part = source.split(marker, 1)
               runtime_part = runtime_part.replace(
-                  "from kordena_fiscal.security import (\n"
-                  "    AuthenticatedCaller,\n"
-                  "    WorkloadAuthenticator,\n"
-                  "    WorkloadCredentialRecord,\n"
-                  ")\n",
+                  "from kordena_fiscal.security import (\n    AuthenticatedCaller,\n    WorkloadAuthenticator,\n    WorkloadCredentialRecord,\n)\n",
                   "from kordena_fiscal.security import AuthenticatedCaller, WorkloadAuthenticator\n",
               )
               runtime_part = runtime_part.replace(
                   "from .commercial import ProviderBindingResolver, ProviderRuntimePolicyConfig\n",
-                  "from kordena_fiscal.control_plane.commercial import (\n"
-                  "    ProviderBindingResolver,\n"
-                  "    ProviderRuntimePolicyConfig,\n"
-                  ")\n",
+                  "from kordena_fiscal.control_plane.commercial import (\n    ProviderBindingResolver,\n    ProviderRuntimePolicyConfig,\n)\n",
               )
               runtime_part = runtime_part.replace(
                   "from .commercial_models import HomologationEvidenceRecord, NumberingConfiguration\n",
-                  "from kordena_fiscal.control_plane.commercial_models import (\n"
-                  "    HomologationEvidenceRecord,\n"
-                  "    NumberingConfiguration,\n"
-                  ")\n",
+                  "from kordena_fiscal.control_plane.commercial_models import (\n    HomologationEvidenceRecord,\n    NumberingConfiguration,\n)\n",
               )
               runtime_part = runtime_part.replace(
                   "from .models import AdminPrincipal, ControlPlanePermission\n",
                   "",
               )
               runtime_part = runtime_part.replace(
-                  "from .service import (\n"
-                  "    ControlPlaneAuthorizationError,\n"
-                  "    ControlPlaneNotFoundError,\n"
-                  ")\n",
+                  "from .service import (\n    ControlPlaneAuthorizationError,\n    ControlPlaneNotFoundError,\n)\n",
                   "from kordena_fiscal.control_plane.service import ControlPlaneNotFoundError\n",
-              )
-              runtime_part = runtime_part.replace(
-                  '"""Runtime consumers for durable commercial configuration.\n\n'
-                  "The classes in this module turn persisted customer configuration into runtime\n"
-                  "policies without customer-specific branching. Legal/readiness authority remains\n"
-                  'outside this module.\n"""',
-                  '"""Runtime consumers for durable commercial configuration.\n\n'
-                  "Provider, vault and resilience dependencies live outside the Control Plane so\n"
-                  "the Control Plane remains a product-neutral configuration authority.\n"
-                  '"""',
               )
               runtime_dir.mkdir(parents=True, exist_ok=True)
               runtime_path.write_text(runtime_part.rstrip() + "\n", encoding="utf-8")
@@ -84,30 +61,29 @@ jobs:
                   encoding="utf-8",
               )
 
-              admin_header = '''"""Governed writes for durable commercial runtime configuration."""
-
-from __future__ import annotations
-
-from kordena_fiscal.control_plane.commercial_models import (
-    HomologationEvidenceRecord,
-    NumberingConfiguration,
-)
-from kordena_fiscal.domain import FiscalEnvironment, FiscalValidationError
-from kordena_fiscal.persistence.ports import FiscalUnitOfWorkFactory
-from kordena_fiscal.security import WorkloadCredentialRecord
-
-from .models import AdminPrincipal, ControlPlanePermission
-from .service import (
-    ControlPlaneAuthorizationError,
-    ControlPlaneNotFoundError,
-)
-'''
-              admin_source = (
-                  admin_header.rstrip()
-                  + "\n\n\nclass CommercialRuntimeConfigurationService:"
-                  + admin_part
-                  + "\n"
-              )
+              admin_lines = [
+                  '"""Governed writes for durable commercial runtime configuration."""',
+                  "",
+                  "from __future__ import annotations",
+                  "",
+                  "from kordena_fiscal.control_plane.commercial_models import (",
+                  "    HomologationEvidenceRecord,",
+                  "    NumberingConfiguration,",
+                  ")",
+                  "from kordena_fiscal.domain import FiscalEnvironment, FiscalValidationError",
+                  "from kordena_fiscal.persistence.ports import FiscalUnitOfWorkFactory",
+                  "from kordena_fiscal.security import WorkloadCredentialRecord",
+                  "",
+                  "from .models import AdminPrincipal, ControlPlanePermission",
+                  "from .service import (",
+                  "    ControlPlaneAuthorizationError,",
+                  "    ControlPlaneNotFoundError,",
+                  ")",
+                  "",
+                  "",
+                  "class CommercialRuntimeConfigurationService:",
+              ]
+              admin_source = "\n".join(admin_lines) + admin_part + "\n"
               admin_path.write_text(admin_source, encoding="utf-8")
               source_path.unlink()
 
@@ -116,33 +92,13 @@ from .service import (
 
           test_path = Path("tests/control_plane/test_v2_15_commercial_runtime.py")
           test_text = test_path.read_text(encoding="utf-8")
-          old_import = '''from kordena_fiscal.control_plane.commercial_runtime import (
-    CommercialRuntimeConfigurationService,
-    DurableConfiguredSequenceManager,
-    DurableFiscalBindingResolver,
-    DurableHomologationEvidenceResolver,
-    DurableNumberingConfigurationResolver,
-    DurablePolicyResilientProviderGateway,
-    DurableProviderRuntimePolicyResolver,
-    DurableWorkloadAuthenticator,
-    PolicyBoundFiscalProviderTransport,
-)'''
-          new_import = '''from kordena_fiscal.control_plane.commercial_admin import (
-    CommercialRuntimeConfigurationService,
-)
-from kordena_fiscal.runtime.commercial import (
-    DurableConfiguredSequenceManager,
-    DurableFiscalBindingResolver,
-    DurableHomologationEvidenceResolver,
-    DurableNumberingConfigurationResolver,
-    DurablePolicyResilientProviderGateway,
-    DurableProviderRuntimePolicyResolver,
-    DurableWorkloadAuthenticator,
-    PolicyBoundFiscalProviderTransport,
-)'''
+          old_import = "from kordena_fiscal.control_plane.commercial_runtime import (\n    CommercialRuntimeConfigurationService,\n    DurableConfiguredSequenceManager,\n    DurableFiscalBindingResolver,\n    DurableHomologationEvidenceResolver,\n    DurableNumberingConfigurationResolver,\n    DurablePolicyResilientProviderGateway,\n    DurableProviderRuntimePolicyResolver,\n    DurableWorkloadAuthenticator,\n    PolicyBoundFiscalProviderTransport,\n)"
+          new_import = "from kordena_fiscal.control_plane.commercial_admin import (\n    CommercialRuntimeConfigurationService,\n)\nfrom kordena_fiscal.runtime.commercial import (\n    DurableConfiguredSequenceManager,\n    DurableFiscalBindingResolver,\n    DurableHomologationEvidenceResolver,\n    DurableNumberingConfigurationResolver,\n    DurablePolicyResilientProviderGateway,\n    DurableProviderRuntimePolicyResolver,\n    DurableWorkloadAuthenticator,\n    PolicyBoundFiscalProviderTransport,\n)"
           if old_import in test_text:
-              test_text = test_text.replace(old_import, new_import, 1)
-              test_path.write_text(test_text, encoding="utf-8")
+              test_path.write_text(
+                  test_text.replace(old_import, new_import, 1),
+                  encoding="utf-8",
+              )
           elif new_import not in test_text:
               raise SystemExit("commercial runtime test import state is unknown")
 
@@ -150,22 +106,24 @@ from kordena_fiscal.runtime.commercial import (
           migration_text = migration_path.read_text(encoding="utf-8")
           start = migration_text.index("def _remove_v5(connection: sqlite3.Connection) -> None:")
           end = migration_text.index("def _remove_v4(connection: sqlite3.Connection) -> None:")
-          replacement = '''def _remove_v5(connection: sqlite3.Connection) -> None:
-    for table in (
-        "fm_commercial_homologation_evidence",
-        "fm_commercial_workload_credentials",
-        "fm_commercial_numbering_configurations",
-        "fm_commercial_provider_runtime_policies",
-        "fm_commercial_webhook_destinations",
-        "fm_commercial_unit_modules",
-        "fm_commercial_product_profiles",
-        "fm_commercial_provider_bindings",
-    ):
-        connection.execute(f"DROP TABLE {table}")
-    connection.execute("DELETE FROM fm_schema_migrations WHERE version = 5")
-
-
-'''
+          replacement_lines = [
+              "def _remove_v5(connection: sqlite3.Connection) -> None:",
+              "    for table in (",
+              '        "fm_commercial_homologation_evidence",',
+              '        "fm_commercial_workload_credentials",',
+              '        "fm_commercial_numbering_configurations",',
+              '        "fm_commercial_provider_runtime_policies",',
+              '        "fm_commercial_webhook_destinations",',
+              '        "fm_commercial_unit_modules",',
+              '        "fm_commercial_product_profiles",',
+              '        "fm_commercial_provider_bindings",',
+              "    ):",
+              '        connection.execute(f"DROP TABLE {table}")',
+              '    connection.execute("DELETE FROM fm_schema_migrations WHERE version = 5")',
+              "",
+              "",
+          ]
+          replacement = "\n".join(replacement_lines)
           migration_path.write_text(
               migration_text[:start] + replacement + migration_text[end:],
               encoding="utf-8",
