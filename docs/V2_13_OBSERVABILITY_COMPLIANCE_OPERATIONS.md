@@ -1,6 +1,6 @@
 # V2-13 — Observabilidade + Compliance Operations
 
-Status: **EM EXECUÇÃO — AUTORIZADA EM 2026-09-13**  
+Status: **EM EXECUÇÃO — BLOCO 1 CERTIFICADO / BLOCO 2 EM EXECUÇÃO**  
 Branch: `v2/observability-compliance-operations`  
 Base certificada: `v2/production-adapters` @ `1242ce74d874ffb87783401ce1abaabb350c948c`  
 Dependência: V2-12 concluída e certificada.
@@ -24,28 +24,36 @@ Tornar o FM Fiscal operável e auditável em produção futura, com observabilid
 
 ## Blocos
 
-1. **Structured Observability Boundary + Sanitization — EM EXECUÇÃO.**
-2. **Metrics + Cardinality Governance — PENDENTE.**
+1. **Structured Observability Boundary + Sanitization — CONCLUÍDO/CERTIFICADO.**
+2. **Metrics + Cardinality Governance — EM EXECUÇÃO.**
 3. **Tracing / Correlation / Causation — PENDENTE.**
 4. **Operational & Compliance Alerts — PENDENTE.**
 5. **Regulatory Watcher Governado — PENDENTE.**
 6. **End-to-End Certification + fechamento V2-13 — PENDENTE.**
 
-## Bloco 1 — Structured Observability Boundary + Sanitization
+## Bloco 1 — Structured Observability Boundary + Sanitization — CONCLUÍDO/CERTIFICADO
 
-Entregas:
+Foi criado `kordena_fiscal.observability` fora do domínio fiscal, com `ObservabilityContext`, `StructuredObservabilityEvent`, `StructuredObservabilityService`, `StructuredEventSink` e sink sintético in-memory sem rede/filesystem.
 
-- package/provider-neutral de observabilidade fora do domínio;
-- eventos estruturados com severidade, categoria, timestamp e scope fiscal explícito;
-- sanitização recursiva e fail-closed de campos proibidos;
-- política explícita para referências, hashes e mensagens de erro;
-- sink in-memory sintético para testes, sem filesystem/network;
-- adapters existentes podem emitir observabilidade sem importar produto consumidor;
-- testes negativos de segredo/payload/credential leakage.
+A sanitização é recursiva e fail-closed: bytes e objetos desconhecidos são redigidos sem `repr`; chaves sensíveis como password/token/credential/CSC/PFX/payload/XML/body/signature/certificate são redigidas por padrão; apenas referências, hashes e fingerprints explicitamente seguros sobrevivem. Mensagens contendo Bearer/Basic auth, material PEM/XML ou padrões de segredo são redigidas. Texto e coleções são bounded.
 
-Gate: Ruff + Mypy strict + regressão completa e testes novos de sanitização.
+`StructuredObservabilityService.emit()` é best-effort: falha do sink retorna `False` e não escapa para a execução fiscal. O domínio permanece sem dependência de observabilidade.
 
-## Bloco 2 — Metrics + Cardinality Governance
+Primeira tentativa do gate: run `34763491466`, job `103740272028`; Install PASS, Ruff falhou somente por duas ocorrências UP035 de import `Mapping` em `typing`; Mypy/Pytest ficaram bloqueados. Correção aplicada sem alterar semântica.
+
+Gate definitivo B1:
+
+- SHA: `11aa2fa9a63d624235ba90619d853aa3d38e2bb3`;
+- run: `34763558714` — **SUCCESS**;
+- job: `103740454991`;
+- Install: PASS;
+- Ruff: PASS;
+- Mypy strict: PASS — **99 source files**;
+- Pytest: **518 PASS em 4.52s**;
+- baseline V2-12: 508; incremento líquido: **+10 testes**;
+- CI restaurado para `workflow_dispatch` no commit `e18af325808c53637492680b17219db0deea49cc`.
+
+## Bloco 2 — Metrics + Cardinality Governance — EM EXECUÇÃO
 
 Entregas:
 
@@ -127,4 +135,4 @@ O workflow permanece `workflow_dispatch` por padrão. Em cada gate de bloco:
 
 ## Governança
 
-A PR da fase deve permanecer Draft. Nenhum merge, deploy, promoção, homologação oficial, segredo real, integração privada de SaaS ou cutover é permitido automaticamente.
+A PR #14 permanece Draft. Nenhum merge, deploy, promoção, homologação oficial, segredo real, integração privada de SaaS ou cutover é permitido automaticamente.
