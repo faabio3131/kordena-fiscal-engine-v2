@@ -103,38 +103,30 @@ jobs:
 
           test_path = Path("tests/control_plane/test_v2_15_commercial_runtime.py")
           test_text = test_path.read_text(encoding="utf-8")
-          old_import = '''from kordena_fiscal.control_plane.commercial_runtime import (
-              CommercialRuntimeConfigurationService,
-              DurableConfiguredSequenceManager,
-              DurableFiscalBindingResolver,
-              DurableHomologationEvidenceResolver,
-              DurableNumberingConfigurationResolver,
-              DurablePolicyResilientProviderGateway,
-              DurableProviderRuntimePolicyResolver,
-              DurableWorkloadAuthenticator,
-              PolicyBoundFiscalProviderTransport,
-          )'''
-          old_import = "\n".join(
-              line[10:] if line.startswith("          ") else line
-              for line in old_import.splitlines()
-          )
-          new_import = '''from kordena_fiscal.control_plane.commercial_admin import (
-              CommercialRuntimeConfigurationService,
-          )
-          from kordena_fiscal.runtime.commercial import (
-              DurableConfiguredSequenceManager,
-              DurableFiscalBindingResolver,
-              DurableHomologationEvidenceResolver,
-              DurableNumberingConfigurationResolver,
-              DurablePolicyResilientProviderGateway,
-              DurableProviderRuntimePolicyResolver,
-              DurableWorkloadAuthenticator,
-              PolicyBoundFiscalProviderTransport,
-          )'''
-          new_import = "\n".join(
-              line[10:] if line.startswith("          ") else line
-              for line in new_import.splitlines()
-          )
+          old_import = """from kordena_fiscal.control_plane.commercial_runtime import (
+    CommercialRuntimeConfigurationService,
+    DurableConfiguredSequenceManager,
+    DurableFiscalBindingResolver,
+    DurableHomologationEvidenceResolver,
+    DurableNumberingConfigurationResolver,
+    DurablePolicyResilientProviderGateway,
+    DurableProviderRuntimePolicyResolver,
+    DurableWorkloadAuthenticator,
+    PolicyBoundFiscalProviderTransport,
+)"""
+          new_import = """from kordena_fiscal.control_plane.commercial_admin import (
+    CommercialRuntimeConfigurationService,
+)
+from kordena_fiscal.runtime.commercial import (
+    DurableConfiguredSequenceManager,
+    DurableFiscalBindingResolver,
+    DurableHomologationEvidenceResolver,
+    DurableNumberingConfigurationResolver,
+    DurablePolicyResilientProviderGateway,
+    DurableProviderRuntimePolicyResolver,
+    DurableWorkloadAuthenticator,
+    PolicyBoundFiscalProviderTransport,
+)"""
           if old_import not in test_text:
               raise SystemExit("runtime test import marker not found")
           test_path.write_text(
@@ -144,35 +136,17 @@ jobs:
 
           migration_path = Path("tests/control_plane/test_durable_persistence.py")
           migration_text = migration_path.read_text(encoding="utf-8")
-          old_tables = '''    for table in (
-              "fm_commercial_provider_runtime_policies",
-              "fm_commercial_webhook_destinations",
-              "fm_commercial_unit_modules",
-              "fm_commercial_product_profiles",
-              "fm_commercial_provider_bindings",
-          ):'''
-          old_tables = "\n".join(
-              line[10:] if line.startswith("          ") else line
-              for line in old_tables.splitlines()
-          )
-          new_tables = '''    for table in (
-              "fm_commercial_homologation_evidence",
-              "fm_commercial_workload_credentials",
-              "fm_commercial_numbering_configurations",
-              "fm_commercial_provider_runtime_policies",
-              "fm_commercial_webhook_destinations",
-              "fm_commercial_unit_modules",
-              "fm_commercial_product_profiles",
-              "fm_commercial_provider_bindings",
-          ):'''
-          new_tables = "\n".join(
-              line[10:] if line.startswith("          ") else line
-              for line in new_tables.splitlines()
-          )
-          if old_tables not in migration_text:
-              raise SystemExit("V5 rollback table marker not found")
+          old_prefix = '''    for table in (
+        "fm_commercial_provider_runtime_policies",'''
+          new_prefix = '''    for table in (
+        "fm_commercial_homologation_evidence",
+        "fm_commercial_workload_credentials",
+        "fm_commercial_numbering_configurations",
+        "fm_commercial_provider_runtime_policies",'''
+          if old_prefix not in migration_text:
+              raise SystemExit("V5 rollback table prefix not found")
           migration_path.write_text(
-              migration_text.replace(old_tables, new_tables, 1),
+              migration_text.replace(old_prefix, new_prefix, 1),
               encoding="utf-8",
           )
           PY
