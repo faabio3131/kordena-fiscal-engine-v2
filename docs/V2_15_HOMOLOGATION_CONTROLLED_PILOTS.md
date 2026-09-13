@@ -1,6 +1,6 @@
 # V2-15 — HOMOLOGAÇÃO + PILOTOS CONTROLADOS
 
-Status: **EM EXECUÇÃO — REMEDIAÇÃO DE CONFIGURABILIDADE COMERCIAL / ZERO-CODE ONBOARDING**  
+Status: **EM EXECUÇÃO — B0 CERTIFICADO / B1 HOMOLOGATION ENVIRONMENT READINESS**  
 Branch: `v2/homologation-controlled-pilots`  
 Base certificada: `v2/system-hardening` @ `15426a4460ed18c8861c807b92b98c6cfecb3126`  
 Dependência: V2-14 concluída e certificada.  
@@ -35,19 +35,19 @@ Código novo só é admissível para evolução reutilizável do produto, como n
 
 ## Blocos
 
-0. **Commercial Configurability Audit + Zero-Code Customer Onboarding — AUDITORIA CONCLUÍDA / REMEDIAÇÃO EM EXECUÇÃO.**
-1. Homologation Environment Readiness — AGUARDANDO GATE B0.
+0. **Commercial Configurability Audit + Zero-Code Customer Onboarding — CONCLUÍDO/CERTIFICADO.**
+1. **Homologation Environment Readiness — EM EXECUÇÃO.**
 2. NF-e Homologation Matrix — PENDENTE.
 3. NFC-e Homologation Matrix — PENDENTE.
 4. NFS-e Homologation Matrix — PENDENTE.
 5. Pilotos Controlados + Go/No-Go — PENDENTE.
 6. Certificação/Fechamento — PENDENTE.
 
-## B0 — Commercial Configurability + Zero-Code Onboarding
+## B0 — Commercial Configurability + Zero-Code Onboarding — CERTIFICADO
 
-A revisão acumulada V2-00 -> V2-15 constatou que a fundação é majoritariamente parametrizada, porém a composição comercial durável ainda possui gaps que poderiam forçar configuração em bootstrap/runtime para clientes reais.
+A revisão acumulada V2-00 -> V2-15 constatou que a fundação era majoritariamente parametrizada, porém a composição comercial durável ainda possuía gaps que poderiam forçar configuração em bootstrap/runtime para clientes reais. Esses gaps foram remediados e o gate Zero-Code foi fechado.
 
-Remediações bloqueantes identificadas:
+Remediações certificadas:
 
 1. `SecretReference` provider-scoped para CREDENTIALS/CSC no Control Plane;
 2. ProviderBinding/FiscalCapabilityBinding durável por tenant/unit/environment/document/jurisdiction/operation;
@@ -57,19 +57,23 @@ Remediações bloqueantes identificadas:
 6. workload identity/grants/config de credencial administrável;
 7. homologation evidence records duráveis;
 8. numbering config;
-9. policy profiles governados para timeout/retry/circuit/rate-limit;
-10. catálogos legais/readiness/tax versionados e governados, sem edição normativa arbitrária pelo tenant.
+9. policy profiles governados para timeout/retry/circuit;
+10. catálogos legais/readiness/tax permanecem governados e não tenant-editable.
 
-O gate B0 exige um teste E2E com ao menos três clientes sintéticos fiscalmente diferentes (restaurante/SP, academia/serviços/NFS-e municipal e varejo/MG), configurados e persistidos sem alteração do source entre eles. Após restart, cada cliente deve continuar resolvendo exclusivamente sua configuração, provider e SecretReferences; cross-tenant/unit/provider/environment deve falhar fechado.
+A fronteira arquitetural foi corrigida para manter dependências concretas de provider/Vault/resilience fora do núcleo do Control Plane. O runtime comercial foi movido para `kordena_fiscal.runtime`, enquanto o Control Plane preserva somente configuração, autorização e governança.
 
-Detalhamento e severidades: `docs/V2_15_COMMERCIAL_CONFIGURABILITY_AUDIT.md`.
+Gate funcional B0: SHA de transformação/certificação `0cc8eeb8ed82fd40cf9c307cf4c24873bdf11bb2`, run `34775807228`, job `103773578619`: Install PASS, Ruff PASS, Mypy PASS em **109 source files**, Pytest **592 PASS em 5.54s**. O mesmo gate persistiu a separação arquitetural no commit `4fbe0f962a8df0c0b44c43b6d70b8636ec965f7d`.
 
-## B1 — Homologation Environment Readiness
+O gate Zero-Code cobre clientes sintéticos fiscalmente distintos usando o mesmo source/binário, persistência/restart e isolamento fail-closed entre tenant/unit/provider/environment. Nenhuma diferença fiscal já suportada exige código específico por cliente.
 
-Somente iniciar após B0 verde. Auditar ambiente HOMOLOGATION, provider catalog/bindings, Vault refs, signer, CSC, credentials, transport/TLS/schema/jurisdiction/readiness/telemetria e distinguir evidência técnica interna de evidência oficial externa.
+## B1 — Homologation Environment Readiness — EM EXECUÇÃO
+
+Auditar ambiente HOMOLOGATION, provider catalog/bindings, Vault refs, signer, CSC, credentials, transport/TLS/schema/jurisdiction/readiness/telemetria e distinguir evidência técnica interna de evidência oficial externa.
+
+Critério B1: readiness exato por provider/document/jurisdiction/environment, isolamento multi-tenant/unidade/provider, fail-closed para configuração ausente/incompatível, nenhuma credencial real no Git e regressão completa verde.
 
 ## Critério de fase
 
 O trabalho interno pode ser certificado com ambientes sintéticos e contract tests. A fase somente será marcada totalmente CONCLUÍDA/CERTIFICADA se existirem evidências oficiais externas para o escopo exigido. Caso contrário, após concluir todo o trabalho interno, o status final será `BLOQUEADA PARCIAL`, com os bloqueios externos discriminados e sem promover produção.
 
-A V2-15 não pode avançar para homologação externa/pilotos enquanto o gate B0 Zero-Code Customer Onboarding não estiver certificado.
+A execução autorizada atual cobre B0 concluído e prossegue continuamente por B1, B2 e B3. B4-B6 permanecem fora do limite desta autorização específica.
