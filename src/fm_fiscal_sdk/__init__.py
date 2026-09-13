@@ -5,8 +5,8 @@ from .client import (
     BridgeRequest,
     BridgeResponse,
     BridgeTransport,
-    RetryPolicy,
     RetryableTransportError,
+    RetryPolicy,
     verify_webhook_signature,
 )
 
