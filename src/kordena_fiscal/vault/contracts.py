@@ -159,10 +159,14 @@ class SecretResolutionService:
         with self._unit_of_work_factory() as uow:
             organization = uow.control_plane.get_organization(scope.tenant_id)
             if organization is None:
-                raise SecretAuthorizationError("secret scope is not onboarded")
+                raise SecretUnavailableError(
+                    "secret reference is not bound for requested scope"
+                )
             unit = uow.control_plane.get_unit(scope.tenant_id, scope.unit_id)
             if unit is None:
-                raise SecretAuthorizationError("secret unit is not onboarded")
+                raise SecretUnavailableError(
+                    "secret reference is not bound for requested scope"
+                )
             if scope.environment not in unit.enabled_environments:
                 raise SecretAuthorizationError("secret environment is not enabled")
             reference = uow.control_plane.get_secret_reference(
