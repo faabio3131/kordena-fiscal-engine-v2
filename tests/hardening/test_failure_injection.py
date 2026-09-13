@@ -57,6 +57,8 @@ from kordena_fiscal.security import InMemoryWebhookKeyRing, WebhookSecurity
 from kordena_fiscal.signing import (
     CryptographyFiscalDocumentSigner,
     FiscalSignatureRequest,
+    FiscalSignatureResult,
+    SignatureAlgorithm,
     SignerUnavailableError,
 )
 from kordena_fiscal.vault import (
@@ -166,6 +168,18 @@ def _scope() -> ExecutionScope:
     )
 
 
+def _signature() -> FiscalSignatureResult:
+    return FiscalSignatureResult(
+        signed_content=b"synthetic-hardening-payload",
+        signature=b"synthetic-hardening-signature",
+        algorithm=SignatureAlgorithm.RSA_SHA256,
+        certificate_reference_id="ref:hardening/certificate",
+        certificate_fingerprint_sha256="a" * 64,
+        signed_at=NOW,
+        document_kind=FiscalDocumentKind.NFE,
+    )
+
+
 def _request(operation: ProviderOperation = ProviderOperation.QUERY) -> ProviderRequest:
     return ProviderRequest(
         scope=_scope(),
@@ -175,7 +189,9 @@ def _request(operation: ProviderOperation = ProviderOperation.QUERY) -> Provider
         payload=b"synthetic-hardening-payload",
         correlation_id="corr-hardening",
         workload_id="hardening-worker",
-        signed_artifact=None,
+        signed_artifact=(
+            _signature() if operation is ProviderOperation.AUTHORIZE else None
+        ),
     )
 
 
@@ -224,7 +240,10 @@ def _database(tmp_path) -> SqliteFiscalDatabase:
     return database
 
 
-def _enqueue(database: SqliteFiscalDatabase, key: str = "hardening-event") -> FiscalOutboxEntry:
+def _enqueue(
+    database: SqliteFiscalDatabase,
+    key: str = "hardening-event",
+) -> FiscalOutboxEntry:
     with database.unit_of_work() as uow:
         result = FiscalOutboxService(uow.outbox).enqueue(
             scope=_scope(),
@@ -298,7 +317,8 @@ def test_circuit_opens_then_half_open_probe_recovers() -> None:
     assert circuits.state(key) is CircuitState.OPEN
 
     clock.advance(10)
-    assert gateway.execute(_request(), provider_id="provider-hardening").status is ProviderResponseStatus.FOUND
+    recovered = gateway.execute(_request(), provider_id="provider-hardening")
+    assert recovered.status is ProviderResponseStatus.FOUND
     assert circuits.state(key) is CircuitState.CLOSED
 
 
@@ -309,7 +329,10 @@ def test_unknown_authorization_outcome_is_never_retried() -> None:
     gateway, _, sleeper, _ = _resilient(executor)
 
     with pytest.raises(UnknownProviderOutcomeError, match="reconciliation"):
-        gateway.execute(_request(ProviderOperation.AUTHORIZE), provider_id="provider-hardening")
+        gateway.execute(
+            _request(ProviderOperation.AUTHORIZE),
+            provider_id="provider-hardening",
+        )
 
     assert executor.calls == 1
     assert sleeper.delays == []
