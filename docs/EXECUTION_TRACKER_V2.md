@@ -26,7 +26,7 @@ Estados permitidos: `PENDENTE`, `EM EXECUÇÃO`, `BLOQUEADO`, `CONCLUÍDO`. Nenh
 | V2-09 | Modularização de verticais | **CONCLUÍDO** | PR #10 Draft; `88071fd557199ffd6848312ea5559b0cba415ee1`; 346 PASS |
 | V2-10 | Contract Packs multiproduto | **CONCLUÍDO** | PR #11 Draft; `345652ecbfc18c8bd3511cf5b9083ba0dbc259cb`; 397 PASS |
 | V2-11 | Control Plane independente | **CONCLUÍDO** | PR #12 Draft; gate `eed6b056e9d1941da435179c5eaf805c261f6622`; run `34736942613`; 85 source; 437 PASS |
-| V2-12 | Gateway/Signer/Vault production adapters | **CONCLUÍDO** | PR #13 Draft; gate funcional B6 `b7bccf2babed336941d920eed73cd0699e6939d4`; run `34762735800`; job `103738293942`; 97 source; 508 PASS |
+| V2-12 | Gateway/Signer/Vault production adapters | **CONCLUÍDO** | PR #13 Draft; B6 `b7bccf2babed336941d920eed73cd0699e6939d4` / 508 PASS; fechamento documental `8cbd4f974a6e72e3f99557d6481c9267a3e8ef81` / run `34762972272`; CI final dispatch-only |
 | V2-13 | Observabilidade + Compliance Operations | PENDENTE | depende V2-12; aguardando autorização |
 | V2-14 | Hardening sistêmico | PENDENTE | regressão/carga/falhas/segurança |
 | V2-15 | Homologação + pilotos controlados | PENDENTE | depende V2-14 |
@@ -81,6 +81,8 @@ A suíte de fechamento certifica NF-e/NFC-e end-to-end, NFS-e municipal/provider
 Primeira tentativa B6: run `34762578767` / job `103737871189`; Install PASS, Ruff falhou apenas por duas ocorrências E501 na suíte nova; Mypy/Pytest ficaram bloqueados. Correção somente de formatação.
 
 Gate funcional definitivo B6: `b7bccf2babed336941d920eed73cd0699e6939d4` / run `34762735800` / job `103738293942` / **Install PASS / Ruff PASS / Mypy strict PASS — 97 source / 508 PASS em 5.06s**. Baseline B5: 497; incremento líquido +11. CI restaurado em `0e232f63d052db6ca2a7c8cd6ef5d97e3fdf0032`.
+
+Gate documental final: `8cbd4f974a6e72e3f99557d6481c9267a3e8ef81` / run `34762972272` / job `103738907041` / **Install PASS / Ruff PASS / Mypy strict PASS — 97 source / 508 PASS em 4.12s**. CI restaurado definitivamente em `75dece2ed83d323834617857f943e3373bc6ecb8` para o blob dispatch-only `b161340d7164afcbf3da0eb0327135528a39450c`.
 
 ### Auditoria V2-11 -> V2-12
 
