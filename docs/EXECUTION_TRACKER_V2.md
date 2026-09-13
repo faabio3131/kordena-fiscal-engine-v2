@@ -27,7 +27,7 @@ Estados permitidos: `PENDENTE`, `EM EXECUÇÃO`, `BLOQUEADO`, `CONCLUÍDO`. Nenh
 | V2-10 | Contract Packs multiproduto | **CONCLUÍDO** | PR #11 Draft; `345652ecbfc18c8bd3511cf5b9083ba0dbc259cb`; 397 PASS |
 | V2-11 | Control Plane independente | **CONCLUÍDO** | PR #12 Draft; gate `eed6b056e9d1941da435179c5eaf805c261f6622`; run `34736942613`; 85 source; 437 PASS |
 | V2-12 | Gateway/Signer/Vault production adapters | **CONCLUÍDO** | PR #13 Draft; B6 `b7bccf2babed336941d920eed73cd0699e6939d4`; 508 PASS; fechamento documental `8cbd4f974a6e72e3f99557d6481c9267a3e8ef81`; CI final dispatch-only |
-| V2-13 | Observabilidade + Compliance Operations | **EM EXECUÇÃO** | PR #14 Draft; B1 `11aa2fa9a63d624235ba90619d853aa3d38e2bb3` / run `34763558714` / job `103740454991` / 99 source / 518 PASS; B2 em execução |
+| V2-13 | Observabilidade + Compliance Operations | **EM EXECUÇÃO** | PR #14 Draft; B1 518 PASS; B2 `832cdddcc0653ead483ca42a6c93c7966ad9e67f` / run `34763739929` / job `103740927942` / 100 source / 528 PASS; B3 em execução |
 | V2-14 | Hardening sistêmico | PENDENTE | depende V2-13 |
 | V2-15 | Homologação + pilotos controlados | PENDENTE | depende V2-14 |
 | V2-16 | Integração produtos FM | BLOQUEADO PARCIAL | depende do Core universal certificado e readiness dos produtos |
@@ -54,19 +54,22 @@ Gate documental final: `8cbd4f974a6e72e3f99557d6481c9267a3e8ef81` / run `3476297
 
 ### Bloco 1 — Structured Observability Boundary + Sanitization — CONCLUÍDO/CERTIFICADO
 
-Boundary provider-neutral criado fora do domínio com eventos estruturados, contexto fiscal explícito, sanitização recursiva fail-closed, bounded text/collections e sink sintético sem rede/filesystem. Bytes e objetos desconhecidos são redigidos sem `repr`; chaves sensíveis são redigidas; referências/hashes explicitamente seguros sobrevivem. Falha do sink não altera execução fiscal.
+Boundary provider-neutral com eventos estruturados, sanitização recursiva fail-closed e sink sintético best-effort.
 
-Primeira tentativa: run `34763491466` / job `103740272028`; Install PASS, Ruff falhou apenas por 2 ocorrências UP035 de import `Mapping`; Mypy/Pytest bloqueados.
+Gate definitivo: `11aa2fa9a63d624235ba90619d853aa3d38e2bb3` / run `34763558714` / job `103740454991` / **99 source / 518 PASS em 4.52s**. CI restaurado em `e18af325808c53637492680b17219db0deea49cc`.
 
-Gate definitivo: `11aa2fa9a63d624235ba90619d853aa3d38e2bb3` / run `34763558714` / job `103740454991` / **Install PASS / Ruff PASS / Mypy strict PASS — 99 source / 518 PASS em 4.52s**. Baseline V2-12: 508; incremento líquido +10. CI restaurado em `e18af325808c53637492680b17219db0deea49cc`.
+### Bloco 2 — Metrics + Cardinality Governance — CONCLUÍDO/CERTIFICADO
 
-### Bloco 2 — Metrics + Cardinality Governance — EM EXECUÇÃO
+Métricas provider-neutral, counters/gauges/histograms, labels por whitelist, scope não sobrescrevível, limite por séries e rejeição fail-closed de labels sensíveis/alta cardinalidade.
 
-Objetivo: métricas provider-neutral por scope fiscal, counters/gauges/histograms, labels por whitelist e cardinalidade limitada, sem segredo/payload em labels.
+Gate definitivo: `832cdddcc0653ead483ca42a6c93c7966ad9e67f` / run `34763739929` / job `103740927942` / **100 source / 528 PASS em 5.02s**. Baseline B1: 518; incremento +10. CI restaurado em `bd300c3e92cf344f91d74976ae235c909ba65ced`.
+
+### Bloco 3 — Tracing / Correlation / Causation — EM EXECUÇÃO
+
+Objetivo: propagação provider-neutral de trace/correlation/causation, spans sanitizados e continuidade entre application/outbox/provider/reconciliation sem tornar tracing estado fiscal.
 
 ### Blocos seguintes
 
-- B3 Tracing / Correlation / Causation — PENDENTE;
 - B4 Operational & Compliance Alerts — PENDENTE;
 - B5 Regulatory Watcher Governado — PENDENTE;
 - B6 End-to-End Certification + fechamento — PENDENTE.
