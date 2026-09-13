@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="FM Fiscal premium operations portal reference surface">
+  <title>FM Fiscal — Control Center</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Pular para o conteúdo</a>
+  <div class="shell">
+    <aside class="sidebar" aria-label="Navegação principal">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">FM</span>
+        <div><strong>FM Fiscal</strong><small>Control Center</small></div>
+      </div>
+      <nav id="nav"></nav>
+      <div class="sidebar-foot">
+        <span class="health-dot" aria-hidden="true"></span>
+        <span>Ambiente de referência</span>
+      </div>
+    </aside>
+
+    <main id="main" tabindex="-1">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">FM Tecnologia · Produto independente</p>
+          <h1 id="view-title">Visão geral</h1>
+        </div>
+        <div class="top-actions">
+          <button class="ghost" type="button" id="environment-button" aria-haspopup="dialog">Homologação</button>
+          <button class="primary" type="button" id="new-action">Nova configuração</button>
+        </div>
+      </header>
+
+      <section class="notice" role="status" aria-live="polite">
+        <strong>Release Candidate interno.</strong>
+        Nenhuma ação desta superfície ativa produção, revela segredos ou concede readiness fiscal.
+      </section>
+
+      <section class="metrics" aria-label="Indicadores principais">
+        <article class="metric"><span>Readiness interno</span><strong>Verde</strong><small>Gates internos certificados</small></article>
+        <article class="metric"><span>Filas críticas</span><strong>0</strong><small>Sem backlog sintético</small></article>
+        <article class="metric"><span>Integrações</span><strong>4</strong><small>Estados governados</small></article>
+        <article class="metric"><span>Ambiente</span><strong>HOMOLOG</strong><small>Produção não habilitada</small></article>
+      </section>
+
+      <section class="workspace" id="workspace" aria-live="polite"></section>
+    </main>
+  </div>
+
+  <dialog id="confirm-dialog" aria-labelledby="dialog-title">
+    <form method="dialog">
+      <p class="eyebrow">Ação crítica</p>
+      <h2 id="dialog-title">Confirmar operação</h2>
+      <p>Esta referência nunca executa efeitos fiscais reais. Em produto, ações críticas exigem confirmação explícita e authority gates.</p>
+      <div class="dialog-actions"><button value="cancel" class="ghost">Cancelar</button><button value="confirm" class="danger">Confirmar referência</button></div>
+    </form>
+  </dialog>
+
+  <script src="app.js" defer></script>
+</body>
+</html>
