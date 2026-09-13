@@ -127,6 +127,10 @@ Gate funcional definitivo B6:
 - baseline B5: 497; incremento líquido: **+11 testes**;
 - CI restaurado para `workflow_dispatch` no commit `0e232f63d052db6ca2a7c8cd6ef5d97e3fdf0032`.
 
+### Gate de fechamento documental
+
+Após reconciliar plano, tracker, closure record e corpo da PR, a regressão completa foi executada novamente no SHA `8cbd4f974a6e72e3f99557d6481c9267a3e8ef81`, run `34762972272`, job `103738907041`: **Install PASS, Ruff PASS, Mypy strict PASS em 97 source files e 508 PASS em 4.12s**. O CI foi restaurado definitivamente no commit `75dece2ed83d323834617857f943e3373bc6ecb8` para o blob dispatch-only `b161340d7164afcbf3da0eb0327135528a39450c`.
+
 ## Auditoria integral V2-11 -> V2-12
 
 Compare funcional `0439246151c7edc959615361c0275961e11c3af0` -> `b7bccf2babed336941d920eed73cd0699e6939d4`:
@@ -141,7 +145,7 @@ Compare funcional `0439246151c7edc959615361c0275961e11c3af0` -> `b7bccf2babed336
 - nenhuma chave/certificado/CSC/token/credential real;
 - nenhuma dependência privada de SaaS no runtime universal.
 
-Após o gate funcional, `.github/workflows/ci.yml` foi restaurado para seu blob governado dispatch-only `b161340d7164afcbf3da0eb0327135528a39450c`.
+O diff documental final agrega somente registros de fechamento e restauração do CI; não altera o comportamento funcional certificado pelo gate B6.
 
 ## Dependências e limites
 
