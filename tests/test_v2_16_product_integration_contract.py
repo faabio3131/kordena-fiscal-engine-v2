@@ -13,10 +13,9 @@ from kordena_fiscal.integrations import (
     CAPABILITIES_ENDPOINT,
     IDEMPOTENCY_HEADER,
     ISSUANCES_ENDPOINT,
-    OPERATIONS_ENDPOINT_TEMPLATE,
-    RECONCILIATION_ENDPOINT,
+    QUERIES_ENDPOINT,
+    RECONCILIATIONS_ENDPOINT,
     REQUIRED_SCOPE_HEADERS,
-    WEBHOOKS_ENDPOINT,
     resolve_product_integration_contract,
 )
 
@@ -32,9 +31,8 @@ def test_bridge_endpoints_declared_by_integration_contract_exist_in_openapi() ->
     for endpoint in (
         CAPABILITIES_ENDPOINT,
         ISSUANCES_ENDPOINT,
-        OPERATIONS_ENDPOINT_TEMPLATE,
-        RECONCILIATION_ENDPOINT,
-        WEBHOOKS_ENDPOINT,
+        QUERIES_ENDPOINT,
+        RECONCILIATIONS_ENDPOINT,
     ):
         assert endpoint in paths
 
