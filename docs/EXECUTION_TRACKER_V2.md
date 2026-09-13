@@ -26,7 +26,7 @@ Estados permitidos: `PENDENTE`, `EM EXECUÇÃO`, `BLOQUEADO`, `CONCLUÍDO`. Nenh
 | V2-09 | Modularização de verticais | **CONCLUÍDO** | PR #10 Draft; `88071fd557199ffd6848312ea5559b0cba415ee1`; 346 PASS |
 | V2-10 | Contract Packs multiproduto | **CONCLUÍDO** | PR #11 Draft; `345652ecbfc18c8bd3511cf5b9083ba0dbc259cb`; 397 PASS |
 | V2-11 | Control Plane independente | **CONCLUÍDO** | PR #12 Draft; gate `eed6b056e9d1941da435179c5eaf805c261f6622`; run `34736942613`; 85 source files; 437 PASS |
-| V2-12 | Gateway/Signer/Vault production adapters | **EM EXECUÇÃO** | PR #13 Draft; B1 447 PASS; B2 459 PASS; B3 `42f27c67145d2d4469374596d869ffc3ba05f013` / run `34760113452` / job `103731343836` / 93 source / 471 PASS; CI restaurado |
+| V2-12 | Gateway/Signer/Vault production adapters | **EM EXECUÇÃO** | PR #13 Draft; B1 447 PASS; B2 459 PASS; B3 471 PASS; B4 `a3db491049d6058753ebad18d6fb62026310b1b8` / run `34760627774` / job `103732719543` / 95 source / 483 PASS; CI restaurado |
 | V2-13 | Observabilidade + Compliance Operations | PENDENTE | depende V2-12 |
 | V2-14 | Hardening sistêmico | PENDENTE | regressão/carga/falhas/segurança |
 | V2-15 | Homologação + pilotos controlados | PENDENTE | depende V2-14 |
@@ -45,29 +45,32 @@ Estados permitidos: `PENDENTE`, `EM EXECUÇÃO`, `BLOQUEADO`, `CONCLUÍDO`. Nenh
 
 ### Bloco 1 — Vault/KMS abstraction + Secret Resolution Boundary — CONCLUÍDO/CERTIFICADO
 
-Gate: `961ee84aa28f58ce933d2dd899bfd013c801da1c` / run `34758902465` / job `103728060621` / **88 source files / 447 PASS em 2.15s**. CI restaurado em `cb399d0c74ae5925c4d89412a4760472fe7ab430`.
+Gate: `961ee84aa28f58ce933d2dd899bfd013c801da1c` / run `34758902465` / job `103728060621` / **88 source / 447 PASS**.
 
 ### Bloco 2 — Signer Boundary + assinatura por SecretReference — CONCLUÍDO/CERTIFICADO
 
-Gate: `f27ae85ac1dbf0b5cf47eea96d1437585b37cb92` / run `34759157421` / job `103728746009` / **91 source files / 459 PASS em 3.05s**. CI restaurado em `750dbb7e2e7f34fd55fe8a79fbda7dd422af9fb7`.
+Gate: `f27ae85ac1dbf0b5cf47eea96d1437585b37cb92` / run `34759157421` / job `103728746009` / **91 source / 459 PASS**.
 
 ### Bloco 3 — Provider/Gateway adapters + CSC/Credentials — CONCLUÍDO/CERTIFICADO
 
-- `ProviderDescriptor`/`ProviderRegistry` explícitos e fail-closed;
-- routing por document kind + jurisdiction + environment + operation + provider opcional explícito;
-- `ProviderRequest`/`ProviderResponse` não carregam segredo;
-- credentials via `SecretReferenceKind.CREDENTIALS` e CSC via `SecretReferenceKind.CSC` somente por Vault;
-- transport injetável e synthetic/no-network;
-- `ProviderGatewayService` consulta a autoridade `CapabilityReadinessService` sem promover readiness;
-- cross-tenant/unit/environment e ambiguidade bloqueados.
+Gate: `42f27c67145d2d4469374596d869ffc3ba05f013` / run `34760113452` / job `103731343836` / **93 source / 471 PASS**. CI restaurado em `9e5019d64b5174ad9fe138e52c566ec3df73af84`.
 
-Falhas intermediárias: run `34759978765` (Ruff) e run `34760070032` (ciclo de importação detectado na coleta). Correções: lint/testes específicos e exports lazy em `gateway.__init__`.
+### Bloco 4 — Resilience Runtime — CONCLUÍDO/CERTIFICADO
 
-Gate definitivo: `42f27c67145d2d4469374596d869ffc3ba05f013` / run `34760113452` / job `103731343836` / **93 source files / 471 PASS em 3.27s**. CI restaurado em `9e5019d64b5174ad9fe138e52c566ec3df73af84`.
+- transport exige connect/read timeout explícitos;
+- retry por operação com bounded exponential backoff e jitter injetável;
+- autorização com outcome desconhecido exige query/reconciliation e não é repetida automaticamente;
+- fiscal rejection/auth/validation não são classificados como indisponibilidade;
+- circuit breaker CLOSED/OPEN/HALF_OPEN particionado por provider/environment/jurisdiction;
+- breaker não cria estado fiscal durável paralelo.
 
-### Bloco 4 — Resilience Runtime — EM EXECUÇÃO
+Falhas intermediárias: run `34760512225` (Ruff E501) e `34760572581` (Mypy retorno Any no delay), ambas corrigidas sem relaxar gates.
 
-Próximo objetivo: timeout explícito, retry governado, backoff/jitter determinístico, circuit breaker particionado e unknown-delivery outcome sem duplicar autorização.
+Gate definitivo: `a3db491049d6058753ebad18d6fb62026310b1b8` / run `34760627774` / job `103732719543` / **95 source files / 483 PASS em 3.03s**. CI restaurado em `dd7d3eb5a6c718bf9576b377112b0c4a812e6159`.
+
+### Bloco 5 — Homologation Gates + Cross-provider — EM EXECUÇÃO
+
+Próximo objetivo: matriz técnica explícita por provider/document/jurisdiction/environment/operation, baseada em evidências, sem duplicar a autoridade central de Capability/Readiness, com certificação cross-provider e NFS-e municipality-aware.
 
 ## Governança preservada
 
