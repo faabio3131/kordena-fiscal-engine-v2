@@ -2,15 +2,15 @@
 
 Data de início: 2026-09-11  
 Repositório: `faabio3131/kordena-fiscal-engine-v2`  
-Status global: **EM EXECUÇÃO — dependências externas V2-15 pendentes**  
-Última fase integralmente concluída sem dependência externa: **V2-14 — Hardening sistêmico**  
-Fase atual: **V2-15 — BLOQUEADA PARCIAL; B0-B6 INTERNAMENTE CONCLUÍDOS/CERTIFICADOS; EXTERNO PENDENTE**
+Status global: **EM EXECUÇÃO CONTROLADA — V2-15 externa pendente; V2-16 parcialmente certificada**  
+Última fase integralmente concluída sem bloqueio externo: **V2-14 — Hardening sistêmico**  
+Fase atual: **V2-16 — BLOQUEADA PARCIAL; B1 E B3 INTERNAMENTE CERTIFICADOS; B2 KORDENA BLOQUEADO POR PRÉ-REQUISITO WEB PREMIUM/FISC-20**
 
-> Snapshot pré-V2-15: `docs/history/EXECUTION_TRACKER_V2_PRE_V2_15.md`. Plano: `docs/V2_15_HOMOLOGATION_CONTROLLED_PILOTS.md`. Fechamento: `docs/V2_15_CLOSURE_CERTIFICATION.md`.
+> Snapshot pré-V2-15: `docs/history/EXECUTION_TRACKER_V2_PRE_V2_15.md`. Plano V2-15: `docs/V2_15_HOMOLOGATION_CONTROLLED_PILOTS.md`. Fechamento V2-15: `docs/V2_15_CLOSURE_CERTIFICATION.md`. Execução V2-16 B1-B3: `docs/V2_16_PRODUCT_INTEGRATION_EXECUTION.md`.
 
 ## Regra de governança
 
-Estados permitidos: `PENDENTE`, `EM EXECUÇÃO`, `BLOQUEADO`, `CONCLUÍDO`. A PR #16 permanece OPEN/DRAFT/não mergeada. Deploy, produção real, cutover e promoção de `PRODUCTION_APPROVED` continuam proibidos. Homologação oficial externa exige evidência externa real; teste sintético não substitui resposta oficial.
+Estados permitidos: `PENDENTE`, `EM EXECUÇÃO`, `BLOQUEADO`, `CONCLUÍDO`. A PR #16 permanece OPEN/DRAFT/não mergeada e preserva o checkpoint certificado da V2-15. PRs de integração da V2-16 também permanecem Draft/não mergeadas. Deploy, produção real, cutover e promoção de `PRODUCTION_APPROVED` continuam proibidos. Homologação oficial externa exige evidência externa real; teste sintético não substitui resposta oficial.
 
 | Bloco | Escopo | Status | Evidência / Gate |
 |---|---|---|---|
@@ -18,7 +18,7 @@ Estados permitidos: `PENDENTE`, `EM EXECUÇÃO`, `BLOQUEADO`, `CONCLUÍDO`. A PR
 | V2-13 | Observabilidade + Compliance Operations | **CONCLUÍDO** | PR #14 Draft; 563 PASS |
 | V2-14 | Hardening sistêmico | **CONCLUÍDO** | PR #15 Draft; 582 PASS; doc gate 582 PASS |
 | V2-15 | Homologação + pilotos controlados | **BLOQUEADO PARCIAL — INTERNO CERTIFICADO** | PR #16 Draft; B0-B6 internos verdes; B6 final 620 PASS; externo oficial pendente |
-| V2-16 | Integração produtos FM | **BLOQUEADO PARCIAL / NÃO INICIADO** | exige nova autorização; verificar readiness real de cada produto antes de integrar |
+| V2-16 | Integração produtos FM | **BLOQUEADO PARCIAL — B1/B3 CERTIFICADOS; B2 KORDENA BLOQUEADO** | PR #17 Draft no Core; Iron PR #48 Draft; Kordena PR #118 ainda OPEN/DRAFT |
 | V2-17 | Convergência/cutover | PENDENTE | NÃO AUTORIZADO |
 | V2-18 | Produto comercial independente | PENDENTE | posterior ao uso interno certificado |
 
@@ -60,12 +60,38 @@ Suíte: `tests/homologation/test_v2_15_closure.py`. Gate final SHA `a1c539081236
 
 CI restaurado após o gate no commit `bca2b21103e0cc9232daa33f492535cd9c0fb93e` ao blob governado exato `b161340d7164afcbf3da0eb0327135528a39450c`: `workflow_dispatch` only + `permissions: contents: read`.
 
+## V2-16 — execução autorizada dos blocos B1-B3
+
+### B1 — Contrato de integração — CONCLUÍDO/CERTIFICADO INTERNAMENTE
+
+Fronteira `kordena_fiscal.integrations` ligada aos Product Contract Packs certificados e ao OpenAPI atual do FM Fiscal Bridge v1. Readiness continua obrigatório e nenhuma resolução de pack concede homologação ou produção.
+
+Primeiro gate detectou drift de rotas/cabeçalhos contra o OpenAPI vigente; a implementação foi corrigida sem enfraquecer o teste. Gate certificado: SHA `c23d49997a4344363720436374a8d9476e665262`, run `34779681157`: Install PASS, Ruff PASS, Mypy PASS, Pytest PASS.
+
+### B2 — Integração Kordena — BLOQUEADA POR PRÉ-REQUISITO REAL
+
+O Plano Mestre exige V1 Web Premium liberada para FISC-20. A PR Kordena #118 permanece OPEN/DRAFT e em estado funcional parcial. Nenhum acoplamento runtime foi introduzido e nenhum verde artificial foi declarado. O bloqueio é do pré-requisito do produto, não do FM Fiscal Core.
+
+### B3 — Integração Iron Fit — CONCLUÍDO/CERTIFICADO INTERNAMENTE
+
+Integração ancorada no fato autoritativo `FinancialService.payCharge`, após quitação idempotente da `Charge`. O Iron produz handoff fiscal `PENDING_CAPABILITY`, determinístico e auditável, mas não seleciona provider, município, alíquota nem prontidão. O Core Fiscal continua autoridade de binding/readiness/regras/emissão.
+
+Branch Iron: `feat/fisc-v2-16-iron-integration`. PR #48 OPEN/DRAFT e não mergeada. Gate canônico final: SHA `2be8321eeb066f0296ba812faab0a098c32f0632`, run `34780329013`: npm ci PASS, dependency audit PASS, Prisma generate PASS, lint/typecheck PASS, build PASS e smoke regression tests PASS.
+
+O gate inicialmente encontrou vulnerabilidade alta transitiva em `multer 2.2.0`; o audit não foi desabilitado. A dependência foi corrigida para `2.3.0`, o lockfile foi atualizado e o workflow canônico foi restaurado antes do gate final.
+
+### Decisão formal V2-16 após B1-B3
+
+**V2-16 — BLOQUEADA PARCIAL — B1 E B3 INTERNAMENTE CONCLUÍDOS/CERTIFICADOS; B2 KORDENA BLOQUEADA POR PRÉ-REQUISITO WEB PREMIUM/FISC-20.**
+
+A autorização de 2026-09-13 cobriu os três blocos acima. Nenhum bloco posterior à V2-16.3 foi iniciado nesta execução.
+
 ## Evidência externa / bloqueios reais
 
 Nenhum provider, UF, município ou operação foi declarado oficialmente homologado. Não foram fornecidos/consumidos segredos reais, certificados privados reais, CSC real, provider credentials reais, endpoints produtivos ou respostas externas oficiais. Nenhum piloto externo real foi executado.
 
-Portanto a decisão formal é: **V2-15 BLOQUEADA PARCIAL — TRABALHO INTERNO CONCLUÍDO/CERTIFICADO; DEPENDÊNCIAS EXTERNAS PENDENTES.** O bloqueio restante é externo e explícito, não uma falha técnica do Core.
+A V2-15 continua formalmente: **BLOQUEADA PARCIAL — TRABALHO INTERNO CONCLUÍDO/CERTIFICADO; DEPENDÊNCIAS EXTERNAS PENDENTES.** Na V2-16, o bloqueio adicional atual é o pré-requisito Kordena Web Premium/FISC-20.
 
 ## Governança preservada
 
-**SEM MERGE da PR #16. SEM Ready/auto-merge. SEM deploy. SEM produção real. SEM cutover. SEM segredo real no repositório. SEM homologação externa inventada. SEM promoção de `PRODUCTION_APPROVED`. V2-16 NÃO INICIADA e exige nova autorização explícita.**
+**SEM MERGE da PR #16. SEM MERGE da PR #17. SEM MERGE da PR Iron #48. SEM Ready/auto-merge. SEM deploy. SEM produção real. SEM cutover. SEM segredo real no repositório. SEM homologação externa inventada. SEM promoção de `PRODUCTION_APPROVED`. V2-17 NÃO INICIADA.**
