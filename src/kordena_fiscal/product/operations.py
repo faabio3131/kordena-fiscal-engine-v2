@@ -80,7 +80,10 @@ DEFAULT_TECHNICAL_TARGETS: tuple[TechnicalServiceTarget, ...] = (
         IncidentSeverity.SEV1,
         15,
         30,
-        "Technical target for major fiscal-authority or security unavailability; not contractual SLA.",
+        (
+            "Technical target for major fiscal-authority or security unavailability; "
+            "not contractual SLA."
+        ),
     ),
     TechnicalServiceTarget(
         IncidentSeverity.SEV2,
@@ -119,7 +122,11 @@ DEFAULT_RUNBOOKS: tuple[IncidentRunbook, ...] = (
     IncidentRunbook(
         IncidentCategory.SEFAZ_OUTAGE,
         IncidentSeverity.SEV2,
-        ("confirm official availability", "apply governed contingency only if capable", "reconcile"),
+        (
+            "confirm official availability",
+            "apply governed contingency only if capable",
+            "reconcile",
+        ),
         True,
     ),
     IncidentRunbook(
@@ -167,7 +174,11 @@ DEFAULT_RUNBOOKS: tuple[IncidentRunbook, ...] = (
     IncidentRunbook(
         IncidentCategory.DISASTER_RECOVERY,
         IncidentSeverity.SEV1,
-        ("activate recovery runbook", "restore authority state", "validate before reopening writers"),
+        (
+            "activate recovery runbook",
+            "restore authority state",
+            "validate before reopening writers",
+        ),
         True,
     ),
 )
