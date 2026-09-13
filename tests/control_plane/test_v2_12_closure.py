@@ -79,6 +79,9 @@ SP = BrazilianJurisdiction("SP")
 SAO_PAULO = BrazilianJurisdiction("SP", "3550308")
 CERT_REF = "ref:fm-fiscal/tenant-closure/unit-closure/hml-certificate"
 CREDENTIAL_REF = "ref:fm-fiscal/tenant-closure/unit-closure/hml-provider-credentials"
+NFSE_CREDENTIAL_REF = (
+    "ref:fm-fiscal/tenant-closure/unit-closure/hml-nfse-provider-credentials"
+)
 CSC_REF = "ref:fm-fiscal/tenant-closure/unit-closure/hml-csc"
 PFX_PASSWORD = b"closure-synthetic-only"
 CREDENTIAL_BYTES = b"CLOSURE-SYNTHETIC-CREDENTIAL"
@@ -142,7 +145,7 @@ def _tenant_admin() -> AdminPrincipal:
 
 def _database(tmp_path) -> SqliteFiscalDatabase:
     database = SqliteFiscalDatabase(tmp_path / "v2-12-closure.sqlite3")
-    assert database.initialize() == (1, 2, 3, 4)
+    assert database.initialize() == (1, 2, 3, 4, 5)
     return database
 
 
@@ -163,7 +166,7 @@ def _scope(
 
 def _onboard(
     database: SqliteFiscalDatabase,
-) -> tuple[SecretReference, SecretReference, SecretReference]:
+) -> tuple[SecretReference, SecretReference, SecretReference, SecretReference]:
     service = DurableControlPlaneService(database)
     service.onboard_organization(
         actor=_global_admin(),
@@ -194,6 +197,15 @@ def _onboard(
         tenant_id=TENANT,
         unit_id=UNIT,
         environment=FiscalEnvironment.HOMOLOGATION,
+        provider_id=PROVIDER,
+    )
+    nfse_credentials = SecretReference(
+        reference_id=NFSE_CREDENTIAL_REF,
+        kind=SecretReferenceKind.CREDENTIALS,
+        tenant_id=TENANT,
+        unit_id=UNIT,
+        environment=FiscalEnvironment.HOMOLOGATION,
+        provider_id=NFSE_PROVIDER,
     )
     csc = SecretReference(
         reference_id=CSC_REF,
@@ -201,14 +213,15 @@ def _onboard(
         tenant_id=TENANT,
         unit_id=UNIT,
         environment=FiscalEnvironment.HOMOLOGATION,
+        provider_id=PROVIDER,
     )
-    for reference in (certificate, credentials, csc):
+    for reference in (certificate, credentials, nfse_credentials, csc):
         service.bind_secret_reference(
             actor=_tenant_admin(),
             reference=reference,
             correlation_id=f"corr-v2-12-{reference.kind.value}",
         )
-    return certificate, credentials, csc
+    return certificate, credentials, nfse_credentials, csc
 
 
 def _synthetic_pkcs12() -> bytes:
@@ -239,6 +252,7 @@ def _synthetic_pkcs12() -> bytes:
 def _vault(
     certificate: SecretReference,
     credentials: SecretReference,
+    nfse_credentials: SecretReference,
     csc: SecretReference,
     *,
     pkcs12_bytes: bytes,
@@ -264,9 +278,9 @@ def _vault(
     )
     vault.register(
         host_namespace=HOST,
-        reference=credentials,
+        reference=nfse_credentials,
         material=EphemeralProviderCredentialsMaterial(
-            reference_id=CREDENTIAL_REF,
+            reference_id=NFSE_CREDENTIAL_REF,
             credential_bytes=NFSE_CREDENTIAL_BYTES,
         ),
         provider_id=NFSE_PROVIDER,
@@ -418,9 +432,9 @@ def _authorize_request(
 
 def test_v2_12_end_to_end_nfe_signs_routes_and_normalizes_without_secret_leak(tmp_path) -> None:
     database = _database(tmp_path)
-    certificate, credentials, csc = _onboard(database)
+    certificate, credentials, nfse_credentials, csc = _onboard(database)
     pfx = _synthetic_pkcs12()
-    vault = _vault(certificate, credentials, csc, pkcs12_bytes=pfx)
+    vault = _vault(certificate, credentials, nfse_credentials, csc, pkcs12_bytes=pfx)
     signer = _signer(database, vault)
     _, signed = _sign(signer, certificate, FiscalDocumentKind.NFE)
     transport = SyntheticProviderTransport()
@@ -446,8 +460,8 @@ def test_v2_12_end_to_end_nfe_signs_routes_and_normalizes_without_secret_leak(tm
 
 def test_v2_12_end_to_end_nfce_requires_provider_scoped_csc(tmp_path) -> None:
     database = _database(tmp_path)
-    certificate, credentials, csc = _onboard(database)
-    vault = _vault(certificate, credentials, csc, pkcs12_bytes=_synthetic_pkcs12())
+    certificate, credentials, nfse_credentials, csc = _onboard(database)
+    vault = _vault(certificate, credentials, nfse_credentials, csc, pkcs12_bytes=_synthetic_pkcs12())
     _, signed = _sign(_signer(database, vault), certificate, FiscalDocumentKind.NFCE)
     transport = SyntheticProviderTransport()
     gateway = _resilient(_provider_service(database, vault, transport))
@@ -464,8 +478,8 @@ def test_v2_12_end_to_end_nfce_requires_provider_scoped_csc(tmp_path) -> None:
 
 def test_v2_12_unknown_authorization_outcome_requires_reconciliation_not_retry(tmp_path) -> None:
     database = _database(tmp_path)
-    certificate, credentials, csc = _onboard(database)
-    vault = _vault(certificate, credentials, csc, pkcs12_bytes=_synthetic_pkcs12())
+    certificate, credentials, nfse_credentials, csc = _onboard(database)
+    vault = _vault(certificate, credentials, nfse_credentials, csc, pkcs12_bytes=_synthetic_pkcs12())
     _, signed = _sign(_signer(database, vault), certificate, FiscalDocumentKind.NFE)
     transport = SyntheticProviderTransport()
     transport.queue_error(ProviderTransportError("ambiguous delivery", delivery_unknown=True))
@@ -482,8 +496,8 @@ def test_v2_12_unknown_authorization_outcome_requires_reconciliation_not_retry(t
 
 def test_v2_12_provider_credentials_are_partitioned_and_never_fall_back(tmp_path) -> None:
     database = _database(tmp_path)
-    certificate, credentials, csc = _onboard(database)
-    vault = _vault(certificate, credentials, csc, pkcs12_bytes=_synthetic_pkcs12())
+    certificate, credentials, nfse_credentials, csc = _onboard(database)
+    vault = _vault(certificate, credentials, nfse_credentials, csc, pkcs12_bytes=_synthetic_pkcs12())
     resolution = SecretResolutionService(unit_of_work_factory=database, vault=vault)
     transport = SyntheticProviderTransport()
     adapter = ConfiguredProviderAdapter(
@@ -522,8 +536,8 @@ def test_v2_12_nfse_remains_municipality_and_provider_specific(
     tmp_path,
 ) -> None:
     database = _database(tmp_path)
-    certificate, credentials, csc = _onboard(database)
-    vault = _vault(certificate, credentials, csc, pkcs12_bytes=_synthetic_pkcs12())
+    certificate, credentials, nfse_credentials, csc = _onboard(database)
+    vault = _vault(certificate, credentials, nfse_credentials, csc, pkcs12_bytes=_synthetic_pkcs12())
     resolution = SecretResolutionService(unit_of_work_factory=database, vault=vault)
     transport = SyntheticProviderTransport()
     adapter = ConfiguredProviderAdapter(
@@ -562,9 +576,9 @@ def test_v2_12_nfse_remains_municipality_and_provider_specific(
 
 def test_v2_12_restart_preserves_references_but_not_runtime_secret_material(tmp_path) -> None:
     database = _database(tmp_path)
-    certificate, credentials, csc = _onboard(database)
+    certificate, credentials, nfse_credentials, csc = _onboard(database)
     pfx = _synthetic_pkcs12()
-    vault = _vault(certificate, credentials, csc, pkcs12_bytes=pfx)
+    vault = _vault(certificate, credentials, nfse_credentials, csc, pkcs12_bytes=pfx)
     signer = _signer(database, vault)
     _sign(signer, certificate, FiscalDocumentKind.NFE)
 
@@ -595,9 +609,9 @@ def test_v2_12_restart_preserves_references_but_not_runtime_secret_material(tmp_
 
 def test_v2_12_sqlite_contains_references_but_no_runtime_secret_material(tmp_path) -> None:
     database = _database(tmp_path)
-    certificate, credentials, csc = _onboard(database)
+    certificate, credentials, nfse_credentials, csc = _onboard(database)
     pfx = _synthetic_pkcs12()
-    vault = _vault(certificate, credentials, csc, pkcs12_bytes=pfx)
+    vault = _vault(certificate, credentials, nfse_credentials, csc, pkcs12_bytes=pfx)
     _, signed = _sign(_signer(database, vault), certificate, FiscalDocumentKind.NFE)
     transport = SyntheticProviderTransport()
     _resilient(_provider_service(database, vault, transport)).execute(

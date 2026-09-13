@@ -75,7 +75,7 @@ def _tenant_admin(tenant_id: str = "tenant-a") -> AdminPrincipal:
 
 def _database(tmp_path, name: str = "control-plane.sqlite3") -> SqliteFiscalDatabase:
     database = SqliteFiscalDatabase(tmp_path / name)
-    assert database.initialize() == (1, 2, 3, 4)
+    assert database.initialize() == (1, 2, 3, 4, 5)
     return database
 
 
@@ -158,6 +158,18 @@ def _profile(
     )
 
 
+
+def _remove_v5(connection: sqlite3.Connection) -> None:
+    for table in (
+        "fm_commercial_provider_runtime_policies",
+        "fm_commercial_webhook_destinations",
+        "fm_commercial_unit_modules",
+        "fm_commercial_product_profiles",
+        "fm_commercial_provider_bindings",
+    ):
+        connection.execute(f"DROP TABLE {table}")
+    connection.execute("DELETE FROM fm_schema_migrations WHERE version = 5")
+
 def _remove_v4(connection: sqlite3.Connection) -> None:
     connection.execute("DROP INDEX fm_control_plane_audit_tenant_idx")
     connection.execute("DROP TABLE fm_control_plane_audit")
@@ -171,15 +183,16 @@ def _remove_v4(connection: sqlite3.Connection) -> None:
 
 def test_v2_11_migration_v4_is_explicit_and_upgrades_v2_08_checkpoint(tmp_path) -> None:
     database = _database(tmp_path, "migration-v4.sqlite3")
-    assert database.applied_migrations() == (1, 2, 3, 4)
+    assert database.applied_migrations() == (1, 2, 3, 4, 5)
 
     with sqlite3.connect(database.path) as connection:
+        _remove_v5(connection)
         _remove_v4(connection)
         connection.commit()
 
     assert database.applied_migrations() == (1, 2, 3)
-    assert database.initialize() == (4,)
-    assert database.applied_migrations() == (1, 2, 3, 4)
+    assert database.initialize() == (4, 5)
+    assert database.applied_migrations() == (1, 2, 3, 4, 5)
 
     with sqlite3.connect(database.path) as connection:
         tables = {
@@ -257,7 +270,14 @@ def test_secret_reference_round_trip_persists_only_opaque_reference_metadata(tmp
                 "PRAGMA table_info(fm_control_plane_secret_references)"
             ).fetchall()
         }
-    assert columns == {"reference_id", "kind", "tenant_id", "unit_id", "environment"}
+    assert columns == {
+        "reference_id",
+        "kind",
+        "tenant_id",
+        "unit_id",
+        "environment",
+        "provider_id",
+    }
     assert not ({"secret", "value", "material", "password", "token", "pfx", "csc"} & columns)
 
 
