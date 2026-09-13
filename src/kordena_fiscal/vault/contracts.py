@@ -42,6 +42,12 @@ _PURPOSE_KIND: dict[SecretUsagePurpose, SecretReferenceKind] = {
     SecretUsagePurpose.CSC_AUTHENTICATION: SecretReferenceKind.CSC,
     SecretUsagePurpose.PROVIDER_AUTHENTICATION: SecretReferenceKind.CREDENTIALS,
 }
+_PROVIDER_SCOPED_PURPOSES = frozenset(
+    {
+        SecretUsagePurpose.CSC_AUTHENTICATION,
+        SecretUsagePurpose.PROVIDER_AUTHENTICATION,
+    }
+)
 
 
 def _required_text(value: str, field_name: str) -> str:
@@ -55,12 +61,13 @@ def _required_text(value: str, field_name: str) -> str:
 
 @dataclass(frozen=True, slots=True)
 class SecretResolutionContext:
-    """Explicit workload and fiscal scope for one secret resolution."""
+    """Explicit workload, fiscal scope and optional provider partition for one secret."""
 
     scope: ExecutionScope
     purpose: SecretUsagePurpose
     kind: SecretReferenceKind
     workload_id: str
+    provider_id: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.scope, ExecutionScope):
@@ -74,6 +81,17 @@ class SecretResolutionContext:
         if _PURPOSE_KIND[self.purpose] is not self.kind:
             raise FiscalValidationError("secret kind is incompatible with usage purpose")
         object.__setattr__(self, "workload_id", _required_text(self.workload_id, "workload_id"))
+
+        if self.provider_id is not None:
+            object.__setattr__(
+                self,
+                "provider_id",
+                _required_text(self.provider_id, "provider_id").lower(),
+            )
+        if self.purpose in _PROVIDER_SCOPED_PURPOSES and self.provider_id is None:
+            raise FiscalValidationError(
+                "provider_id is required for provider-scoped secret resolution"
+            )
 
 
 @dataclass(frozen=True, slots=True, repr=False, eq=False)
