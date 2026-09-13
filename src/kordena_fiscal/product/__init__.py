@@ -8,6 +8,14 @@ from .catalog import (
     EntitlementDefinition,
     ProductIdentity,
 )
+from .onboarding import (
+    ONBOARDING_SEQUENCE,
+    OnboardingEvidence,
+    OnboardingStep,
+    SelfServiceOnboarding,
+    SelfServiceOnboardingCheckpoint,
+    SelfServiceOnboardingError,
+)
 
 __all__ = [
     "CommercialCatalog",
@@ -15,5 +23,11 @@ __all__ = [
     "DEFAULT_COMMERCIAL_CATALOG",
     "EditionBlueprint",
     "EntitlementDefinition",
+    "ONBOARDING_SEQUENCE",
+    "OnboardingEvidence",
+    "OnboardingStep",
     "ProductIdentity",
+    "SelfServiceOnboarding",
+    "SelfServiceOnboardingCheckpoint",
+    "SelfServiceOnboardingError",
 ]
