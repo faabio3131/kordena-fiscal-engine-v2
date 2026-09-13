@@ -16,7 +16,7 @@ A V2-11 estabeleceu um Control Plane independente e host-neutral para o FM Fisca
 
 Foram certificados organização/unidade, atores administrativos, RBAC, ambientes explícitos, referências opacas e audit trail.
 
-Gate: `eaeca06739f75617c1eecabebcc846dd7`  
+Gate: `eaeca06739f756d31085617c1eecabebcc846dd7`  
 Run: `34708472525`  
 Resultado: **406 PASS**, 81 source files.
 
