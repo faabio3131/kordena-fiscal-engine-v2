@@ -46,6 +46,7 @@ class ControlPlanePermission(StrEnum):
     CAPABILITY_READ = "capability.read"
     CAPABILITY_WRITE = "capability.write"
     SECRET_REFERENCE_WRITE = "secret_reference.write"
+    COMMERCIAL_CONFIG_WRITE = "commercial_config.write"
     AUDIT_READ = "audit.read"
     OPERATIONS_READ = "operations.read"
 
@@ -143,13 +144,20 @@ class FiscalUnitRegistration:
 
 @dataclass(frozen=True, slots=True)
 class SecretReference:
-    """Opaque pointer only; secret/certificate/CSC material is never stored here."""
+    """Opaque pointer only; secret/certificate/CSC material is never stored here.
+
+    Provider credentials and NFC-e CSC are provider-scoped so one unit can use
+    multiple providers in the same environment without overwriting references.
+    Certificate references remain unit/environment scoped because document signing
+    is a Core capability rather than a provider credential.
+    """
 
     reference_id: str
     kind: SecretReferenceKind
     tenant_id: str
     unit_id: str
     environment: FiscalEnvironment
+    provider_id: str | None = None
 
     def __post_init__(self) -> None:
         normalized = _required_text(self.reference_id, "reference_id", max_length=256).lower()
@@ -164,6 +172,26 @@ class SecretReference:
         object.__setattr__(self, "unit_id", _token(self.unit_id, "unit_id"))
         if not isinstance(self.environment, FiscalEnvironment):
             raise FiscalValidationError("environment must be FiscalEnvironment")
+
+        provider_id = self.provider_id
+        provider_scoped = self.kind in {
+            SecretReferenceKind.CSC,
+            SecretReferenceKind.CREDENTIALS,
+        }
+        if provider_scoped and provider_id is None:
+            raise FiscalValidationError(
+                "provider_id is required for CSC and provider credentials references"
+            )
+        if not provider_scoped and provider_id is not None:
+            raise FiscalValidationError(
+                "provider_id is not allowed for unit-scoped certificate references"
+            )
+        if provider_id is not None:
+            object.__setattr__(self, "provider_id", _token(provider_id, "provider_id"))
+
+    @property
+    def provider_scope(self) -> str:
+        return self.provider_id or ""
 
 
 @dataclass(frozen=True, slots=True)
