@@ -4,9 +4,9 @@ Data de início: 2026-09-11
 Repositório: `faabio3131/kordena-fiscal-engine-v2`  
 Status global: **EM EXECUÇÃO**  
 Última fase concluída: **V2-11 — Control Plane independente**  
-Próxima fase: **V2-12 — Gateway/Signer/Vault production adapters — PENDENTE**
+Fase atual: **V2-12 — Gateway/Signer/Vault production adapters — EM EXECUÇÃO**
 
-> Snapshot anterior à V2-11: `docs/history/EXECUTION_TRACKER_V2_PRE_V2_11.md`. Fechamento detalhado: `docs/V2_11_CLOSURE_CERTIFICATION.md`.
+> Snapshot imediatamente anterior à V2-12: `docs/history/EXECUTION_TRACKER_V2_PRE_V2_12.md`. Fechamento V2-11: `docs/V2_11_CLOSURE_CERTIFICATION.md`.
 
 ## Regra de governança
 
@@ -25,8 +25,8 @@ Estados permitidos: `PENDENTE`, `EM EXECUÇÃO`, `BLOQUEADO`, `CONCLUÍDO`. Nenh
 | V2-08 | Events/Webhooks/Inbox/Outbox | **CONCLUÍDO** | PR #9 Draft; `bc77ee4cf2b7151d06c09cf32ca9168363ece1c7`; 337 PASS |
 | V2-09 | Modularização de verticais | **CONCLUÍDO** | PR #10 Draft; `88071fd557199ffd6848312ea5559b0cba415ee1`; 346 PASS |
 | V2-10 | Contract Packs multiproduto | **CONCLUÍDO** | PR #11 Draft; `345652ecbfc18c8bd3511cf5b9083ba0dbc259cb`; 397 PASS |
-| V2-11 | Control Plane independente | **CONCLUÍDO** | PR #12 Draft; gate final `eed6b056e9d1941da435179c5eaf805c261f6622`; run `34736942613`; 85 source files; **437 PASS**; CI restaurado em `df2c961db5ee7db20d6269afa6b2213e3bc30698` |
-| V2-12 | Gateway/Signer/Vault production adapters | PENDENTE | depende V2-11 |
+| V2-11 | Control Plane independente | **CONCLUÍDO** | PR #12 Draft; gate `eed6b056e9d1941da435179c5eaf805c261f6622`; run `34736942613`; 85 source files; 437 PASS |
+| V2-12 | Gateway/Signer/Vault production adapters | **EM EXECUÇÃO** | branch `v2/production-adapters`; base `0439246151c7edc959615361c0275961e11c3af0`; bootstrap iniciado |
 | V2-13 | Observabilidade + Compliance Operations | PENDENTE | depende V2-12 |
 | V2-14 | Hardening sistêmico | PENDENTE | regressão/carga/falhas/segurança |
 | V2-15 | Homologação + pilotos controlados | PENDENTE | depende V2-14 |
@@ -41,10 +41,27 @@ Estados permitidos: `PENDENTE`, `EM EXECUÇÃO`, `BLOQUEADO`, `CONCLUÍDO`. Nenh
 - Bloco 3 — Capability/Readiness governance: `292abfda6ffa02c599b5b01d0ec2ba766267f994` / run `34709912172` / 424 PASS.
 - Bloco 4 — Operational Control Plane: `a0b0ddd101942c2e1fa68550575b20a11470dcfe` / run `34710207596` / 430 PASS.
 - Bloco 5 — Certificação end-to-end: `eed6b056e9d1941da435179c5eaf805c261f6622` / run `34736942613` / job `103669941388` / 437 PASS em 1.99s.
-- Auditoria funcional V2-10 -> V2-11 no gate final: 55 commits à frente, 0 atrás, 26 arquivos líquidos.
-- CI normal restaurado para `workflow_dispatch` em `df2c961db5ee7db20d6269afa6b2213e3bc30698`.
-- PR #12 permanece Draft e sem merge.
+- CI final V2-11 restaurado para `workflow_dispatch`.
+- PR #12 permaneceu Draft e sem merge.
+
+## V2-12 — Gateway/Signer/Vault Production Adapters
+
+### Bootstrap — CONCLUÍDO
+
+- autorização explícita registrada em 2026-09-13;
+- branch `v2/production-adapters` criada exatamente de `0439246151c7edc959615361c0275961e11c3af0`;
+- snapshot pré-fase preservado em `docs/history/EXECUTION_TRACKER_V2_PRE_V2_12.md`;
+- plano da fase criado em `docs/V2_12_PRODUCTION_ADAPTERS.md`;
+- execução autorizada nesta rodada: Bloco 1 e Bloco 2 completos, cada um com gate próprio e CI restaurado.
+
+### Bloco 1 — Vault/KMS abstraction + Secret Resolution Boundary — EM EXECUÇÃO
+
+Objetivo: resolver material sensível apenas em runtime a partir de `SecretReference` opaca, com isolamento host/tenant/unidade/ambiente/kind/purpose, zero persistência de segredo e adapter sintético para contract tests.
+
+### Bloco 2 — Signer Boundary + assinatura por SecretReference — PENDENTE
+
+Objetivo: signer provider-neutral consumindo exclusivamente o Vault boundary certificado, com request/result tipados, verificação de assinatura/tampering e sem segredo persistido.
 
 ## Governança preservada
 
-Nenhum deploy, promoção, homologação externa ou cutover foi executado. A V2-12 só deve iniciar mediante autorização explícita.
+PR V2-12 deve permanecer Draft. Nenhum merge, deploy, produção real, homologação externa, promoção ou cutover é autorizado nesta execução.
