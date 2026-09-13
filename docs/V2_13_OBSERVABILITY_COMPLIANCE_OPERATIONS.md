@@ -1,9 +1,10 @@
 # V2-13 — Observabilidade + Compliance Operations
 
-Status: **EM EXECUÇÃO — BLOCOS 1-5 CERTIFICADOS / BLOCO 6 EM EXECUÇÃO**  
+Status: **EM FECHAMENTO — BLOCOS 1-6 FUNCIONALMENTE CERTIFICADOS / GATE DOCUMENTAL FINAL PENDENTE**  
 Branch: `v2/observability-compliance-operations`  
 Base certificada: `v2/production-adapters` @ `1242ce74d874ffb87783401ce1abaabb350c948c`  
-Dependência: V2-12 concluída e certificada.
+Dependência: V2-12 concluída e certificada.  
+Certificação de fechamento: `docs/V2_13_CLOSURE_CERTIFICATION.md`.
 
 ## Objetivo
 
@@ -29,7 +30,7 @@ Tornar o FM Fiscal operável e auditável em produção futura, com observabilid
 3. **Tracing / Correlation / Causation — CONCLUÍDO/CERTIFICADO.**
 4. **Operational & Compliance Alerts — CONCLUÍDO/CERTIFICADO.**
 5. **Regulatory Watcher Governado — CONCLUÍDO/CERTIFICADO.**
-6. **End-to-End Certification + fechamento V2-13 — EM EXECUÇÃO.**
+6. **End-to-End Certification + fechamento V2-13 — FUNCIONALMENTE CERTIFICADO / FECHAMENTO DOCUMENTAL PENDENTE.**
 
 ## Bloco 1 — Structured Observability Boundary + Sanitization — CONCLUÍDO/CERTIFICADO
 
@@ -55,21 +56,9 @@ Foi criado `observability.alerts` com alertas tipados e sanitizados para certifi
 
 `AlertRegistry` calcula chave SHA-256 de deduplicação a partir de kind + host + tenant + unit + environment + document kind + operation + provider + jurisdiction + dimensão segura. Alertas ativos não entram em loop; após `resolve()` podem ser emitidos novamente. Falha do sink não marca alerta como ativo.
 
-`OperationalAlertEvaluator` só produz sinais operacionais/compliance; não altera documento, readiness ou regra fiscal. Attributes passam pela sanitização fail-closed do B1 e referências explicitamente seguras podem ser preservadas.
-
 Primeira tentativa B4: run `34764107470`, job `103741903144`; Install PASS, Ruff falhou apenas por import não usado `MappingProxyType`; Mypy/Pytest bloqueados. Import removido sem alteração semântica.
 
-Gate definitivo B4:
-
-- SHA: `79e83cf34b6b7d6bf71b98036d20cdd0b3364cfd`;
-- run: `34764162846` — **SUCCESS**;
-- job: `103742057522`;
-- Install: PASS;
-- Ruff: PASS;
-- Mypy strict: PASS — **102 source files**;
-- Pytest: **547 PASS em 4.45s**;
-- baseline B3: 537; incremento líquido: **+10 testes**;
-- CI restaurado em `dba2173c4ba0c23d5791b96ae6e381333d63a2b2`.
+Gate definitivo B4: `79e83cf34b6b7d6bf71b98036d20cdd0b3364cfd` / run `34764162846` / job `103742057522` / **102 source / 547 PASS em 4.45s**. CI restaurado em `dba2173c4ba0c23d5791b96ae6e381333d63a2b2`.
 
 ## Bloco 5 — Regulatory Watcher Governado — CONCLUÍDO/CERTIFICADO
 
@@ -77,23 +66,27 @@ Foi criado `compliance.regulatory_watcher` com observações normativas imutáve
 
 A comparação com capability/rule vigente é somente leitura. `RegulatoryChangeProposal` é explicitamente não executável e aprovação exige revisão humana identificada e evidência de testes. Mesmo aprovada, a proposta não altera `CapabilityReadinessService`, `JurisdictionCapabilityMatrix`, readiness, rule matrix ou qualquer adapter de produção.
 
-O fluxo representa contradições entre fontes em vez de ocultá-las e rejeita transições inválidas, impedindo promoção normativa autônoma.
+Gate B5: `9174b461b13d6a8b26c76cfa1a9cc877fbc18895` / run `34764440273` / job `103742791023` / **103 source / 557 PASS em 4.44s**. CI restaurado em `2c113de637277732a695e18a3ab5ffd4d0e92773`.
 
-Gate definitivo B5:
+## Bloco 6 — End-to-End Certification + fechamento V2-13 — FUNCIONALMENTE CERTIFICADO
 
-- SHA: `9174b461b13d6a8b26c76cfa1a9cc877fbc18895`;
-- run: `34764440273` — **SUCCESS**;
-- job: `103742791023`;
+A suíte de fechamento integra B1-B5 e certifica sanitização, absence de raw secret/payload fields, fail-open dos sinks de telemetria, isolamento cross-host/cross-tenant/cross-provider, trace restart/replay e soberania da autoridade de readiness diante de proposta normativa aprovada.
+
+Gate funcional B6:
+
+- SHA: `0b919fa8fc2bd0203774a0b487e46a94fe6dfda1`;
+- run: `34765368461` — **SUCCESS**;
+- job: `103745272017`;
 - Install: PASS;
 - Ruff: PASS;
 - Mypy strict: PASS — **103 source files**;
-- Pytest: **557 PASS em 4.44s**;
-- baseline B4: 547; incremento líquido: **+10 testes**;
-- CI restaurado para dispatch-only em `2c113de637277732a695e18a3ab5ffd4d0e92773`.
+- Pytest: **563 PASS em 4.10s**;
+- baseline B5: 557; incremento líquido: **+6 testes de fechamento**;
+- CI restaurado em `615a9db4e205cc0ad115552cf7045d6b6ed247a7` para o blob dispatch-only governado.
 
-## Bloco 6 — End-to-End Certification + fechamento V2-13 — EM EXECUÇÃO
+Auditoria de diff V2-12 -> estado pós-gate/restauração: **45 commits à frente, 0 atrás, 17 arquivos líquidos, 3.526 adições e 51 remoções**. Nenhum arquivo de domínio foi alterado, nenhuma migration foi criada e o workflow CI não aparece no diff líquido porque voltou ao conteúdo dispatch-only original.
 
-Certificar structured logs, metrics/cardinalidade, tracing/correlation, alertas, Regulatory Watcher, ausência de raw secrets/payloads, fail-open controlado da telemetria, isolamento cross-host/cross-tenant/cross-provider, restart/replay, regressão mestre e diff completo V2-12 -> V2-13.
+O fechamento documental final ainda deve receber um gate verde antes de o tracker marcar V2-13 como oficialmente CONCLUÍDA/CERTIFICADA.
 
 ## Política de CI
 
@@ -101,4 +94,4 @@ O workflow permanece `workflow_dispatch` por padrão. Em cada gate de bloco: hab
 
 ## Governança
 
-A PR #14 permanece Draft. Nenhum merge, deploy, promoção, homologação oficial, segredo real, integração privada de SaaS ou cutover é permitido automaticamente.
+A PR #14 permanece Draft. Nenhum merge, deploy, promoção, homologação oficial, segredo real, integração privada de SaaS ou cutover é permitido automaticamente. V2-14 permanece PENDENTE até autorização humana explícita.
