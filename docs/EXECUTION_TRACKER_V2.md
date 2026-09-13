@@ -27,7 +27,7 @@ Estados permitidos: `PENDENTE`, `EM EXECUÇÃO`, `BLOQUEADO`, `CONCLUÍDO`. Nenh
 | V2-10 | Contract Packs multiproduto | **CONCLUÍDO** | PR #11 Draft; `345652ecbfc18c8bd3511cf5b9083ba0dbc259cb`; 397 PASS |
 | V2-11 | Control Plane independente | **CONCLUÍDO** | PR #12 Draft; `eed6b056e9d1941da435179c5eaf805c261f6622`; 437 PASS |
 | V2-12 | Gateway/Signer/Vault production adapters | **CONCLUÍDO** | PR #13 Draft; B6 `b7bccf2babed336941d920eed73cd0699e6939d4`; 508 PASS; CI final dispatch-only |
-| V2-13 | Observabilidade + Compliance Operations | **EM EXECUÇÃO** | PR #14 Draft; B1 518; B2 528; B3 537; B4 `79e83cf34b6b7d6bf71b98036d20cdd0b3364cfd` / run `34764162846` / job `103742057522` / 102 source / 547 PASS; B5 em execução |
+| V2-13 | Observabilidade + Compliance Operations | **EM EXECUÇÃO** | PR #14 Draft; B1 518; B2 528; B3 537; B4 547; B5 `9174b461b13d6a8b26c76cfa1a9cc877fbc18895` / run `34764440273` / job `103742791023` / 103 source / 557 PASS; B6 em execução |
 | V2-14 | Hardening sistêmico | PENDENTE | depende V2-13 |
 | V2-15 | Homologação + pilotos controlados | PENDENTE | depende V2-14 |
 | V2-16 | Integração produtos FM | BLOQUEADO PARCIAL | depende do Core universal certificado e readiness dos produtos |
@@ -62,11 +62,15 @@ Alertas sanitizados e deduplicados para certificado, fila/dead-letter, rejeiçã
 
 Primeira tentativa: run `34764107470` / job `103741903144`; Ruff falhou apenas por import não usado. Gate definitivo: `79e83cf34b6b7d6bf71b98036d20cdd0b3364cfd` / run `34764162846` / job `103742057522` / **102 source / 547 PASS em 4.45s**. CI restaurado `dba2173c4ba0c23d5791b96ae6e381333d63a2b2`.
 
-### B5 — Regulatory Watcher Governado — EM EXECUÇÃO
+### B5 — Regulatory Watcher Governado — CONCLUÍDO/CERTIFICADO
 
-Objetivo: observar, triar e propor mudanças normativas com proveniência/evidência, revisão humana e testes obrigatórios, sem mutação automática de readiness/rules.
+Watcher governado com observação normativa, proveniência, jurisdição, vigência, evidência hash, conflitos explícitos, triagem, proposta e decisão separadas. Proposta é não executável; aprovação exige revisão humana e evidência de testes e não altera readiness/rules automaticamente.
 
-### B6 — End-to-End Certification + fechamento — PENDENTE
+Gate `9174b461b13d6a8b26c76cfa1a9cc877fbc18895` / run `34764440273` / job `103742791023` / **103 source / 557 PASS em 4.44s**. CI restaurado para dispatch-only em `2c113de637277732a695e18a3ab5ffd4d0e92773`.
+
+### B6 — End-to-End Certification + fechamento — EM EXECUÇÃO
+
+Objetivo: regressão integrada B1-B5, ausência estrutural de raw secrets/payloads, fail-open da telemetria, isolamento cross-host/cross-tenant/cross-provider, replay/restart, diff V2-12 -> V2-13, riscos residuais, gate funcional e gate documental final.
 
 ## Governança preservada
 
