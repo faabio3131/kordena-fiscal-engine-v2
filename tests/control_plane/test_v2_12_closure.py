@@ -82,6 +82,9 @@ CREDENTIAL_REF = "ref:fm-fiscal/tenant-closure/unit-closure/hml-provider-credent
 NFSE_CREDENTIAL_REF = (
     "ref:fm-fiscal/tenant-closure/unit-closure/hml-nfse-provider-credentials"
 )
+NFSE_CREDENTIAL_REF = (
+    "ref:fm-fiscal/tenant-closure/unit-closure/hml-nfse-provider-credentials"
+)
 CSC_REF = "ref:fm-fiscal/tenant-closure/unit-closure/hml-csc"
 PFX_PASSWORD = b"closure-synthetic-only"
 CREDENTIAL_BYTES = b"CLOSURE-SYNTHETIC-CREDENTIAL"
