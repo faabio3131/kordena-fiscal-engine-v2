@@ -4,9 +4,9 @@ Data de início: 2026-09-11
 Repositório: `faabio3131/kordena-fiscal-engine-v2`  
 Status global: **EM EXECUÇÃO**  
 Última fase concluída: **V2-13 — Observabilidade + Compliance Operations**  
-Fase atual: **V2-14 — Hardening sistêmico — EM EXECUÇÃO**
+Fase atual: **V2-14 — Hardening sistêmico — FECHAMENTO DOCUMENTAL**
 
-> Snapshot imediatamente anterior à V2-14: `docs/history/EXECUTION_TRACKER_V2_PRE_V2_14.md`. Plano da fase: `docs/V2_14_SYSTEM_HARDENING.md`.
+> Snapshot pré-V2-14: `docs/history/EXECUTION_TRACKER_V2_PRE_V2_14.md`. Plano: `docs/V2_14_SYSTEM_HARDENING.md`. Certificação: `docs/V2_14_CLOSURE_CERTIFICATION.md`.
 
 ## Regra de governança
 
@@ -14,47 +14,58 @@ Estados permitidos: `PENDENTE`, `EM EXECUÇÃO`, `BLOQUEADO`, `CONCLUÍDO`. Nenh
 
 | Bloco | Escopo | Status | Evidência / Gate |
 |---|---|---|---|
-| V2-00 | Clone técnico + equivalência | **CONCLUÍDO** | PR #1 Draft; `9da776e353b31d03a8453a83c6e61a736e6ed00b`; 215 PASS |
-| V2-01 | Identidade FM + neutralização de branding | **CONCLUÍDO** | PR #2 Draft; `ac6ad42eeacca2a84675e7e57e04b18414cadf36`; 215 PASS |
-| V2-02 | Host namespace + fiscal account binding | **CONCLUÍDO** | PR #3 Draft; `4fa8a2a8c74db65622099cd7dca43d2e8d19aea3`; 239 PASS |
-| V2-03 | Fiscal Operation Contract genérico | **CONCLUÍDO** | PR #4 Draft; `598a2ec83aecd27a5427f3e1e401532e8be2696a`; 262 PASS |
-| V2-04 | FM Fiscal Bridge | **CONCLUÍDO** | PR #5 Draft; `86689b3d3d7d47740b56bcc22594aa8c8e0b08c7`; 269 PASS |
-| V2-05 | Auth S2S + workload identity + webhook security | **CONCLUÍDO** | PR #6 Draft; `196928d1b0cfe896df0c4741839ce72258f8f4d4`; 290 PASS |
-| V2-06 | Capability & Readiness API | **CONCLUÍDO** | PR #7 Draft; `e6c7b2b9e507116ef4919812153f8e54f84173f3`; 305 PASS |
-| V2-07 | Application service + persistência durável | **CONCLUÍDO** | PR #8 Draft; `999ba84b9c25988441867820bfe8af0571269548`; 309 PASS |
-| V2-08 | Events/Webhooks/Inbox/Outbox | **CONCLUÍDO** | PR #9 Draft; `bc77ee4cf2b7151d06c09cf32ca9168363ece1c7`; 337 PASS |
-| V2-09 | Modularização de verticais | **CONCLUÍDO** | PR #10 Draft; `88071fd557199ffd6848312ea5559b0cba415ee1`; 346 PASS |
-| V2-10 | Contract Packs multiproduto | **CONCLUÍDO** | PR #11 Draft; `345652ecbfc18c8bd3511cf5b9083ba0dbc259cb`; 397 PASS |
-| V2-11 | Control Plane independente | **CONCLUÍDO** | PR #12 Draft; `eed6b056e9d1941da435179c5eaf805c261f6622`; 437 PASS |
-| V2-12 | Gateway/Signer/Vault production adapters | **CONCLUÍDO** | PR #13 Draft; B6 `b7bccf2babed336941d920eed73cd0699e6939d4`; 508 PASS; CI final dispatch-only |
-| V2-13 | Observabilidade + Compliance Operations | **CONCLUÍDO** | PR #14 Draft; B6 `0b919fa8fc2bd0203774a0b487e46a94fe6dfda1`; 563 PASS; gate documental `94d822aef5c0f6889e67f85bbee6b68c9aac145e`; CI final dispatch-only |
-| V2-14 | Hardening sistêmico | **EM EXECUÇÃO** | branch `v2/system-hardening`; bootstrap iniciado sobre V2-13 @ `12d9503f53b59dc7ba24ec205e21ce1ab03c91fb` |
-| V2-15 | Homologação + pilotos controlados | PENDENTE | depende V2-14 |
-| V2-16 | Integração produtos FM | BLOQUEADO PARCIAL | depende do Core universal certificado e readiness dos produtos |
-| V2-17 | Convergência/cutover + arquivamento original | PENDENTE | depende de equivalência e integrações certificadas |
+| V2-00 | Clone técnico + equivalência | **CONCLUÍDO** | PR #1 Draft; 215 PASS |
+| V2-01 | Identidade FM + neutralização | **CONCLUÍDO** | PR #2 Draft; 215 PASS |
+| V2-02 | Host namespace + fiscal binding | **CONCLUÍDO** | PR #3 Draft; 239 PASS |
+| V2-03 | Fiscal Operation Contract | **CONCLUÍDO** | PR #4 Draft; 262 PASS |
+| V2-04 | FM Fiscal Bridge | **CONCLUÍDO** | PR #5 Draft; 269 PASS |
+| V2-05 | Auth S2S + webhook security | **CONCLUÍDO** | PR #6 Draft; 290 PASS |
+| V2-06 | Capability & Readiness API | **CONCLUÍDO** | PR #7 Draft; 305 PASS |
+| V2-07 | Application + persistência durável | **CONCLUÍDO** | PR #8 Draft; 309 PASS |
+| V2-08 | Events/Webhooks/Inbox/Outbox | **CONCLUÍDO** | PR #9 Draft; 337 PASS |
+| V2-09 | Modularização de verticais | **CONCLUÍDO** | PR #10 Draft; 346 PASS |
+| V2-10 | Contract Packs multiproduto | **CONCLUÍDO** | PR #11 Draft; 397 PASS |
+| V2-11 | Control Plane independente | **CONCLUÍDO** | PR #12 Draft; 437 PASS |
+| V2-12 | Gateway/Signer/Vault adapters | **CONCLUÍDO** | PR #13 Draft; 508 PASS |
+| V2-13 | Observabilidade + Compliance Operations | **CONCLUÍDO** | PR #14 Draft; 563 PASS; CI final dispatch-only |
+| V2-14 | Hardening sistêmico | **EM EXECUÇÃO — fechamento documental** | PR #15 Draft; B6 `004190e102f88f613f83607b477f2abf99be7818`; run `34767340977`; 103 source; 582 PASS; CI restaurado |
+| V2-15 | Homologação + pilotos controlados | PENDENTE | autorizado; iniciar após gate documental V2-14 |
+| V2-16 | Integração produtos FM | BLOQUEADO PARCIAL | autorizado; depende de readiness real dos produtos e limites V2-15 |
+| V2-17 | Convergência/cutover | PENDENTE | NÃO AUTORIZADO nesta execução |
 | V2-18 | Produto comercial independente | PENDENTE | posterior ao uso interno certificado |
 
-## V2-13 — Observabilidade + Compliance Operations — CONCLUÍDA/CERTIFICADA
+## V2-14 — Hardening sistêmico
 
-Fechamento oficial: `docs/V2_13_CLOSURE_CERTIFICATION.md`. Gate funcional B6 `0b919fa8fc2bd0203774a0b487e46a94fe6dfda1` / run `34765368461` / 563 PASS. Gate documental `94d822aef5c0f6889e67f85bbee6b68c9aac145e` / run `34765573097` / 563 PASS. CI final dispatch-only.
+Branch `v2/system-hardening`, stacked sobre `v2/observability-compliance-operations` @ `12d9503f53b59dc7ba24ec205e21ce1ab03c91fb`. PR #15 permanece Draft.
 
-## V2-14 — Hardening sistêmico — EM EXECUÇÃO
+### B1 — Failure Injection + Chaos — CONCLUÍDO/CERTIFICADO
 
-### Bootstrap — CONCLUÍDO
+`6ae140bbc9c6d8d9ddca978591d2e110b9b82c4d` / run `34766801662` / job `103749098152` / **574 PASS em 4.83s**.
 
-- branch `v2/system-hardening` criada exatamente do HEAD V2-13 `12d9503f53b59dc7ba24ec205e21ce1ab03c91fb`;
-- snapshot pré-fase em `docs/history/EXECUTION_TRACKER_V2_PRE_V2_14.md`;
-- plano em `docs/V2_14_SYSTEM_HARDENING.md`;
-- PR Draft stacked sobre `v2/observability-compliance-operations` deve permanecer aberta/não mergeada.
+### B2 — Concurrency / Idempotency / Races — CONCLUÍDO/CERTIFICADO
 
-### B1 — Failure Injection + Chaos Hardening — EM EXECUÇÃO
+`a01f668fb9ae4027cb040dc9f621c85c69b4df38` / run `34766907909` / job `103749380939` / **574 PASS em 5.62s**.
 
-Escopo: gateway/outbox/storage/Vault/signer/telemetria/webhook/replay/restart/processamento parcial/adapters, com fail-closed fiscal/segurança e fail-open somente em telemetria best-effort.
+### B3 — Security Hardening — CONCLUÍDO/CERTIFICADO
 
-### Próximos blocos
+`eae4863ace3ac738375a272ba892f7508eba78ba` / run `34766999896` / job `103749636115` / **574 PASS em 4.48s**.
 
-B2 concorrência/idempotência/races; B3 security hardening; B4 performance/load/backpressure; B5 recovery/durability/restart; B6 regressão e fechamento.
+### B4 — Performance / Load / Backpressure — CONCLUÍDO/CERTIFICADO
+
+`64279702a2b48639e7a293ae187dc5819ca48329` / run `34767103876` / job `103749915646` / **578 PASS em 4.47s**.
+
+### B5 — Recovery / Durability / Restart — CONCLUÍDO/CERTIFICADO
+
+`0bcb8997d7a917cc59c910448a24b1a6d7d67abc` / run `34767187658` / job `103750146391` / **578 PASS em 6.81s**.
+
+### B6 — End-to-End + auditoria — FUNCIONALMENTE CERTIFICADO
+
+`004190e102f88f613f83607b477f2abf99be7818` / run `34767340977` / job `103750554549` / **Install PASS / Ruff PASS / Mypy strict PASS / 103 source / 582 PASS em 5.79s**. CI restaurado em `321f1a64354969e65705f4ac7863583e66855598` para o blob dispatch-only governado.
+
+Diff V2-13 -> pós-gate/restauração: **24 commits à frente, 0 atrás, 6 arquivos líquidos**, nenhuma alteração em código de produção, migration ou dependência produtiva.
+
+Falta somente o gate documental final. Após verde, marcar V2-14 CONCLUÍDA/CERTIFICADA e iniciar V2-15 automaticamente conforme autorização do prompt mestre.
 
 ## Governança preservada
 
-Nenhum merge, deploy, produção real, homologação oficial externa, segredo real, promoção normativa automática ou cutover foi autorizado ou executado. V2-15/V2-16 somente serão avançadas conforme gates e bloqueios reais previstos no Plano Mestre e autorização já concedida no prompt mestre.
+PRs permanecem Draft. Nenhum merge, deploy, produção real, homologação oficial externa, segredo real ou cutover foi executado. V2-17 não deve ser iniciada.
