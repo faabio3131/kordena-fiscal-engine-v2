@@ -1,6 +1,6 @@
 # V2-13 — Observabilidade + Compliance Operations
 
-Status: **EM EXECUÇÃO — BLOCO 1 CERTIFICADO / BLOCO 2 EM EXECUÇÃO**  
+Status: **EM EXECUÇÃO — BLOCOS 1-2 CERTIFICADOS / BLOCO 3 EM EXECUÇÃO**  
 Branch: `v2/observability-compliance-operations`  
 Base certificada: `v2/production-adapters` @ `1242ce74d874ffb87783401ce1abaabb350c948c`  
 Dependência: V2-12 concluída e certificada.
@@ -25,8 +25,8 @@ Tornar o FM Fiscal operável e auditável em produção futura, com observabilid
 ## Blocos
 
 1. **Structured Observability Boundary + Sanitization — CONCLUÍDO/CERTIFICADO.**
-2. **Metrics + Cardinality Governance — EM EXECUÇÃO.**
-3. **Tracing / Correlation / Causation — PENDENTE.**
+2. **Metrics + Cardinality Governance — CONCLUÍDO/CERTIFICADO.**
+3. **Tracing / Correlation / Causation — EM EXECUÇÃO.**
 4. **Operational & Compliance Alerts — PENDENTE.**
 5. **Regulatory Watcher Governado — PENDENTE.**
 6. **End-to-End Certification + fechamento V2-13 — PENDENTE.**
@@ -41,32 +41,29 @@ A sanitização é recursiva e fail-closed: bytes e objetos desconhecidos são r
 
 Primeira tentativa do gate: run `34763491466`, job `103740272028`; Install PASS, Ruff falhou somente por duas ocorrências UP035 de import `Mapping` em `typing`; Mypy/Pytest ficaram bloqueados. Correção aplicada sem alterar semântica.
 
-Gate definitivo B1:
+Gate definitivo B1: SHA `11aa2fa9a63d624235ba90619d853aa3d38e2bb3`, run `34763558714`, job `103740454991`, **Install PASS / Ruff PASS / Mypy strict PASS — 99 source files / 518 PASS em 4.52s**. Baseline V2-12: 508; incremento líquido +10. CI restaurado em `e18af325808c53637492680b17219db0deea49cc`.
 
-- SHA: `11aa2fa9a63d624235ba90619d853aa3d38e2bb3`;
-- run: `34763558714` — **SUCCESS**;
-- job: `103740454991`;
+## Bloco 2 — Metrics + Cardinality Governance — CONCLUÍDO/CERTIFICADO
+
+Foi criado `observability.metrics`, provider-neutral e sem SDK específico. `MetricDefinition`, `MetricPoint`, `MetricRecorder`, `MetricSink` e `InMemoryMetricSink` modelam counters, gauges e histograms com labels governadas.
+
+As dimensões base são derivadas exclusivamente de `ObservabilityContext`: host, tenant, unidade, ambiente e, quando presentes, document kind, operação e provider. Labels opcionais são whitelist fechada (`queue`, `reason_code`, `status`, `contingency_mode`) e não podem sobrescrever o scope. Labels de alta cardinalidade ou sensíveis — correlation/document ids, references arbitrárias, payload, secret, token, credential, password, message/XML/body — falham fechado.
+
+Cada métrica tem `max_series` explícito; novas séries além do limite são recusadas sem impedir atualização de série já conhecida. Falha do sink é best-effort e não registra série fantasma. O catálogo cobre queue depth, retries, rejeições, unknown provider outcomes, contingência e duração de operação.
+
+Gate definitivo B2:
+
+- SHA: `832cdddcc0653ead483ca42a6c93c7966ad9e67f`;
+- run: `34763739929` — **SUCCESS**;
+- job: `103740927942`;
 - Install: PASS;
 - Ruff: PASS;
-- Mypy strict: PASS — **99 source files**;
-- Pytest: **518 PASS em 4.52s**;
-- baseline V2-12: 508; incremento líquido: **+10 testes**;
-- CI restaurado para `workflow_dispatch` no commit `e18af325808c53637492680b17219db0deea49cc`.
+- Mypy strict: PASS — **100 source files**;
+- Pytest: **528 PASS em 5.02s**;
+- baseline B1: 518; incremento líquido: **+10 testes**;
+- CI restaurado para `workflow_dispatch` no commit `bd300c3e92cf344f91d74976ae235c909ba65ced`.
 
-## Bloco 2 — Metrics + Cardinality Governance — EM EXECUÇÃO
-
-Entregas:
-
-- métricas por host/tenant/unit/environment/document kind/operation/provider quando aplicável;
-- counters/gauges/histograms modelados sem SDK específico;
-- whitelist de labels e limites de cardinalidade;
-- rejeição de labels proibidas/valores de alta entropia onde inadequado;
-- métricas para filas, retries, rejeições, unknown outcomes e contingência;
-- nenhum segredo/payload em labels.
-
-Gate: invariantes de cardinalidade e isolamento multi-tenant/multi-host.
-
-## Bloco 3 — Tracing / Correlation / Causation
+## Bloco 3 — Tracing / Correlation / Causation — EM EXECUÇÃO
 
 Entregas:
 
@@ -109,29 +106,11 @@ Gate: watcher nunca altera `CapabilityReadinessService` nem rule matrix sozinho.
 
 ## Bloco 6 — End-to-End Certification + fechamento V2-13
 
-Certificar:
-
-- structured logs sanitizados;
-- metrics e cardinalidade;
-- tracing/correlation;
-- alertas operacionais;
-- Regulatory Watcher governado;
-- ausência de raw secrets/payloads em toda telemetria;
-- fail-open controlado da telemetria sem afetar autoridade fiscal;
-- cross-host/cross-tenant/cross-provider isolation;
-- restart/replay onde aplicável;
-- regressão mestre;
-- diff completo V2-12 -> V2-13;
-- riscos residuais e documentação final.
+Certificar structured logs, metrics/cardinalidade, tracing/correlation, alertas, Regulatory Watcher, ausência de raw secrets/payloads, fail-open controlado da telemetria, cross-host/cross-tenant/cross-provider isolation, restart/replay, regressão mestre e diff completo V2-12 -> V2-13.
 
 ## Política de CI
 
-O workflow permanece `workflow_dispatch` por padrão. Em cada gate de bloco:
-
-1. habilitar temporariamente `pull_request`;
-2. registrar SHA/run/job e resultado de Install/Ruff/Mypy/Pytest;
-3. restaurar imediatamente o arquivo para o blob governado dispatch-only `b161340d7164afcbf3da0eb0327135528a39450c`;
-4. somente então reconciliar documentação do bloco.
+O workflow permanece `workflow_dispatch` por padrão. Em cada gate de bloco: habilitar temporariamente `pull_request`, registrar SHA/run/job e gates, restaurar o blob dispatch-only `b161340d7164afcbf3da0eb0327135528a39450c` e somente então reconciliar documentação.
 
 ## Governança
 
