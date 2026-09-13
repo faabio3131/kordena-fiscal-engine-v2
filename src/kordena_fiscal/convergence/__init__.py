@@ -1,5 +1,14 @@
 """Governed pre-cutover convergence contracts."""
 
+from .cutover_rehearsal import (
+    CutoverInvariantEvidence,
+    CutoverRehearsal,
+    CutoverRehearsalCheckpoint,
+    CutoverRehearsalError,
+    CutoverStage,
+    ProductionEffectForbiddenError,
+    WriterStatus,
+)
 from .migration import (
     DEFAULT_MIGRATION_INVENTORY,
     MigrationBatch,
@@ -28,10 +37,15 @@ from .readiness import (
 __all__ = [
     "AuthorityAssignment",
     "ConvergenceValidationError",
+    "CutoverInvariantEvidence",
     "CutoverNotReadyError",
     "CutoverReadinessMatrix",
     "CutoverReadinessStatus",
+    "CutoverRehearsal",
+    "CutoverRehearsalCheckpoint",
+    "CutoverRehearsalError",
     "CutoverRequirement",
+    "CutoverStage",
     "DEFAULT_MIGRATION_INVENTORY",
     "FiscalAuthorityDomain",
     "LegacyAuthorityMode",
@@ -44,6 +58,8 @@ __all__ = [
     "MigrationRecord",
     "MigrationRehearsalLedger",
     "MigrationValidationError",
+    "ProductionEffectForbiddenError",
     "SequenceMigrationCheckpoint",
     "SingleFiscalAuthorityPlan",
+    "WriterStatus",
 ]
