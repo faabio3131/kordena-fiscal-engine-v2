@@ -146,12 +146,20 @@ def _runtime(
     actual_clock = clock or _Clock()
     actual_sleeper = sleeper or _Sleeper()
     circuits = CircuitBreakerRegistry(
-        policy=circuit or CircuitBreakerPolicy(failure_threshold=5, recovery_timeout_seconds=10),
+        policy=circuit or CircuitBreakerPolicy(
+            failure_threshold=5,
+            recovery_timeout_seconds=10,
+        ),
         clock=actual_clock,
+    )
+    default_retry = RetryPolicy(
+        max_attempts=3,
+        base_delay_seconds=1,
+        max_delay_seconds=4,
     )
     gateway = ResilientProviderGateway(
         executor=executor,
-        retry_policy=retry or RetryPolicy(max_attempts=3, base_delay_seconds=1, max_delay_seconds=4),
+        retry_policy=retry or default_retry,
         circuits=circuits,
         sleeper=actual_sleeper,
         jitter=_Jitter(),
@@ -179,7 +187,6 @@ def test_retry_policy_is_bounded_exponential_with_deterministic_jitter() -> None
         max_delay_seconds=5,
         jitter_ratio=0.5,
     )
-
     assert policy.delay(1, 0.5) == 2.0
     assert policy.delay(2, 0.5) == 4.0
     assert policy.delay(3, 0.5) == 5.0
@@ -190,9 +197,7 @@ def test_retry_policy_is_bounded_exponential_with_deterministic_jitter() -> None
 def test_safe_query_retries_transient_error_then_succeeds_without_real_sleep() -> None:
     executor = _Executor([ProviderTransportError("temporary"), _response()])
     gateway, _, sleeper, _ = _runtime(executor)
-
     result = gateway.execute(_request(), provider_id="provider-a")
-
     assert result.status is ProviderResponseStatus.FOUND
     assert len(executor.calls) == 2
     assert sleeper.delays == [1.0]
@@ -207,10 +212,8 @@ def test_retry_stops_at_max_attempts() -> None:
     )
     retry = RetryPolicy(max_attempts=2, base_delay_seconds=0, max_delay_seconds=0)
     gateway, _, sleeper, _ = _runtime(executor, retry=retry)
-
     with pytest.raises(ProviderTransportError, match="temporary-2"):
         gateway.execute(_request(), provider_id="provider-a")
-
     assert len(executor.calls) == 2
     assert sleeper.delays == [0.0]
 
@@ -220,10 +223,8 @@ def test_unknown_authorization_outcome_never_retries_automatically() -> None:
         [ProviderTransportError("socket closed", delivery_unknown=True), _response()]
     )
     gateway, _, sleeper, _ = _runtime(executor)
-
     with pytest.raises(UnknownProviderOutcomeError, match="reconciliation") as raised:
         gateway.execute(_request(ProviderOperation.AUTHORIZE), provider_id="provider-a")
-
     assert raised.value.requires_reconciliation is True
     assert len(executor.calls) == 1
     assert sleeper.delays == []
@@ -235,10 +236,8 @@ def test_fiscal_rejection_exception_is_not_retried_or_counted_as_availability() 
         executor,
         circuit=CircuitBreakerPolicy(failure_threshold=1, recovery_timeout_seconds=10),
     )
-
     with pytest.raises(ProviderRejectedError, match="fiscal rejection"):
         gateway.execute(_request(), provider_id="provider-a")
-
     assert len(executor.calls) == 1
     assert sleeper.delays == []
     assert circuits.state(_key()) is CircuitState.CLOSED
@@ -247,9 +246,7 @@ def test_fiscal_rejection_exception_is_not_retried_or_counted_as_availability() 
 def test_normalized_rejected_response_returns_without_retry() -> None:
     executor = _Executor([_response(ProviderResponseStatus.REJECTED), _response()])
     gateway, _, sleeper, _ = _runtime(executor)
-
     result = gateway.execute(_request(), provider_id="provider-a")
-
     assert result.status is ProviderResponseStatus.REJECTED
     assert len(executor.calls) == 1
     assert sleeper.delays == []
@@ -261,10 +258,8 @@ def test_authentication_error_is_not_retried_and_does_not_trip_circuit() -> None
         executor,
         circuit=CircuitBreakerPolicy(failure_threshold=1, recovery_timeout_seconds=10),
     )
-
     with pytest.raises(ProviderAuthenticationError, match="authentication failed"):
         gateway.execute(_request(), provider_id="provider-a")
-
     assert circuits.state(_key()) is CircuitState.CLOSED
 
 
@@ -278,12 +273,10 @@ def test_circuit_opens_after_transient_threshold_and_blocks_calls() -> None:
         retry=retry,
         circuit=CircuitBreakerPolicy(failure_threshold=2, recovery_timeout_seconds=10),
     )
-
     with pytest.raises(ProviderTransportError, match="down-1"):
         gateway.execute(_request(), provider_id="provider-a")
     with pytest.raises(ProviderTransportError, match="down-2"):
         gateway.execute(_request(), provider_id="provider-a")
-
     assert circuits.state(_key()) is CircuitState.OPEN
     with pytest.raises(CircuitOpenError, match="open"):
         gateway.execute(_request(), provider_id="provider-a")
@@ -303,14 +296,11 @@ def test_open_circuit_moves_half_open_after_timeout_and_closes_on_probe_success(
             success_threshold=1,
         ),
     )
-
     with pytest.raises(ProviderTransportError):
         gateway.execute(_request(), provider_id="provider-a")
     assert circuits.state(_key()) is CircuitState.OPEN
     clock.advance(10)
-
     result = gateway.execute(_request(), provider_id="provider-a")
-
     assert result.status is ProviderResponseStatus.FOUND
     assert circuits.state(_key()) is CircuitState.CLOSED
 
@@ -325,9 +315,7 @@ def test_circuit_is_partitioned_by_provider_environment_and_jurisdiction() -> No
     provider_b = _key("provider-b")
     production = _key("provider-a", environment="production")
     rio = _key("provider-a", state_code="RJ")
-
     circuits.record_failure(provider_a)
-
     assert circuits.state(provider_a) is CircuitState.OPEN
     assert circuits.state(provider_b) is CircuitState.CLOSED
     assert circuits.state(production) is CircuitState.CLOSED
@@ -344,17 +332,14 @@ def test_resilience_error_messages_do_not_echo_synthetic_secret_material() -> No
         executor,
         retry=RetryPolicy(max_attempts=1, base_delay_seconds=0, max_delay_seconds=0),
     )
-
     with pytest.raises(ProviderTransportError) as raised:
         gateway.execute(_request(), provider_id="provider-a")
-
     assert secret_marker not in str(raised.value)
 
 
 def test_provider_id_is_required_for_circuit_partitioning() -> None:
     executor = _Executor([_response()])
     gateway, _, _, _ = _runtime(executor)
-
     with pytest.raises(FiscalValidationError, match="provider_id"):
         gateway.execute(_request(), provider_id=" ")
     assert executor.calls == []
