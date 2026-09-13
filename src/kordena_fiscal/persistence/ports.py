@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from types import TracebackType
-from typing import Protocol, Self
+from typing import TYPE_CHECKING, Protocol, Self
 
 from kordena_fiscal.archive import FiscalArchiveStore
 from kordena_fiscal.contingency import FiscalOutboxStore
@@ -21,10 +21,13 @@ from kordena_fiscal.control_plane.models import (
     SecretReferenceKind,
 )
 from kordena_fiscal.domain import (
+    BrazilianJurisdiction,
     ExecutionScope,
     FiscalAccountBinding,
+    FiscalDocumentKind,
     FiscalDomainError,
     FiscalEnvironment,
+    FiscalProductProfile,
     FiscalProfile,
     HostScope,
     SourceReference,
@@ -33,6 +36,15 @@ from kordena_fiscal.events import FiscalDeliveryAuditStore, FiscalInboxStore
 from kordena_fiscal.lifecycle import FiscalStateSnapshot, IdempotencyStore
 from kordena_fiscal.numbering import FiscalSequenceStore
 from kordena_fiscal.reconciliation import FiscalReconciliationResult
+
+if TYPE_CHECKING:
+    from kordena_fiscal.control_plane.commercial import (
+        ConfiguredFiscalOperation,
+        ProviderBinding,
+        ProviderRuntimePolicyConfig,
+        UnitModuleBinding,
+        WebhookDestinationConfig,
+    )
 
 
 class FiscalPersistenceError(FiscalDomainError):
@@ -111,6 +123,8 @@ class ControlPlaneStore(Protocol):
         unit_id: str,
         environment: FiscalEnvironment,
         kind: SecretReferenceKind,
+        *,
+        provider_id: str | None = None,
     ) -> SecretReference | None: ...
 
     def add_profile(self, profile: FiscalProfile) -> FiscalProfile: ...
@@ -130,6 +144,72 @@ class ControlPlaneStore(Protocol):
     def append_audit(self, event: ControlPlaneAuditEvent) -> ControlPlaneAuditEvent: ...
 
     def list_audit(self, tenant_id: str | None = None) -> tuple[ControlPlaneAuditEvent, ...]: ...
+
+
+class CommercialConfigurationStore(Protocol):
+    """Durable zero-code customer configuration repository."""
+
+    def put_provider_binding(self, binding: ProviderBinding) -> ProviderBinding: ...
+
+    def resolve_provider_binding(
+        self,
+        *,
+        tenant_id: str,
+        unit_id: str,
+        environment: FiscalEnvironment,
+        document_kind: FiscalDocumentKind,
+        jurisdiction: BrazilianJurisdiction,
+        operation: ConfiguredFiscalOperation,
+    ) -> ProviderBinding | None: ...
+
+    def add_product_profile(self, profile: FiscalProductProfile) -> FiscalProductProfile: ...
+
+    def resolve_product_profile(
+        self,
+        *,
+        tenant_id: str,
+        unit_id: str,
+        environment: FiscalEnvironment,
+        product_id: str,
+        instant: datetime,
+    ) -> FiscalProductProfile | None: ...
+
+    def put_module_binding(self, binding: UnitModuleBinding) -> UnitModuleBinding: ...
+
+    def list_module_bindings(
+        self,
+        *,
+        tenant_id: str,
+        unit_id: str,
+        environment: FiscalEnvironment,
+    ) -> tuple[UnitModuleBinding, ...]: ...
+
+    def put_webhook_destination(
+        self,
+        destination: WebhookDestinationConfig,
+    ) -> WebhookDestinationConfig: ...
+
+    def list_webhook_destinations(
+        self,
+        *,
+        tenant_id: str,
+        unit_id: str,
+        environment: FiscalEnvironment,
+    ) -> tuple[WebhookDestinationConfig, ...]: ...
+
+    def put_runtime_policy(
+        self,
+        policy: ProviderRuntimePolicyConfig,
+    ) -> ProviderRuntimePolicyConfig: ...
+
+    def get_runtime_policy(
+        self,
+        *,
+        tenant_id: str,
+        unit_id: str,
+        environment: FiscalEnvironment,
+        provider_id: str,
+    ) -> ProviderRuntimePolicyConfig | None: ...
 
 
 class FiscalUnitOfWork(Protocol):
@@ -167,6 +247,9 @@ class FiscalUnitOfWork(Protocol):
 
     @property
     def control_plane(self) -> ControlPlaneStore: ...
+
+    @property
+    def commercial(self) -> CommercialConfigurationStore: ...
 
     def __enter__(self) -> Self: ...
 
