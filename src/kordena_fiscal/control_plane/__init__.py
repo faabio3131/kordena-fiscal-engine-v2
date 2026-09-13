@@ -28,6 +28,16 @@ if TYPE_CHECKING:
         CapabilityControlContext,
         GovernedCapabilityReadinessService,
     )
+    from .commercial import (
+        CommercialConfigurationService,
+        ConfiguredFiscalOperation,
+        DurableProviderBindingResolver,
+        ProviderBinding,
+        ProviderBindingResolver,
+        ProviderRuntimePolicyConfig,
+        UnitModuleBinding,
+        WebhookDestinationConfig,
+    )
     from .durable import (
         DurableControlPlaneClock,
         DurableControlPlaneService,
@@ -58,6 +68,38 @@ def __getattr__(name: str) -> Any:
             "GovernedCapabilityReadinessService": GovernedCapabilityReadinessService,
         }
         return capability_values[name]
+    if name in {
+        "CommercialConfigurationService",
+        "ConfiguredFiscalOperation",
+        "DurableProviderBindingResolver",
+        "ProviderBinding",
+        "ProviderBindingResolver",
+        "ProviderRuntimePolicyConfig",
+        "UnitModuleBinding",
+        "WebhookDestinationConfig",
+    }:
+        from .commercial import (
+            CommercialConfigurationService,
+            ConfiguredFiscalOperation,
+            DurableProviderBindingResolver,
+            ProviderBinding,
+            ProviderBindingResolver,
+            ProviderRuntimePolicyConfig,
+            UnitModuleBinding,
+            WebhookDestinationConfig,
+        )
+
+        commercial_values = {
+            "CommercialConfigurationService": CommercialConfigurationService,
+            "ConfiguredFiscalOperation": ConfiguredFiscalOperation,
+            "DurableProviderBindingResolver": DurableProviderBindingResolver,
+            "ProviderBinding": ProviderBinding,
+            "ProviderBindingResolver": ProviderBindingResolver,
+            "ProviderRuntimePolicyConfig": ProviderRuntimePolicyConfig,
+            "UnitModuleBinding": UnitModuleBinding,
+            "WebhookDestinationConfig": WebhookDestinationConfig,
+        }
+        return commercial_values[name]
     if name in {
         "DurableControlPlaneClock",
         "DurableControlPlaneService",
@@ -108,6 +150,8 @@ __all__ = [
     "AdminPrincipal",
     "ArchiveReferenceView",
     "CapabilityControlContext",
+    "CommercialConfigurationService",
+    "ConfiguredFiscalOperation",
     "ControlPlaneAuditAction",
     "ControlPlaneAuditEvent",
     "ControlPlaneAuthorizationError",
@@ -120,14 +164,20 @@ __all__ = [
     "DeliveryOperationView",
     "DurableControlPlaneClock",
     "DurableControlPlaneService",
+    "DurableProviderBindingResolver",
     "FiscalOrganization",
     "FiscalUnitRegistration",
     "GovernedCapabilityReadinessService",
     "InMemoryControlPlaneState",
     "OperationalControlPlaneService",
+    "ProviderBinding",
+    "ProviderBindingResolver",
+    "ProviderRuntimePolicyConfig",
     "ReconciliationControlView",
     "ReconciliationIssueView",
     "SecretReference",
     "SecretReferenceKind",
     "SystemDurableControlPlaneClock",
+    "UnitModuleBinding",
+    "WebhookDestinationConfig",
 ]
