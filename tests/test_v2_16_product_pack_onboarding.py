@@ -6,8 +6,10 @@ from kordena_fiscal.compliance import FiscalActionCapability
 from kordena_fiscal.contract_packs.base import (
     DeclarativeProductFiscalContractPack,
     ProductContractPackDescriptor,
+    ProductContractPackNotFoundError,
     ProductContractPackRegistry,
     ProductUseCaseDescriptor,
+    ProductUseCaseNotFoundError,
 )
 from kordena_fiscal.contract_packs.onboarding import (
     ProductMutationPreflight,
@@ -46,8 +48,7 @@ def _synthetic_pack() -> DeclarativeProductFiscalContractPack:
     )
 
 
-def _valid_preflight(registry: ProductContractPackRegistry) -> ProductMutationPreflight:
-    del registry
+def _valid_preflight() -> ProductMutationPreflight:
     return ProductMutationPreflight(
         pack_id="synthetic-product",
         host_namespace="fm.synthetic-product",
@@ -108,30 +109,34 @@ def test_onboarding_requires_explicit_commercial_authority_and_idempotency_strat
         )
 
 
-def test_valid_registered_pack_passes_mutation_preflight_only_with_authoritative_gates_green() -> None:
+def test_valid_registered_pack_passes_only_with_authoritative_gates_green() -> None:
     pack = _synthetic_pack()
     registry = ProductContractPackRegistry((pack,))
-    validate_product_mutation_preflight(_valid_preflight(registry), registry=registry)
+    validate_product_mutation_preflight(_valid_preflight(), registry=registry)
 
 
 @pytest.mark.parametrize(
-    ("field", "value"),
+    ("field", "value", "expected_error"),
     [
-        ("host_namespace", "fm.other"),
-        ("use_case_id", "unknown-use-case"),
-        ("operation_kind", FiscalOperationKind.SERVICE),
-        ("document_kind", FiscalDocumentKind.NFE),
-        ("fiscal_action", FiscalActionCapability.CANCEL),
-        ("idempotency_key", ""),
-        ("fiscal_binding_resolved", False),
-        ("capability_granted", False),
-        ("readiness_granted", False),
+        ("host_namespace", "fm.other", ProductContractPackNotFoundError),
+        ("use_case_id", "unknown-use-case", ProductUseCaseNotFoundError),
+        ("operation_kind", FiscalOperationKind.SERVICE, ProductMutationPreflightError),
+        ("document_kind", FiscalDocumentKind.NFE, ProductMutationPreflightError),
+        ("fiscal_action", FiscalActionCapability.CANCEL, ProductMutationPreflightError),
+        ("idempotency_key", "", ProductMutationPreflightError),
+        ("fiscal_binding_resolved", False, ProductMutationPreflightError),
+        ("capability_granted", False, ProductMutationPreflightError),
+        ("readiness_granted", False, ProductMutationPreflightError),
     ],
 )
-def test_invalid_mutation_preflight_fails_closed(field: str, value: object) -> None:
+def test_invalid_mutation_preflight_fails_closed(
+    field: str,
+    value: object,
+    expected_error: type[Exception],
+) -> None:
     pack = _synthetic_pack()
     registry = ProductContractPackRegistry((pack,))
-    request = _valid_preflight(registry)
+    request = _valid_preflight()
     values = {
         "pack_id": request.pack_id,
         "host_namespace": request.host_namespace,
@@ -146,13 +151,14 @@ def test_invalid_mutation_preflight_fails_closed(field: str, value: object) -> N
         "readiness_granted": request.readiness_granted,
     }
     values[field] = value
-    with pytest.raises(Exception):
-        validate_product_mutation_preflight(ProductMutationPreflight(**values), registry=registry)  # type: ignore[arg-type]
+    with pytest.raises(expected_error):
+        candidate = ProductMutationPreflight(**values)  # type: ignore[arg-type]
+        validate_product_mutation_preflight(candidate, registry=registry)
 
 
 def test_incomplete_scope_fails_closed() -> None:
     registry = ProductContractPackRegistry((_synthetic_pack(),))
-    request = _valid_preflight(registry)
+    request = _valid_preflight()
     headers = dict(request.scope_headers)
     headers.pop("X-FM-Unit-Id")
     invalid = ProductMutationPreflight(
@@ -174,5 +180,5 @@ def test_incomplete_scope_fails_closed() -> None:
 
 def test_unregistered_pack_fails_closed() -> None:
     registry = ProductContractPackRegistry()
-    with pytest.raises(Exception):
-        validate_product_mutation_preflight(_valid_preflight(registry), registry=registry)
+    with pytest.raises(ProductContractPackNotFoundError):
+        validate_product_mutation_preflight(_valid_preflight(), registry=registry)
