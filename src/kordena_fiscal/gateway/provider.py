@@ -89,6 +89,23 @@ class ProviderResponseStatus(StrEnum):
     AVAILABLE = "available"
 
 
+@dataclass(frozen=True, slots=True)
+class ProviderTimeoutPolicy:
+    """Explicit transport deadlines; no adapter relies on SDK defaults."""
+
+    connect_seconds: float
+    read_seconds: float
+
+    def __post_init__(self) -> None:
+        for field_name in ("connect_seconds", "read_seconds"):
+            value = getattr(self, field_name)
+            if not isinstance(value, (int, float)) or isinstance(value, bool):
+                raise FiscalValidationError(f"{field_name} must be numeric")
+            if value <= 0 or value > 300:
+                raise FiscalValidationError(f"{field_name} must be > 0 and <= 300")
+            object.__setattr__(self, field_name, float(value))
+
+
 _OPERATION_ACTION: dict[ProviderOperation, FiscalActionCapability] = {
     ProviderOperation.AUTHORIZE: FiscalActionCapability.ISSUE,
     ProviderOperation.QUERY: FiscalActionCapability.QUERY,
@@ -270,6 +287,7 @@ class FiscalProviderTransport(Protocol):
         request: ProviderRequest,
         credentials: EphemeralProviderCredentialsMaterial,
         csc: EphemeralCscMaterial | None,
+        timeout: ProviderTimeoutPolicy,
     ) -> ProviderTransportResponse: ...
 
 
@@ -291,8 +309,12 @@ class ConfiguredProviderAdapter:
         descriptor: ProviderDescriptor,
         secret_resolution: SecretResolutionService,
         transport: FiscalProviderTransport,
+        timeout_policy: ProviderTimeoutPolicy,
     ) -> None:
+        if not isinstance(timeout_policy, ProviderTimeoutPolicy):
+            raise FiscalValidationError("timeout_policy must be ProviderTimeoutPolicy")
         self.descriptor = descriptor
+        self.timeout_policy = timeout_policy
         self._secret_resolution = secret_resolution
         self._transport = transport
 
@@ -322,6 +344,7 @@ class ConfiguredProviderAdapter:
             request=request,
             credentials=credentials,
             csc=csc,
+            timeout=self.timeout_policy,
         )
         if not isinstance(response, ProviderTransportResponse):
             raise MalformedProviderResponseError("provider transport returned invalid response")
