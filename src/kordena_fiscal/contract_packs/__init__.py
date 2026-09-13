@@ -47,6 +47,15 @@ from .kordena import (
     KORDENA_RESTAURANT_POS_SALE,
     KordenaFiscalContractPack,
 )
+from .onboarding import (
+    ProductMutationPreflight,
+    ProductMutationPreflightError,
+    ProductOnboardingCertification,
+    ProductOnboardingCertificationError,
+    ProductOnboardingDeclaration,
+    certify_product_onboarding,
+    validate_product_mutation_preflight,
+)
 from .sales import (
     SALES_CONTRACT_DESCRIPTOR,
     SALES_FISCAL_CONTRACT_PACK,
@@ -90,6 +99,11 @@ __all__ = [
     "ProductContractPackRegistrationError",
     "ProductContractPackRegistry",
     "ProductFiscalContractPack",
+    "ProductMutationPreflight",
+    "ProductMutationPreflightError",
+    "ProductOnboardingCertification",
+    "ProductOnboardingCertificationError",
+    "ProductOnboardingDeclaration",
     "ProductOperationContractError",
     "ProductUseCaseDescriptor",
     "ProductUseCaseNotFoundError",
@@ -102,4 +116,6 @@ __all__ = [
     "SalesFiscalContractPack",
     "V2_10_PRODUCT_CONTRACT_MATRIX",
     "build_product_contract_matrix",
+    "certify_product_onboarding",
+    "validate_product_mutation_preflight",
 ]
