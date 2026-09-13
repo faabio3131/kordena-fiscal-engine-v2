@@ -15,17 +15,17 @@ from kordena_fiscal.domain import FiscalDocumentKind
 from kordena_fiscal.operations import FiscalOperationKind
 
 FM_FISCAL_API_VERSION = "v1"
-CAPABILITIES_ENDPOINT = "/v1/fiscal/capabilities"
-ISSUANCES_ENDPOINT = "/v1/fiscal/issuances"
-OPERATIONS_ENDPOINT_TEMPLATE = "/v1/fiscal/operations/{operation_id}"
-RECONCILIATION_ENDPOINT = "/v1/fiscal/reconciliation"
-WEBHOOKS_ENDPOINT = "/v1/fiscal/webhooks"
+CAPABILITIES_ENDPOINT = "/v1/capabilities/query"
+ISSUANCES_ENDPOINT = "/v1/issuances"
+QUERIES_ENDPOINT = "/v1/queries"
+RECONCILIATIONS_ENDPOINT = "/v1/reconciliations"
 
 REQUIRED_SCOPE_HEADERS: tuple[str, ...] = (
-    "X-Tenant-Id",
-    "X-Unit-Id",
+    "X-FM-Host-Namespace",
+    "X-FM-Tenant-Id",
+    "X-FM-Unit-Id",
+    "X-FM-Environment",
     "X-Correlation-Id",
-    "X-Host-System-Id",
 )
 IDEMPOTENCY_HEADER = "Idempotency-Key"
 
@@ -51,9 +51,8 @@ class ProductIntegrationContract:
     api_version: str = FM_FISCAL_API_VERSION
     capabilities_endpoint: str = CAPABILITIES_ENDPOINT
     issuance_endpoint: str = ISSUANCES_ENDPOINT
-    operation_endpoint_template: str = OPERATIONS_ENDPOINT_TEMPLATE
-    reconciliation_endpoint: str = RECONCILIATION_ENDPOINT
-    webhooks_endpoint: str = WEBHOOKS_ENDPOINT
+    query_endpoint: str = QUERIES_ENDPOINT
+    reconciliations_endpoint: str = RECONCILIATIONS_ENDPOINT
     required_scope_headers: tuple[str, ...] = REQUIRED_SCOPE_HEADERS
     idempotency_header: str = IDEMPOTENCY_HEADER
     readiness_required_before_mutation: bool = True
@@ -90,10 +89,9 @@ __all__ = [
     "FM_FISCAL_API_VERSION",
     "IDEMPOTENCY_HEADER",
     "ISSUANCES_ENDPOINT",
-    "OPERATIONS_ENDPOINT_TEMPLATE",
     "ProductIntegrationContract",
-    "RECONCILIATION_ENDPOINT",
+    "QUERIES_ENDPOINT",
+    "RECONCILIATIONS_ENDPOINT",
     "REQUIRED_SCOPE_HEADERS",
-    "WEBHOOKS_ENDPOINT",
     "resolve_product_integration_contract",
 ]
