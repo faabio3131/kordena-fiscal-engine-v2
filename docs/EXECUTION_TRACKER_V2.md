@@ -2,116 +2,85 @@
 
 Data de início: 2026-09-11  
 Repositório: `faabio3131/kordena-fiscal-engine-v2`  
-Status global: **EM EXECUÇÃO CONTROLADA — V2-15 externa pendente; V2-16 parcialmente concluída/certificada**  
+Status global: **EM EXECUÇÃO CONTROLADA — V2-15 externa pendente; V2-16 internamente fechada com bloqueios reais de produto; V2-17 preparatória autorizada**  
 Última fase integralmente concluída sem bloqueio externo: **V2-14 — Hardening sistêmico**  
-Fase atual: **V2-16 — BLOQUEADA PARCIAL; B1/B3/B6 CERTIFICADOS; B2 KORDENA BLOQUEADO; B4/B5 INTERNAMENTE CERTIFICADOS COM BLOQUEIOS REAIS DE DOMÍNIO**
+Fase atual: **V2-16 — BLOQUEADA PARCIAL; TODO O TRABALHO INTERNO EXECUTÁVEL B1-B7 CONCLUÍDO/CERTIFICADO**
 
-> Snapshot pré-V2-15: `docs/history/EXECUTION_TRACKER_V2_PRE_V2_15.md`. Plano V2-15: `docs/V2_15_HOMOLOGATION_CONTROLLED_PILOTS.md`. Fechamento V2-15: `docs/V2_15_CLOSURE_CERTIFICATION.md`. Execução V2-16: `docs/V2_16_PRODUCT_INTEGRATION_EXECUTION.md`.
+> Snapshot pré-V2-15: `docs/history/EXECUTION_TRACKER_V2_PRE_V2_15.md`. V2-15: `docs/V2_15_CLOSURE_CERTIFICATION.md`. V2-16: `docs/V2_16_PRODUCT_INTEGRATION_EXECUTION.md` + `docs/V2_16_CLOSURE_CERTIFICATION.md`.
 
 ## Regra de governança
 
-Estados permitidos: `PENDENTE`, `EM EXECUÇÃO`, `BLOQUEADO`, `CONCLUÍDO`. A PR #16 permanece OPEN/DRAFT/não mergeada e preserva o checkpoint certificado da V2-15. PRs de integração da V2-16 também permanecem Draft/não mergeadas. Deploy, produção real, cutover e promoção de `PRODUCTION_APPROVED` continuam proibidos. Homologação oficial externa exige evidência externa real; teste sintético não substitui resposta oficial.
+Estados permitidos: `PENDENTE`, `EM EXECUÇÃO`, `BLOQUEADO`, `CONCLUÍDO`. PRs permanecem Draft/não mergeadas. Deploy, produção real, cutover, migração produtiva e promoção de `PRODUCTION_APPROVED` continuam proibidos. Homologação oficial externa exige evidência externa real; teste sintético não substitui resposta oficial.
 
-| Bloco | Escopo | Status | Evidência / Gate |
+| Fase | Escopo | Status | Evidência / Gate |
 |---|---|---|---|
+| V2-00..V2-11 | Equivalência → Control Plane | **CONCLUÍDO** | histórico preservado nas PRs #1-#12 |
 | V2-12 | Gateway/Signer/Vault adapters | **CONCLUÍDO** | PR #13 Draft; 508 PASS |
 | V2-13 | Observabilidade + Compliance Operations | **CONCLUÍDO** | PR #14 Draft; 563 PASS |
-| V2-14 | Hardening sistêmico | **CONCLUÍDO** | PR #15 Draft; 582 PASS; doc gate 582 PASS |
-| V2-15 | Homologação + pilotos controlados | **BLOQUEADO PARCIAL — INTERNO CERTIFICADO** | PR #16 Draft; B0-B6 internos verdes; B6 final 620 PASS; externo oficial pendente |
-| V2-16 | Integração produtos FM | **BLOQUEADO PARCIAL — JANELAS B1-B6 EXECUTADAS** | B1/B3/B6 certificados; B2 bloqueado; B4/B5 internos certificados com bloqueios de domínio |
-| V2-17 | Convergência/cutover | PENDENTE | NÃO AUTORIZADO |
-| V2-18 | Produto comercial independente | PENDENTE | posterior ao uso interno certificado |
+| V2-14 | Hardening sistêmico | **CONCLUÍDO** | PR #15 Draft; 582 PASS |
+| V2-15 | Homologação + pilotos controlados | **BLOQUEADO PARCIAL — INTERNO CERTIFICADO** | PR #16 Draft; B0-B6 verdes; 620 PASS; externo oficial pendente |
+| V2-16 | Integração produtos FM | **BLOQUEADO PARCIAL — INTERNO B1-B7 CERTIFICADO** | PR #17 Draft; B7 646 PASS; bloqueios de produto explicitados |
+| V2-17 | Convergência/cutover | **PREPARAÇÃO AUTORIZADA** | cutover real proibido até pré-condições + aprovação humana |
+| V2-18 | Produto comercial independente | PENDENTE | não autorizado |
 
 ## V2-15 — certificação interna acumulada
 
-### B0 — Commercial Configurability + Zero-Code Onboarding — CONCLUÍDO/CERTIFICADO
+- B0 Commercial Configurability + Zero-Code Onboarding: SHA `87af3e9c96b135142d4ea41118c3463c4223f3d9`, run `34776022773`, **592 PASS**.
+- B1 Homologation Environment Readiness: SHA `4bd07f94db7c0d5e05c7896adbfc8ff80d377ac3`, run `34776243989`, **597 PASS**.
+- B2 NF-e Matrix: SHA `ec5a00dff67710a2d20e7931665e15e94d6de77b`, run `34776372599`, **601 PASS**.
+- B3 NFC-e Matrix: SHA `5507d4ea4c721af4ea77b576e162c684b551eb38`, run `34776525383`, **605 PASS**.
+- B4 NFS-e Matrix: SHA `2c152f0a86d4a80a97f91125bc9e9bbc50ee993a`, run `34777347753`, **611 PASS**.
+- B5 Pilotos Controlados/Go-No-Go: SHA `d7fa063c8a842480179b178a1e45f37061fe8e18`, run `34777597412`, **616 PASS**.
+- B6 Closure: SHA `a1c539081236bb3f8df9afb096c4e78efcb8374f`, run `34777811652`, **620 PASS**.
 
-Novo cliente = configuração, não desenvolvimento. SecretReference provider-scoped para CREDENTIALS/CSC, ProviderBinding durável, perfis fiscais, módulos, webhooks, workload identity/grants, homologation evidence, numbering e runtime policies persistidos/governados. Runtime concreto separado do núcleo do Control Plane.
-
-Gate: SHA `87af3e9c96b135142d4ea41118c3463c4223f3d9`, run `34776022773`, job `103774161682`: 109 source files, **592 PASS em 8.42s**.
-
-### B1 — Homologation Environment Readiness — CONCLUÍDO/CERTIFICADO INTERNAMENTE
-
-Gate: SHA `4bd07f94db7c0d5e05c7896adbfc8ff80d377ac3`, run `34776243989`, job `103774775120`: 110 source files, **597 PASS em 6.19s**.
-
-### B2 — NF-e Homologation Matrix — CONCLUÍDO/CERTIFICADO INTERNAMENTE
-
-Gate: SHA `ec5a00dff67710a2d20e7931665e15e94d6de77b`, run `34776372599`, job `103775124030`: 110 source files, **601 PASS em 22.18s**.
-
-### B3 — NFC-e Homologation Matrix — CONCLUÍDO/CERTIFICADO INTERNAMENTE
-
-Gate: SHA `5507d4ea4c721af4ea77b576e162c684b551eb38`, run `34776525383`, job `103775530828`: 110 source files, **605 PASS em 6.94s**.
-
-### B4 — NFS-e Homologation Matrix — CONCLUÍDO/CERTIFICADO INTERNAMENTE
-
-Documento: `docs/V2_15_NFSE_HOMOLOGATION_MATRIX.md`. Município IBGE obrigatório, provider/operação/jurisdição exatos, sem fallback município→UF/provider-default/cross-provider/HOMOLOGATION→PRODUCTION, credenciais provider-scoped, restart durability e unknown outcome sem retry cego.
-
-Gate: SHA `2c152f0a86d4a80a97f91125bc9e9bbc50ee993a`, run `34777347753`, job `103777774112`: 110 source files, **611 PASS em 6.27s**.
-
-### B5 — Pilotos Controlados + Go/No-Go — CONCLUÍDO/CERTIFICADO INTERNAMENTE
-
-Documento: `docs/V2_15_B5_CONTROLLED_PILOTS_GO_NO_GO.md`. Pilot scope explícito, allowlist, HOMOLOGATION-only, S2S autorizado, technical readiness, provider binding exato, kill-switch durável, audit trail e estados `GO_INTERNAL`, `NO_GO`, `BLOCKED_EXTERNAL`.
-
-Gate: SHA `d7fa063c8a842480179b178a1e45f37061fe8e18`, run `34777597412`, job `103778446003`: 111 source files, **616 PASS em 6.82s**.
-
-### B6 — Certificação/Fechamento — CONCLUÍDO/CERTIFICADO INTERNAMENTE
-
-Suíte: `tests/homologation/test_v2_15_closure.py`. Gate final SHA `a1c539081236bb3f8df9afb096c4e78efcb8374f`, run `34777811652`, job `103779032887`: Install PASS, Ruff PASS, Mypy PASS em **111 source files**, Pytest **620 PASS em 21.21s**.
-
-CI restaurado após o gate ao blob governado `b161340d7164afcbf3da0eb0327135528a39450c`: `workflow_dispatch` only + `permissions: contents: read`.
+Estado formal: **BLOQUEADA PARCIAL — INTERNO CERTIFICADO; EXTERNO OFICIAL PENDENTE**. Nenhum provider/UF/município é oficialmente homologado sem evidência externa.
 
 ## V2-16 — execução acumulada
 
-### B1 — Contrato de integração — CONCLUÍDO/CERTIFICADO INTERNAMENTE
+### B1 — Contrato de integração — CONCLUÍDO/CERTIFICADO
 
-Fronteira `kordena_fiscal.integrations` ligada aos Product Contract Packs certificados e ao OpenAPI atual do FM Fiscal Bridge v1. Gate certificado: SHA `c23d49997a4344363720436374a8d9476e665262`, run `34779681157`: Install/Ruff/Mypy/Pytest PASS.
+SHA `c23d49997a4344363720436374a8d9476e665262`, run `34779681157`: Install/Ruff/Mypy/Pytest PASS.
 
-### B2 — Integração Kordena — BLOQUEADA POR PRÉ-REQUISITO REAL
+### B2 — Kordena — BLOQUEADO POR PRÉ-REQUISITO REAL
 
-O Plano Mestre exige V1 Web Premium liberada para FISC-20. A PR Kordena #118 permanece OPEN/DRAFT. Nenhum acoplamento runtime foi introduzido e nenhum verde artificial foi declarado.
+PR Kordena #118 permanece OPEN/DRAFT e funcionalmente PARCIAL. Web Premium/FISC-20 ainda impede integração runtime/cutover.
 
-### B3 — Integração Iron Fit — CONCLUÍDO/CERTIFICADO INTERNAMENTE
+### B3 — Iron Fit — CONCLUÍDO/CERTIFICADO
 
-Branch `feat/fisc-v2-16-iron-integration`, PR #48 OPEN/DRAFT. Gate final SHA `2be8321eeb066f0296ba812faab0a098c32f0632`, run `34780329013`: npm ci, dependency audit, Prisma generate, lint/typecheck, build e smoke tests PASS.
+PR #48 Draft. SHA `2be8321eeb066f0296ba812faab0a098c32f0632`, run `34780329013`: dependency audit, Prisma, lint/typecheck, build e smoke PASS.
 
-### B4 — Integração Vendedor IA — BLOQUEADO PARCIAL / INTERNO CERTIFICADO
+### B4 — Vendedor IA — BLOQUEADO PARCIAL / INTERNO CERTIFICADO
 
-Autoridade de liquidação: `Payment.status = CONFIRMED`, com Quote ACCEPTED e snapshot de itens como fonte comercial. Handoff `fm.vendedor-ia` + pack `sales` implementado sem adivinhar NF-e/NFC-e. Produtos liquidados ficam `PENDING_FISCAL_CLASSIFICATION`; SERVICE fica `BLOCKED_UNSUPPORTED_SALE_CONTENT`.
+`Payment.status = CONFIRMED` é autoridade de liquidação. Handoff `fm.vendedor-ia` certificado sem adivinhar NF-e/NFC-e. Faltam CPF/CNPJ/endereço fiscal e fatos suficientes para classificação segura. PR #1 Draft. SHA `b4b7fb05236c481d5626de5386864ae6f5227418`, run `34783831679`: **157 PASS** + security/Docker smoke.
 
-Bloqueio real: Customer não possui CPF/CNPJ/endereço fiscal e o domínio atual não contém fatos suficientes para escolher NF-e versus NFC-e.
+### B5 — CampaIA — BLOQUEADO PARCIAL / INTERNO CERTIFICADO
 
-Branch `feat/fisc-v2-16-vendedor-integration`, PR Vendedor IA #1 OPEN/DRAFT. HEAD `b4b7fb05236c481d5626de5386864ae6f5227418`, run `34783831679`, job `103795573887`: install/build/typecheck PASS; **34 arquivos / 157 testes PASS**; runtime security PASS; Docker smoke PASS.
+Adapter `SettledOwnBillingFact` fail-closed certificado sem transformar media spend em receita. Falta autoridade real de faturamento/pagamento próprio. PR #1 Draft. SHA `bdebbc3558ff8b07c1a38e0cb728be0dc3635c4b`, run `34784021431`: **347 PASS** + AsyncAPI 24 eventos.
 
-### B5 — Integração CampaIA — BLOQUEADO PARCIAL / INTERNO CERTIFICADO
+### B6 — Adapter Contract Pack / novos produtos — CONCLUÍDO/CERTIFICADO
 
-O produto não possui ainda autoridade de faturamento/assinatura/pagamento próprio. Campanha, orçamento e media spend não foram convertidos artificialmente em receita. Foi implementada seam fail-closed `SettledOwnBillingFact` para futuro evento autoritativo, mapeando somente service-billing/saas-billing para NFS-e com idempotência, binding e readiness obrigatórios.
+`ProductOnboardingDeclaration`, `ProductMutationPreflight` e validações fail-closed. Primeiro gate encontrou cinco Ruff; corrigido sem relaxamento. SHA `878738c172ab31e3f81618a95986370b17d0e602`, run `34784375685`: 114 source files, **639 PASS**.
 
-Branch `feat/fisc-v2-16-campaia-integration`, PR CampaIA #1 OPEN/DRAFT. HEAD `bdebbc3558ff8b07c1a38e0cb728be0dc3635c4b`, run `34784021431`, job `103796103296`: **267 core tests PASS + 80 API tests PASS = 347 PASS**; AsyncAPI PASS com 24 eventos verificados end-to-end.
+### B7 — E2E + Multi-Product Cross-Certification + Closure — CONCLUÍDO/CERTIFICADO
 
-### B6 — Adapter Contract Pack / novos produtos FM — CONCLUÍDO/CERTIFICADO INTERNAMENTE
+A divergência histórica do B6 foi reconciliada sem reescrever entregas. Nova suíte `tests/test_v2_16_cross_product_closure.py` certifica quatro hosts, três document kinds, múltiplas operações, isolamento host/tenant/unit/environment, correlation/causation, idempotência, spoofing fail-closed e readiness obrigatório.
 
-A fundação existente foi reutilizada; não foi criado framework paralelo. Foram adicionados:
+SHA de implementação `5afb3d9af8879f17b451e757f53ca41796e843e7`, run `34785216450`, job `103799337982`: Install PASS; Ruff PASS; Mypy PASS em **114 source files**; Pytest **646 PASS em 6.44s**.
 
-- `ProductOnboardingDeclaration` + `certify_product_onboarding(...)`;
-- `ProductMutationPreflight` + `validate_product_mutation_preflight(...)`;
-- fail-closed para pack/host/use case/operação/documento/ação/escopo/idempotência/binding/capability/readiness;
-- prova sintética não registrada no catálogo real;
-- `docs/V2_16_ADAPTER_PACK_ONBOARDING.md`.
+Diff V2-15 → gate B7: **20 ahead / 0 behind**, merge-base exato `33e34866bc6e8c736c585c45101ce214816e0594`.
 
-O primeiro gate, run `34784287287`, encontrou cinco violações Ruff. O gate permaneceu vermelho, o código/testes foram corrigidos e nenhuma regra/teste foi relaxado. Um run intermediário avaliou commit parcial. Gate integral corrigido: SHA `878738c172ab31e3f81618a95986370b17d0e602`, run `34784375685`, job `103797066379`: Install PASS; Ruff PASS; Mypy PASS em **114 source files**; Pytest **639 PASS em 16.83s**.
+Closure: `docs/V2_16_CLOSURE_CERTIFICATION.md`.
 
-## Estado formal da V2-16 após B1-B6
+## Estado formal da V2-16
 
-**V2-16 — BLOQUEADA PARCIAL — B1, B3 E B6 INTERNAMENTE CONCLUÍDOS/CERTIFICADOS; B2 KORDENA BLOQUEADO POR PRÉ-REQUISITO WEB PREMIUM/FISC-20; B4 VENDEDOR IA E B5 CAMPAIA INTERNAMENTE CERTIFICADOS, MAS BLOQUEADOS PARCIALMENTE POR LACUNAS REAIS DE DOMÍNIO DOS PRODUTOS.**
+**V2-16 — BLOQUEADA PARCIAL — TODO O TRABALHO INTERNO EXECUTÁVEL CONCLUÍDO/CERTIFICADO; DEPENDÊNCIAS DE PRODUTO/EXTERNAS DOCUMENTADAS.**
 
-As duas janelas autorizadas B1-B3 e B4-B6 estão executadas. A arquitetura de integração e onboarding multiproduto está certificada; os bloqueios restantes pertencem aos pré-requisitos/domínios reais dos produtos e não foram convertidos artificialmente em verde.
+Os bloqueios de Kordena, Vendedor IA e CampaIA não são convertidos em verde. Eles também não impedem o trabalho preparatório interno da V2-17, mas continuam impedindo cutover real quando fizerem parte das pré-condições obrigatórias.
 
 ## Evidência externa / bloqueios reais
 
-Nenhum provider, UF, município ou operação foi declarado oficialmente homologado. Não foram fornecidos/consumidos segredos reais, certificados privados reais, CSC real, provider credentials reais, endpoints produtivos ou respostas externas oficiais. Nenhum piloto externo real foi executado.
-
-A V2-15 continua formalmente **BLOQUEADA PARCIAL — TRABALHO INTERNO CONCLUÍDO/CERTIFICADO; DEPENDÊNCIAS EXTERNAS PENDENTES**.
+Não foram fornecidos/consumidos certificados privados reais, CSC real, provider credentials reais, endpoints produtivos ou respostas externas oficiais. Nenhum piloto externo real foi executado. Nenhuma homologação sintética é tratada como homologação oficial.
 
 ## Governança preservada
 
-**SEM MERGE da PR #16, PR #17, Iron #48, Vendedor IA #1 ou CampaIA #1. SEM Ready/auto-merge. SEM deploy. SEM produção real. SEM cutover. SEM segredo real no repositório. SEM homologação externa inventada. SEM promoção de `PRODUCTION_APPROVED`. V2-17 NÃO INICIADA.**
+**SEM MERGE. SEM Ready/auto-merge. SEM deploy. SEM produção real. SEM cutover real. SEM migração produtiva. SEM segredo real. SEM homologação externa inventada. SEM promoção indevida de `PRODUCTION_APPROVED`. V2-18 NÃO INICIADA.**
