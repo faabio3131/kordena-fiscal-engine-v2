@@ -1,4 +1,4 @@
-"""Provider-neutral fiscal authorization gateway surface."""
+"""Provider-neutral fiscal gateway surface."""
 
 from .authorization import (
     AuthorizationRequest,
@@ -10,15 +10,60 @@ from .authorization import (
     GatewayProviderMetadata,
 )
 from .fake import FakeFiscalGateway, FakeGatewayMode
+from .provider import (
+    ConfiguredProviderAdapter,
+    CscUnavailableError,
+    FiscalProviderTransport,
+    MalformedProviderResponseError,
+    ProviderAuthenticationError,
+    ProviderCredentialsUnavailableError,
+    ProviderDescriptor,
+    ProviderGatewayError,
+    ProviderGatewayService,
+    ProviderOperation,
+    ProviderRegistry,
+    ProviderRejectedError,
+    ProviderRequest,
+    ProviderResponse,
+    ProviderResponseStatus,
+    ProviderTransportError,
+    ProviderTransportResponse,
+    ProviderUnavailableError,
+    UnsupportedJurisdictionError,
+    UnsupportedProviderError,
+)
+from .synthetic_transport import SyntheticProviderTransport, SyntheticTransportObservation
 
 __all__ = [
     "AuthorizationRequest",
     "AuthorizationResult",
     "AuthorizationStatus",
+    "ConfiguredProviderAdapter",
+    "CscUnavailableError",
     "FakeFiscalGateway",
     "FakeGatewayMode",
     "FiscalGateway",
     "FiscalGatewayClient",
+    "FiscalProviderTransport",
     "GatewayContractError",
     "GatewayProviderMetadata",
+    "MalformedProviderResponseError",
+    "ProviderAuthenticationError",
+    "ProviderCredentialsUnavailableError",
+    "ProviderDescriptor",
+    "ProviderGatewayError",
+    "ProviderGatewayService",
+    "ProviderOperation",
+    "ProviderRegistry",
+    "ProviderRejectedError",
+    "ProviderRequest",
+    "ProviderResponse",
+    "ProviderResponseStatus",
+    "ProviderTransportError",
+    "ProviderTransportResponse",
+    "ProviderUnavailableError",
+    "SyntheticProviderTransport",
+    "SyntheticTransportObservation",
+    "UnsupportedJurisdictionError",
+    "UnsupportedProviderError",
 ]
