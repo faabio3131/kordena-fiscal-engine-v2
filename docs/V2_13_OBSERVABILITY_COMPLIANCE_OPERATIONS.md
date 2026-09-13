@@ -1,6 +1,6 @@
 # V2-13 — Observabilidade + Compliance Operations
 
-Status: **EM FECHAMENTO — BLOCOS 1-6 FUNCIONALMENTE CERTIFICADOS / GATE DOCUMENTAL FINAL PENDENTE**  
+Status: **CONCLUÍDA / CERTIFICADA**  
 Branch: `v2/observability-compliance-operations`  
 Base certificada: `v2/production-adapters` @ `1242ce74d874ffb87783401ce1abaabb350c948c`  
 Dependência: V2-12 concluída e certificada.  
@@ -30,7 +30,7 @@ Tornar o FM Fiscal operável e auditável em produção futura, com observabilid
 3. **Tracing / Correlation / Causation — CONCLUÍDO/CERTIFICADO.**
 4. **Operational & Compliance Alerts — CONCLUÍDO/CERTIFICADO.**
 5. **Regulatory Watcher Governado — CONCLUÍDO/CERTIFICADO.**
-6. **End-to-End Certification + fechamento V2-13 — FUNCIONALMENTE CERTIFICADO / FECHAMENTO DOCUMENTAL PENDENTE.**
+6. **End-to-End Certification + fechamento V2-13 — CONCLUÍDO/CERTIFICADO.**
 
 ## Bloco 1 — Structured Observability Boundary + Sanitization — CONCLUÍDO/CERTIFICADO
 
@@ -68,9 +68,9 @@ A comparação com capability/rule vigente é somente leitura. `RegulatoryChange
 
 Gate B5: `9174b461b13d6a8b26c76cfa1a9cc877fbc18895` / run `34764440273` / job `103742791023` / **103 source / 557 PASS em 4.44s**. CI restaurado em `2c113de637277732a695e18a3ab5ffd4d0e92773`.
 
-## Bloco 6 — End-to-End Certification + fechamento V2-13 — FUNCIONALMENTE CERTIFICADO
+## Bloco 6 — End-to-End Certification + fechamento V2-13 — CONCLUÍDO/CERTIFICADO
 
-A suíte de fechamento integra B1-B5 e certifica sanitização, absence de raw secret/payload fields, fail-open dos sinks de telemetria, isolamento cross-host/cross-tenant/cross-provider, trace restart/replay e soberania da autoridade de readiness diante de proposta normativa aprovada.
+A suíte de fechamento integra B1-B5 e certifica sanitização, ausência de raw secret/payload fields, fail-open dos sinks de telemetria, isolamento cross-host/cross-tenant/cross-provider, trace restart/replay e soberania da autoridade de readiness diante de proposta normativa aprovada.
 
 Gate funcional B6:
 
@@ -86,12 +86,21 @@ Gate funcional B6:
 
 Auditoria de diff V2-12 -> estado pós-gate/restauração: **45 commits à frente, 0 atrás, 17 arquivos líquidos, 3.526 adições e 51 remoções**. Nenhum arquivo de domínio foi alterado, nenhuma migration foi criada e o workflow CI não aparece no diff líquido porque voltou ao conteúdo dispatch-only original.
 
-O fechamento documental final ainda deve receber um gate verde antes de o tracker marcar V2-13 como oficialmente CONCLUÍDA/CERTIFICADA.
+Gate documental final:
+
+- SHA: `94d822aef5c0f6889e67f85bbee6b68c9aac145e`;
+- run: `34765573097` — **SUCCESS**;
+- job: `103745807658`;
+- Install: PASS;
+- Ruff: PASS;
+- Mypy strict: PASS — **103 source files**;
+- Pytest: **563 PASS em 7.20s**;
+- CI restaurado definitivamente em `1b7861b6f3365bf1eedff4870c7acd3af4bd70b4` para o blob dispatch-only `b161340d7164afcbf3da0eb0327135528a39450c`.
 
 ## Política de CI
 
-O workflow permanece `workflow_dispatch` por padrão. Em cada gate de bloco: habilitar temporariamente `pull_request`, registrar SHA/run/job e gates, restaurar o blob dispatch-only `b161340d7164afcbf3da0eb0327135528a39450c` e somente então reconciliar documentação.
+O workflow permanece `workflow_dispatch` por padrão. Em cada gate da fase foi habilitado temporariamente `pull_request`, registrado SHA/run/job e restaurado o blob dispatch-only governado. O estado final da V2-13 está novamente em `workflow_dispatch` only.
 
 ## Governança
 
-A PR #14 permanece Draft. Nenhum merge, deploy, promoção, homologação oficial, segredo real, integração privada de SaaS ou cutover é permitido automaticamente. V2-14 permanece PENDENTE até autorização humana explícita.
+A V2-13 está **CONCLUÍDA / CERTIFICADA**. A PR #14 permanece Draft, aberta e não mergeada. Nenhum merge, deploy, promoção, homologação oficial, segredo real, integração privada de SaaS ou cutover foi executado. **V2-14 — Hardening sistêmico permanece PENDENTE e aguarda autorização humana explícita.**
