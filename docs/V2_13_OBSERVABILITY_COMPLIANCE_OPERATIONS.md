@@ -1,6 +1,6 @@
 # V2-13 — Observabilidade + Compliance Operations
 
-Status: **EM EXECUÇÃO — BLOCOS 1-3 CERTIFICADOS / BLOCO 4 EM EXECUÇÃO**  
+Status: **EM EXECUÇÃO — BLOCOS 1-4 CERTIFICADOS / BLOCO 5 EM EXECUÇÃO**  
 Branch: `v2/observability-compliance-operations`  
 Base certificada: `v2/production-adapters` @ `1242ce74d874ffb87783401ce1abaabb350c948c`  
 Dependência: V2-12 concluída e certificada.
@@ -14,10 +14,10 @@ Tornar o FM Fiscal operável e auditável em produção futura, com observabilid
 - observabilidade não pode alterar decisão fiscal, readiness ou estado de documento;
 - logs, métricas, traces e alertas devem ser sanitizados por construção;
 - segredo, certificado, CSC, credential bytes, payload fiscal integral e dado real de cliente não entram em telemetria;
-- cardinalidade deve ser controlada; correlation/document references podem aparecer somente em superfícies apropriadas e sanitizadas;
-- host/tenant/unit/environment/document kind são dimensões explícitas de operação, nunca inferidas silenciosamente;
+- cardinalidade deve ser controlada;
+- host/tenant/unit/environment/document kind são dimensões explícitas de operação;
 - falha da telemetria não pode causar duplicação de emissão, bypass de segurança ou promoção de readiness;
-- alertas operacionais apontam risco/condição; não promovem `PRODUCTION_APPROVED`;
+- alertas operacionais não promovem `PRODUCTION_APPROVED`;
 - Regulatory Watcher separa fato normativo, evidência, proposta e decisão;
 - nenhuma regra normativa entra em vigor automaticamente: revisão, testes e aprovação humana são obrigatórios;
 - nenhuma integração SaaS privada, deploy, produção real, homologação oficial ou cutover é autorizada nesta fase.
@@ -27,66 +27,65 @@ Tornar o FM Fiscal operável e auditável em produção futura, com observabilid
 1. **Structured Observability Boundary + Sanitization — CONCLUÍDO/CERTIFICADO.**
 2. **Metrics + Cardinality Governance — CONCLUÍDO/CERTIFICADO.**
 3. **Tracing / Correlation / Causation — CONCLUÍDO/CERTIFICADO.**
-4. **Operational & Compliance Alerts — EM EXECUÇÃO.**
-5. **Regulatory Watcher Governado — PENDENTE.**
+4. **Operational & Compliance Alerts — CONCLUÍDO/CERTIFICADO.**
+5. **Regulatory Watcher Governado — EM EXECUÇÃO.**
 6. **End-to-End Certification + fechamento V2-13 — PENDENTE.**
 
 ## Bloco 1 — Structured Observability Boundary + Sanitization — CONCLUÍDO/CERTIFICADO
 
-Foi criado `kordena_fiscal.observability` fora do domínio fiscal, com eventos estruturados, contexto fiscal explícito, sanitização recursiva fail-closed, bounded text/collections e sink sintético sem rede/filesystem. Falha do sink é best-effort e não altera execução fiscal.
+Boundary provider-neutral fora do domínio fiscal com eventos estruturados, sanitização recursiva fail-closed, bounded text/collections e sink sintético best-effort.
 
-Primeira tentativa do gate: run `34763491466`, job `103740272028`; Install PASS, Ruff falhou somente por duas ocorrências UP035 de import `Mapping`; Mypy/Pytest ficaram bloqueados.
-
-Gate definitivo B1: SHA `11aa2fa9a63d624235ba90619d853aa3d38e2bb3`, run `34763558714`, job `103740454991`, **99 source files / 518 PASS em 4.52s**. CI restaurado em `e18af325808c53637492680b17219db0deea49cc`.
+Gate B1: `11aa2fa9a63d624235ba90619d853aa3d38e2bb3` / run `34763558714` / job `103740454991` / **99 source / 518 PASS em 4.52s**. CI restaurado em `e18af325808c53637492680b17219db0deea49cc`.
 
 ## Bloco 2 — Metrics + Cardinality Governance — CONCLUÍDO/CERTIFICADO
 
-`MetricDefinition`, `MetricPoint`, `MetricRecorder`, `MetricSink` e `InMemoryMetricSink` modelam counters, gauges e histograms sem SDK específico. Scope fiscal é derivado exclusivamente de `ObservabilityContext`, labels opcionais são whitelist fechada, labels de alta cardinalidade/sensíveis falham fechado e `max_series` limita novas séries sem impedir atualização das existentes.
+Counters/gauges/histograms sem SDK específico; scope fiscal derivado de `ObservabilityContext`; labels opcionais por whitelist; `max_series` limita cardinalidade; labels sensíveis/alta cardinalidade falham fechado.
 
-Catálogo certificado: queue depth, retries, rejeições, unknown provider outcomes, contingência e duração de operação.
-
-Gate definitivo B2: SHA `832cdddcc0653ead483ca42a6c93c7966ad9e67f`, run `34763739929`, job `103740927942`, **100 source files / 528 PASS em 5.02s**. CI restaurado em `bd300c3e92cf344f91d74976ae235c909ba65ced`.
+Gate B2: `832cdddcc0653ead483ca42a6c93c7966ad9e67f` / run `34763739929` / job `103740927942` / **100 source / 528 PASS em 5.02s**. CI restaurado em `bd300c3e92cf344f91d74976ae235c909ba65ced`.
 
 ## Bloco 3 — Tracing / Correlation / Causation — CONCLUÍDO/CERTIFICADO
 
-Foi criado `observability.tracing` com `TraceContext`, `TracePropagation`, `TraceSpan`, `TraceRecorder`, `TraceSpanSink` e sink sintético. Trace IDs usam 32 hex, span IDs 16 hex, correlation/causation são referências bounded e carrier possui allowlist fixa de headers.
+`TraceContext`, carrier com allowlist fixa, cadeia parent/child, correlation/causation explícitos, replay por reidratação e attributes sanitizados. Trace correlation deve corresponder ao scope fiscal. Falha do sink é best-effort.
 
-A cadeia application -> outbox -> provider -> reconciliation preserva `trace_id` e `correlation_id`, com parent spans e causation explícitos. Replay pode reidratar carrier e criar novo child span sem persistir trace como estado fiscal. Attributes reutilizam a sanitização fail-closed do Bloco 1. Correlação do trace deve corresponder ao `ExecutionScope`; mismatch falha fechado. Falha do trace sink é best-effort.
+Gate B3: `f23df8625c78aafa3284c00515376d5174b7892e` / run `34763939319` / job `103741455008` / **101 source / 537 PASS em 5.46s**. CI restaurado em `838a20f6b5e597bd8fd6263ff5406ad833c257df`.
 
-Gate definitivo B3:
+## Bloco 4 — Operational & Compliance Alerts — CONCLUÍDO/CERTIFICADO
 
-- SHA: `f23df8625c78aafa3284c00515376d5174b7892e`;
-- run: `34763939319` — **SUCCESS**;
-- job: `103741455008`;
+Foi criado `observability.alerts` com alertas tipados e sanitizados para certificado próximo de expirar/indisponível, fila/backlog/dead-letter, taxa de rejeição, gap de numeração, contingência prolongada e unknown provider outcome.
+
+`AlertRegistry` calcula chave SHA-256 de deduplicação a partir de kind + host + tenant + unit + environment + document kind + operation + provider + jurisdiction + dimensão segura. Alertas ativos não entram em loop; após `resolve()` podem ser emitidos novamente. Falha do sink não marca alerta como ativo.
+
+`OperationalAlertEvaluator` só produz sinais operacionais/compliance; não altera documento, readiness ou regra fiscal. Attributes passam pela sanitização fail-closed do B1 e referências explicitamente seguras podem ser preservadas.
+
+Primeira tentativa B4: run `34764107470`, job `103741903144`; Install PASS, Ruff falhou apenas por import não usado `MappingProxyType`; Mypy/Pytest bloqueados. Import removido sem alteração semântica.
+
+Gate definitivo B4:
+
+- SHA: `79e83cf34b6b7d6bf71b98036d20cdd0b3364cfd`;
+- run: `34764162846` — **SUCCESS**;
+- job: `103742057522`;
 - Install: PASS;
 - Ruff: PASS;
-- Mypy strict: PASS — **101 source files**;
-- Pytest: **537 PASS em 5.46s**;
-- baseline B2: 528; incremento líquido: **+9 testes**;
-- CI restaurado em `838a20f6b5e597bd8fd6263ff5406ad833c257df`.
+- Mypy strict: PASS — **102 source files**;
+- Pytest: **547 PASS em 4.45s**;
+- baseline B3: 537; incremento líquido: **+10 testes**;
+- CI restaurado em `dba2173c4ba0c23d5791b96ae6e381333d63a2b2`.
 
-## Bloco 4 — Operational & Compliance Alerts — EM EXECUÇÃO
+## Bloco 5 — Regulatory Watcher Governado — EM EXECUÇÃO
 
 Entregas:
 
-- alertas modelados para certificado próximo de expirar/indisponível;
-- fila/backlog/dead-letter;
-- taxa de rejeição;
-- gap de numeração/sequence;
-- contingência prolongada;
-- unknown provider outcome pendente de reconciliação;
-- severity, deduplication key e scope explícito;
-- política para não alertar em loop nem vazar payload.
-
-Gate: cenários sintéticos reproduzíveis e isolamento por scope/provider/jurisdição.
-
-## Bloco 5 — Regulatory Watcher Governado
-
-Entregas: observações normativas com proveniência/evidência, triagem, propostas não executáveis, revisão humana/testes/aprovação e conflitos explícitos. O watcher nunca altera readiness/rules sozinho.
+- observação normativa com fonte/proveniência, jurisdição, assunto, effective dates e hash de evidência;
+- estados separados para observado, triado, proposta de mudança, aprovado/rejeitado;
+- comparação com rule/capability vigente sem mutação automática;
+- proposta explicitamente não executável;
+- revisão humana e evidência de testes obrigatórias para aprovação;
+- conflitos/contradições de fontes representados explicitamente;
+- nenhuma alteração autônoma de `CapabilityReadinessService` ou rule matrix.
 
 ## Bloco 6 — End-to-End Certification + fechamento V2-13
 
-Certificar structured logs, metrics/cardinalidade, tracing/correlation, alertas, Regulatory Watcher, ausência de raw secrets/payloads, fail-open controlado da telemetria, cross-host/cross-tenant/cross-provider isolation, restart/replay, regressão mestre e diff completo V2-12 -> V2-13.
+Certificar structured logs, metrics/cardinalidade, tracing/correlation, alertas, Regulatory Watcher, ausência de raw secrets/payloads, fail-open controlado da telemetria, isolamento cross-host/cross-tenant/cross-provider, restart/replay, regressão mestre e diff completo V2-12 -> V2-13.
 
 ## Política de CI
 
