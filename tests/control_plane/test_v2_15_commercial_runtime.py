@@ -348,7 +348,9 @@ class _FlakyExecutor:
         )
 
 
-def test_homologation_evidence_is_durable_exact_and_does_not_imply_official_status(tmp_path) -> None:
+def test_homologation_evidence_is_durable_exact_and_does_not_imply_official_status(
+    tmp_path,
+) -> None:
     database = _database(tmp_path)
     _onboard(database)
     record = HomologationEvidenceRecord(

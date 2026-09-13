@@ -33,7 +33,6 @@ from kordena_fiscal.domain import (
     ProductOrigin,
     TaxClassificationHints,
 )
-
 from kordena_fiscal.security import (
     CallerIdentity,
     FiscalCapability,
