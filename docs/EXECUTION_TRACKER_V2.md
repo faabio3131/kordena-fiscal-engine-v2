@@ -4,9 +4,9 @@ Data de início: 2026-09-11
 Repositório: `faabio3131/kordena-fiscal-engine-v2`  
 Status global: **EM EXECUÇÃO**  
 Última fase concluída: **V2-12 — Gateway/Signer/Vault production adapters**  
-Fase atual: **V2-12 — CONCLUÍDA/CERTIFICADA; V2-13 aguardando autorização**
+Fase atual: **V2-13 — Observabilidade + Compliance Operations — EM EXECUÇÃO**
 
-> Snapshot imediatamente anterior à V2-12: `docs/history/EXECUTION_TRACKER_V2_PRE_V2_12.md`. Fechamento V2-11: `docs/V2_11_CLOSURE_CERTIFICATION.md`. Fechamento V2-12: `docs/V2_12_CLOSURE_CERTIFICATION.md`.
+> Snapshot imediatamente anterior à V2-13: `docs/history/EXECUTION_TRACKER_V2_PRE_V2_13.md`. Plano da fase: `docs/V2_13_OBSERVABILITY_COMPLIANCE_OPERATIONS.md`.
 
 ## Regra de governança
 
@@ -26,77 +26,44 @@ Estados permitidos: `PENDENTE`, `EM EXECUÇÃO`, `BLOQUEADO`, `CONCLUÍDO`. Nenh
 | V2-09 | Modularização de verticais | **CONCLUÍDO** | PR #10 Draft; `88071fd557199ffd6848312ea5559b0cba415ee1`; 346 PASS |
 | V2-10 | Contract Packs multiproduto | **CONCLUÍDO** | PR #11 Draft; `345652ecbfc18c8bd3511cf5b9083ba0dbc259cb`; 397 PASS |
 | V2-11 | Control Plane independente | **CONCLUÍDO** | PR #12 Draft; gate `eed6b056e9d1941da435179c5eaf805c261f6622`; run `34736942613`; 85 source; 437 PASS |
-| V2-12 | Gateway/Signer/Vault production adapters | **CONCLUÍDO** | PR #13 Draft; B6 `b7bccf2babed336941d920eed73cd0699e6939d4` / 508 PASS; fechamento documental `8cbd4f974a6e72e3f99557d6481c9267a3e8ef81` / run `34762972272`; CI final dispatch-only |
-| V2-13 | Observabilidade + Compliance Operations | PENDENTE | depende V2-12; aguardando autorização |
-| V2-14 | Hardening sistêmico | PENDENTE | regressão/carga/falhas/segurança |
+| V2-12 | Gateway/Signer/Vault production adapters | **CONCLUÍDO** | PR #13 Draft; B6 `b7bccf2babed336941d920eed73cd0699e6939d4`; 508 PASS; fechamento documental `8cbd4f974a6e72e3f99557d6481c9267a3e8ef81`; CI final dispatch-only |
+| V2-13 | Observabilidade + Compliance Operations | **EM EXECUÇÃO** | branch `v2/observability-compliance-operations`; base `1242ce74d874ffb87783401ce1abaabb350c948c`; B1 em execução |
+| V2-14 | Hardening sistêmico | PENDENTE | depende V2-13 |
 | V2-15 | Homologação + pilotos controlados | PENDENTE | depende V2-14 |
 | V2-16 | Integração produtos FM | BLOQUEADO PARCIAL | depende do Core universal certificado e readiness dos produtos |
 | V2-17 | Convergência/cutover + arquivamento original | PENDENTE | depende de equivalência e integrações certificadas |
 | V2-18 | Produto comercial independente | PENDENTE | posterior ao uso interno certificado |
 
-## V2-12 — Gateway/Signer/Vault Production Adapters
+## V2-12 — Gateway/Signer/Vault Production Adapters — CONCLUÍDA/CERTIFICADA
+
+Fechamento oficial: `docs/V2_12_CLOSURE_CERTIFICATION.md`.
+
+Gate funcional definitivo B6: `b7bccf2babed336941d920eed73cd0699e6939d4` / run `34762735800` / job `103738293942` / **97 source / 508 PASS em 5.06s**.
+
+Gate documental final: `8cbd4f974a6e72e3f99557d6481c9267a3e8ef81` / run `34762972272` / job `103738907041` / **97 source / 508 PASS em 4.12s**. CI restaurado para o blob dispatch-only `b161340d7164afcbf3da0eb0327135528a39450c`.
+
+## V2-13 — Observabilidade + Compliance Operations
 
 ### Bootstrap — CONCLUÍDO
 
-- branch `v2/production-adapters` criada exatamente de `0439246151c7edc959615361c0275961e11c3af0`;
-- snapshot pré-fase em `docs/history/EXECUTION_TRACKER_V2_PRE_V2_12.md`;
-- plano da fase em `docs/V2_12_PRODUCTION_ADAPTERS.md`;
-- PR #13 Draft stacked sobre `v2/control-plane`.
+- autorização humana explícita recebida em 2026-09-13;
+- branch `v2/observability-compliance-operations` criada exatamente de `1242ce74d874ffb87783401ce1abaabb350c948c`;
+- snapshot pré-fase salvo em `docs/history/EXECUTION_TRACKER_V2_PRE_V2_13.md`;
+- plano formal salvo em `docs/V2_13_OBSERVABILITY_COMPLIANCE_OPERATIONS.md`;
+- PR da fase deve permanecer Draft e stacked sobre `v2/production-adapters`.
 
-### Bloco 1 — Vault/KMS abstraction + Secret Resolution Boundary — CONCLUÍDO/CERTIFICADO
+### Bloco 1 — Structured Observability Boundary + Sanitization — EM EXECUÇÃO
 
-Gate: `961ee84aa28f58ce933d2dd899bfd013c801da1c` / run `34758902465` / job `103728060621` / **88 source / 447 PASS**.
+Objetivo: criar boundary provider-neutral para eventos estruturados, sanitização fail-closed e sink sintético sem rede/filesystem, preservando autoridade fiscal e impedindo vazamento de segredo/payload.
 
-### Bloco 2 — Signer Boundary + assinatura por SecretReference — CONCLUÍDO/CERTIFICADO
+### Blocos seguintes
 
-Gate: `f27ae85ac1dbf0b5cf47eea96d1437585b37cb92` / run `34759157421` / job `103728746009` / **91 source / 459 PASS**.
-
-### Bloco 3 — Provider/Gateway adapters + CSC/Credentials — CONCLUÍDO/CERTIFICADO
-
-Gate: `42f27c67145d2d4469374596d869ffc3ba05f013` / run `34760113452` / job `103731343836` / **93 source / 471 PASS em 3.27s**. CI restaurado em `9e5019d64b5174ad9fe138e52c566ec3df73af84`.
-
-### Bloco 4 — Resilience Runtime — CONCLUÍDO/CERTIFICADO
-
-- timeout connect/read explícito;
-- retry por operação com bounded exponential backoff e jitter injetável;
-- autorização com outcome desconhecido exige query/reconciliation e não é repetida automaticamente;
-- fiscal rejection/auth/validation não são classificados como indisponibilidade;
-- circuit breaker CLOSED/OPEN/HALF_OPEN particionado por provider/environment/jurisdiction;
-- breaker não cria estado fiscal durável paralelo.
-
-Falhas intermediárias: run `34760512225` (Ruff E501) e `34760572581` (Mypy retorno Any no delay), ambas corrigidas sem relaxar gates.
-
-Gate definitivo: `a3db491049d6058753ebad18d6fb62026310b1b8` / run `34760627774` / job `103732719543` / **95 source / 483 PASS em 3.03s**. CI restaurado em `dd7d3eb5a6c718bf9576b377112b0c4a812e6159`.
-
-### Bloco 5 — Homologation Gates + Cross-provider — CONCLUÍDO/CERTIFICADO
-
-Gate definitivo: `ae9347b2f97f6984e22f6a719eec5e4b1ea8a3db` / run `34760988165` / job `103733669977` / **97 source / 497 PASS em 3.41s**. CI restaurado em `e2c89a602c85c104e668f8bb3cc469161ed4b408`.
-
-### Bloco 6 — Certificação End-to-End + fechamento V2-12 — CONCLUÍDO/CERTIFICADO
-
-A auditoria B6 identificou e corrigiu, antes do fechamento, um gap de isolamento cross-provider no Vault runtime. `provider_id` passou a ser obrigatório para credenciais/CSC, os slots runtime são indexados por `(host, reference_id, provider_id)` e não existe fallback entre providers. O Control Plane continua persistindo apenas `SecretReference`, sem migration nova e sem material sensível.
-
-A suíte de fechamento certifica NF-e/NFC-e end-to-end, NFS-e municipal/provider-specific, unknown outcome sem retry de autorização, restart sem persistência de material efêmero, SQLite reference-only, secret scan estrutural, architecture boundaries, dependências e neutralidade cross-product.
-
-Primeira tentativa B6: run `34762578767` / job `103737871189`; Install PASS, Ruff falhou apenas por duas ocorrências E501 na suíte nova; Mypy/Pytest ficaram bloqueados. Correção somente de formatação.
-
-Gate funcional definitivo B6: `b7bccf2babed336941d920eed73cd0699e6939d4` / run `34762735800` / job `103738293942` / **Install PASS / Ruff PASS / Mypy strict PASS — 97 source / 508 PASS em 5.06s**. Baseline B5: 497; incremento líquido +11. CI restaurado em `0e232f63d052db6ca2a7c8cd6ef5d97e3fdf0032`.
-
-Gate documental final: `8cbd4f974a6e72e3f99557d6481c9267a3e8ef81` / run `34762972272` / job `103738907041` / **Install PASS / Ruff PASS / Mypy strict PASS — 97 source / 508 PASS em 4.12s**. CI restaurado definitivamente em `75dece2ed83d323834617857f943e3373bc6ecb8` para o blob dispatch-only `b161340d7164afcbf3da0eb0327135528a39450c`.
-
-### Auditoria V2-11 -> V2-12
-
-Compare funcional `0439246151c7edc959615361c0275961e11c3af0` -> `b7bccf2babed336941d920eed73cd0699e6939d4`:
-
-- 68 commits à frente, 0 atrás;
-- 29 arquivos líquidos no gate funcional;
-- 5.046 adições / 15 remoções;
-- nenhum arquivo de domínio alterado;
-- nenhuma migration nova;
-- nenhum segredo real, arquivo PFX/P12/PEM/KEY ou endpoint produtivo;
-- alterações de runtime restritas a `vault`, `signing`, `gateway`, `resilience`, `homologation` e contratos/testes associados;
-- dependências produtivas: `cryptography>=44,<48` e `lxml>=5.3,<7`.
+- B2 Metrics + Cardinality Governance — PENDENTE;
+- B3 Tracing / Correlation / Causation — PENDENTE;
+- B4 Operational & Compliance Alerts — PENDENTE;
+- B5 Regulatory Watcher Governado — PENDENTE;
+- B6 End-to-End Certification + fechamento — PENDENTE.
 
 ## Governança preservada
 
-PR #13 deve permanecer **OPEN / DRAFT / não mergeada**. Nenhum merge, deploy, produção real, homologação oficial externa, promoção ou cutover foi executado. V2-13 permanece PENDENTE e não foi iniciada.
+Nenhum merge, deploy, produção real, homologação oficial externa, segredo real, promoção normativa automática ou cutover foi autorizado. V2-14 permanece PENDENTE.
