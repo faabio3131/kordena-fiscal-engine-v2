@@ -8,8 +8,8 @@ mutating fiscal call is allowed.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Mapping
 
 from kordena_fiscal.compliance import FiscalActionCapability
 from kordena_fiscal.domain import FiscalDocumentKind, FiscalValidationError
@@ -148,7 +148,9 @@ def validate_product_mutation_preflight(
         raise ProductMutationPreflightError("fiscal action is not declared by product use case")
 
     missing_headers = tuple(
-        header for header in _REQUIRED_SCOPE_HEADERS if not request.scope_headers.get(header, "").strip()
+        header
+        for header in _REQUIRED_SCOPE_HEADERS
+        if not request.scope_headers.get(header, "").strip()
     )
     if missing_headers:
         raise ProductMutationPreflightError(
