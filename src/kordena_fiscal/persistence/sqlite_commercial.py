@@ -45,6 +45,19 @@ def _normalized(value: str, field_name: str) -> str:
     return result
 
 
+def _required(value: str, field_name: str) -> str:
+    result = value.strip()
+    if not result:
+        raise FiscalValidationError(f"{field_name} must not be blank")
+    return result
+
+
+def _real(value: object, field_name: str) -> float:
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        raise PersistenceStateError(f"persisted {field_name} must be numeric")
+    return float(value)
+
+
 class SqliteCommercialConfigurationStore:
     """Transactional durable repository for customer-specific configuration."""
 
@@ -84,7 +97,9 @@ class SqliteCommercialConfigurationStore:
                 ),
             )
         except sqlite3.IntegrityError as exc:
-            raise PersistenceConflictError("provider binding conflicts with existing identity") from exc
+            raise PersistenceConflictError(
+                "provider binding conflicts with existing identity"
+            ) from exc
         return binding
 
     def resolve_provider_binding(
@@ -268,7 +283,7 @@ class SqliteCommercialConfigurationStore:
     ) -> FiscalProductProfile | None:
         tenant = _normalized(tenant_id, "tenant_id")
         unit = _normalized(unit_id, "unit_id")
-        product = _normalized(product_id, "product_id")
+        product = _required(product_id, "product_id")
         instant_iso = iso(instant)
         rows = self._connection.execute(
             f"""
@@ -475,13 +490,13 @@ class SqliteCommercialConfigurationStore:
             unit_id=text(row[2], "unit_id"),
             environment=FiscalEnvironment(text(row[3], "environment")),
             provider_id=text(row[4], "provider_id"),
-            connect_timeout_seconds=float(row[5]),
-            read_timeout_seconds=float(row[6]),
+            connect_timeout_seconds=_real(row[5], "connect_timeout_seconds"),
+            read_timeout_seconds=_real(row[6], "read_timeout_seconds"),
             max_attempts=integer(row[7], "max_attempts"),
-            base_delay_seconds=float(row[8]),
-            max_delay_seconds=float(row[9]),
-            jitter_ratio=float(row[10]),
+            base_delay_seconds=_real(row[8], "base_delay_seconds"),
+            max_delay_seconds=_real(row[9], "max_delay_seconds"),
+            jitter_ratio=_real(row[10], "jitter_ratio"),
             circuit_failure_threshold=integer(row[11], "circuit_failure_threshold"),
-            circuit_recovery_seconds=float(row[12]),
+            circuit_recovery_seconds=_real(row[12], "circuit_recovery_seconds"),
             circuit_success_threshold=integer(row[13], "circuit_success_threshold"),
         )
