@@ -1,5 +1,14 @@
 """Structured observability boundary for FM Fiscal Core."""
 
+from .alerts import (
+    AlertKind,
+    AlertRegistry,
+    AlertSeverity,
+    AlertSink,
+    ComplianceOperationalAlert,
+    InMemoryAlertSink,
+    OperationalAlertEvaluator,
+)
 from .events import (
     InMemoryStructuredEventSink,
     ObservabilityCategory,
@@ -39,6 +48,12 @@ from .tracing import (
 
 __all__ = [
     "CONTINGENCY_ACTIVE",
+    "AlertKind",
+    "AlertRegistry",
+    "AlertSeverity",
+    "AlertSink",
+    "ComplianceOperationalAlert",
+    "InMemoryAlertSink",
     "InMemoryMetricSink",
     "InMemoryStructuredEventSink",
     "InMemoryTraceSpanSink",
@@ -52,6 +67,7 @@ __all__ = [
     "ObservabilityClock",
     "ObservabilityContext",
     "ObservabilitySeverity",
+    "OperationalAlertEvaluator",
     "QUEUE_DEPTH",
     "REJECTION_TOTAL",
     "RETRY_TOTAL",
