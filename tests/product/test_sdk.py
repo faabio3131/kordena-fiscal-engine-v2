@@ -10,8 +10,8 @@ from fm_fiscal_sdk import (
     BridgeClient,
     BridgeRequest,
     BridgeResponse,
-    RetryPolicy,
     RetryableTransportError,
+    RetryPolicy,
     verify_webhook_signature,
 )
 
