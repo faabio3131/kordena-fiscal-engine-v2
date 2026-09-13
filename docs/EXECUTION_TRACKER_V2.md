@@ -2,9 +2,9 @@
 
 Data de início: 2026-09-11  
 Repositório: `faabio3131/kordena-fiscal-engine-v2`  
-Status global: **EM EXECUÇÃO CONTROLADA — V2-15 externa pendente; V2-16 parcialmente certificada**  
+Status global: **EM EXECUÇÃO CONTROLADA — V2-15 externa pendente; V2-16 parcialmente concluída/certificada**  
 Última fase integralmente concluída sem bloqueio externo: **V2-14 — Hardening sistêmico**  
-Fase atual: **V2-16 — BLOQUEADA PARCIAL; B1/B3 CERTIFICADOS; B2 KORDENA BLOQUEADO; B4/B5 INTERNAMENTE CERTIFICADOS COM BLOQUEIOS DE DOMÍNIO; B6 EM CERTIFICAÇÃO**
+Fase atual: **V2-16 — BLOQUEADA PARCIAL; B1/B3/B6 CERTIFICADOS; B2 KORDENA BLOQUEADO; B4/B5 INTERNAMENTE CERTIFICADOS COM BLOQUEIOS REAIS DE DOMÍNIO**
 
 > Snapshot pré-V2-15: `docs/history/EXECUTION_TRACKER_V2_PRE_V2_15.md`. Plano V2-15: `docs/V2_15_HOMOLOGATION_CONTROLLED_PILOTS.md`. Fechamento V2-15: `docs/V2_15_CLOSURE_CERTIFICATION.md`. Execução V2-16: `docs/V2_16_PRODUCT_INTEGRATION_EXECUTION.md`.
 
@@ -18,7 +18,7 @@ Estados permitidos: `PENDENTE`, `EM EXECUÇÃO`, `BLOQUEADO`, `CONCLUÍDO`. A PR
 | V2-13 | Observabilidade + Compliance Operations | **CONCLUÍDO** | PR #14 Draft; 563 PASS |
 | V2-14 | Hardening sistêmico | **CONCLUÍDO** | PR #15 Draft; 582 PASS; doc gate 582 PASS |
 | V2-15 | Homologação + pilotos controlados | **BLOQUEADO PARCIAL — INTERNO CERTIFICADO** | PR #16 Draft; B0-B6 internos verdes; B6 final 620 PASS; externo oficial pendente |
-| V2-16 | Integração produtos FM | **BLOQUEADO PARCIAL / EM CERTIFICAÇÃO B6** | Core PR #17 Draft; Kordena bloqueado; Iron certificado; Vendedor/CampaIA parciais; B6 em gate |
+| V2-16 | Integração produtos FM | **BLOQUEADO PARCIAL — JANELAS B1-B6 EXECUTADAS** | B1/B3/B6 certificados; B2 bloqueado; B4/B5 internos certificados com bloqueios de domínio |
 | V2-17 | Convergência/cutover | PENDENTE | NÃO AUTORIZADO |
 | V2-18 | Produto comercial independente | PENDENTE | posterior ao uso interno certificado |
 
@@ -88,7 +88,7 @@ O produto não possui ainda autoridade de faturamento/assinatura/pagamento próp
 
 Branch `feat/fisc-v2-16-campaia-integration`, PR CampaIA #1 OPEN/DRAFT. HEAD `bdebbc3558ff8b07c1a38e0cb728be0dc3635c4b`, run `34784021431`, job `103796103296`: **267 core tests PASS + 80 API tests PASS = 347 PASS**; AsyncAPI PASS com 24 eventos verificados end-to-end.
 
-### B6 — Adapter Contract Pack / novos produtos FM — EM CERTIFICAÇÃO
+### B6 — Adapter Contract Pack / novos produtos FM — CONCLUÍDO/CERTIFICADO INTERNAMENTE
 
 A fundação existente foi reutilizada; não foi criado framework paralelo. Foram adicionados:
 
@@ -98,11 +98,13 @@ A fundação existente foi reutilizada; não foi criado framework paralelo. Fora
 - prova sintética não registrada no catálogo real;
 - `docs/V2_16_ADAPTER_PACK_ONBOARDING.md`.
 
-O primeiro gate de B6, run `34784287287`, encontrou Ruff vermelho por cinco violações de qualidade (import de Mapping, duas linhas longas e duas assertions genéricas de Exception). O código/testes foram corrigidos sem relaxar regra ou gate. Um segundo run intermediário ainda avaliou commit anterior à correção completa; a certificação final permanece pendente do próximo gate sobre o HEAD integral corrigido.
+O primeiro gate, run `34784287287`, encontrou cinco violações Ruff. O gate permaneceu vermelho, o código/testes foram corrigidos e nenhuma regra/teste foi relaxado. Um run intermediário avaliou commit parcial. Gate integral corrigido: SHA `878738c172ab31e3f81618a95986370b17d0e602`, run `34784375685`, job `103797066379`: Install PASS; Ruff PASS; Mypy PASS em **114 source files**; Pytest **639 PASS em 16.83s**.
 
-## Estado formal provisório da V2-16
+## Estado formal da V2-16 após B1-B6
 
-**V2-16 — BLOQUEADA PARCIAL — B1/B3 INTERNAMENTE CONCLUÍDOS; B2 KORDENA BLOQUEADO; B4/B5 INTERNAMENTE CERTIFICADOS COM BLOQUEIOS REAIS DE DOMÍNIO; B6 EM CERTIFICAÇÃO.**
+**V2-16 — BLOQUEADA PARCIAL — B1, B3 E B6 INTERNAMENTE CONCLUÍDOS/CERTIFICADOS; B2 KORDENA BLOQUEADO POR PRÉ-REQUISITO WEB PREMIUM/FISC-20; B4 VENDEDOR IA E B5 CAMPAIA INTERNAMENTE CERTIFICADOS, MAS BLOQUEADOS PARCIALMENTE POR LACUNAS REAIS DE DOMÍNIO DOS PRODUTOS.**
+
+As duas janelas autorizadas B1-B3 e B4-B6 estão executadas. A arquitetura de integração e onboarding multiproduto está certificada; os bloqueios restantes pertencem aos pré-requisitos/domínios reais dos produtos e não foram convertidos artificialmente em verde.
 
 ## Evidência externa / bloqueios reais
 
