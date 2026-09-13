@@ -54,7 +54,7 @@ class InMemoryControlPlaneState:
     organizations: dict[str, FiscalOrganization] = field(default_factory=dict)
     units: dict[tuple[str, str], FiscalUnitRegistration] = field(default_factory=dict)
     secret_references: dict[
-        tuple[str, str, FiscalEnvironment, SecretReferenceKind], SecretReference
+        tuple[str, str, FiscalEnvironment, SecretReferenceKind, str], SecretReference
     ] = field(default_factory=dict)
     audit_events: list[ControlPlaneAuditEvent] = field(default_factory=list)
 
@@ -170,10 +170,11 @@ class ControlPlaneFoundationService:
             reference.unit_id,
             reference.environment,
             reference.kind,
+            reference.provider_scope,
         )
         if key in self._state.secret_references:
             raise ControlPlaneConflictError(
-                "secret reference kind is already bound for unit/environment"
+                "secret reference kind/provider is already bound for unit/environment"
             )
         self._state.secret_references[key] = reference
         self._append_audit(
