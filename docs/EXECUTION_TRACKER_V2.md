@@ -25,9 +25,9 @@ Estados permitidos: `PENDENTE`, `EM EXECUÇÃO`, `BLOQUEADO`, `CONCLUÍDO`. Nenh
 | V2-08 | Events/Webhooks/Inbox/Outbox | **CONCLUÍDO** | PR #9 Draft; `bc77ee4cf2b7151d06c09cf32ca9168363ece1c7`; 337 PASS |
 | V2-09 | Modularização de verticais | **CONCLUÍDO** | PR #10 Draft; `88071fd557199ffd6848312ea5559b0cba415ee1`; 346 PASS |
 | V2-10 | Contract Packs multiproduto | **CONCLUÍDO** | PR #11 Draft; `345652ecbfc18c8bd3511cf5b9083ba0dbc259cb`; 397 PASS |
-| V2-11 | Control Plane independente | **CONCLUÍDO** | PR #12 Draft; gate `eed6b056e9d1941da435179c5eaf805c261f6622`; run `34736942613`; 85 source; 437 PASS |
-| V2-12 | Gateway/Signer/Vault production adapters | **CONCLUÍDO** | PR #13 Draft; B6 `b7bccf2babed336941d920eed73cd0699e6939d4`; 508 PASS; fechamento documental `8cbd4f974a6e72e3f99557d6481c9267a3e8ef81`; CI final dispatch-only |
-| V2-13 | Observabilidade + Compliance Operations | **EM EXECUÇÃO** | PR #14 Draft; B1 518 PASS; B2 `832cdddcc0653ead483ca42a6c93c7966ad9e67f` / run `34763739929` / job `103740927942` / 100 source / 528 PASS; B3 em execução |
+| V2-11 | Control Plane independente | **CONCLUÍDO** | PR #12 Draft; `eed6b056e9d1941da435179c5eaf805c261f6622`; 437 PASS |
+| V2-12 | Gateway/Signer/Vault production adapters | **CONCLUÍDO** | PR #13 Draft; B6 `b7bccf2babed336941d920eed73cd0699e6939d4`; 508 PASS; CI final dispatch-only |
+| V2-13 | Observabilidade + Compliance Operations | **EM EXECUÇÃO** | PR #14 Draft; B1 518 PASS; B2 528 PASS; B3 `f23df8625c78aafa3284c00515376d5174b7892e` / run `34763939319` / job `103741455008` / 101 source / 537 PASS; B4 em execução |
 | V2-14 | Hardening sistêmico | PENDENTE | depende V2-13 |
 | V2-15 | Homologação + pilotos controlados | PENDENTE | depende V2-14 |
 | V2-16 | Integração produtos FM | BLOQUEADO PARCIAL | depende do Core universal certificado e readiness dos produtos |
@@ -40,8 +40,6 @@ Fechamento oficial: `docs/V2_12_CLOSURE_CERTIFICATION.md`.
 
 Gate funcional definitivo B6: `b7bccf2babed336941d920eed73cd0699e6939d4` / run `34762735800` / job `103738293942` / **97 source / 508 PASS em 5.06s**.
 
-Gate documental final: `8cbd4f974a6e72e3f99557d6481c9267a3e8ef81` / run `34762972272` / job `103738907041` / **97 source / 508 PASS em 4.12s**. CI restaurado para o blob dispatch-only `b161340d7164afcbf3da0eb0327135528a39450c`.
-
 ## V2-13 — Observabilidade + Compliance Operations
 
 ### Bootstrap — CONCLUÍDO
@@ -52,25 +50,26 @@ Gate documental final: `8cbd4f974a6e72e3f99557d6481c9267a3e8ef81` / run `3476297
 - plano formal salvo em `docs/V2_13_OBSERVABILITY_COMPLIANCE_OPERATIONS.md`;
 - PR #14 Draft stacked sobre `v2/production-adapters`.
 
-### Bloco 1 — Structured Observability Boundary + Sanitization — CONCLUÍDO/CERTIFICADO
+### B1 — Structured Observability Boundary + Sanitization — CONCLUÍDO/CERTIFICADO
 
-Boundary provider-neutral com eventos estruturados, sanitização recursiva fail-closed e sink sintético best-effort.
+Gate: `11aa2fa9a63d624235ba90619d853aa3d38e2bb3` / run `34763558714` / job `103740454991` / **99 source / 518 PASS em 4.52s**. CI restaurado em `e18af325808c53637492680b17219db0deea49cc`.
 
-Gate definitivo: `11aa2fa9a63d624235ba90619d853aa3d38e2bb3` / run `34763558714` / job `103740454991` / **99 source / 518 PASS em 4.52s**. CI restaurado em `e18af325808c53637492680b17219db0deea49cc`.
+### B2 — Metrics + Cardinality Governance — CONCLUÍDO/CERTIFICADO
 
-### Bloco 2 — Metrics + Cardinality Governance — CONCLUÍDO/CERTIFICADO
+Gate: `832cdddcc0653ead483ca42a6c93c7966ad9e67f` / run `34763739929` / job `103740927942` / **100 source / 528 PASS em 5.02s**. CI restaurado em `bd300c3e92cf344f91d74976ae235c909ba65ced`.
 
-Métricas provider-neutral, counters/gauges/histograms, labels por whitelist, scope não sobrescrevível, limite por séries e rejeição fail-closed de labels sensíveis/alta cardinalidade.
+### B3 — Tracing / Correlation / Causation — CONCLUÍDO/CERTIFICADO
 
-Gate definitivo: `832cdddcc0653ead483ca42a6c93c7966ad9e67f` / run `34763739929` / job `103740927942` / **100 source / 528 PASS em 5.02s**. Baseline B1: 518; incremento +10. CI restaurado em `bd300c3e92cf344f91d74976ae235c909ba65ced`.
+Carrier com allowlist fixa, trace/span IDs bounded, correlation/causation explícitos, parent chain application/outbox/provider/reconciliation, replay por reidratação do carrier, sanitização de attributes e mismatch de correlation fail-closed.
 
-### Bloco 3 — Tracing / Correlation / Causation — EM EXECUÇÃO
+Gate: `f23df8625c78aafa3284c00515376d5174b7892e` / run `34763939319` / job `103741455008` / **101 source / 537 PASS em 5.46s**. Baseline B2: 528; incremento +9. CI restaurado em `838a20f6b5e597bd8fd6263ff5406ad833c257df`.
 
-Objetivo: propagação provider-neutral de trace/correlation/causation, spans sanitizados e continuidade entre application/outbox/provider/reconciliation sem tornar tracing estado fiscal.
+### B4 — Operational & Compliance Alerts — EM EXECUÇÃO
+
+Objetivo: alertas sanitizados/deduplicados para certificado, filas, rejeições, gap de numeração, contingência e unknown provider outcome, isolados por scope/provider/jurisdição.
 
 ### Blocos seguintes
 
-- B4 Operational & Compliance Alerts — PENDENTE;
 - B5 Regulatory Watcher Governado — PENDENTE;
 - B6 End-to-End Certification + fechamento — PENDENTE.
 
