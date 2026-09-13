@@ -92,7 +92,10 @@ class RetryPolicy:
             raise FiscalValidationError("retry_index must be >= 1")
         if not 0 <= jitter_value <= 1:
             raise FiscalValidationError("jitter_value must be between 0 and 1")
-        base = min(self.base_delay_seconds * (2 ** (retry_index - 1)), self.max_delay_seconds)
+        base = min(
+            self.base_delay_seconds * (2 ** (retry_index - 1)),
+            self.max_delay_seconds,
+        )
         spread = base * self.jitter_ratio
         shifted = base - spread + (2 * spread * jitter_value)
         return min(max(shifted, 0.0), self.max_delay_seconds)
@@ -260,7 +263,7 @@ def retry_mode(operation: ProviderOperation) -> RetryMode:
     return RetryMode.NO_AUTOMATIC_RETRY
 
 
-def classify_provider_error(error: BaseException) -> ProviderErrorClass:
+def classify_provider_error(error: Exception) -> ProviderErrorClass:
     if isinstance(error, ProviderTransportError):
         if error.delivery_unknown:
             return ProviderErrorClass.UNKNOWN_DELIVERY
@@ -272,7 +275,10 @@ def classify_provider_error(error: BaseException) -> ProviderErrorClass:
         (ProviderAuthenticationError, ProviderCredentialsUnavailableError, CscUnavailableError),
     ):
         return ProviderErrorClass.AUTHENTICATION
-    if isinstance(error, (UnsupportedProviderError, UnsupportedJurisdictionError, FiscalValidationError)):
+    if isinstance(
+        error,
+        (UnsupportedProviderError, UnsupportedJurisdictionError, FiscalValidationError),
+    ):
         return ProviderErrorClass.VALIDATION
     if isinstance(error, ProviderRejectedError):
         return ProviderErrorClass.FISCAL_REJECTION
@@ -320,7 +326,7 @@ class ResilientProviderGateway:
                     request,
                     provider_id=normalized_provider,
                 )
-            except BaseException as error:
+            except Exception as error:
                 classification = classify_provider_error(error)
                 if classification is ProviderErrorClass.UNKNOWN_DELIVERY:
                     self._circuits.record_failure(key)
