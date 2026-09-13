@@ -464,7 +464,13 @@ def test_v2_12_end_to_end_nfe_signs_routes_and_normalizes_without_secret_leak(tm
 def test_v2_12_end_to_end_nfce_requires_provider_scoped_csc(tmp_path) -> None:
     database = _database(tmp_path)
     certificate, credentials, nfse_credentials, csc = _onboard(database)
-    vault = _vault(certificate, credentials, nfse_credentials, csc, pkcs12_bytes=_synthetic_pkcs12())
+    vault = _vault(
+        certificate,
+        credentials,
+        nfse_credentials,
+        csc,
+        pkcs12_bytes=_synthetic_pkcs12(),
+    )
     _, signed = _sign(_signer(database, vault), certificate, FiscalDocumentKind.NFCE)
     transport = SyntheticProviderTransport()
     gateway = _resilient(_provider_service(database, vault, transport))
@@ -482,7 +488,13 @@ def test_v2_12_end_to_end_nfce_requires_provider_scoped_csc(tmp_path) -> None:
 def test_v2_12_unknown_authorization_outcome_requires_reconciliation_not_retry(tmp_path) -> None:
     database = _database(tmp_path)
     certificate, credentials, nfse_credentials, csc = _onboard(database)
-    vault = _vault(certificate, credentials, nfse_credentials, csc, pkcs12_bytes=_synthetic_pkcs12())
+    vault = _vault(
+        certificate,
+        credentials,
+        nfse_credentials,
+        csc,
+        pkcs12_bytes=_synthetic_pkcs12(),
+    )
     _, signed = _sign(_signer(database, vault), certificate, FiscalDocumentKind.NFE)
     transport = SyntheticProviderTransport()
     transport.queue_error(ProviderTransportError("ambiguous delivery", delivery_unknown=True))
@@ -500,7 +512,13 @@ def test_v2_12_unknown_authorization_outcome_requires_reconciliation_not_retry(t
 def test_v2_12_provider_credentials_are_partitioned_and_never_fall_back(tmp_path) -> None:
     database = _database(tmp_path)
     certificate, credentials, nfse_credentials, csc = _onboard(database)
-    vault = _vault(certificate, credentials, nfse_credentials, csc, pkcs12_bytes=_synthetic_pkcs12())
+    vault = _vault(
+        certificate,
+        credentials,
+        nfse_credentials,
+        csc,
+        pkcs12_bytes=_synthetic_pkcs12(),
+    )
     resolution = SecretResolutionService(unit_of_work_factory=database, vault=vault)
     transport = SyntheticProviderTransport()
     adapter = ConfiguredProviderAdapter(
@@ -540,7 +558,13 @@ def test_v2_12_nfse_remains_municipality_and_provider_specific(
 ) -> None:
     database = _database(tmp_path)
     certificate, credentials, nfse_credentials, csc = _onboard(database)
-    vault = _vault(certificate, credentials, nfse_credentials, csc, pkcs12_bytes=_synthetic_pkcs12())
+    vault = _vault(
+        certificate,
+        credentials,
+        nfse_credentials,
+        csc,
+        pkcs12_bytes=_synthetic_pkcs12(),
+    )
     resolution = SecretResolutionService(unit_of_work_factory=database, vault=vault)
     transport = SyntheticProviderTransport()
     adapter = ConfiguredProviderAdapter(
