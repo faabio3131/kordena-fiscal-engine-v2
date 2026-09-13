@@ -1,6 +1,6 @@
 # V2-15 B4 — NFS-e Homologation Matrix
 
-Status: **CANDIDATO À CERTIFICAÇÃO INTERNA**
+Status: **CONCLUÍDO / CERTIFICADO INTERNAMENTE**
 
 ## Escopo
 
@@ -40,6 +40,6 @@ Para homologação oficial futura serão necessários, conforme o município/pro
 - operações não declaradas pelo descriptor/capability não podem ser inferidas;
 - a certificação deste bloco prova o boundary interno, o isolamento e a governança, não a disponibilidade de um provedor/prefeitura externos.
 
-## Gate
+## Gate certificado
 
-O gate definitivo deste B4 deve registrar SHA, run, job, Ruff, Mypy, quantidade de source files, Pytest e duração. Após o gate, o CI deve voltar a `workflow_dispatch` only.
+SHA `2c152f0a86d4a80a97f91125bc9e9bbc50ee993a`, run `34777347753`, job `103777774112`: Install PASS, Ruff PASS, Mypy PASS em **110 source files**, Pytest **611 PASS em 6.27s**. Warning informativo: actions baseadas em Node 20 foram executadas em Node 24 pelo runner; não afetou o gate. CI restaurado para `workflow_dispatch` only em `eb54bae4e138bf8658a72f73970bee967c417d72`.
