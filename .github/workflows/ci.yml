@@ -17,18 +17,30 @@ jobs:
         with:
           ref: v2/homologation-controlled-pilots
 
-      - name: Apply B0 runtime patch
-        run: python scripts/v2_15_b0_runtime_patch.py
-
-      - name: Commit B0 runtime patch
+      - name: Clean temporary patch helper and lint-fix imports
         shell: bash
         run: |
+          rm -f scripts/v2_15_b0_runtime_patch.py
+          python - <<'PY'
+          from pathlib import Path
+          path = Path("tests/control_plane/test_v2_15_commercial_runtime.py")
+          text = path.read_text(encoding="utf-8")
+          text = text.replace(
+              "def test_homologation_evidence_is_durable_exact_and_does_not_imply_official_status(tmp_path) -> None:\n",
+              "def test_homologation_evidence_is_durable_exact_and_does_not_imply_official_status(\n"
+              "    tmp_path,\n"
+              ") -> None:\n",
+          )
+          path.write_text(text, encoding="utf-8")
+          PY
+          python -m pip install ruff==0.16.7
+          ruff check src tests --fix
           git diff --check
-          if ! git diff --quiet -- src tests; then
+          if ! git diff --quiet -- src tests scripts; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add src tests
-            git commit -m "feat(v2-15): wire durable B0 commercial runtime"
+            git add src tests scripts
+            git commit -m "fix(v2-15): clean B0 runtime certification surface"
             git push origin HEAD:v2/homologation-controlled-pilots
           fi
 
