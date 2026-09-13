@@ -1,6 +1,6 @@
 # V2-14 — SYSTEM HARDENING
 
-Status: **EM EXECUÇÃO — B1-B4 CERTIFICADOS / B5 EM EXECUÇÃO**  
+Status: **EM EXECUÇÃO — B1-B5 CERTIFICADOS / B6 EM EXECUÇÃO**  
 Branch: `v2/system-hardening`  
 PR: `#15` — Draft  
 Base certificada: `v2/observability-compliance-operations` @ `12d9503f53b59dc7ba24ec205e21ce1ab03c91fb`  
@@ -28,8 +28,8 @@ Provar segurança, resiliência, consistência e comportamento adversarial do FM
 2. **Concurrency / Idempotency / Race Conditions — CONCLUÍDO/CERTIFICADO.**
 3. **Security Hardening — CONCLUÍDO/CERTIFICADO.**
 4. **Performance / Load / Backpressure — CONCLUÍDO/CERTIFICADO.**
-5. **Recovery / Durability / Restart — EM EXECUÇÃO.**
-6. End-to-End Certification + fechamento — PENDENTE.
+5. **Recovery / Durability / Restart — CONCLUÍDO/CERTIFICADO.**
+6. **End-to-End Certification + fechamento — EM EXECUÇÃO.**
 
 ## B1 — Failure Injection + Chaos Hardening
 
@@ -51,21 +51,22 @@ Gate B3: `eae4863ace3ac738375a272ba892f7508eba78ba` / run `34766999896` / job `1
 
 ## B4 — Performance / Load / Backpressure
 
-`tests/hardening/test_load_baseline.py` define workloads reproduzíveis sem converter CI em promessa comercial:
+`tests/hardening/test_load_baseline.py` define workloads reproduzíveis sem converter CI em promessa comercial: 2.048 reservas fiscais únicas/contíguas; 5.000 pontos na mesma série de métrica; 128 tenants disputando limite de 32 séries; 200 entradas duráveis de outbox drenadas em lotes de 50 sem duplicação.
 
-- 2.048 reservas fiscais sequenciais únicas/contíguas;
-- 5.000 pontos na mesma série de métrica, comprovando cardinalidade estável;
-- 128 tenants disputando limite de 32 séries, com backpressure de cardinalidade fail-closed;
-- 200 entradas duráveis de outbox drenadas em 4 lotes de 50, sem duplicação.
-
-O gate completo, incluindo os workloads acima, permaneceu abaixo do timeout do CI. O tempo total de Pytest é apenas baseline do runner e não SLA comercial.
-
-Gate B4: `64279702a2b48639e7a293ae187dc5819ca48329` / run `34767103876` / job `103749915646` — **Install PASS, Ruff PASS, Mypy strict PASS em 103 source files e 578 PASS em 4.47s**. Baseline B3: 574; +4 testes de carga. CI restaurado em `76e0db78609ada734511752c7af11d2a4debfe82`.
+Gate B4: `64279702a2b48639e7a293ae187dc5819ca48329` / run `34767103876` / job `103749915646` — **103 source / 578 PASS em 4.47s**. CI restaurado em `76e0db78609ada734511752c7af11d2a4debfe82`.
 
 ## B5 — Recovery / Durability / Restart
 
-Em execução. A certificação cobre migrations idempotentes, restart do authority state, rollback de UoW, crash recovery de issuance, lease recovery de outbox, inbox replay, reconciliation durável e integridade/encadeamento SHA-256 do archive.
+A regressão certificou migrations idempotentes, restart do authority state, rollback do UoW, crash recovery de issuance sem duplicação, lease recovery de outbox, inbox replay, reconciliation durável, archive append-only e verificação SHA-256/manifest chain.
+
+Gate B5: `0bcb8997d7a917cc59c910448a24b1a6d7d67abc` / run `34767187658` / job `103750146391` — **Install PASS, Ruff PASS, Mypy strict PASS em 103 source files e 578 PASS em 6.81s**. CI restaurado em `a6e76ea98852a546ffe5c5f31ed81f47c453ebd0`.
+
+## B6 — End-to-End Certification + fechamento
+
+`tests/hardening/test_v2_14_closure.py` adiciona o fechamento estrutural da fase: migrations/restart idempotentes, detecção fail-closed de tampering no archive, identidade distinta de partições multi-tenant/unit, structural secret scan e garantia de que o domínio universal não importa boundaries/adapters de infraestrutura.
+
+O gate B6 deve executar regressão integral, auditoria V2-13 -> V2-14, dependency/migration/secret/architecture audit e fechamento documental antes da fase ser declarada concluída.
 
 ## Critério de fechamento
 
-A V2-14 só poderá ser marcada CONCLUÍDA/CERTIFICADA após full regression, gates de todos os blocos, auditoria V2-13 -> V2-14, secret/migration/architecture audit, fechamento documental e restauração do CI para o blob governado dispatch-only `b161340d7164afcbf3da0eb0327135528a39450c`.
+A V2-14 só poderá ser marcada CONCLUÍDA/CERTIFICADA após full regression, gate B6, auditoria V2-13 -> V2-14, secret/migration/architecture audit, fechamento documental e restauração do CI para o blob governado dispatch-only `b161340d7164afcbf3da0eb0327135528a39450c`.
