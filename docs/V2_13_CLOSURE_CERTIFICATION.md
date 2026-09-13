@@ -1,22 +1,22 @@
 # V2-13 — CLOSURE CERTIFICATION
 
-Status: **CANDIDATA A FECHAMENTO — B6 FUNCIONAL CERTIFICADO / GATE DOCUMENTAL FINAL PENDENTE**  
+Status: **CONCLUÍDA / CERTIFICADA**  
 Branch: `v2/observability-compliance-operations`  
-PR: `#14` — deve permanecer Draft  
+PR: `#14` — permanece Draft  
 Base V2-12: `1242ce74d874ffb87783401ce1abaabb350c948c`
 
 ## Escopo certificado
 
 A V2-13 estabelece e certifica a camada provider-neutral de Observabilidade + Compliance Operations do FM Fiscal Core sem transformar telemetria ou watcher normativo em autoridade fiscal.
 
-Blocos certificados funcionalmente:
+Blocos certificados:
 
 1. Structured Observability Boundary + Sanitization;
 2. Metrics + Cardinality Governance;
 3. Tracing / Correlation / Causation;
 4. Operational & Compliance Alerts;
 5. Regulatory Watcher Governado;
-6. End-to-End Certification + auditoria funcional.
+6. End-to-End Certification + auditoria e fechamento.
 
 ## Gates
 
@@ -28,7 +28,7 @@ Blocos certificados funcionalmente:
 | B4 | `79e83cf34b6b7d6bf71b98036d20cdd0b3364cfd` | `34764162846` / `103742057522` | 102 source / 547 PASS em 4.45s |
 | B5 | `9174b461b13d6a8b26c76cfa1a9cc877fbc18895` | `34764440273` / `103742791023` | 103 source / 557 PASS em 4.44s |
 | B6 funcional | `0b919fa8fc2bd0203774a0b487e46a94fe6dfda1` | `34765368461` / `103745272017` | Install/Ruff/Mypy PASS; 103 source / 563 PASS em 4.10s |
-| Fechamento documental | **PENDENTE** | **PENDENTE** | deve validar docs/tracker/PR antes do encerramento oficial |
+| Fechamento documental | `94d822aef5c0f6889e67f85bbee6b68c9aac145e` | `34765573097` / `103745807658` | Install/Ruff/Mypy PASS; 103 source / 563 PASS em 7.20s |
 
 ## End-to-end certificado
 
@@ -92,7 +92,9 @@ Gate funcional B6: `0b919fa8fc2bd0203774a0b487e46a94fe6dfda1`, run `34765368461`
 
 Após o gate funcional, o CI foi restaurado em `615a9db4e205cc0ad115552cf7045d6b6ed247a7` para o blob governado dispatch-only `b161340d7164afcbf3da0eb0327135528a39450c`.
 
-A PR #14 permanece OPEN / DRAFT / não mergeada. O gate documental final ainda deve ser executado antes de marcar V2-13 como oficialmente concluída no tracker.
+O fechamento documental recebeu gate final no SHA `94d822aef5c0f6889e67f85bbee6b68c9aac145e`, run `34765573097`, job `103745807658`: **Install PASS, Ruff PASS, Mypy strict PASS em 103 source files e 563 PASS em 7.20s**. Em seguida o CI foi restaurado novamente no commit `1b7861b6f3365bf1eedff4870c7acd3af4bd70b4`, retornando ao mesmo blob governado dispatch-only `b161340d7164afcbf3da0eb0327135528a39450c`.
+
+A PR #14 permanece OPEN / DRAFT / não mergeada.
 
 ## Riscos residuais / limites explícitos
 
@@ -104,6 +106,6 @@ A PR #14 permanece OPEN / DRAFT / não mergeada. O gate documental final ainda d
 
 ## Regra de saída
 
-Somente após o gate documental final verde e a restauração final do CI para dispatch-only a V2-13 poderá ser marcada **CONCLUÍDA / CERTIFICADA**. V2-14 deve permanecer **PENDENTE, aguardando autorização humana explícita**.
+A V2-13 está **CONCLUÍDA / CERTIFICADA**. A V2-14 — Hardening sistêmico permanece **PENDENTE, aguardando autorização humana explícita**.
 
 **SEM MERGE. SEM DEPLOY. SEM PRODUÇÃO REAL. SEM HOMOLOGAÇÃO OFICIAL EXTERNA. SEM CUTOVER. SEM PROMOÇÃO NORMATIVA AUTOMÁTICA.**
