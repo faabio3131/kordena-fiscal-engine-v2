@@ -259,7 +259,13 @@ def test_two_providers_coexist_but_evidence_and_gate_keys_remain_isolated() -> N
 def test_unsupported_operation_remains_technical_gap_even_if_readiness_exists() -> None:
     key = _key(operation=ProviderOperation.CANCEL)
     rule = _rule(key, evidence=_evidence(operation_supported=False))
-    readiness = _readiness(actions=frozenset({FiscalActionCapability.ISSUE, FiscalActionCapability.CANCEL}))
+    actions = frozenset(
+        {
+            FiscalActionCapability.ISSUE,
+            FiscalActionCapability.CANCEL,
+        }
+    )
+    readiness = _readiness(actions=actions)
 
     result = HomologationGateEvaluator(
         matrix=TechnicalHomologationMatrix((rule,)),
