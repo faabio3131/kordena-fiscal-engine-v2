@@ -8,6 +8,7 @@ from kordena_fiscal.compliance import (
     CapabilityReadinessService,
     FiscalActionCapability,
     FiscalCapabilityLevel,
+    JurisdictionCapabilityError,
     JurisdictionCapabilityMatrix,
     JurisdictionCapabilityRule,
     TechnicalValidationMode,
@@ -343,7 +344,7 @@ def test_ambiguous_provider_resolution_never_selects_default(tmp_path) -> None:
 def test_unsupported_jurisdiction_fails_before_transport(tmp_path) -> None:
     _, _, transport, service, _ = _runtime(tmp_path)
 
-    with pytest.raises(Exception):
+    with pytest.raises(JurisdictionCapabilityError, match="no explicit"):
         service.execute(
             _request(jurisdiction=BrazilianJurisdiction("RJ")),
             provider_id="synthetic-sp",
@@ -355,16 +356,22 @@ def test_cross_tenant_and_cross_unit_credentials_fail_closed(tmp_path) -> None:
     _, _, transport, service, _ = _runtime(tmp_path)
 
     with pytest.raises(ProviderCredentialsUnavailableError, match="unavailable"):
-        service.execute(_request(scope=_scope(tenant="tenant-other")), provider_id="synthetic-sp")
+        service.execute(
+            _request(scope=_scope(tenant="tenant-other")),
+            provider_id="synthetic-sp",
+        )
     with pytest.raises(ProviderCredentialsUnavailableError, match="unavailable"):
-        service.execute(_request(scope=_scope(unit="unit-other")), provider_id="synthetic-sp")
+        service.execute(
+            _request(scope=_scope(unit="unit-other")),
+            provider_id="synthetic-sp",
+        )
     assert transport.observations == []
 
 
 def test_cross_environment_never_reuses_homologation_credentials(tmp_path) -> None:
     _, _, transport, service, _ = _runtime(tmp_path)
 
-    with pytest.raises(Exception):
+    with pytest.raises(JurisdictionCapabilityError, match="no explicit"):
         service.execute(
             _request(scope=_scope(environment=FiscalEnvironment.PRODUCTION)),
             provider_id="synthetic-sp",
@@ -383,7 +390,10 @@ def test_missing_credentials_cannot_be_replaced_by_csc(tmp_path) -> None:
     )
     adapter = ConfiguredProviderAdapter(
         descriptor=_descriptor(),
-        secret_resolution=SecretResolutionService(unit_of_work_factory=database, vault=empty),
+        secret_resolution=SecretResolutionService(
+            unit_of_work_factory=database,
+            vault=empty,
+        ),
         transport=SyntheticProviderTransport(),
     )
 
@@ -405,7 +415,10 @@ def test_missing_csc_fails_closed_for_nfce(tmp_path) -> None:
     )
     adapter = ConfiguredProviderAdapter(
         descriptor=_descriptor(),
-        secret_resolution=SecretResolutionService(unit_of_work_factory=database, vault=vault),
+        secret_resolution=SecretResolutionService(
+            unit_of_work_factory=database,
+            vault=vault,
+        ),
         transport=SyntheticProviderTransport(),
     )
 
@@ -446,12 +459,18 @@ def test_registry_uses_jurisdiction_and_capability_not_host_product_name(tmp_pat
 
 def test_synthetic_transport_performs_no_network_and_persists_no_secret(tmp_path) -> None:
     database, _, transport, service, _ = _runtime(tmp_path)
-    service.execute(_request(kind=FiscalDocumentKind.NFCE), provider_id="synthetic-sp")
+    service.execute(
+        _request(kind=FiscalDocumentKind.NFCE),
+        provider_id="synthetic-sp",
+    )
 
     restarted = SqliteFiscalDatabase(database.path)
     assert restarted.initialize() == ()
     assert len(transport.observations) == 1
     assert all(
         token not in repr(transport.observations[0])
-        for token in ("SYNTHETIC-PROVIDER-CREDENTIAL-NOT-REAL", "SYNTHETIC-CSC-NOT-REAL")
+        for token in (
+            "SYNTHETIC-PROVIDER-CREDENTIAL-NOT-REAL",
+            "SYNTHETIC-CSC-NOT-REAL",
+        )
     )
