@@ -370,6 +370,7 @@ class ConfiguredProviderAdapter:
                     purpose=SecretUsagePurpose.PROVIDER_AUTHENTICATION,
                     kind=SecretReferenceKind.CREDENTIALS,
                     workload_id=request.workload_id,
+                    provider_id=self.descriptor.provider_id,
                 )
             )
         except SecretResolutionError:
@@ -388,6 +389,7 @@ class ConfiguredProviderAdapter:
                     purpose=SecretUsagePurpose.CSC_AUTHENTICATION,
                     kind=SecretReferenceKind.CSC,
                     workload_id=request.workload_id,
+                    provider_id=self.descriptor.provider_id,
                 )
             )
         except SecretResolutionError:
