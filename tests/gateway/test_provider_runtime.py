@@ -145,6 +145,8 @@ def _onboard(database: SqliteFiscalDatabase) -> tuple[SecretReference, SecretRef
 def _vault(
     credentials: SecretReference,
     csc: SecretReference,
+    *,
+    provider_id: str,
 ) -> InMemorySyntheticFiscalSecretVault:
     vault = InMemorySyntheticFiscalSecretVault()
     vault.register(
@@ -154,6 +156,7 @@ def _vault(
             reference_id=CREDENTIAL_REF,
             credential_bytes=b"SYNTHETIC-PROVIDER-CREDENTIAL-NOT-REAL",
         ),
+        provider_id=provider_id,
     )
     vault.register(
         host_namespace=HOST,
@@ -162,6 +165,7 @@ def _vault(
             reference_id=CSC_REF,
             code=b"SYNTHETIC-CSC-NOT-REAL",
         ),
+        provider_id=provider_id,
     )
     return vault
 
@@ -275,7 +279,7 @@ def _adapter(
 def _runtime(tmp_path, *, provider_id: str = "synthetic-sp"):
     database = _database(tmp_path)
     credentials, csc = _onboard(database)
-    vault = _vault(credentials, csc)
+    vault = _vault(credentials, csc, provider_id=provider_id)
     resolution = SecretResolutionService(unit_of_work_factory=database, vault=vault)
     transport = SyntheticProviderTransport()
     adapter = _adapter(
@@ -335,7 +339,7 @@ def test_ambiguous_provider_resolution_never_selects_default(tmp_path) -> None:
     credentials, csc = _onboard(database)
     resolution = SecretResolutionService(
         unit_of_work_factory=database,
-        vault=_vault(credentials, csc),
+        vault=_vault(credentials, csc, provider_id="provider-a"),
     )
     first = _adapter(
         descriptor=_descriptor("provider-a"),
@@ -354,6 +358,37 @@ def test_ambiguous_provider_resolution_never_selects_default(tmp_path) -> None:
     )
     with pytest.raises(UnsupportedProviderError, match="exactly one"):
         service.execute(_request())
+
+
+def test_provider_a_credentials_never_fall_back_to_provider_b(tmp_path) -> None:
+    database = _database(tmp_path)
+    credentials, csc = _onboard(database)
+    vault = _vault(credentials, csc, provider_id="provider-a")
+    resolution = SecretResolutionService(unit_of_work_factory=database, vault=vault)
+    transport_a = SyntheticProviderTransport()
+    transport_b = SyntheticProviderTransport()
+    first = _adapter(
+        descriptor=_descriptor("provider-a"),
+        resolution=resolution,
+        transport=transport_a,
+    )
+    second = _adapter(
+        descriptor=_descriptor("provider-b"),
+        resolution=resolution,
+        transport=transport_b,
+    )
+    service = ProviderGatewayService(
+        registry=ProviderRegistry((first, second)),
+        readiness=_readiness(),
+        clock=_Clock(),
+    )
+
+    response = service.execute(_request(), provider_id="provider-a")
+    assert response.status is ProviderResponseStatus.ACCEPTED
+    with pytest.raises(ProviderCredentialsUnavailableError, match="unavailable"):
+        service.execute(_request(), provider_id="provider-b")
+    assert len(transport_a.observations) == 1
+    assert transport_b.observations == []
 
 
 def test_unsupported_jurisdiction_fails_before_transport(tmp_path) -> None:
@@ -399,6 +434,7 @@ def test_missing_credentials_cannot_be_replaced_by_csc(tmp_path) -> None:
         host_namespace=HOST,
         reference=csc,
         material=EphemeralCscMaterial(reference_id=CSC_REF, code=b"SYNTHETIC-CSC"),
+        provider_id="synthetic-sp",
     )
     adapter = _adapter(
         descriptor=_descriptor(),
@@ -420,6 +456,7 @@ def test_missing_csc_fails_closed_for_nfce(tmp_path) -> None:
             reference_id=CREDENTIAL_REF,
             credential_bytes=b"SYNTHETIC-CREDENTIAL",
         ),
+        provider_id="synthetic-sp",
     )
     adapter = _adapter(
         descriptor=_descriptor(),
