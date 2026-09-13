@@ -1,6 +1,6 @@
 # V2-15 B5 — Pilotos Controlados + Go/No-Go
 
-Status: **CANDIDATO À CERTIFICAÇÃO INTERNA**
+Status: **CONCLUÍDO / CERTIFICADO INTERNAMENTE**
 
 ## Princípio
 
@@ -105,10 +105,10 @@ Ativação, desativação, mudança de escopo governada e decisão Go/No-Go gera
 
 ## Estado externo desta execução
 
-Nenhum segredo real, certificado real, endpoint externo oficial ou autorização de homologação externa foi fornecido nesta execução. Portanto, o mecanismo deve certificar `GO_INTERNAL` para o cenário sintético válido e `BLOCKED_EXTERNAL` quando a decisão exigir evidência oficial.
+Nenhum segredo real, certificado real, endpoint externo oficial ou autorização de homologação externa foi fornecido nesta execução. O gate certificou `GO_INTERNAL` para cenário sintético válido e `BLOCKED_EXTERNAL` quando a decisão exige evidência oficial.
 
 Isso é resultado correto e esperado, não falha de engenharia.
 
-## Gate
+## Gate certificado
 
-O gate B5 deve comprovar Ruff/Mypy/Pytest completos, testes negativos, fail-closed, kill-switch/restart, isolamento e audit trail. O CI deve voltar a `workflow_dispatch` only após a certificação.
+SHA `d7fa063c8a842480179b178a1e45f37061fe8e18`, run `34777597412`, job `103778446003`: Install PASS, Ruff PASS, Mypy PASS em **111 source files**, Pytest **616 PASS em 6.82s**. O gate cobre testes negativos, fail-closed, kill-switch durável após restart, operation/provider disable por configuração e audit trail. Warning Node 20→24 apenas informativo. CI restaurado para `workflow_dispatch` only em `116edbe9bbf4142bae6962d2ec0c598a3348d781`.
