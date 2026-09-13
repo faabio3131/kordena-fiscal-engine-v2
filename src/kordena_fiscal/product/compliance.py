@@ -4,11 +4,8 @@ This module is not legal advice. Policies requiring legal confirmation are expli
 LEGAL_VALIDATION_REQUIRED and do not claim a statutory retention period.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from enum import StrEnum
-
 
 LEGAL_VALIDATION_REQUIRED = "LEGAL_VALIDATION_REQUIRED"
 
