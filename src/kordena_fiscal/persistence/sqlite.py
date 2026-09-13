@@ -356,7 +356,10 @@ _MIGRATIONS = (
             FROM fm_control_plane_secret_references
             """,
             "DROP TABLE fm_control_plane_secret_references",
-            "ALTER TABLE fm_control_plane_secret_references_v2 RENAME TO fm_control_plane_secret_references",
+            (
+                "ALTER TABLE fm_control_plane_secret_references_v2 "
+                "RENAME TO fm_control_plane_secret_references"
+            ),
             """
             CREATE TABLE fm_commercial_provider_bindings (
                 binding_id TEXT NOT NULL UNIQUE,
@@ -637,7 +640,11 @@ class SqliteFiscalDatabase:
                     INSERT INTO fm_schema_migrations (version, name, applied_at)
                     VALUES (?, ?, ?)
                     """,
-                    (migration.version, migration.name, datetime.now().astimezone().isoformat()),
+                    (
+                        migration.version,
+                        migration.name,
+                        datetime.now().astimezone().isoformat(),
+                    ),
                 )
                 new_versions.append(migration.version)
             connection.commit()
