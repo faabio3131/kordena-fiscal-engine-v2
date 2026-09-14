@@ -167,7 +167,7 @@ def test_commercial_surfaces_contain_no_private_key_files_or_material() -> None:
 
 def test_runtime_dependencies_remain_small_and_bounded() -> None:
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
-    assert '"cryptography>=44,<48"' in pyproject
+    assert '"cryptography>=50,<51"' in pyproject
     assert '"lxml>=5.3,<7"' in pyproject
     project_section = pyproject.split("[project.optional-dependencies]", maxsplit=1)[0]
     assert "requests" not in project_section
