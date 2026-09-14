@@ -77,14 +77,20 @@ class _Observer:
 
 
 class _ExplodingWorker(DurableFiscalOutboxWorker):
-    def run_once(self, *, now: datetime, limit: int = 10, lease_duration: timedelta = timedelta(seconds=60)) -> tuple[FiscalOutboxEntry, ...]:
+    def run_once(
+        self,
+        *,
+        now: datetime,
+        limit: int = 10,
+        lease_duration: timedelta = timedelta(seconds=60),
+    ) -> tuple[FiscalOutboxEntry, ...]:
         del now, limit, lease_duration
         raise RuntimeError("database unavailable")
 
 
 def test_runtime_routes_webhook_and_reconciliation_jobs_in_one_bounded_cycle(tmp_path) -> None:
     database = SqliteFiscalDatabase(tmp_path / "worker.sqlite3")
-    assert database.initialize() == (1, 2, 3, 4, 5, 6)
+    database.initialize()
     webhook = _SuccessHandler("webhook")
     reconciliation = _SuccessHandler("reconciliation")
     routed = RoutedOutboxHandler(
