@@ -41,7 +41,7 @@ def nfe_channel(*, homologation_verified: bool = True) -> FiscalChannelConfigura
         provider_profile_id="sefaz-sp-direct-v1",
         uf="sp",
         municipality_code=None,
-        certificate=verified("cert/client-a") ,
+        certificate=verified("cert/client-a"),
         csc_identifier=missing(),
         csc_token=missing(),
         provider_credentials=verified("provider/client-a"),
@@ -59,6 +59,11 @@ def tenant_config(
     homologation_verified: bool = True,
     production_verified: bool = True,
 ) -> TenantExternalConfiguration:
+    activation = (
+        verified("activation/client-a")
+        if production_verified
+        else configured("activation/client-a")
+    )
     return TenantExternalConfiguration(
         configuration_id=f"tenant-a-v{version}",
         version=version,
@@ -82,9 +87,7 @@ def tenant_config(
         ),
         legal_approval=verified("legal/terms-v1"),
         pilot_approval=verified("pilot/client-a"),
-        production_activation=(
-            verified("activation/client-a") if production_verified else configured("activation/client-a")
-        ),
+        production_activation=activation,
     )
 
 
