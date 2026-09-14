@@ -154,12 +154,12 @@ function overviewMarkup() {
     <article class="panel">
       <div class="panel-header">
         <div><p class="eyebrow">External gates</p><h2>Antes do go-live</h2></div>
-        <span class="badge warning">EXTERNAL</span>
+        <span class="badge warning">PROD BLOQUEADA</span>
       </div>
       <div class="status-list">
-        <div class="status-item"><span>Certificados e credenciais reais</span><strong>EXTERNAL_INPUT</strong></div>
+        <div class="status-item"><span>Certificados e credenciais reais</span><strong>BLOCKED_EXTERNAL</strong></div>
         <div class="status-item"><span>Homologação oficial aplicável</span><strong>EVIDENCE_REQUIRED</strong></div>
-        <div class="status-item"><span>Piloto e ativação produtiva</span><strong>APPROVAL_REQUIRED</strong></div>
+        <div class="status-item"><span>Piloto e ativação produtiva</span><strong>HUMAN_APPROVAL_REQUIRED</strong></div>
       </div>
     </article>
 
@@ -207,8 +207,8 @@ function genericMarkup(viewId) {
       <p>Ausência de capability, entitlement, binding, evidence ou approval permanece bloqueio; a interface não converte configuração em autorização.</p>
     </article>
     <article class="panel">
-      <p class="eyebrow">Secret handling</p><h2>Reference-only</h2>
-      <p>Certificados, CSC, tokens e credenciais são representados por referências opacas. Segredos reais não pertencem ao código nem à interface.</p>
+      <p class="eyebrow">Secret handling</p><h2>Sem segredo em tela</h2>
+      <p>Reference-only: certificados, CSC, tokens e credenciais são representados por referências opacas. Segredos reais não pertencem ao código nem à interface.</p>
     </article>`;
 }
 
