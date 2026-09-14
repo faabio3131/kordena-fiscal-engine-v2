@@ -14,7 +14,6 @@ from enum import StrEnum
 from threading import RLock
 from typing import Protocol, runtime_checkable
 
-
 _SECRET_REF = re.compile(r"^sec_[A-Za-z0-9_-]{16,160}$")
 _SAFE_PURPOSE = re.compile(r"^[a-z][a-z0-9_.-]{1,63}$")
 
