@@ -2,6 +2,9 @@ name: FM NFCORE V1 CI
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feat/nfcore-web-04-real-portal-integration
 
 permissions:
   contents: read
