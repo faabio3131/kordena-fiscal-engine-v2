@@ -2,32 +2,33 @@
 
 Data de início: 2026-09-11  
 Repositório: `faabio3131/kordena-fiscal-engine-v2`  
-Status global: **TODO O TRABALHO INTERNO AUTORIZADO V2-00..V2-18.11 CONCLUÍDO; AGUARDANDO AUDITORIA FINAL 0–100% E GATE DO HEAD DOCUMENTAL**  
-Fase atual: **V2-18.11 — RELEASE CANDIDATE TÉCNICO INTERNO**
+Status global: **ENGENHARIA INTERNA V2-00..V2-18.11 CONCLUÍDA/CERTIFICADA; CÓDIGO PROMOVIDO PARA `main`; PRODUÇÃO/CUTOVER REAL AINDA BLOQUEADOS POR PRÉ-CONDIÇÕES REAIS.**  
+Release Candidate técnico: **FM Fiscal 2.18.0-rc.1**
 
-## Regra de governança
+## Regra de governança atual
 
 Estados permitidos: `PENDENTE`, `EM EXECUÇÃO`, `BLOQUEADO`, `CONCLUÍDO`.
-PRs permanecem Draft/não mergeadas. Deploy, produção real, cutover, migração produtiva,
-freeze produtivo, segredo real e promoção real de `PRODUCTION_APPROVED` continuam proibidos
-sem autorização humana específica. Homologação oficial exige evidência externa real.
+
+A autorização de 2026-09-13 permitiu promover para `main` código certificado e reconciliar PRs antigas quando os gates estivessem verdes. Essa promoção de fonte foi executada. Ela **não equivale** a deploy produtivo, homologação oficial, migração produtiva, ativação de autoridade fiscal real, freeze de writers, uso de segredo real ou cutover.
+
+Homologação oficial continua exigindo evidência externa real. `PRODUCTION_APPROVED` não pode ser inferido a partir de CI, merge ou Release Candidate.
 
 ## Estado por fase
 
 | Fase | Escopo | Status | Evidência principal |
 |---|---|---|---|
-| V2-00..V2-11 | Equivalência → Control Plane | **CONCLUÍDO** | PRs #1-#12 / histórico certificado |
-| V2-12 | Gateway/Signer/Vault | **CONCLUÍDO** | PR #13 / 508 PASS |
-| V2-13 | Observabilidade/Compliance | **CONCLUÍDO** | PR #14 / 563 PASS |
-| V2-14 | Hardening sistêmico | **CONCLUÍDO** | PR #15 / 582 PASS |
-| V2-15 | Homologação/pilotos | **BLOQUEADO PARCIAL — INTERNO CERTIFICADO** | PR #16 / 620 PASS / externo pendente |
-| V2-16 | Integração produtos FM | **BLOQUEADO PARCIAL — INTERNO B1-B7 CERTIFICADO** | PR #17 / 646 PASS |
+| V2-00..V2-11 | Equivalência → Control Plane | **CONCLUÍDO / INCORPORADO EM `main`** | histórico PRs #1-#12 / promoção #24 |
+| V2-12 | Gateway/Signer/Vault | **CONCLUÍDO / INCORPORADO EM `main`** | 508 PASS / promoção #24 |
+| V2-13 | Observabilidade/Compliance | **CONCLUÍDO / INCORPORADO EM `main`** | 563 PASS / promoção #24 |
+| V2-14 | Hardening sistêmico | **CONCLUÍDO / INCORPORADO EM `main`** | 582 PASS / promoção #24 |
+| V2-15 | Homologação/pilotos | **INTERNO CERTIFICADO / EXTERNO PENDENTE** | 620 PASS / evidência oficial externa ainda necessária |
+| V2-16 | Integração produtos FM | **INTERNO CERTIFICADO / CONSUMIDORES PARCIAIS** | 646 PASS / consumer states abaixo |
 | V2-17.1 | Readiness + single authority | **CONCLUÍDO/CERTIFICADO** | 116 source / 651 PASS |
 | V2-17.2 | Migration + rollback rehearsal | **CONCLUÍDO/CERTIFICADO SINTÉTICO** | 117 source / 660 PASS |
 | V2-17.3 | Cutover rehearsal / authority transfer | **CONCLUÍDO/CERTIFICADO SINTÉTICO** | run `34787607567`, 118 source / 675 PASS |
 | V2-17.4 | Consumer integration closure | **CONCLUÍDO COMO REAUDITORIA GOVERNADA** | blockers reais preservados |
-| V2-17.5 | Final convergence readiness | **CONCLUÍDO/CERTIFICADO** | cutover real permanece bloqueado |
-| V2-18.1 | Product identity + packaging | **CONCLUÍDO/CERTIFICADO** | catálogo configurável / 120 source / 681 PASS |
+| V2-17.5 | Final convergence readiness | **CONCLUÍDO/CERTIFICADO** | cutover real ainda bloqueado |
+| V2-18.1 | Product identity + packaging | **CONCLUÍDO/CERTIFICADO** | 120 source / 681 PASS |
 | V2-18.2 | Public developer documentation | **CONCLUÍDO/CERTIFICADO** | docs públicas/sintéticas |
 | V2-18.3 | Self-service onboarding | **CONCLUÍDO/CERTIFICADO** | idempotent/checkpoint/fail-closed |
 | V2-18.4 | Plans + entitlements + billing foundation | **CONCLUÍDO/CERTIFICADO** | commercial billing separado da authority fiscal |
@@ -37,46 +38,103 @@ sem autorização humana específica. Homologação oficial exige evidência ext
 | V2-18.8 | Premium Product Experience | **CONCLUÍDO/CERTIFICADO** | run `34791085676`, 126 source / 724 PASS |
 | V2-18.9 | Commercial End-to-End | **CONCLUÍDO/CERTIFICADO** | run `34791237542`, 126 source / 730 PASS |
 | V2-18.10 | Security + Performance + DR | **CONCLUÍDO/CERTIFICADO** | run `34791936752`, Bandit + pip-audit + 741 PASS |
-| V2-18.11 | Release Candidate Closure | **CONCLUÍDO INTERNAMENTE** | `2.18.0-rc.1` / aguardando gate documental final |
+| V2-18.11 | Release Candidate Closure | **CONCLUÍDO/CERTIFICADO** | `2.18.0-rc.1` / gate final abaixo |
 
-## V2-15 — estado preservado
+## Certificação final interna V2
 
-Todo o trabalho interno B0-B6 está certificado. Continuam externos certificados privados,
-CSC, provider credentials, ambientes/respostas oficiais e pilotos externos autorizados.
+HEAD final certificado antes da promoção:
+
+`5ffa561e6459177f97829c223fdd2faf7b36415a`
+
+Gate final:
+
+- run `34792183667`;
+- job `103818329390`;
+- Install PASS;
+- Ruff PASS;
+- Mypy PASS — **126 source files**;
+- Bandit PASS;
+- pip-audit PASS — **No known vulnerabilities found**;
+- Pytest **741 PASS em 7.34s**.
+
+Durante V2-18.10, o dependency audit detectou vulnerabilidades reais em `cryptography 47.0.0`. A faixa de runtime foi corrigida para `cryptography>=50,<51`; o gate final executou com `cryptography 50.0.1` e permaneceu totalmente verde.
+
+## Promoção de código para `main`
+
+Antes da promoção, o compare `main` → `v2/commercial-independent-product` comprovou:
+
+- **723 commits à frente**;
+- **0 commits atrás**;
+- merge-base exatamente no antigo `main` `ed6c91deac5c0f160f6564328bb5b35bab8c5ae5`.
+
+A PR cumulativa **#24 — `FM Fiscal V2 — promote certified 2.18.0-rc.1 to main`** foi mergeada com o HEAD esperado travado em `5ffa561e6459177f97829c223fdd2faf7b36415a`.
+
+Merge commit em `main`:
+
+`5c9cbb6b42d715f5686be5a4e8d2cb622f8d3c97`
+
+O compare pós-merge confirmou `main` exatamente **1 commit à frente** do HEAD certificado, **0 atrás**, merge-base no próprio HEAD certificado e **nenhum arquivo divergente**. O commit adicional é apenas o merge da PR #24.
+
+As PRs históricas stacked V2-00..V2-18 foram reconciliadas como incorporadas pela promoção cumulativa. Não há PR permanente antiga aberta no repositório do Core após a reconciliação.
+
+## V2-15 — homologação externa
+
+Todo o trabalho interno B0-B6 está certificado. Continuam externos, quando aplicáveis:
+
+- certificados privados reais;
+- CSC real;
+- provider credentials reais;
+- conectividade/ambientes/respostas oficiais;
+- evidência oficial por jurisdição/documento/operação;
+- pilotos externos autorizados.
+
 Nenhum provider, UF ou município foi declarado oficialmente homologado sem evidência.
 
 Documento: `docs/V2_15_CLOSURE_CERTIFICATION.md`.
 
-## V2-16 — estado preservado
+## V2-16 — consumidores após promoção
 
-Todo o trabalho interno executável B1-B7 foi certificado. Revalidação ao vivo de 2026-09-13/14:
+### Kordena
 
-- Kordena PR #118: OPEN/DRAFT, HEAD `9ee10a08cf445cc7233cde5b70564f8feade315c`, situação funcional PARCIAL;
-- Iron Fit PR #48: OPEN/DRAFT, HEAD `2be8321eeb066f0296ba812faab0a098c32f0632`, integração interna certificada;
-- Vendedor IA PR #1: OPEN/DRAFT, HEAD `b4b7fb05236c481d5626de5386864ae6f5227418`, handoff certificado e recipient/classificação NF-e/NFC-e pendentes;
-- CampaIA PR #1: OPEN/DRAFT, HEAD `bdebbc3558ff8b07c1a38e0cb728be0dc3635c4b`, adapter certificado e authority real de own billing/payment pendente.
+PR `faabio3131/fm-ai-platform#118` permanece **OPEN/DRAFT**, HEAD `9ee10a08cf445cc7233cde5b70564f8feade315c`, situação funcional **PARCIAL**. Os workflows do HEAD estão verdes, porém Web Premium/FISC-20 e a conclusão funcional do consumidor permanecem blockers reais. Portanto **não foi mergeada nem promovida como pronta**.
 
-Documento: `docs/V2_16_CLOSURE_CERTIFICATION.md`.
+### Iron Fit
 
-## V2-17 — convergência
+PR `faabio3131/iron-fit-backend#48` foi mergeada após gate certificado e auditoria de workflow sem deploy automático.
 
-Branch: `v2/convergence-cutover`  
-PR: #19 — OPEN/DRAFT/não mergeada  
-HEAD final certificado: `cfd58c3249a5601dc62088eee7327dfe02759646`
+Merge em `main`: `9763f9a3fd41cad1a9cf67ea36ae9bf67189bd24`.
 
-### Referência legado correta
+Gate pós-merge em `main`: run `34793571834` — **SUCCESS**.
 
-`faabio3131/kordena-fiscal-engine`
+O handoff fiscal continua fail-closed em `PENDING_CAPABILITY` até existir readiness fiscal aplicável.
 
-Branch: `feat/fisc-19-rtc-multiuf-hardening`
+### Vendedor IA
 
-SHA: `b336def47ad4f5188307102203f4e04b98406014`
+PR `faabio3131/ai-sales-saas-vendedor-ia#1` foi mergeada após gate certificado e auditoria de workflow sem deploy automático.
 
-O `main` atual do legado não é baseline funcional de convergência.
+Merge em `main`: `ec13fee2829ffe17c1e25c1dbffcc76070caee5c`.
 
-### Resultado
+Gate pós-merge em `main`: run `34793618320` — **SUCCESS**.
+
+Permanece bloqueada a emissão efetiva enquanto faltarem CPF/CNPJ/endereço fiscal e fatos suficientes para seleção segura NF-e versus NFC-e. O adapter preserva `PENDING_FISCAL_CLASSIFICATION` / fail-closed.
+
+### CampaIA
+
+PR `faabio3131/CampaIA#1` foi mergeada após gate certificado e auditoria de workflow sem deploy automático.
+
+Merge em `main`: `fba7fccf1b1e6808a75f41bc6f8b971b60c9f2b8`.
+
+Gate pós-merge em `main`: run `34793636144` — **SUCCESS**.
+
+Permanece bloqueada a integração runtime enquanto não existir fato real/autoritativo de faturamento/pagamento próprio da CampaIA. Verba de campanha/media spend continua explicitamente fora dessa autoridade.
+
+## V2-17 — convergência e cutover
 
 V2-17.1..V2-17.5 estão internamente certificadas: readiness/single authority, migration + rollback rehearsal, cutover/authority-transfer rehearsal, consumer reauditoria e final readiness.
+
+HEAD histórico final V2-17:
+
+`cfd58c3249a5601dc62088eee7327dfe02759646`
 
 Gate final V2-17:
 
@@ -86,52 +144,52 @@ Gate final V2-17:
 - **118 source files**;
 - Pytest **675 PASS**.
 
-Bloqueios obrigatórios para cutover real continuam:
-
-1. Kordena/FISC-20 e consumer prerequisites aplicáveis;
-2. inventário de writers reais do ambiente alvo;
-3. evidência/homologação externa aplicável;
-4. provisioning seguro de material real;
-5. snapshot/migração produtiva autorizada;
-6. autorização humana específica.
+A PR histórica #19 foi fechada como **incorporada pela promoção cumulativa #24**, não como trabalho descartado.
 
 ## V2-18 — produto comercial independente
 
-Branch: `v2/commercial-independent-product`  
-PR: #22 — OPEN/DRAFT/não mergeada  
-Base: `v2/convergence-cutover@cfd58c3249a5601dc62088eee7327dfe02759646`
-
-Release Candidate técnico interno:
+Release Candidate técnico:
 
 `FM Fiscal 2.18.0-rc.1`
 
 Manifesto: `docs/V2_18_RELEASE_CANDIDATE_MANIFEST.md`  
-Closure: `docs/V2_18_CLOSURE_CERTIFICATION.md`
+Closure: `docs/V2_18_CLOSURE_CERTIFICATION.md`  
+Auditoria 0–100%: `docs/V2_FINAL_0_100_AUDIT.md`
 
-### Security gate V2-18.10
+A PR histórica #22 foi fechada como **incorporada pela promoção cumulativa #24**. O código do RC está em `main`; isso não significa que um release produtivo foi realizado.
 
-O dependency audit detectou vulnerabilidades reais em `cryptography 47.0.0`. A faixa foi elevada para `cryptography>=50,<51`, e o gate final instalou `50.0.1`.
+## Auditoria de prontidão
 
-Gate final do bloco:
+Última classificação formal:
 
-- run `34791936752`;
-- job `103817664298`;
-- Ruff PASS;
-- Mypy PASS — **126 source files**;
-- Bandit Medium/High PASS com triagem B608 documentada/protegida por regressão;
-- pip-audit PASS — **No known vulnerabilities found** no runtime auditado;
-- Pytest **741 PASS em 5.43s**.
+- Engenharia interna: **100%**;
+- Produto comercial técnico interno: **100%**;
+- Integrações: **80%** antes da promoção; código certificado de Iron/Vendedor/CampaIA agora está em `main`, mas blockers funcionais de Kordena/Vendedor/CampaIA continuam governando a prontidão real;
+- Homologação/operação: **60%**;
+- Total ponderado para produção real na auditoria final: **89%**.
 
-## Gate humano de produção/cutover
+O merge de código não transforma automaticamente essas métricas em 100% de produção.
 
-A V2 está internamente preparada para Release Candidate e rehearsal governado, mas **NÃO está autorizada a executar produção/cutover real**.
+## Gate de produção/cutover — AINDA NÃO SATISFEITO
 
-Não desligar legado, congelar writer real, migrar banco real, alterar DNS/endpoint, usar segredo real, emitir documento real ou promover `PRODUCTION_APPROVED` sem autorização humana específica e pré-condições reais satisfeitas.
+A V2 está internamente construída e o código certificado foi promovido para `main`, porém **produção/cutover real continuam BLOQUEADOS** enquanto qualquer pré-condição obrigatória permanecer pendente.
 
-## Sequência restante
+Pendências reais atuais:
 
-`AUDITORIA FINAL 0–100% → GATE FINAL DO HEAD DOCUMENTAL → FECHAR PR CI #23 SEM MERGE → NEUTRALIZAR BRANCH CI → PARAR`
+1. concluir Kordena/Web Premium/FISC-20 e colocar o consumidor em estado funcional compatível;
+2. concluir os fatos/dados fiscais de destinatário e classificação no Vendedor IA;
+3. criar no CampaIA, quando o produto realmente precisar, uma authority real de own billing/payment;
+4. obter evidência/homologação externa oficial aplicável;
+5. provisionar certificados/CSC/provider credentials reais por canal seguro;
+6. inventariar writers reais e preparar freeze governado;
+7. executar snapshot/dry-run/migração produtiva somente em janela autorizada;
+8. realizar reconciliação final e Go/No-Go operacional;
+9. obter autorização humana específica para deploy/cutover produtivo.
 
-## Governança preservada
+Até lá, continuam proibidos: desativar legado, congelar writers reais, migrar banco produtivo, alterar DNS/endpoint produtivo, usar segredos reais fora de provisioning autorizado, emitir documento fiscal real sem readiness/homologação, ou promover `PRODUCTION_APPROVED` por inferência.
 
-**SEM MERGE. SEM Ready/auto-merge. SEM deploy real. SEM produção real. SEM cutover real. SEM migração produtiva. SEM segredo real. SEM homologação externa inventada. SEM promoção indevida de `PRODUCTION_APPROVED`.**
+## Próximo ponto de continuidade
+
+**Não há bloco interno V2-00..V2-18 pendente nem PR histórica do Core esquecida sem reconciliação.**
+
+A próxima frente é resolver as pré-condições reais acima e, somente quando todas estiverem verdes, executar um novo **Go/No-Go de Produção + Cutover Real** com evidência atualizada.
