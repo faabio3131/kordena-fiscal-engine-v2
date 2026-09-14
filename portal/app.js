@@ -262,7 +262,7 @@ function applyBootstrap(state) {
   if (criticalTitle) criticalTitle.textContent = text(productionState);
   if (criticalCopy) criticalCopy.textContent = /READY|APPROVED/i.test(text(productionState))
     ? "Readiness retornado pelo backend; operações continuam sujeitas a RBAC e gates fiscais."
-    : `${safetyStates.blocked}: produção permanece bloqueada até que o backend comprove os gates aplicáveis (${safetyStates.external} / ${safetyStates.approval}).`;
+    : `${safetyStates.blocked}: Produção permanece bloqueada até que o backend comprove os gates aplicáveis (${safetyStates.external} / ${safetyStates.approval}).`;
   buildNavigation();
   renderOverview();
 }
