@@ -28,6 +28,10 @@ class HumanAuthenticationError(HumanIdentityError):
     """Raised when credentials or a web session cannot be authenticated."""
 
 
+class HumanRateLimitError(HumanAuthenticationError):
+    """Raised when login attempts exceed the configured defensive policy."""
+
+
 class HumanAuthorizationError(HumanIdentityError):
     """Raised when an authenticated user lacks authority."""
 
@@ -215,18 +219,29 @@ class HumanAccount:
         if "@" not in email:
             raise ValueError("email must contain @")
         object.__setattr__(self, "email", email)
-        object.__setattr__(self, "password_hash", _required(self.password_hash, "password_hash", 4096))
+        object.__setattr__(
+            self,
+            "password_hash",
+            _required(self.password_hash, "password_hash", 4096),
+        )
         object.__setattr__(self, "tenant_id", _required(self.tenant_id, "tenant_id", 128))
         if not isinstance(self.role, PortalRole):
             raise ValueError("role must be PortalRole")
         if self.unit_ids is not None:
-            normalized_units = frozenset(_required(value, "unit_id", 128) for value in self.unit_ids)
+            normalized_units = frozenset(
+                _required(value, "unit_id", 128) for value in self.unit_ids
+            )
             if not normalized_units:
                 raise ValueError("unit_ids must be None or contain at least one unit")
             object.__setattr__(self, "unit_ids", normalized_units)
         if not isinstance(self.enabled, bool):
             raise ValueError("enabled must be bool")
-        if not isinstance(self.session_epoch, int) or isinstance(self.session_epoch, bool) or self.session_epoch < 0:
+        valid_epoch = (
+            isinstance(self.session_epoch, int)
+            and not isinstance(self.session_epoch, bool)
+            and self.session_epoch >= 0
+        )
+        if not valid_epoch:
             raise ValueError("session_epoch must be a non-negative integer")
 
     @property
@@ -355,6 +370,39 @@ class InMemoryWebSessionRepository:
                     self._by_id[session_id] = replace(session, revoked=True)
 
 
+class LoginAttemptLimiter:
+    """Reference fixed-window limiter for human login attempts."""
+
+    def __init__(self, *, max_failures: int = 5, window_seconds: int = 300) -> None:
+        if max_failures < 1 or window_seconds < 1:
+            raise ValueError("login rate-limit values must be positive")
+        self._max_failures = max_failures
+        self._window_seconds = window_seconds
+        self._lock = Lock()
+        self._failures: dict[tuple[str, int], int] = {}
+
+    def _key(self, email: str, now: datetime) -> tuple[str, int]:
+        _aware(now, "now")
+        normalized = _required(email, "email", 320).casefold()
+        return normalized, int(now.timestamp()) // self._window_seconds
+
+    def assert_allowed(self, email: str, now: datetime) -> None:
+        key = self._key(email, now)
+        with self._lock:
+            if self._failures.get(key, 0) >= self._max_failures:
+                raise HumanRateLimitError("too many login attempts")
+
+    def record_failure(self, email: str, now: datetime) -> None:
+        key = self._key(email, now)
+        with self._lock:
+            self._failures[key] = self._failures.get(key, 0) + 1
+
+    def reset(self, email: str, now: datetime) -> None:
+        key = self._key(email, now)
+        with self._lock:
+            self._failures.pop(key, None)
+
+
 @dataclass(frozen=True, slots=True)
 class IssuedWebSession:
     session_token: str
@@ -384,7 +432,12 @@ class AuthenticatedHuman:
     def permissions(self) -> frozenset[PortalPermission]:
         return self.account.permissions
 
-    def assert_permission(self, permission: PortalPermission, *, unit_id: str | None = None) -> None:
+    def assert_permission(
+        self,
+        permission: PortalPermission,
+        *,
+        unit_id: str | None = None,
+    ) -> None:
         if permission not in self.permissions:
             raise HumanAuthorizationError("user does not have the required permission")
         if unit_id is not None:
@@ -403,6 +456,7 @@ class HumanIdentityService:
         sessions: WebSessionRepository,
         password_hasher: ScryptPasswordHasher,
         session_ttl: timedelta = timedelta(hours=8),
+        login_limiter: LoginAttemptLimiter | None = None,
     ) -> None:
         if not isinstance(accounts, HumanAccountRepository):
             raise ValueError("accounts must implement HumanAccountRepository")
@@ -414,15 +468,21 @@ class HumanIdentityService:
         self._sessions = sessions
         self._password_hasher = password_hasher
         self._session_ttl = session_ttl
+        self._login_limiter = login_limiter or LoginAttemptLimiter()
+        self._dummy_hash = password_hasher.hash("nfcore-dummy-password-never-authenticates")
 
     def login(self, *, email: str, password: str, now: datetime) -> IssuedWebSession:
         _aware(now, "now")
-        account = self._accounts.by_email(email)
-        if account is None or not account.enabled:
-            raise HumanAuthenticationError("invalid email or password")
-        if not self._password_hasher.verify(password, account.password_hash):
+        normalized_email = _required(email, "email", 320).casefold()
+        self._login_limiter.assert_allowed(normalized_email, now)
+        account = self._accounts.by_email(normalized_email)
+        encoded = account.password_hash if account is not None else self._dummy_hash
+        password_valid = self._password_hasher.verify(password, encoded)
+        if account is None or not account.enabled or not password_valid:
+            self._login_limiter.record_failure(normalized_email, now)
             raise HumanAuthenticationError("invalid email or password")
 
+        self._login_limiter.reset(normalized_email, now)
         session_token = secrets.token_urlsafe(48)
         csrf_token = secrets.token_urlsafe(32)
         expires_at = now + self._session_ttl
@@ -461,7 +521,8 @@ class HumanIdentityService:
 
     def assert_csrf(self, authenticated: AuthenticatedHuman, presented_token: str) -> None:
         normalized = _required(presented_token, "csrf_token", 4096)
-        if not hmac.compare_digest(_token_digest(normalized), authenticated.csrf_token_sha256):
+        candidate = _token_digest(normalized)
+        if not hmac.compare_digest(candidate, authenticated.csrf_token_sha256):
             raise CsrfValidationError("invalid CSRF token")
 
     def logout(self, authenticated: AuthenticatedHuman) -> None:
