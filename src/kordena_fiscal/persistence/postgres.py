@@ -1,6 +1,6 @@
 """PostgreSQL production persistence for FM NFCORE.
 
-The fiscal domain remains host-neutral.  This module supplies a PostgreSQL-backed
+The fiscal domain remains host-neutral. This module supplies a PostgreSQL-backed
 unit-of-work and durable human identity stores while reusing the already-certified
 repository semantics of the SQLite reference adapters through a deliberately small
 DB-API compatibility boundary.
@@ -12,29 +12,34 @@ configuration remain in the certified repository implementations.
 
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
 from collections.abc import Iterable, Sequence
 from contextlib import contextmanager
 from datetime import datetime
-from typing import Any, Iterator, cast
+from types import TracebackType
+from typing import Any, Iterator, TypeVar, cast
 
 from psycopg import Connection, Cursor, IntegrityError
-from psycopg.rows import tuple_row
+from psycopg.errors import UndefinedTable
 from psycopg_pool import ConnectionPool
 
+from kordena_fiscal.contingency import FiscalOutboxEnqueueResult, FiscalOutboxEntry
 from kordena_fiscal.domain import FiscalValidationError
+from kordena_fiscal.events import FiscalInboxEntry, FiscalInboxReceiveResult
+from kordena_fiscal.lifecycle import IdempotencyKey, IdempotencyReservation
+from kordena_fiscal.numbering import (
+    FiscalNumberReservation,
+    FiscalSequenceKey,
+    FiscalSequencePolicy,
+)
 from kordena_fiscal.security.human_identity import (
     HumanAccount,
-    HumanAccountRepository,
     PortalRole,
     WebSessionRecord,
-    WebSessionRepository,
 )
-from kordena_fiscal.security.human_recovery import (
-    PasswordResetRecord,
-    PasswordResetRepository,
-)
+from kordena_fiscal.security.human_recovery import PasswordResetRecord
 
 from .ports import PersistenceStateError
 from .sqlite import _MIGRATIONS
@@ -50,6 +55,8 @@ from .sqlite_idempotency import SqliteIdempotencyStore
 from .sqlite_inbox import SqliteFiscalInboxStore
 from .sqlite_outbox_archive import SqliteFiscalArchiveStore, SqliteFiscalOutboxStore
 from .sqlite_reconciliation import SqliteReconciliationRepository
+
+_T = TypeVar("_T")
 
 
 class _CursorCompat:
@@ -71,21 +78,14 @@ class _CursorCompat:
 
 
 class _PostgresCompatConnection:
-    """Translate qmark parameters and integrity errors for reference adapters.
-
-    The existing persistence adapters deliberately contain no SQLite-only business
-    rules.  They depend on ``execute``/``fetch``/``rowcount`` and qmark placeholders.
-    Keeping that contract at one boundary prevents a second implementation of fiscal
-    persistence rules from drifting away from the certified behavior.
-    """
+    """Translate qmark parameters and integrity errors for reference adapters."""
 
     def __init__(self, connection: Connection[Any]) -> None:
         self._connection = connection
 
     @staticmethod
     def _sql(statement: str) -> str:
-        # Repository SQL does not use question marks inside string literals.  Keep the
-        # translation intentionally narrow and test it against the production schema.
+        # Certified repository SQL never embeds literal question marks.
         return statement.replace("?", "%s")
 
     def execute(
@@ -96,8 +96,7 @@ class _PostgresCompatConnection:
         try:
             cursor = self._connection.execute(self._sql(statement), tuple(parameters))
         except IntegrityError as exc:
-            # Existing certified adapters translate sqlite3.IntegrityError into their
-            # domain-specific conflict errors.  Preserve that exact semantic boundary.
+            # Reference adapters already map sqlite3.IntegrityError to domain conflicts.
             raise sqlite3.IntegrityError(str(exc)) from exc
         return _CursorCompat(cursor)
 
@@ -108,22 +107,57 @@ class _PostgresCompatConnection:
         self._connection.rollback()
 
 
+def _advisory_lock(connection: sqlite3.Connection, material: str) -> None:
+    compat = cast(_PostgresCompatConnection, connection)
+    compat.execute(
+        "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
+        (material,),
+    )
+
+
+class PostgresIdempotencyStore(SqliteIdempotencyStore):
+    """Idempotency store serialized per key across concurrent PostgreSQL workers."""
+
+    def reserve(
+        self,
+        key: IdempotencyKey,
+        request_fingerprint: str,
+        document_id: str,
+    ) -> IdempotencyReservation:
+        if isinstance(key, IdempotencyKey):
+            _advisory_lock(self._connection, f"idempotency:{key.value}")
+        return super().reserve(key, request_fingerprint, document_id)
+
+
 class PostgresFiscalSequenceStore(SqliteFiscalSequenceStore):
     """Sequence store with a transaction-scoped advisory lock per fiscal sequence."""
 
-    def reserve_next(self, key: Any, policy: Any) -> Any:
-        # The stable canonical material already identifies host/tenant/unit/env/model/
-        # series.  A transaction-scoped advisory lock serializes only that sequence,
-        # avoiding a global bottleneck while preventing duplicate reservations.
-        material = getattr(key, "canonical_material", None)
-        if not isinstance(material, str) or not material:
-            return super().reserve_next(key, policy)
-        connection = cast(_PostgresCompatConnection, self._connection)
-        connection.execute(
-            "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
-            (material,),
-        )
+    def reserve_next(
+        self,
+        key: FiscalSequenceKey,
+        policy: FiscalSequencePolicy,
+    ) -> FiscalNumberReservation:
+        if isinstance(key, FiscalSequenceKey):
+            _advisory_lock(self._connection, f"sequence:{key.canonical_material}")
         return super().reserve_next(key, policy)
+
+
+class PostgresFiscalInboxStore(SqliteFiscalInboxStore):
+    """Inbox store that turns concurrent duplicate receives into deterministic replay."""
+
+    def receive(self, entry: FiscalInboxEntry) -> FiscalInboxReceiveResult:
+        if isinstance(entry, FiscalInboxEntry):
+            _advisory_lock(self._connection, f"inbox:{entry.entry_id}")
+        return super().receive(entry)
+
+
+class PostgresFiscalOutboxStore(SqliteFiscalOutboxStore):
+    """Outbox enqueue serialized per deterministic entry identity."""
+
+    def enqueue(self, entry: FiscalOutboxEntry) -> FiscalOutboxEnqueueResult:
+        if isinstance(entry, FiscalOutboxEntry):
+            _advisory_lock(self._connection, f"outbox:{entry.entry_id}")
+        return super().enqueue(entry)
 
 
 class PostgresFiscalUnitOfWork:
@@ -133,12 +167,11 @@ class PostgresFiscalUnitOfWork:
         self._database = database
         self._pool_context: Any | None = None
         self._raw_connection: Connection[Any] | None = None
-        self._connection: _PostgresCompatConnection | None = None
         self._committed = False
-        self._idempotency: SqliteIdempotencyStore | None = None
+        self._idempotency: PostgresIdempotencyStore | None = None
         self._sequences: PostgresFiscalSequenceStore | None = None
-        self._inbox: SqliteFiscalInboxStore | None = None
-        self._outbox: SqliteFiscalOutboxStore | None = None
+        self._inbox: PostgresFiscalInboxStore | None = None
+        self._outbox: PostgresFiscalOutboxStore | None = None
         self._outbox_ordering: SqliteFiscalOutboxOrderingStore | None = None
         self._delivery_audit: SqliteFiscalDeliveryAuditStore | None = None
         self._archive: SqliteFiscalArchiveStore | None = None
@@ -158,12 +191,11 @@ class PostgresFiscalUnitOfWork:
         sqlite_compat = cast(sqlite3.Connection, compat)
         self._pool_context = pool_context
         self._raw_connection = raw
-        self._connection = compat
         self._committed = False
-        self._idempotency = SqliteIdempotencyStore(sqlite_compat)
+        self._idempotency = PostgresIdempotencyStore(sqlite_compat)
         self._sequences = PostgresFiscalSequenceStore(sqlite_compat)
-        self._inbox = SqliteFiscalInboxStore(sqlite_compat)
-        self._outbox = SqliteFiscalOutboxStore(sqlite_compat)
+        self._inbox = PostgresFiscalInboxStore(sqlite_compat)
+        self._outbox = PostgresFiscalOutboxStore(sqlite_compat)
         self._outbox_ordering = SqliteFiscalOutboxOrderingStore(sqlite_compat)
         self._delivery_audit = SqliteFiscalDeliveryAuditStore(sqlite_compat)
         self._archive = SqliteFiscalArchiveStore(sqlite_compat)
@@ -178,7 +210,7 @@ class PostgresFiscalUnitOfWork:
         self,
         exc_type: type[BaseException] | None,
         exc: BaseException | None,
-        traceback: object | None,
+        traceback: TracebackType | None,
     ) -> None:
         raw = self._raw_connection
         pool_context = self._pool_context
@@ -188,19 +220,18 @@ class PostgresFiscalUnitOfWork:
             if exc_type is not None or not self._committed:
                 raw.rollback()
         finally:
-            self._connection = None
             self._raw_connection = None
             self._pool_context = None
             pool_context.__exit__(exc_type, exc, traceback)
 
     @staticmethod
-    def _require[T](value: T | None, name: str) -> T:
+    def _require(value: _T | None, name: str) -> _T:
         if value is None:
             raise PersistenceStateError(f"unit of work {name} repository is not active")
         return value
 
     @property
-    def idempotency(self) -> SqliteIdempotencyStore:
+    def idempotency(self) -> PostgresIdempotencyStore:
         return self._require(self._idempotency, "idempotency")
 
     @property
@@ -208,11 +239,11 @@ class PostgresFiscalUnitOfWork:
         return self._require(self._sequences, "sequences")
 
     @property
-    def inbox(self) -> SqliteFiscalInboxStore:
+    def inbox(self) -> PostgresFiscalInboxStore:
         return self._require(self._inbox, "inbox")
 
     @property
-    def outbox(self) -> SqliteFiscalOutboxStore:
+    def outbox(self) -> PostgresFiscalOutboxStore:
         return self._require(self._outbox, "outbox")
 
     @property
@@ -306,9 +337,6 @@ _HUMAN_SCHEMA = (
 
 
 def _translate_ddl(statement: str) -> str:
-    # SQLite's BLOB type is the only type in the certified migrations that needs a
-    # PostgreSQL spelling change.  All constraints/indexes/ALTER statements are ANSI
-    # compatible and are executed one statement at a time.
     return statement.replace(" BLOB ", " BYTEA ").replace(" BLOB\n", " BYTEA\n")
 
 
@@ -333,13 +361,13 @@ class PostgresFiscalDatabase:
         if min_pool_size < 1 or max_pool_size < min_pool_size:
             raise FiscalValidationError("invalid PostgreSQL pool size")
         self._dsn = normalized
-        self._pool = ConnectionPool(
+        self._pool: ConnectionPool[Any] = ConnectionPool(
             conninfo=normalized,
             min_size=min_pool_size,
             max_size=max_pool_size,
-            kwargs={"row_factory": tuple_row},
-            open=True,
+            open=False,
         )
+        self._pool.open(wait=True)
 
     @property
     def dsn_redacted(self) -> str:
@@ -366,7 +394,6 @@ class PostgresFiscalDatabase:
                     )
                     """
                 )
-                # One migrator at a time per database, without serializing runtime UoWs.
                 raw.execute("SELECT pg_advisory_xact_lock(638051840319)")
                 rows = raw.execute(
                     "SELECT version FROM fm_schema_migrations ORDER BY version"
@@ -417,7 +444,7 @@ class PostgresFiscalDatabase:
                 rows = raw.execute(
                     "SELECT version FROM fm_schema_migrations ORDER BY version"
                 ).fetchall()
-            except Exception:
+            except UndefinedTable:
                 raw.rollback()
                 return ()
             return tuple(int(row[0]) for row in rows)
@@ -438,14 +465,12 @@ class PostgresFiscalDatabase:
         return PostgresPasswordResetRepository(self)
 
 
-class PostgresHumanAccountRepository(HumanAccountRepository):
+class PostgresHumanAccountRepository:
     def __init__(self, database: PostgresFiscalDatabase) -> None:
         self._database = database
 
     @staticmethod
     def _account(row: tuple[object, ...]) -> HumanAccount:
-        import json
-
         raw_units = row[5]
         unit_ids: frozenset[str] | None
         if raw_units is None:
@@ -493,42 +518,44 @@ class PostgresHumanAccountRepository(HumanAccountRepository):
         return None if row is None else self._account(cast(tuple[object, ...], row))
 
     def save(self, account: HumanAccount) -> None:
-        import json
-
         if not isinstance(account, HumanAccount):
             raise ValueError("account must be HumanAccount")
         units_json = None if account.unit_ids is None else json.dumps(sorted(account.unit_ids))
         with self._database._pool.connection() as raw:
-            raw.execute(
-                """
-                INSERT INTO fm_human_accounts (
-                    account_id, email, password_hash, tenant_id, role, unit_ids_json,
-                    enabled, session_epoch
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (account_id) DO UPDATE SET
-                    email = EXCLUDED.email,
-                    password_hash = EXCLUDED.password_hash,
-                    tenant_id = EXCLUDED.tenant_id,
-                    role = EXCLUDED.role,
-                    unit_ids_json = EXCLUDED.unit_ids_json,
-                    enabled = EXCLUDED.enabled,
-                    session_epoch = EXCLUDED.session_epoch
-                """,
-                (
-                    account.account_id,
-                    account.email,
-                    account.password_hash,
-                    account.tenant_id,
-                    account.role.value,
-                    units_json,
-                    int(account.enabled),
-                    account.session_epoch,
-                ),
-            )
-            raw.commit()
+            try:
+                raw.execute(
+                    """
+                    INSERT INTO fm_human_accounts (
+                        account_id, email, password_hash, tenant_id, role, unit_ids_json,
+                        enabled, session_epoch
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (account_id) DO UPDATE SET
+                        email = EXCLUDED.email,
+                        password_hash = EXCLUDED.password_hash,
+                        tenant_id = EXCLUDED.tenant_id,
+                        role = EXCLUDED.role,
+                        unit_ids_json = EXCLUDED.unit_ids_json,
+                        enabled = EXCLUDED.enabled,
+                        session_epoch = EXCLUDED.session_epoch
+                    """,
+                    (
+                        account.account_id,
+                        account.email,
+                        account.password_hash,
+                        account.tenant_id,
+                        account.role.value,
+                        units_json,
+                        int(account.enabled),
+                        account.session_epoch,
+                    ),
+                )
+                raw.commit()
+            except IntegrityError as exc:
+                raw.rollback()
+                raise ValueError("email is already assigned to another account") from exc
 
 
-class PostgresWebSessionRepository(WebSessionRepository):
+class PostgresWebSessionRepository:
     def __init__(self, database: PostgresFiscalDatabase) -> None:
         self._database = database
 
@@ -606,7 +633,7 @@ class PostgresWebSessionRepository(WebSessionRepository):
             raw.commit()
 
 
-class PostgresPasswordResetRepository(PasswordResetRepository):
+class PostgresPasswordResetRepository:
     def __init__(self, database: PostgresFiscalDatabase) -> None:
         self._database = database
 
@@ -671,12 +698,7 @@ class PostgresPasswordResetRepository(PasswordResetRepository):
 def production_database_from_env(
     environ: Iterable[tuple[str, str]] | None = None,
 ) -> PostgresFiscalDatabase:
-    """Build the production database from environment without embedding credentials.
-
-    ``NFCORE_PERSISTENCE_BACKEND`` must explicitly be ``postgres`` and
-    ``NFCORE_DATABASE_URL`` must contain the runtime DSN.  This fail-closed factory
-    prevents an accidental production fallback to SQLite.
-    """
+    """Build production persistence from environment, failing closed on SQLite."""
 
     values = dict(os.environ.items() if environ is None else environ)
     backend = values.get("NFCORE_PERSISTENCE_BACKEND", "").strip().casefold()
