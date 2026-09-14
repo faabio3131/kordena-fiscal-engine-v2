@@ -58,11 +58,15 @@ O CI temporário de certificação da V2-18.10 foi elevado para executar, além 
 - **Bandit** sobre `src/` como SAST Python;
 - **pip-audit** sobre o conjunto explícito de dependências de runtime (`cryptography`, `lxml`, `cffi`, `pycparser`).
 
+O primeiro full scan do Bandit, sem `# nosec`, encontrou 0 High, 3 Medium e 14 Low. A análise e classificação completa estão em `docs/V2_18_10_SAST_TRIAGE.md`. Os três Medium B608 foram demonstrados como false positives de SELECTs cujas únicas interpolações são listas de colunas constantes do próprio módulo; todos os valores de runtime continuam ligados por `?` e isso agora possui regressão estrutural dedicada em `tests/product/test_sast_triage.py`.
+
+O gate final permanece bloqueante para qualquer **Medium/High diferente do B608 documentado**. Findings baixos continuam documentados, e invariantes de runtime relevantes estão sendo convertidos de `assert` para validação explícita fail-closed quando aplicável.
+
 Essas ferramentas são instaladas somente no runner do gate temporário. Elas não entram como dependência de runtime do produto e o workflow auxiliar será neutralizado após o fechamento da V2-18.
 
 ## Classificação
 
-Um achado real de Bandit, pip-audit, Ruff, Mypy ou Pytest é vermelho e deve ser corrigido antes do avanço. Nenhum finding pode ser suprimido apenas para obter verde.
+Um achado real de Bandit, pip-audit, Ruff, Mypy ou Pytest é vermelho e deve ser corrigido antes do avanço. Nenhum finding pode ser suprimido apenas para obter verde. False positives aceitos exigem evidência técnica e regressão específica.
 
 ## Limites
 
