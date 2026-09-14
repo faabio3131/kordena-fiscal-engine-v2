@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -63,6 +64,22 @@ def test_rotation_keeps_versions_explicit_and_latest_moves_forward() -> None:
         assert latest.reveal() == b"second-version"
     assert v1.version == 1
     assert v2.version == 2
+
+
+def test_concurrent_rotation_and_resolution_remain_version_safe() -> None:
+    backend = InMemorySecretBackend()
+
+    def rotate(index: int) -> SecretReference:
+        return backend.put(reference_id=REF, scope=SCOPE, value=f"value-{index}".encode())
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        references = list(executor.map(rotate, range(1, 17)))
+
+    versions = sorted(reference.version for reference in references if reference.version is not None)
+    assert versions == list(range(1, 17))
+    resolver = _resolver(backend, [])
+    with resolver.resolve(SecretReference(REF), scope=SCOPE) as latest:
+        assert latest.reveal().startswith(b"value-")
 
 
 def test_tenant_unit_and_purpose_are_authority_not_browser_metadata() -> None:
