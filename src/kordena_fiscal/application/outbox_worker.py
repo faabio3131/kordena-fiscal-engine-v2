@@ -13,6 +13,7 @@ from kordena_fiscal.contingency import (
     OutboxStateError,
 )
 from kordena_fiscal.domain import FiscalValidationError
+from kordena_fiscal.events.delivery_audit import DeliveryAuditError
 from kordena_fiscal.persistence.ports import FiscalUnitOfWorkFactory
 
 
@@ -82,13 +83,21 @@ class DurableFiscalOutboxWorker:
                 limit=limit,
                 lease_duration=lease_duration,
             )
-            for entry in claimed:
-                uow.delivery_audit.expire_prior_attempts(
-                    entry.entry_id,
-                    before_attempt=entry.attempt_count,
-                    expired_at=now,
-                )
-                uow.delivery_audit.start(entry, started_at=now)
+            try:
+                for entry in claimed:
+                    uow.delivery_audit.expire_prior_attempts(
+                        entry.entry_id,
+                        before_attempt=entry.attempt_count,
+                        expired_at=now,
+                    )
+                    uow.delivery_audit.start(entry, started_at=now)
+            except DeliveryAuditError:
+                # A competing PostgreSQL transaction may have selected the same due row
+                # before either transaction committed its lease. The delivery-attempt
+                # primary key is the durable claim fence: the loser rolls back its entire
+                # claim transaction and performs no provider I/O.
+                uow.rollback()
+                return ()
             uow.commit()
             return claimed
 
