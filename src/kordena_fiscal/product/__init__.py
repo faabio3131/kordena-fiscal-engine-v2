@@ -17,6 +17,20 @@ from .onboarding import (
     SelfServiceOnboardingError,
 )
 from .platform_configuration import PlatformExternalConfiguration
+from .pricing import (
+    AddOnDefinition,
+    BillingCadence,
+    CommercialPricingConfiguration,
+    CommercialPricingError,
+    CommercialPricingRegistry,
+    DiscountKind,
+    PackageDefinition,
+    PlanDefinition,
+    PriceDefinition,
+    PromotionDefinition,
+    ResolvedPrice,
+    TenantPriceOverride,
+)
 from .tenant_configuration import (
     CommercialGatewayConfiguration,
     CommercialOfferConfiguration,
@@ -32,11 +46,17 @@ from .tenant_configuration import (
 )
 
 __all__ = [
+    "AddOnDefinition",
+    "BillingCadence",
     "CommercialCatalog",
     "CommercialGatewayConfiguration",
     "CommercialModule",
     "CommercialOfferConfiguration",
+    "CommercialPricingConfiguration",
+    "CommercialPricingError",
+    "CommercialPricingRegistry",
     "DEFAULT_COMMERCIAL_CATALOG",
+    "DiscountKind",
     "DocumentKind",
     "EditionBlueprint",
     "EntitlementDefinition",
@@ -47,13 +67,19 @@ __all__ = [
     "ONBOARDING_SEQUENCE",
     "OnboardingEvidence",
     "OnboardingStep",
+    "PackageDefinition",
+    "PlanDefinition",
     "PlatformExternalConfiguration",
+    "PriceDefinition",
     "PricingMode",
     "ProductIdentity",
+    "PromotionDefinition",
+    "ResolvedPrice",
     "SelfServiceOnboarding",
     "SelfServiceOnboardingCheckpoint",
     "SelfServiceOnboardingError",
     "TenantConfigurationError",
     "TenantConfigurationRegistry",
     "TenantExternalConfiguration",
+    "TenantPriceOverride",
 ]

@@ -1,0 +1,94 @@
+{
+  "configuration_id": "fm-fiscal-commercial-example",
+  "version": 1,
+  "prices": [
+    {
+      "price_id": "foundation-monthly-example",
+      "currency": "BRL",
+      "cadence": "monthly",
+      "base_amount": "99.90",
+      "per_document_amount": "0.20",
+      "setup_amount": "0",
+      "external_price_reference": "gateway://replace-with-real-price-id",
+      "enabled": true
+    },
+    {
+      "price_id": "foundation-annual-example",
+      "currency": "BRL",
+      "cadence": "annual",
+      "base_amount": "999.00",
+      "enabled": true
+    },
+    {
+      "price_id": "launch-package-example",
+      "currency": "BRL",
+      "cadence": "monthly",
+      "base_amount": "149.90",
+      "enabled": true
+    },
+    {
+      "price_id": "priority-support-example",
+      "currency": "BRL",
+      "cadence": "monthly",
+      "base_amount": "49.90",
+      "enabled": true
+    }
+  ],
+  "plans": [
+    {
+      "plan_id": "foundation-example",
+      "display_name": "Foundation Example",
+      "edition_id": "foundation",
+      "price_ids": [
+        "foundation-monthly-example",
+        "foundation-annual-example"
+      ],
+      "trial_days": 14,
+      "tags": ["example", "public"],
+      "enabled": true
+    }
+  ],
+  "add_ons": [
+    {
+      "add_on_id": "priority-support-example",
+      "display_name": "Priority Support Example",
+      "price_ids": ["priority-support-example"],
+      "entitlement_ids": ["support.premium"],
+      "enabled": true
+    }
+  ],
+  "packages": [
+    {
+      "package_id": "launch-example",
+      "display_name": "Launch Package Example",
+      "plan_id": "foundation-example",
+      "add_on_ids": ["priority-support-example"],
+      "price_ids": ["launch-package-example"],
+      "enabled": true
+    }
+  ],
+  "promotions": [
+    {
+      "promotion_id": "launch-20-example",
+      "display_name": "Launch 20% Example",
+      "kind": "percentage",
+      "value": "20",
+      "eligible_price_ids": ["foundation-monthly-example"],
+      "starts_at": "2026-09-01T00:00:00+00:00",
+      "ends_at": "2026-10-01T00:00:00+00:00",
+      "coupon_code": "EXAMPLE20",
+      "stackable": false,
+      "enabled": true
+    }
+  ],
+  "tenant_overrides": [
+    {
+      "override_id": "negotiated-example",
+      "tenant_id": "tenant-example",
+      "price_id": "foundation-monthly-example",
+      "base_amount": "79.90",
+      "contract_reference": "contract://example-only",
+      "enabled": true
+    }
+  ]
+}
