@@ -11,7 +11,7 @@ requires-python = ">=3.11"
 license = {text = "Proprietary-compatible public development; license TBD before release"}
 authors = [{name = "FM Tecnologia"}]
 dependencies = [
-  "cryptography>=44,<48",
+  "cryptography>=50,<51",
   "lxml>=5.3,<7",
 ]
 
