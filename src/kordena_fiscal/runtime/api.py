@@ -15,15 +15,20 @@ class RuntimeApi:
     def __init__(self, settings: RuntimeSettings) -> None:
         self.settings = settings
         self.database: PostgresFiscalDatabase | None = None
+        self._database_boot_error = False
         if settings.persistence_backend == "postgres":
             assert settings.database_url is not None
-            self.database = PostgresFiscalDatabase(settings.database_url)
-            self.database.initialize()
+            try:
+                database = PostgresFiscalDatabase(settings.database_url)
+                database.initialize()
+                self.database = database
+            except Exception:
+                self._database_boot_error = True
 
     def ready(self) -> tuple[bool, str]:
         if self.settings.persistence_backend == "postgres":
-            if self.database is None:
-                return False, "database_not_initialized"
+            if self._database_boot_error or self.database is None:
+                return False, "database_unavailable"
             try:
                 with self.database.connection() as connection:
                     connection.execute("SELECT 1").fetchone()
