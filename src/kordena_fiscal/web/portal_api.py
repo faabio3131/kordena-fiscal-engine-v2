@@ -1,8 +1,8 @@
 """Session-authorized portal API for the FM NFCORE web control center.
 
-The browser never supplies tenant authority.  Human authority is reconstructed from
+The browser never supplies tenant authority. Human authority is reconstructed from
 the opaque session cookie and every operation is delegated to a server-side product
-executor.  No synthetic fallback exists: if the executor is unavailable the portal
+executor. No synthetic fallback exists: if the executor is unavailable the portal
 fails closed with 503.
 """
 
@@ -100,6 +100,16 @@ _SECRET_KEYS = {
     "csc",
 }
 
+_BROWSER_AUTHORITY_FIELDS = {
+    "tenant_id",
+    "account_id",
+    "role",
+    "permissions",
+    "authority",
+    "session_epoch",
+    "host_namespace",
+}
+
 
 def _safe_payload(value: object, *, path: str = "payload") -> None:
     """Fail closed if a portal projection attempts to expose secret material."""
@@ -119,6 +129,26 @@ def _safe_payload(value: object, *, path: str = "payload") -> None:
     elif isinstance(value, (list, tuple)):
         for index, nested in enumerate(value):
             _safe_payload(nested, path=f"{path}[{index}]")
+
+
+def _reject_browser_authority(value: object) -> None:
+    """Reject mass-assignment attempts for server-owned authority fields."""
+
+    if isinstance(value, Mapping):
+        for raw_key, nested in value.items():
+            key = str(raw_key).strip().casefold()
+            if key in _BROWSER_AUTHORITY_FIELDS:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail={
+                        "code": "BROWSER_AUTHORITY_REJECTED",
+                        "message": "Authority fields are derived from the authenticated session",
+                    },
+                )
+            _reject_browser_authority(nested)
+    elif isinstance(value, (list, tuple)):
+        for nested in value:
+            _reject_browser_authority(nested)
 
 
 def _authenticated(
@@ -243,6 +273,7 @@ def create_portal_router(
                 detail={"code": "UNKNOWN_PORTAL_OPERATION", "message": "Unknown portal operation"},
             )
         auth = authority(request)
+        _reject_browser_authority(payload)
         unit_id = payload.get("unit_id")
         if unit_id is not None and not isinstance(unit_id, str):
             raise HTTPException(
