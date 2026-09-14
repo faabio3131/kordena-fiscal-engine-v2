@@ -2,9 +2,6 @@ name: FM Fiscal Core V2 CI
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - feat/fm-nfcore-v1-brand-kit
 
 permissions:
   contents: read
