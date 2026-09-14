@@ -11,7 +11,23 @@
 </head>
 <body>
   <a class="skip-link" href="#main">Pular para o conteúdo</a>
-  <div class="shell">
+
+  <section id="login-view" class="login-view" aria-labelledby="login-title" hidden>
+    <div class="login-card">
+      <img class="brand-mark" src="assets/fm-nfcore-mark.svg" alt="" aria-hidden="true">
+      <p class="eyebrow">FM NFCORE · Infrastructure Mission Control</p>
+      <h1 id="login-title">Acessar Control Center</h1>
+      <p>Entre com sua conta. Tenant, permissões e unidades são definidos exclusivamente pela sessão autenticada.</p>
+      <form id="login-form">
+        <label>E-mail<input id="login-email" name="email" type="email" autocomplete="username" required></label>
+        <label>Senha<input id="login-password" name="password" type="password" autocomplete="current-password" required></label>
+        <button class="primary" type="submit">Entrar</button>
+        <p id="login-error" class="form-error" role="alert" aria-live="polite"></p>
+      </form>
+    </div>
+  </section>
+
+  <div id="app-shell" class="shell" hidden>
     <aside class="sidebar" aria-label="Navegação principal">
       <div class="brand-lockup">
         <img class="brand-mark" src="assets/fm-nfcore-mark.svg" alt="" aria-hidden="true">
@@ -21,13 +37,11 @@
         </div>
         <span class="version-pill">V1.0</span>
       </div>
-
       <nav id="nav" aria-label="Áreas do produto"></nav>
-
       <div class="sidebar-foot">
-        <div class="platform-health">
+        <div class="platform-health" id="runtime-health">
           <span class="health-dot" aria-hidden="true"></span>
-          <div><strong>Core certificado</strong><small>Fail-closed por padrão</small></div>
+          <div><strong>Runtime governado</strong><small id="runtime-state">Verificando...</small></div>
         </div>
         <p>FM Tecnologia</p>
       </div>
@@ -40,12 +54,8 @@
           <h1 id="view-title">Visão geral</h1>
         </div>
         <div class="top-actions">
-          <button class="environment-control" type="button" id="environment-button" aria-haspopup="dialog">
-            <span class="environment-dot" aria-hidden="true"></span>
-            Homologação
-          </button>
-          <button class="ghost" type="button" id="docs-action">Documentação</button>
-          <button class="primary" type="button" id="new-action">Nova configuração</button>
+          <span class="environment-control" id="authority-context">Sessão autenticada</span>
+          <button class="ghost" type="button" id="logout-action">Sair</button>
         </div>
       </header>
 
@@ -56,9 +66,7 @@
           <p>Emissão governada de NF-e, NFC-e e NFS-e para SaaS, ERPs e plataformas digitais, com isolamento, idempotência, reconciliação e auditabilidade desde a origem.</p>
         </div>
         <div class="banner-assurance" aria-label="Princípios da plataforma">
-          <span>API versionada</span>
-          <span>Zero-code onboarding</span>
-          <span>Evidence-based readiness</span>
+          <span>API versionada</span><span>Autoridade da sessão</span><span>Evidence-based readiness</span>
         </div>
       </section>
 
@@ -69,35 +77,37 @@
         <span><strong>SCALE</strong> Integração segura</span>
       </section>
 
-      <section class="metrics" aria-label="Capacidades principais da V1">
-        <article class="metric"><span>Documentos V1</span><strong>3</strong><small>NF-e · NFC-e · NFS-e</small></article>
-        <article class="metric"><span>Governança</span><strong>Fail-closed</strong><small>Capability + readiness</small></article>
-        <article class="metric"><span>Onboarding</span><strong>Zero-code</strong><small>Tenant e unidade configuráveis</small></article>
-        <article class="metric"><span>Rastreabilidade</span><strong>End-to-end</strong><small>Idempotência · audit · archive</small></article>
-      </section>
-
-      <section class="assurance-strip" role="status" aria-live="polite">
-        <span class="assurance-icon" aria-hidden="true">✓</span>
-        <div><strong>Produção protegida por design.</strong> Credenciais, homologação oficial e ativação produtiva permanecem gates externos explícitos; configuração nunca vira aprovação automaticamente.</div>
+      <section id="critical-state" class="assurance-strip" role="status" aria-live="polite">
+        <span class="assurance-icon" aria-hidden="true">!</span>
+        <div><strong id="critical-state-title">Carregando readiness...</strong> <span id="critical-state-copy">A interface nunca promove produção por conta própria.</span></div>
       </section>
 
       <section class="workspace" id="workspace" aria-live="polite"></section>
 
       <footer class="product-footer">
         <span>FM NFCORE V1.0 · FM Tecnologia</span>
-        <span>Dados exibidos nesta superfície são sintéticos e demonstrativos.</span>
+        <span>Dados operacionais carregados da API autenticada; nenhuma autoridade é derivada do navegador.</span>
       </footer>
     </main>
   </div>
 
-  <dialog id="confirm-dialog" aria-labelledby="dialog-title">
-    <form method="dialog">
-      <p class="eyebrow">Governança</p>
-      <h2 id="dialog-title">Confirmar operação</h2>
-      <p>Nenhuma ação desta superfície ativa produção. Operações críticas exigem escopo válido, capability, readiness e aprovação aplicável. Esta superfície demonstrativa não executa efeitos fiscais reais.</p>
+  <dialog id="operation-dialog" aria-labelledby="dialog-title">
+    <form id="operation-form" method="dialog">
+      <p class="eyebrow">Operação fiscal governada</p>
+      <h2 id="dialog-title">Executar operação</h2>
+      <label>Operação<select id="operation-id" name="operation">
+        <option value="issueFiscalDocument">Emitir documento</option>
+        <option value="queryFiscalDocument">Consultar documento</option>
+        <option value="cancelFiscalDocument">Cancelar documento</option>
+        <option value="inutilizeFiscalRange">Inutilizar faixa</option>
+        <option value="reconcileFiscalOperation">Reconciliar</option>
+      </select></label>
+      <label>Unidade<input id="operation-unit" name="unit_id" required></label>
+      <label>Payload JSON<textarea id="operation-payload" rows="8" spellcheck="false">{}</textarea></label>
+      <p id="operation-error" class="form-error" role="alert"></p>
       <div class="dialog-actions">
-        <button value="cancel" class="ghost">Cancelar</button>
-        <button value="confirm" class="danger">Confirmar referência</button>
+        <button type="button" class="ghost" id="operation-cancel">Cancelar</button>
+        <button type="submit" class="primary">Executar</button>
       </div>
     </form>
   </dialog>
