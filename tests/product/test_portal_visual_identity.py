@@ -12,19 +12,23 @@ def test_v1_commercial_identity_is_applied() -> None:
     html = read("index.html")
     css = read("styles.css")
 
-    assert "FM Fiscal V1.0" in html
+    assert "FM NFCORE V1.0" in html
     assert "Infraestrutura fiscal. Sob controle." in html
-    assert "Commercial Launch Edition · V1.0" in html
-    assert "--brand-primary: #2e6ae6" in css
-    assert "--brand-cyan: #5ee8ff" in css
+    assert "FM NFCORE · Commercial Launch Edition · V1.0" in html
+    assert "--brand-primary: #2563ff" in css
+    assert "--brand-cyan: #00e5ff" in css
+    assert 'src="assets/fm-nfcore-mark.svg"' in html
+    assert 'href="assets/favicon.svg"' in html
 
 
 def test_brand_color_is_not_operational_success_color() -> None:
     css = read("styles.css")
 
-    assert "--brand-primary: #2e6ae6" in css
-    assert "--success: #34d399" in css
+    assert "--brand-primary: #2563ff" in css
+    assert "--success: #22c55e" in css
     assert "background: var(--success)" in css
+    assert "button.primary" in css
+    assert "background: linear-gradient(135deg, #2563ff, #174bd6)" in css
 
 
 def test_standalone_surface_does_not_expose_internal_product_names() -> None:
@@ -32,6 +36,16 @@ def test_standalone_surface_does_not_expose_internal_product_names() -> None:
 
     for internal_name in ("Kordena", "Iron Fit", "Vendedor IA", "CampaIA"):
         assert internal_name not in app
+
+
+def test_commercial_surface_uses_nfcore_name_only() -> None:
+    html = read("index.html")
+    app = read("app.js")
+
+    assert "FM Fiscal V1.0" not in html
+    assert "FM Fiscal V1.0" not in app
+    assert "FM NFCORE" in html
+    assert "FM NFCORE" in app
 
 
 def test_commercial_surface_does_not_claim_internal_release_language() -> None:
