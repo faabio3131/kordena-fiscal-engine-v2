@@ -9,9 +9,12 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Body, HTTPException, Request, Response, status
 
 from kordena_fiscal.security.human_identity import (
+    AuthenticatedHuman,
     CsrfValidationError,
+    HumanAccount,
     HumanAuthenticationError,
     HumanIdentityService,
+    HumanRateLimitError,
 )
 
 SESSION_COOKIE = "nfcore_session"
@@ -19,7 +22,7 @@ CSRF_COOKIE = "nfcore_csrf"
 CSRF_HEADER = "X-CSRF-Token"
 
 
-def _account_payload(account: Any) -> dict[str, Any]:
+def _account_payload(account: HumanAccount) -> dict[str, Any]:
     return {
         "account_id": account.account_id,
         "email": account.email,
@@ -40,7 +43,7 @@ def create_human_auth_router(
     now_provider = now or (lambda: datetime.now(UTC))
     router = APIRouter(prefix="/v1/auth", tags=["human-auth"])
 
-    def authenticated(request: Request):
+    def authenticated(request: Request) -> AuthenticatedHuman:
         token = request.cookies.get(SESSION_COOKIE, "")
         if not token:
             raise HTTPException(
@@ -55,7 +58,7 @@ def create_human_auth_router(
                 detail={"code": "INVALID_SESSION", "message": "Web session is not usable"},
             ) from exc
 
-    def csrf_authenticated(request: Request):
+    def csrf_authenticated(request: Request) -> AuthenticatedHuman:
         auth = authenticated(request)
         header_token = request.headers.get(CSRF_HEADER, "")
         cookie_token = request.cookies.get(CSRF_COOKIE, "")
@@ -83,10 +86,18 @@ def create_human_auth_router(
         if not isinstance(email, str) or not isinstance(password, str):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail={"code": "INVALID_LOGIN_PAYLOAD", "message": "Email and password are required"},
+                detail={
+                    "code": "INVALID_LOGIN_PAYLOAD",
+                    "message": "Email and password are required",
+                },
             )
         try:
             issued = identity.login(email=email, password=password, now=now_provider())
+        except HumanRateLimitError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail={"code": "LOGIN_RATE_LIMITED", "message": "Try again later"},
+            ) from exc
         except (HumanAuthenticationError, ValueError) as exc:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -129,8 +140,20 @@ def create_human_auth_router(
     async def logout(request: Request, response: Response) -> Response:
         auth = csrf_authenticated(request)
         identity.logout(auth)
-        response.delete_cookie(SESSION_COOKIE, path="/", secure=True, httponly=True, samesite="lax")
-        response.delete_cookie(CSRF_COOKIE, path="/", secure=True, httponly=False, samesite="lax")
+        response.delete_cookie(
+            SESSION_COOKIE,
+            path="/",
+            secure=True,
+            httponly=True,
+            samesite="lax",
+        )
+        response.delete_cookie(
+            CSRF_COOKIE,
+            path="/",
+            secure=True,
+            httponly=False,
+            samesite="lax",
+        )
         response.status_code = status.HTTP_204_NO_CONTENT
         return response
 
