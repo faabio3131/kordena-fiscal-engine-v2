@@ -75,7 +75,9 @@ def test_concurrent_rotation_and_resolution_remain_version_safe() -> None:
     with ThreadPoolExecutor(max_workers=8) as executor:
         references = list(executor.map(rotate, range(1, 17)))
 
-    versions = sorted(reference.version for reference in references if reference.version is not None)
+    versions = sorted(
+        reference.version for reference in references if reference.version is not None
+    )
     assert versions == list(range(1, 17))
     resolver = _resolver(backend, [])
     with resolver.resolve(SecretReference(REF), scope=SCOPE) as latest:
