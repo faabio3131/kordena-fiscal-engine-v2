@@ -3,59 +3,98 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="FM Fiscal premium operations portal reference surface">
-  <title>FM Fiscal — Control Center</title>
+  <meta name="description" content="FM Fiscal V1.0 — infraestrutura fiscal governada para SaaS, ERPs e plataformas digitais.">
+  <meta name="theme-color" content="#07101d">
+  <title>FM Fiscal V1.0 — Control Center</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <a class="skip-link" href="#main">Pular para o conteúdo</a>
   <div class="shell">
     <aside class="sidebar" aria-label="Navegação principal">
-      <div class="brand">
-        <span class="brand-mark" aria-hidden="true">FM</span>
-        <div><strong>FM Fiscal</strong><small>Control Center</small></div>
+      <div class="brand-lockup">
+        <span class="brand-symbol" aria-hidden="true">
+          <span class="brand-rail rail-a"></span>
+          <span class="brand-rail rail-b"></span>
+          <span class="brand-rail rail-c"></span>
+        </span>
+        <div class="brand-copy">
+          <strong>FM Fiscal</strong>
+          <small>Fiscal Infrastructure</small>
+        </div>
+        <span class="version-pill">V1.0</span>
       </div>
-      <nav id="nav"></nav>
+
+      <nav id="nav" aria-label="Áreas do produto"></nav>
+
       <div class="sidebar-foot">
-        <span class="health-dot" aria-hidden="true"></span>
-        <span>Ambiente de referência</span>
+        <div class="platform-health">
+          <span class="health-dot" aria-hidden="true"></span>
+          <div><strong>Core certificado</strong><small>Fail-closed por padrão</small></div>
+        </div>
+        <p>FM Tecnologia</p>
       </div>
     </aside>
 
     <main id="main" tabindex="-1">
       <header class="topbar">
         <div>
-          <p class="eyebrow">FM Tecnologia · Produto independente</p>
+          <p class="eyebrow">FM Tecnologia · Fiscal Infrastructure</p>
           <h1 id="view-title">Visão geral</h1>
         </div>
         <div class="top-actions">
-          <button class="ghost" type="button" id="environment-button" aria-haspopup="dialog">Homologação</button>
+          <button class="environment-control" type="button" id="environment-button" aria-haspopup="dialog">
+            <span class="environment-dot" aria-hidden="true"></span>
+            Homologação
+          </button>
+          <button class="ghost" type="button" id="docs-action">Documentação</button>
           <button class="primary" type="button" id="new-action">Nova configuração</button>
         </div>
       </header>
 
-      <section class="notice" role="status" aria-live="polite">
-        <strong>Release Candidate interno.</strong>
-        Nenhuma ação desta superfície ativa produção, revela segredos ou concede readiness fiscal.
+      <section class="product-banner" aria-labelledby="brand-promise">
+        <div>
+          <span class="banner-kicker">Commercial Launch Edition · V1.0</span>
+          <h2 id="brand-promise">Infraestrutura fiscal. Sob controle.</h2>
+          <p>Emissão governada de NF-e, NFC-e e NFS-e para SaaS, ERPs e plataformas digitais, com isolamento, idempotência, reconciliação e auditabilidade desde a origem.</p>
+        </div>
+        <div class="banner-assurance" aria-label="Princípios da plataforma">
+          <span>API versionada</span>
+          <span>Zero-code onboarding</span>
+          <span>Evidence-based readiness</span>
+        </div>
       </section>
 
-      <section class="metrics" aria-label="Indicadores principais">
-        <article class="metric"><span>Readiness interno</span><strong>Verde</strong><small>Gates internos certificados</small></article>
-        <article class="metric"><span>Filas críticas</span><strong>0</strong><small>Sem backlog sintético</small></article>
-        <article class="metric"><span>Integrações</span><strong>4</strong><small>Estados governados</small></article>
-        <article class="metric"><span>Ambiente</span><strong>HOMOLOG</strong><small>Produção não habilitada</small></article>
+      <section class="metrics" aria-label="Capacidades principais da V1">
+        <article class="metric"><span>Documentos V1</span><strong>3</strong><small>NF-e · NFC-e · NFS-e</small></article>
+        <article class="metric"><span>Governança</span><strong>Fail-closed</strong><small>Capability + readiness</small></article>
+        <article class="metric"><span>Onboarding</span><strong>Zero-code</strong><small>Tenant e unidade configuráveis</small></article>
+        <article class="metric"><span>Rastreabilidade</span><strong>End-to-end</strong><small>Idempotência · audit · archive</small></article>
+      </section>
+
+      <section class="assurance-strip" role="status" aria-live="polite">
+        <span class="assurance-icon" aria-hidden="true">✓</span>
+        <div><strong>Produção protegida por design.</strong> Credenciais, homologação oficial e ativação produtiva permanecem gates externos explícitos; configuração nunca vira aprovação automaticamente.</div>
       </section>
 
       <section class="workspace" id="workspace" aria-live="polite"></section>
+
+      <footer class="product-footer">
+        <span>FM Fiscal V1.0 · FM Tecnologia</span>
+        <span>Dados exibidos nesta superfície são sintéticos e demonstrativos.</span>
+      </footer>
     </main>
   </div>
 
   <dialog id="confirm-dialog" aria-labelledby="dialog-title">
     <form method="dialog">
-      <p class="eyebrow">Ação crítica</p>
+      <p class="eyebrow">Governança</p>
       <h2 id="dialog-title">Confirmar operação</h2>
-      <p>Esta referência nunca executa efeitos fiscais reais. Em produto, ações críticas exigem confirmação explícita e authority gates.</p>
-      <div class="dialog-actions"><button value="cancel" class="ghost">Cancelar</button><button value="confirm" class="danger">Confirmar referência</button></div>
+      <p>Nenhuma ação desta superfície ativa produção. Operações críticas exigem escopo válido, capability, readiness e aprovação aplicável. Esta superfície demonstrativa não executa efeitos fiscais reais.</p>
+      <div class="dialog-actions">
+        <button value="cancel" class="ghost">Cancelar</button>
+        <button value="confirm" class="danger">Confirmar referência</button>
+      </div>
     </form>
   </dialog>
 
