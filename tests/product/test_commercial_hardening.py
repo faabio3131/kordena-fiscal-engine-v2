@@ -7,8 +7,8 @@ from fm_fiscal_sdk import (
     BridgeClient,
     BridgeRequest,
     BridgeResponse,
-    RetryPolicy,
     RetryableTransportError,
+    RetryPolicy,
     verify_webhook_signature,
 )
 from kordena_fiscal.product.billing import (
@@ -142,7 +142,11 @@ def test_critical_operational_runbooks_remain_escalating_and_fail_safe() -> None
 
 
 def test_commercial_surfaces_contain_no_private_key_files_or_material() -> None:
-    roots = [ROOT / "src" / "kordena_fiscal" / "product", ROOT / "src" / "fm_fiscal_sdk", ROOT / "portal"]
+    roots = [
+        ROOT / "src" / "kordena_fiscal" / "product",
+        ROOT / "src" / "fm_fiscal_sdk",
+        ROOT / "portal",
+    ]
     secret_files = [
         path
         for root in roots
