@@ -724,6 +724,6 @@ def test_v2_12_structural_secret_dependency_architecture_and_product_neutrality(
     with (root / "pyproject.toml").open("rb") as stream:
         project = tomllib.load(stream)["project"]
     assert set(project["dependencies"]) == {
-        "cryptography>=44,<48",
+        "cryptography>=50,<51",
         "lxml>=5.3,<7",
     }
