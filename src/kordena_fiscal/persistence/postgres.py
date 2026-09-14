@@ -15,11 +15,11 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from datetime import datetime
 from types import TracebackType
-from typing import Any, Iterator, TypeVar, cast
+from typing import Any, TypeVar, cast
 
 from psycopg import Connection, Cursor, IntegrityError
 from psycopg.errors import UndefinedTable
@@ -318,8 +318,14 @@ _HUMAN_SCHEMA = (
         FOREIGN KEY (account_id) REFERENCES fm_human_accounts(account_id)
     )
     """,
-    "CREATE INDEX IF NOT EXISTS fm_web_sessions_account_idx ON fm_web_sessions (account_id)",
-    "CREATE INDEX IF NOT EXISTS fm_web_sessions_expiry_idx ON fm_web_sessions (expires_at, revoked)",
+    (
+        "CREATE INDEX IF NOT EXISTS fm_web_sessions_account_idx "
+        "ON fm_web_sessions (account_id)"
+    ),
+    (
+        "CREATE INDEX IF NOT EXISTS fm_web_sessions_expiry_idx "
+        "ON fm_web_sessions (expires_at, revoked)"
+    ),
     """
     CREATE TABLE IF NOT EXISTS fm_password_resets (
         reset_id TEXT PRIMARY KEY,
@@ -331,8 +337,14 @@ _HUMAN_SCHEMA = (
         FOREIGN KEY (account_id) REFERENCES fm_human_accounts(account_id)
     )
     """,
-    "CREATE INDEX IF NOT EXISTS fm_password_resets_account_idx ON fm_password_resets (account_id)",
-    "CREATE INDEX IF NOT EXISTS fm_password_resets_expiry_idx ON fm_password_resets (expires_at, used)",
+    (
+        "CREATE INDEX IF NOT EXISTS fm_password_resets_account_idx "
+        "ON fm_password_resets (account_id)"
+    ),
+    (
+        "CREATE INDEX IF NOT EXISTS fm_password_resets_expiry_idx "
+        "ON fm_password_resets (expires_at, used)"
+    ),
 )
 
 
