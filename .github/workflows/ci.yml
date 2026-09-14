@@ -2,6 +2,9 @@ name: FM Fiscal Core V2 CI
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feat/nfcore-web-01-http-runtime
 
 permissions:
   contents: read
