@@ -2,8 +2,8 @@
 
 Data de início: 2026-09-11  
 Repositório: `faabio3131/kordena-fiscal-engine-v2`  
-Status global: **EM EXECUÇÃO CONTROLADA — CONVERGÊNCIA INTERNA V2-17 CERTIFICADA; CUTOVER REAL BLOQUEADO; V2-18 LIBERADA PARA CONSTRUÇÃO INTERNA**  
-Fase atual: **V2-17 — TODO O TRABALHO INTERNO AUTORIZADO V2-17.1..V2-17.5 CONCLUÍDO/CERTIFICADO**
+Status global: **TODO O TRABALHO INTERNO AUTORIZADO V2-00..V2-18.11 CONCLUÍDO; AGUARDANDO AUDITORIA FINAL 0–100% E GATE DO HEAD DOCUMENTAL**  
+Fase atual: **V2-18.11 — RELEASE CANDIDATE TÉCNICO INTERNO**
 
 ## Regra de governança
 
@@ -27,7 +27,17 @@ sem autorização humana específica. Homologação oficial exige evidência ext
 | V2-17.3 | Cutover rehearsal / authority transfer | **CONCLUÍDO/CERTIFICADO SINTÉTICO** | run `34787607567`, 118 source / 675 PASS |
 | V2-17.4 | Consumer integration closure | **CONCLUÍDO COMO REAUDITORIA GOVERNADA** | blockers reais preservados |
 | V2-17.5 | Final convergence readiness | **CONCLUÍDO/CERTIFICADO** | cutover real permanece bloqueado |
-| V2-18 | Produto comercial independente | **AUTORIZADA PARA CONSTRUÇÃO INTERNA** | efeitos produtivos continuam proibidos |
+| V2-18.1 | Product identity + packaging | **CONCLUÍDO/CERTIFICADO** | catálogo configurável / 120 source / 681 PASS |
+| V2-18.2 | Public developer documentation | **CONCLUÍDO/CERTIFICADO** | docs públicas/sintéticas |
+| V2-18.3 | Self-service onboarding | **CONCLUÍDO/CERTIFICADO** | idempotent/checkpoint/fail-closed |
+| V2-18.4 | Plans + entitlements + billing foundation | **CONCLUÍDO/CERTIFICADO** | commercial billing separado da authority fiscal |
+| V2-18.5 | SDKs | **CONCLUÍDO/CERTIFICADO** | Python + TypeScript reference / Bridge público |
+| V2-18.6 | SLA + support + operations | **CONCLUÍDO/CERTIFICADO** | SEV1–SEV4 + runbooks + health |
+| V2-18.7 | LGPD + retention + compliance técnico | **CONCLUÍDO/CERTIFICADO** | `LEGAL_VALIDATION_REQUIRED` preservado |
+| V2-18.8 | Premium Product Experience | **CONCLUÍDO/CERTIFICADO** | run `34791085676`, 126 source / 724 PASS |
+| V2-18.9 | Commercial End-to-End | **CONCLUÍDO/CERTIFICADO** | run `34791237542`, 126 source / 730 PASS |
+| V2-18.10 | Security + Performance + DR | **CONCLUÍDO/CERTIFICADO** | run `34791936752`, Bandit + pip-audit + 741 PASS |
+| V2-18.11 | Release Candidate Closure | **CONCLUÍDO INTERNAMENTE** | `2.18.0-rc.1` / aguardando gate documental final |
 
 ## V2-15 — estado preservado
 
@@ -39,12 +49,12 @@ Documento: `docs/V2_15_CLOSURE_CERTIFICATION.md`.
 
 ## V2-16 — estado preservado
 
-Todo o trabalho interno executável B1-B7 foi certificado. Estado dos consumidores:
+Todo o trabalho interno executável B1-B7 foi certificado. Revalidação ao vivo de 2026-09-13/14:
 
-- Kordena: bloqueado por Web Premium/FISC-20;
-- Iron Fit: integração interna certificada;
-- Vendedor IA: handoff certificado, recipient/classificação NF-e/NFC-e pendentes;
-- CampaIA: own-billing boundary certificada, authority real de billing/payment pendente.
+- Kordena PR #118: OPEN/DRAFT, HEAD `9ee10a08cf445cc7233cde5b70564f8feade315c`, situação funcional PARCIAL;
+- Iron Fit PR #48: OPEN/DRAFT, HEAD `2be8321eeb066f0296ba812faab0a098c32f0632`, integração interna certificada;
+- Vendedor IA PR #1: OPEN/DRAFT, HEAD `b4b7fb05236c481d5626de5386864ae6f5227418`, handoff certificado e recipient/classificação NF-e/NFC-e pendentes;
+- CampaIA PR #1: OPEN/DRAFT, HEAD `bdebbc3558ff8b07c1a38e0cb728be0dc3635c4b`, adapter certificado e authority real de own billing/payment pendente.
 
 Documento: `docs/V2_16_CLOSURE_CERTIFICATION.md`.
 
@@ -52,7 +62,7 @@ Documento: `docs/V2_16_CLOSURE_CERTIFICATION.md`.
 
 Branch: `v2/convergence-cutover`  
 PR: #19 — OPEN/DRAFT/não mergeada  
-Base: `v2/fm-products-integration@6998d5a4b7370621160e2520bbadabafca86bda0`
+HEAD final certificado: `cfd58c3249a5601dc62088eee7327dfe02759646`
 
 ### Referência legado correta
 
@@ -64,78 +74,64 @@ SHA: `b336def47ad4f5188307102203f4e04b98406014`
 
 O `main` atual do legado não é baseline funcional de convergência.
 
-### V2-17.1
+### Resultado
 
-Readiness matrix fail-closed + `SingleFiscalAuthorityPlan` para sequence, idempotency,
-lifecycle, archive, reconciliation, provider state, binding, capability, readiness, audit e
-events. Gate: 116 source / 651 PASS.
+V2-17.1..V2-17.5 estão internamente certificadas: readiness/single authority, migration + rollback rehearsal, cutover/authority-transfer rehearsal, consumer reauditoria e final readiness.
 
-### V2-17.2
+Gate final V2-17:
 
-Migration contract/rehearsal sintético com inventário de 20 categorias, dry-run,
-idempotência, restart, conflito, rollback, reconciliation e sequence floor. Gate: 117 source /
-660 PASS.
+- run `34787708874`;
+- job `103806110253`;
+- Install/Ruff/Mypy PASS;
+- **118 source files**;
+- Pytest **675 PASS**.
 
-### V2-17.3
+Bloqueios obrigatórios para cutover real continuam:
 
-`kordena_fiscal.convergence.cutover_rehearsal` adiciona máquina de estados governada:
-PRECHECK → freeze → snapshot → migration → reconciliation → authority transfer simulada →
-post-validation → closure, com abort/rollback.
-
-Barreiras de código rejeitam migração produtiva e ativação real de autoridade.
-
-Gate certificado:
-
-- run `34787607567`;
-- job `103805827149`;
-- Install PASS;
-- Ruff PASS;
-- Mypy PASS — **118 source files**;
-- Pytest **675 PASS em 7.67s**.
-
-Documento: `docs/V2_17_3_CUTOVER_REHEARSAL.md`.
-
-### V2-17.4
-
-Reauditoria ao vivo dos consumidores em 2026-09-13:
-
-- Kordena PR #118: `BLOCKED_PRODUCT`, HEAD `9ee10a08...`, situação PARCIAL;
-- Iron PR #48: `READY_INTERNAL`, HEAD `2be8321e...`;
-- Vendedor IA PR #1: `BLOCKED_PRODUCT` parcial, HEAD `b4b7fb05...`;
-- CampaIA PR #1: `BLOCKED_PRODUCT` parcial, HEAD `bdebbc35...`.
-
-Documento: `docs/V2_17_4_CONSUMER_INTEGRATION_CLOSURE.md`.
-
-### V2-17.5
-
-A matriz final confirma `READY_INTERNAL` para equivalência, multiproduto, regressão,
-migration/rollback rehearsal, freeze protocol, state reconciliation, archive, sequence,
-idempotency, provider-state boundaries e observabilidade.
-
-Bloqueios obrigatórios para cutover real:
-
-1. Kordena/FISC-20;
+1. Kordena/FISC-20 e consumer prerequisites aplicáveis;
 2. inventário de writers reais do ambiente alvo;
 3. evidência/homologação externa aplicável;
 4. provisioning seguro de material real;
-5. autorização humana específica.
+5. snapshot/migração produtiva autorizada;
+6. autorização humana específica.
 
-Documento: `docs/V2_17_FINAL_READINESS_CERTIFICATION.md`.
+## V2-18 — produto comercial independente
 
-## Gate humano de cutover
+Branch: `v2/commercial-independent-product`  
+PR: #22 — OPEN/DRAFT/não mergeada  
+Base: `v2/convergence-cutover@cfd58c3249a5601dc62088eee7327dfe02759646`
 
-A V2-17 está internamente preparada para rehearsal governado, mas **NÃO está autorizada a
-executar cutover real**. Não desligar legado, congelar writer real, migrar banco real, alterar
-DNS/endpoint, usar segredo real ou promover `PRODUCTION_APPROVED`.
+Release Candidate técnico interno:
 
-A ausência desse gate NÃO bloqueia a construção interna da V2-18.
+`FM Fiscal 2.18.0-rc.1`
 
-## Próxima sequência autorizada
+Manifesto: `docs/V2_18_RELEASE_CANDIDATE_MANIFEST.md`  
+Closure: `docs/V2_18_CLOSURE_CERTIFICATION.md`
 
-`V2-18.1 → V2-18.2 → V2-18.3 → V2-18.4 → V2-18.5 → V2-18.6 → V2-18.7 → V2-18.8 → V2-18.9 → V2-18.10 → V2-18.11 → AUDITORIA FINAL 0–100%`
+### Security gate V2-18.10
+
+O dependency audit detectou vulnerabilidades reais em `cryptography 47.0.0`. A faixa foi elevada para `cryptography>=50,<51`, e o gate final instalou `50.0.1`.
+
+Gate final do bloco:
+
+- run `34791936752`;
+- job `103817664298`;
+- Ruff PASS;
+- Mypy PASS — **126 source files**;
+- Bandit Medium/High PASS com triagem B608 documentada/protegida por regressão;
+- pip-audit PASS — **No known vulnerabilities found** no runtime auditado;
+- Pytest **741 PASS em 5.43s**.
+
+## Gate humano de produção/cutover
+
+A V2 está internamente preparada para Release Candidate e rehearsal governado, mas **NÃO está autorizada a executar produção/cutover real**.
+
+Não desligar legado, congelar writer real, migrar banco real, alterar DNS/endpoint, usar segredo real, emitir documento real ou promover `PRODUCTION_APPROVED` sem autorização humana específica e pré-condições reais satisfeitas.
+
+## Sequência restante
+
+`AUDITORIA FINAL 0–100% → GATE FINAL DO HEAD DOCUMENTAL → FECHAR PR CI #23 SEM MERGE → NEUTRALIZAR BRANCH CI → PARAR`
 
 ## Governança preservada
 
-**SEM MERGE. SEM Ready/auto-merge. SEM deploy real. SEM produção real. SEM cutover real. SEM
-migração produtiva. SEM segredo real. SEM homologação externa inventada. SEM promoção indevida
-de `PRODUCTION_APPROVED`.**
+**SEM MERGE. SEM Ready/auto-merge. SEM deploy real. SEM produção real. SEM cutover real. SEM migração produtiva. SEM segredo real. SEM homologação externa inventada. SEM promoção indevida de `PRODUCTION_APPROVED`.**
