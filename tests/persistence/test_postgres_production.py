@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
-from typing import Iterator
 
 import psycopg
 import pytest
@@ -94,9 +94,9 @@ def test_postgres_migrations_are_real_reproducible_and_fail_closed(
     assert database.dsn_redacted == "postgresql://<redacted>"
 
     with pytest.raises(PersistenceStateError, match="backend must be postgres"):
-        production_database_from_env((('NFCORE_PERSISTENCE_BACKEND', 'sqlite'),))
+        production_database_from_env((("NFCORE_PERSISTENCE_BACKEND", "sqlite"),))
     with pytest.raises(PersistenceStateError, match="DATABASE_URL"):
-        production_database_from_env((('NFCORE_PERSISTENCE_BACKEND', 'postgres'),))
+        production_database_from_env((("NFCORE_PERSISTENCE_BACKEND", "postgres"),))
 
 
 def test_postgres_uow_commit_rollback_and_core_state_parity(
