@@ -1,4 +1,4 @@
-name: FM Fiscal Core V2 CI
+name: FM NFCORE V1 CI
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ permissions:
 jobs:
   quality:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:16-alpine
@@ -36,7 +36,7 @@ jobs:
           python-version: "3.11"
           cache: pip
 
-      - name: Install
+      - name: Install Python
         run: python -m pip install -e ".[dev]"
 
       - name: Ruff
@@ -47,3 +47,30 @@ jobs:
 
       - name: Pytest
         run: pytest
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install frontend
+        run: npm install --no-audit --no-fund
+
+      - name: Frontend lint
+        run: npm run lint:frontend
+
+      - name: Frontend typecheck
+        run: npm run typecheck:frontend
+
+      - name: Frontend tests
+        run: npm run test:frontend
+
+      - name: Frontend build
+        run: npm run build:frontend
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E critical
+        run: npm run test:e2e
