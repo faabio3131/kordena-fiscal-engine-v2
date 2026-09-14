@@ -17,6 +17,7 @@ from kordena_fiscal.security import WebhookSecurity
 
 FM_WEBHOOK_SIGNATURE_HEADER = "X-FM-Webhook-Signature"
 FM_WEBHOOK_CORRELATION_HEADER = "X-FM-Correlation-ID"
+FM_WEBHOOK_CAUSATION_HEADER = "X-FM-Causation-ID"
 FM_WEBHOOK_OUTBOX_ENTRY_HEADER = "X-FM-Outbox-Entry-ID"
 FM_WEBHOOK_ATTEMPT_HEADER = "X-FM-Delivery-Attempt"
 
@@ -200,6 +201,7 @@ class SignedWebhookOutboxHandler:
                 ("Content-Type", "application/json"),
                 (FM_WEBHOOK_SIGNATURE_HEADER, signature.header_value),
                 (FM_WEBHOOK_CORRELATION_HEADER, entry.scope.correlation_id),
+                (FM_WEBHOOK_CAUSATION_HEADER, entry.entry_id),
                 (FM_WEBHOOK_OUTBOX_ENTRY_HEADER, entry.entry_id),
                 (FM_WEBHOOK_ATTEMPT_HEADER, str(entry.attempt_count)),
             ),
