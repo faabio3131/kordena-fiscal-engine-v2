@@ -1,0 +1,688 @@
+"""PostgreSQL production persistence for FM NFCORE.
+
+The fiscal domain remains host-neutral.  This module supplies a PostgreSQL-backed
+unit-of-work and durable human identity stores while reusing the already-certified
+repository semantics of the SQLite reference adapters through a deliberately small
+DB-API compatibility boundary.
+
+Only SQL placeholder syntax and driver exceptions are adapted here; fiscal rules,
+idempotency semantics, archive behavior, control-plane rules and commercial
+configuration remain in the certified repository implementations.
+"""
+
+from __future__ import annotations
+
+import os
+import sqlite3
+from collections.abc import Iterable, Sequence
+from contextlib import contextmanager
+from datetime import datetime
+from typing import Any, Iterator, cast
+
+from psycopg import Connection, Cursor, IntegrityError
+from psycopg.rows import tuple_row
+from psycopg_pool import ConnectionPool
+
+from kordena_fiscal.domain import FiscalValidationError
+from kordena_fiscal.security.human_identity import (
+    HumanAccount,
+    HumanAccountRepository,
+    PortalRole,
+    WebSessionRecord,
+    WebSessionRepository,
+)
+from kordena_fiscal.security.human_recovery import (
+    PasswordResetRecord,
+    PasswordResetRepository,
+)
+
+from .ports import PersistenceStateError
+from .sqlite import _MIGRATIONS
+from .sqlite_commercial import SqliteCommercialConfigurationStore
+from .sqlite_control_plane import SqliteControlPlaneStore
+from .sqlite_core import (
+    SqliteBindingRepository,
+    SqliteFiscalSequenceStore,
+    SqliteLifecycleRepository,
+)
+from .sqlite_delivery import SqliteFiscalDeliveryAuditStore, SqliteFiscalOutboxOrderingStore
+from .sqlite_idempotency import SqliteIdempotencyStore
+from .sqlite_inbox import SqliteFiscalInboxStore
+from .sqlite_outbox_archive import SqliteFiscalArchiveStore, SqliteFiscalOutboxStore
+from .sqlite_reconciliation import SqliteReconciliationRepository
+
+
+class _CursorCompat:
+    """Small cursor facade exposing the subset used by certified repositories."""
+
+    def __init__(self, cursor: Cursor[Any]) -> None:
+        self._cursor = cursor
+
+    @property
+    def rowcount(self) -> int:
+        return self._cursor.rowcount
+
+    def fetchone(self) -> tuple[object, ...] | None:
+        row = self._cursor.fetchone()
+        return None if row is None else cast(tuple[object, ...], row)
+
+    def fetchall(self) -> list[tuple[object, ...]]:
+        return [cast(tuple[object, ...], row) for row in self._cursor.fetchall()]
+
+
+class _PostgresCompatConnection:
+    """Translate qmark parameters and integrity errors for reference adapters.
+
+    The existing persistence adapters deliberately contain no SQLite-only business
+    rules.  They depend on ``execute``/``fetch``/``rowcount`` and qmark placeholders.
+    Keeping that contract at one boundary prevents a second implementation of fiscal
+    persistence rules from drifting away from the certified behavior.
+    """
+
+    def __init__(self, connection: Connection[Any]) -> None:
+        self._connection = connection
+
+    @staticmethod
+    def _sql(statement: str) -> str:
+        # Repository SQL does not use question marks inside string literals.  Keep the
+        # translation intentionally narrow and test it against the production schema.
+        return statement.replace("?", "%s")
+
+    def execute(
+        self,
+        statement: str,
+        parameters: Sequence[object] = (),
+    ) -> _CursorCompat:
+        try:
+            cursor = self._connection.execute(self._sql(statement), tuple(parameters))
+        except IntegrityError as exc:
+            # Existing certified adapters translate sqlite3.IntegrityError into their
+            # domain-specific conflict errors.  Preserve that exact semantic boundary.
+            raise sqlite3.IntegrityError(str(exc)) from exc
+        return _CursorCompat(cursor)
+
+    def commit(self) -> None:
+        self._connection.commit()
+
+    def rollback(self) -> None:
+        self._connection.rollback()
+
+
+class PostgresFiscalSequenceStore(SqliteFiscalSequenceStore):
+    """Sequence store with a transaction-scoped advisory lock per fiscal sequence."""
+
+    def reserve_next(self, key: Any, policy: Any) -> Any:
+        # The stable canonical material already identifies host/tenant/unit/env/model/
+        # series.  A transaction-scoped advisory lock serializes only that sequence,
+        # avoiding a global bottleneck while preventing duplicate reservations.
+        material = getattr(key, "canonical_material", None)
+        if not isinstance(material, str) or not material:
+            return super().reserve_next(key, policy)
+        connection = cast(_PostgresCompatConnection, self._connection)
+        connection.execute(
+            "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
+            (material,),
+        )
+        return super().reserve_next(key, policy)
+
+
+class PostgresFiscalUnitOfWork:
+    """One PostgreSQL transaction spanning the complete fiscal persistence surface."""
+
+    def __init__(self, database: PostgresFiscalDatabase) -> None:
+        self._database = database
+        self._pool_context: Any | None = None
+        self._raw_connection: Connection[Any] | None = None
+        self._connection: _PostgresCompatConnection | None = None
+        self._committed = False
+        self._idempotency: SqliteIdempotencyStore | None = None
+        self._sequences: PostgresFiscalSequenceStore | None = None
+        self._inbox: SqliteFiscalInboxStore | None = None
+        self._outbox: SqliteFiscalOutboxStore | None = None
+        self._outbox_ordering: SqliteFiscalOutboxOrderingStore | None = None
+        self._delivery_audit: SqliteFiscalDeliveryAuditStore | None = None
+        self._archive: SqliteFiscalArchiveStore | None = None
+        self._bindings: SqliteBindingRepository | None = None
+        self._lifecycle: SqliteLifecycleRepository | None = None
+        self._reconciliations: SqliteReconciliationRepository | None = None
+        self._control_plane: SqliteControlPlaneStore | None = None
+        self._commercial: SqliteCommercialConfigurationStore | None = None
+
+    def __enter__(self) -> PostgresFiscalUnitOfWork:
+        if self._raw_connection is not None:
+            raise PersistenceStateError("unit of work cannot be entered twice")
+        pool_context = self._database._pool.connection()
+        raw = pool_context.__enter__()
+        raw.execute("BEGIN")
+        compat = _PostgresCompatConnection(raw)
+        sqlite_compat = cast(sqlite3.Connection, compat)
+        self._pool_context = pool_context
+        self._raw_connection = raw
+        self._connection = compat
+        self._committed = False
+        self._idempotency = SqliteIdempotencyStore(sqlite_compat)
+        self._sequences = PostgresFiscalSequenceStore(sqlite_compat)
+        self._inbox = SqliteFiscalInboxStore(sqlite_compat)
+        self._outbox = SqliteFiscalOutboxStore(sqlite_compat)
+        self._outbox_ordering = SqliteFiscalOutboxOrderingStore(sqlite_compat)
+        self._delivery_audit = SqliteFiscalDeliveryAuditStore(sqlite_compat)
+        self._archive = SqliteFiscalArchiveStore(sqlite_compat)
+        self._bindings = SqliteBindingRepository(sqlite_compat)
+        self._lifecycle = SqliteLifecycleRepository(sqlite_compat)
+        self._reconciliations = SqliteReconciliationRepository(sqlite_compat)
+        self._control_plane = SqliteControlPlaneStore(sqlite_compat)
+        self._commercial = SqliteCommercialConfigurationStore(sqlite_compat)
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: object | None,
+    ) -> None:
+        raw = self._raw_connection
+        pool_context = self._pool_context
+        if raw is None or pool_context is None:
+            return
+        try:
+            if exc_type is not None or not self._committed:
+                raw.rollback()
+        finally:
+            self._connection = None
+            self._raw_connection = None
+            self._pool_context = None
+            pool_context.__exit__(exc_type, exc, traceback)
+
+    @staticmethod
+    def _require[T](value: T | None, name: str) -> T:
+        if value is None:
+            raise PersistenceStateError(f"unit of work {name} repository is not active")
+        return value
+
+    @property
+    def idempotency(self) -> SqliteIdempotencyStore:
+        return self._require(self._idempotency, "idempotency")
+
+    @property
+    def sequences(self) -> PostgresFiscalSequenceStore:
+        return self._require(self._sequences, "sequences")
+
+    @property
+    def inbox(self) -> SqliteFiscalInboxStore:
+        return self._require(self._inbox, "inbox")
+
+    @property
+    def outbox(self) -> SqliteFiscalOutboxStore:
+        return self._require(self._outbox, "outbox")
+
+    @property
+    def outbox_ordering(self) -> SqliteFiscalOutboxOrderingStore:
+        return self._require(self._outbox_ordering, "outbox_ordering")
+
+    @property
+    def delivery_audit(self) -> SqliteFiscalDeliveryAuditStore:
+        return self._require(self._delivery_audit, "delivery_audit")
+
+    @property
+    def archive(self) -> SqliteFiscalArchiveStore:
+        return self._require(self._archive, "archive")
+
+    @property
+    def bindings(self) -> SqliteBindingRepository:
+        return self._require(self._bindings, "bindings")
+
+    @property
+    def lifecycle(self) -> SqliteLifecycleRepository:
+        return self._require(self._lifecycle, "lifecycle")
+
+    @property
+    def reconciliations(self) -> SqliteReconciliationRepository:
+        return self._require(self._reconciliations, "reconciliations")
+
+    @property
+    def control_plane(self) -> SqliteControlPlaneStore:
+        return self._require(self._control_plane, "control_plane")
+
+    @property
+    def commercial(self) -> SqliteCommercialConfigurationStore:
+        return self._require(self._commercial, "commercial")
+
+    def commit(self) -> None:
+        if self._raw_connection is None:
+            raise PersistenceStateError("unit of work is not active")
+        self._raw_connection.commit()
+        self._committed = True
+
+    def rollback(self) -> None:
+        if self._raw_connection is None:
+            raise PersistenceStateError("unit of work is not active")
+        self._raw_connection.rollback()
+        self._committed = False
+
+
+_HUMAN_SCHEMA = (
+    """
+    CREATE TABLE IF NOT EXISTS fm_human_accounts (
+        account_id TEXT PRIMARY KEY,
+        email TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        tenant_id TEXT NOT NULL,
+        role TEXT NOT NULL,
+        unit_ids_json TEXT,
+        enabled INTEGER NOT NULL CHECK (enabled IN (0, 1)),
+        session_epoch INTEGER NOT NULL CHECK (session_epoch >= 0)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS fm_human_accounts_tenant_idx ON fm_human_accounts (tenant_id)",
+    """
+    CREATE TABLE IF NOT EXISTS fm_web_sessions (
+        session_id TEXT PRIMARY KEY,
+        account_id TEXT NOT NULL,
+        session_token_sha256 TEXT NOT NULL UNIQUE,
+        csrf_token_sha256 TEXT NOT NULL,
+        session_epoch INTEGER NOT NULL CHECK (session_epoch >= 0),
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        revoked INTEGER NOT NULL CHECK (revoked IN (0, 1)),
+        FOREIGN KEY (account_id) REFERENCES fm_human_accounts(account_id)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS fm_web_sessions_account_idx ON fm_web_sessions (account_id)",
+    "CREATE INDEX IF NOT EXISTS fm_web_sessions_expiry_idx ON fm_web_sessions (expires_at, revoked)",
+    """
+    CREATE TABLE IF NOT EXISTS fm_password_resets (
+        reset_id TEXT PRIMARY KEY,
+        account_id TEXT NOT NULL,
+        token_sha256 TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        used INTEGER NOT NULL CHECK (used IN (0, 1)),
+        FOREIGN KEY (account_id) REFERENCES fm_human_accounts(account_id)
+    )
+    """,
+    "CREATE INDEX IF NOT EXISTS fm_password_resets_account_idx ON fm_password_resets (account_id)",
+    "CREATE INDEX IF NOT EXISTS fm_password_resets_expiry_idx ON fm_password_resets (expires_at, used)",
+)
+
+
+def _translate_ddl(statement: str) -> str:
+    # SQLite's BLOB type is the only type in the certified migrations that needs a
+    # PostgreSQL spelling change.  All constraints/indexes/ALTER statements are ANSI
+    # compatible and are executed one statement at a time.
+    return statement.replace(" BLOB ", " BYTEA ").replace(" BLOB\n", " BYTEA\n")
+
+
+class PostgresFiscalDatabase:
+    """Pooled PostgreSQL database handle with reproducible versioned migrations."""
+
+    HUMAN_MIGRATION_VERSION = 6
+    HUMAN_MIGRATION_NAME = "web03_human_identity_and_sessions"
+
+    def __init__(
+        self,
+        dsn: str,
+        *,
+        min_pool_size: int = 1,
+        max_pool_size: int = 10,
+    ) -> None:
+        normalized = dsn.strip()
+        if not normalized:
+            raise FiscalValidationError("PostgreSQL DSN must not be blank")
+        if not normalized.startswith(("postgresql://", "postgres://")):
+            raise FiscalValidationError("PostgreSQL DSN must use postgres/postgresql scheme")
+        if min_pool_size < 1 or max_pool_size < min_pool_size:
+            raise FiscalValidationError("invalid PostgreSQL pool size")
+        self._dsn = normalized
+        self._pool = ConnectionPool(
+            conninfo=normalized,
+            min_size=min_pool_size,
+            max_size=max_pool_size,
+            kwargs={"row_factory": tuple_row},
+            open=True,
+        )
+
+    @property
+    def dsn_redacted(self) -> str:
+        return "postgresql://<redacted>"
+
+    def close(self) -> None:
+        self._pool.close()
+
+    @contextmanager
+    def connection(self) -> Iterator[_PostgresCompatConnection]:
+        with self._pool.connection() as raw:
+            yield _PostgresCompatConnection(raw)
+
+    def initialize(self) -> tuple[int, ...]:
+        with self._pool.connection() as raw:
+            raw.execute("BEGIN")
+            try:
+                raw.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS fm_schema_migrations (
+                        version INTEGER PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        applied_at TEXT NOT NULL
+                    )
+                    """
+                )
+                # One migrator at a time per database, without serializing runtime UoWs.
+                raw.execute("SELECT pg_advisory_xact_lock(638051840319)")
+                rows = raw.execute(
+                    "SELECT version FROM fm_schema_migrations ORDER BY version"
+                ).fetchall()
+                applied = {int(row[0]) for row in rows}
+                new_versions: list[int] = []
+                for migration in _MIGRATIONS:
+                    if migration.version in applied:
+                        continue
+                    for statement in migration.statements:
+                        raw.execute(_translate_ddl(statement))
+                    raw.execute(
+                        """
+                        INSERT INTO fm_schema_migrations (version, name, applied_at)
+                        VALUES (%s, %s, %s)
+                        """,
+                        (
+                            migration.version,
+                            migration.name,
+                            datetime.now().astimezone().isoformat(),
+                        ),
+                    )
+                    new_versions.append(migration.version)
+                if self.HUMAN_MIGRATION_VERSION not in applied:
+                    for statement in _HUMAN_SCHEMA:
+                        raw.execute(statement)
+                    raw.execute(
+                        """
+                        INSERT INTO fm_schema_migrations (version, name, applied_at)
+                        VALUES (%s, %s, %s)
+                        """,
+                        (
+                            self.HUMAN_MIGRATION_VERSION,
+                            self.HUMAN_MIGRATION_NAME,
+                            datetime.now().astimezone().isoformat(),
+                        ),
+                    )
+                    new_versions.append(self.HUMAN_MIGRATION_VERSION)
+                raw.commit()
+                return tuple(new_versions)
+            except Exception:
+                raw.rollback()
+                raise
+
+    def applied_migrations(self) -> tuple[int, ...]:
+        with self._pool.connection() as raw:
+            try:
+                rows = raw.execute(
+                    "SELECT version FROM fm_schema_migrations ORDER BY version"
+                ).fetchall()
+            except Exception:
+                raw.rollback()
+                return ()
+            return tuple(int(row[0]) for row in rows)
+
+    def unit_of_work(self) -> PostgresFiscalUnitOfWork:
+        return PostgresFiscalUnitOfWork(self)
+
+    def __call__(self) -> PostgresFiscalUnitOfWork:
+        return self.unit_of_work()
+
+    def human_accounts(self) -> PostgresHumanAccountRepository:
+        return PostgresHumanAccountRepository(self)
+
+    def web_sessions(self) -> PostgresWebSessionRepository:
+        return PostgresWebSessionRepository(self)
+
+    def password_resets(self) -> PostgresPasswordResetRepository:
+        return PostgresPasswordResetRepository(self)
+
+
+class PostgresHumanAccountRepository(HumanAccountRepository):
+    def __init__(self, database: PostgresFiscalDatabase) -> None:
+        self._database = database
+
+    @staticmethod
+    def _account(row: tuple[object, ...]) -> HumanAccount:
+        import json
+
+        raw_units = row[5]
+        unit_ids: frozenset[str] | None
+        if raw_units is None:
+            unit_ids = None
+        else:
+            decoded = json.loads(str(raw_units))
+            if not isinstance(decoded, list) or not all(isinstance(item, str) for item in decoded):
+                raise PersistenceStateError("persisted human unit_ids_json is invalid")
+            unit_ids = frozenset(cast(list[str], decoded))
+        return HumanAccount(
+            account_id=str(row[0]),
+            email=str(row[1]),
+            password_hash=str(row[2]),
+            tenant_id=str(row[3]),
+            role=PortalRole(str(row[4])),
+            unit_ids=unit_ids,
+            enabled=bool(int(cast(int, row[6]))),
+            session_epoch=int(cast(int, row[7])),
+        )
+
+    def by_email(self, email: str) -> HumanAccount | None:
+        normalized = email.strip().casefold()
+        with self._database._pool.connection() as raw:
+            row = raw.execute(
+                """
+                SELECT account_id, email, password_hash, tenant_id, role,
+                       unit_ids_json, enabled, session_epoch
+                FROM fm_human_accounts WHERE email = %s
+                """,
+                (normalized,),
+            ).fetchone()
+        return None if row is None else self._account(cast(tuple[object, ...], row))
+
+    def by_id(self, account_id: str) -> HumanAccount | None:
+        normalized = account_id.strip()
+        with self._database._pool.connection() as raw:
+            row = raw.execute(
+                """
+                SELECT account_id, email, password_hash, tenant_id, role,
+                       unit_ids_json, enabled, session_epoch
+                FROM fm_human_accounts WHERE account_id = %s
+                """,
+                (normalized,),
+            ).fetchone()
+        return None if row is None else self._account(cast(tuple[object, ...], row))
+
+    def save(self, account: HumanAccount) -> None:
+        import json
+
+        if not isinstance(account, HumanAccount):
+            raise ValueError("account must be HumanAccount")
+        units_json = None if account.unit_ids is None else json.dumps(sorted(account.unit_ids))
+        with self._database._pool.connection() as raw:
+            raw.execute(
+                """
+                INSERT INTO fm_human_accounts (
+                    account_id, email, password_hash, tenant_id, role, unit_ids_json,
+                    enabled, session_epoch
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (account_id) DO UPDATE SET
+                    email = EXCLUDED.email,
+                    password_hash = EXCLUDED.password_hash,
+                    tenant_id = EXCLUDED.tenant_id,
+                    role = EXCLUDED.role,
+                    unit_ids_json = EXCLUDED.unit_ids_json,
+                    enabled = EXCLUDED.enabled,
+                    session_epoch = EXCLUDED.session_epoch
+                """,
+                (
+                    account.account_id,
+                    account.email,
+                    account.password_hash,
+                    account.tenant_id,
+                    account.role.value,
+                    units_json,
+                    int(account.enabled),
+                    account.session_epoch,
+                ),
+            )
+            raw.commit()
+
+
+class PostgresWebSessionRepository(WebSessionRepository):
+    def __init__(self, database: PostgresFiscalDatabase) -> None:
+        self._database = database
+
+    @staticmethod
+    def _session(row: tuple[object, ...]) -> WebSessionRecord:
+        return WebSessionRecord(
+            session_id=str(row[0]),
+            account_id=str(row[1]),
+            session_token_sha256=str(row[2]),
+            csrf_token_sha256=str(row[3]),
+            session_epoch=int(cast(int, row[4])),
+            created_at=datetime.fromisoformat(str(row[5])),
+            expires_at=datetime.fromisoformat(str(row[6])),
+            revoked=bool(int(cast(int, row[7]))),
+        )
+
+    def by_token_digest(self, session_token_sha256: str) -> WebSessionRecord | None:
+        with self._database._pool.connection() as raw:
+            row = raw.execute(
+                """
+                SELECT session_id, account_id, session_token_sha256, csrf_token_sha256,
+                       session_epoch, created_at, expires_at, revoked
+                FROM fm_web_sessions WHERE session_token_sha256 = %s
+                """,
+                (session_token_sha256,),
+            ).fetchone()
+        return None if row is None else self._session(cast(tuple[object, ...], row))
+
+    def save(self, session: WebSessionRecord) -> None:
+        if not isinstance(session, WebSessionRecord):
+            raise ValueError("session must be WebSessionRecord")
+        with self._database._pool.connection() as raw:
+            raw.execute(
+                """
+                INSERT INTO fm_web_sessions (
+                    session_id, account_id, session_token_sha256, csrf_token_sha256,
+                    session_epoch, created_at, expires_at, revoked
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (session_id) DO UPDATE SET
+                    account_id = EXCLUDED.account_id,
+                    session_token_sha256 = EXCLUDED.session_token_sha256,
+                    csrf_token_sha256 = EXCLUDED.csrf_token_sha256,
+                    session_epoch = EXCLUDED.session_epoch,
+                    created_at = EXCLUDED.created_at,
+                    expires_at = EXCLUDED.expires_at,
+                    revoked = EXCLUDED.revoked
+                """,
+                (
+                    session.session_id,
+                    session.account_id,
+                    session.session_token_sha256,
+                    session.csrf_token_sha256,
+                    session.session_epoch,
+                    session.created_at.isoformat(),
+                    session.expires_at.isoformat(),
+                    int(session.revoked),
+                ),
+            )
+            raw.commit()
+
+    def revoke(self, session_id: str) -> None:
+        with self._database._pool.connection() as raw:
+            raw.execute(
+                "UPDATE fm_web_sessions SET revoked = 1 WHERE session_id = %s",
+                (session_id.strip(),),
+            )
+            raw.commit()
+
+    def revoke_account(self, account_id: str) -> None:
+        with self._database._pool.connection() as raw:
+            raw.execute(
+                "UPDATE fm_web_sessions SET revoked = 1 WHERE account_id = %s",
+                (account_id.strip(),),
+            )
+            raw.commit()
+
+
+class PostgresPasswordResetRepository(PasswordResetRepository):
+    def __init__(self, database: PostgresFiscalDatabase) -> None:
+        self._database = database
+
+    @staticmethod
+    def _record(row: tuple[object, ...]) -> PasswordResetRecord:
+        return PasswordResetRecord(
+            reset_id=str(row[0]),
+            account_id=str(row[1]),
+            token_sha256=str(row[2]),
+            created_at=datetime.fromisoformat(str(row[3])),
+            expires_at=datetime.fromisoformat(str(row[4])),
+            used=bool(int(cast(int, row[5]))),
+        )
+
+    def by_token_digest(self, token_sha256: str) -> PasswordResetRecord | None:
+        with self._database._pool.connection() as raw:
+            row = raw.execute(
+                """
+                SELECT reset_id, account_id, token_sha256, created_at, expires_at, used
+                FROM fm_password_resets WHERE token_sha256 = %s
+                """,
+                (token_sha256,),
+            ).fetchone()
+        return None if row is None else self._record(cast(tuple[object, ...], row))
+
+    def save(self, record: PasswordResetRecord) -> None:
+        if not isinstance(record, PasswordResetRecord):
+            raise ValueError("record must be PasswordResetRecord")
+        with self._database._pool.connection() as raw:
+            raw.execute(
+                """
+                INSERT INTO fm_password_resets (
+                    reset_id, account_id, token_sha256, created_at, expires_at, used
+                ) VALUES (%s, %s, %s, %s, %s, %s)
+                ON CONFLICT (reset_id) DO UPDATE SET
+                    account_id = EXCLUDED.account_id,
+                    token_sha256 = EXCLUDED.token_sha256,
+                    created_at = EXCLUDED.created_at,
+                    expires_at = EXCLUDED.expires_at,
+                    used = EXCLUDED.used
+                """,
+                (
+                    record.reset_id,
+                    record.account_id,
+                    record.token_sha256,
+                    record.created_at.isoformat(),
+                    record.expires_at.isoformat(),
+                    int(record.used),
+                ),
+            )
+            raw.commit()
+
+    def mark_used(self, reset_id: str) -> None:
+        with self._database._pool.connection() as raw:
+            raw.execute(
+                "UPDATE fm_password_resets SET used = 1 WHERE reset_id = %s",
+                (reset_id.strip(),),
+            )
+            raw.commit()
+
+
+def production_database_from_env(
+    environ: Iterable[tuple[str, str]] | None = None,
+) -> PostgresFiscalDatabase:
+    """Build the production database from environment without embedding credentials.
+
+    ``NFCORE_PERSISTENCE_BACKEND`` must explicitly be ``postgres`` and
+    ``NFCORE_DATABASE_URL`` must contain the runtime DSN.  This fail-closed factory
+    prevents an accidental production fallback to SQLite.
+    """
+
+    values = dict(os.environ.items() if environ is None else environ)
+    backend = values.get("NFCORE_PERSISTENCE_BACKEND", "").strip().casefold()
+    if backend != "postgres":
+        raise PersistenceStateError("production persistence backend must be postgres")
+    dsn = values.get("NFCORE_DATABASE_URL", "").strip()
+    if not dsn:
+        raise PersistenceStateError("NFCORE_DATABASE_URL is required for PostgreSQL")
+    return PostgresFiscalDatabase(dsn)
