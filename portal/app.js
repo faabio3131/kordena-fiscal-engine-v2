@@ -1,5 +1,8 @@
 "use strict";
 
+/** @typedef {{tenant_id:string, role:string, unit_ids:string[]|null, permissions:string[], supported_documents:string[], projection:Record<string, unknown>}} BootstrapState */
+/** @typedef {{method?:string, headers?:Record<string,string>, body?:string}} ApiOptions */
+
 const navigation = [
   { label: "Operação", items: [["overview", "Visão geral"], ["documents", "Documentos"], ["issuances", "Emissões"], ["errors", "Erros"], ["reconciliation", "Reconciliação"]] },
   { label: "Configuração", items: [["onboarding", "Onboarding"], ["companies", "Empresas"], ["units", "Unidades"], ["environments", "Ambientes"], ["capabilities", "Capabilities"], ["certificates", "Certificados"], ["providers", "Providers"], ["users", "Usuários"]] },
@@ -13,6 +16,7 @@ const safetyStates = {
   approval: "HUMAN_APPROVAL_REQUIRED",
 };
 
+/** @type {Record<string,string>} */
 const descriptions = {
   overview: "Visão governada da operação fiscal e do readiness real do tenant.",
   documents: "Lifecycle documental, consulta, archive e correlação.",
@@ -37,32 +41,33 @@ const descriptions = {
   settings: "Políticas e configurações autorizadas.",
 };
 
-const loginView = document.getElementById("login-view");
-const appShell = document.getElementById("app-shell");
-const loginForm = document.getElementById("login-form");
-const loginEmail = document.getElementById("login-email");
-const loginPassword = document.getElementById("login-password");
-const loginError = document.getElementById("login-error");
-const nav = document.getElementById("nav");
-const workspace = document.getElementById("workspace");
-const title = document.getElementById("view-title");
-const authorityContext = document.getElementById("authority-context");
-const runtimeState = document.getElementById("runtime-state");
-const criticalTitle = document.getElementById("critical-state-title");
-const criticalCopy = document.getElementById("critical-state-copy");
-const logoutAction = document.getElementById("logout-action");
-const operationDialog = document.getElementById("operation-dialog");
-const operationForm = document.getElementById("operation-form");
-const operationId = document.getElementById("operation-id");
-const operationUnit = document.getElementById("operation-unit");
-const operationPayload = document.getElementById("operation-payload");
-const operationError = document.getElementById("operation-error");
-const operationCancel = document.getElementById("operation-cancel");
+const loginView = /** @type {HTMLElement} */ (document.getElementById("login-view"));
+const appShell = /** @type {HTMLElement} */ (document.getElementById("app-shell"));
+const loginForm = /** @type {HTMLFormElement} */ (document.getElementById("login-form"));
+const loginEmail = /** @type {HTMLInputElement} */ (document.getElementById("login-email"));
+const loginPassword = /** @type {HTMLInputElement} */ (document.getElementById("login-password"));
+const loginError = /** @type {HTMLElement} */ (document.getElementById("login-error"));
+const nav = /** @type {HTMLElement} */ (document.getElementById("nav"));
+const workspace = /** @type {HTMLElement} */ (document.getElementById("workspace"));
+const title = /** @type {HTMLElement} */ (document.getElementById("view-title"));
+const authorityContext = /** @type {HTMLElement} */ (document.getElementById("authority-context"));
+const runtimeState = /** @type {HTMLElement} */ (document.getElementById("runtime-state"));
+const criticalTitle = /** @type {HTMLElement} */ (document.getElementById("critical-state-title"));
+const criticalCopy = /** @type {HTMLElement} */ (document.getElementById("critical-state-copy"));
+const logoutAction = /** @type {HTMLButtonElement} */ (document.getElementById("logout-action"));
+const operationDialog = /** @type {HTMLDialogElement} */ (document.getElementById("operation-dialog"));
+const operationForm = /** @type {HTMLFormElement} */ (document.getElementById("operation-form"));
+const operationId = /** @type {HTMLSelectElement} */ (document.getElementById("operation-id"));
+const operationUnit = /** @type {HTMLInputElement} */ (document.getElementById("operation-unit"));
+const operationPayload = /** @type {HTMLTextAreaElement} */ (document.getElementById("operation-payload"));
+const operationError = /** @type {HTMLElement} */ (document.getElementById("operation-error"));
+const operationCancel = /** @type {HTMLButtonElement} */ (document.getElementById("operation-cancel"));
 
-if (!loginView || !appShell || !loginForm || !nav || !workspace || !title) {
+if (!loginView || !appShell || !loginForm || !nav || !workspace || !title || !operationDialog) {
   throw new Error("FM NFCORE portal shell is incomplete");
 }
 
+/** @type {BootstrapState|null} */
 let bootstrapState = null;
 let currentView = "overview";
 
@@ -72,6 +77,7 @@ function csrfToken() {
   return entry ? decodeURIComponent(entry.slice(prefix.length)) : "";
 }
 
+/** @param {string} path @param {ApiOptions} [options] @returns {Promise<any>} */
 async function api(path, options = {}) {
   const response = await fetch(path, {
     credentials: "same-origin",
@@ -85,18 +91,16 @@ async function api(path, options = {}) {
     const message = detail && typeof detail === "object" && typeof detail.message === "string"
       ? detail.message
       : `Falha HTTP ${response.status}`;
-    const error = new Error(message);
-    error.status = response.status;
-    error.body = body;
-    throw error;
+    throw Object.assign(new Error(message), { status: response.status, body });
   }
   return body;
 }
 
+/** @param {string} [message] */
 function showLogin(message = "") {
   loginView.hidden = false;
   appShell.hidden = true;
-  if (loginError) loginError.textContent = message;
+  loginError.textContent = message;
 }
 
 function showApp() {
@@ -104,6 +108,7 @@ function showApp() {
   appShell.hidden = false;
 }
 
+/** @param {unknown} value */
 function text(value) {
   if (value === null || value === undefined) return "—";
   if (Array.isArray(value)) return value.join(", ");
@@ -111,6 +116,7 @@ function text(value) {
   return String(value);
 }
 
+/** @param {unknown} value */
 function tone(value) {
   const normalized = text(value).toUpperCase();
   if (/FAIL|ERROR|REJECT|UNAVAILABLE/.test(normalized)) return "danger";
@@ -119,6 +125,7 @@ function tone(value) {
   return "neutral";
 }
 
+/** @param {Record<string, unknown>} row */
 function rowElement(row) {
   const wrapper = document.createElement("div");
   wrapper.className = "row";
@@ -139,6 +146,7 @@ function rowElement(row) {
   return wrapper;
 }
 
+/** @param {string} titleText @param {string} [eyebrow] */
 function panel(titleText, eyebrow = "FM NFCORE V1.0") {
   const article = document.createElement("article");
   article.className = "panel full";
@@ -185,11 +193,13 @@ function renderOverview() {
   workspace.append(article, identity);
 }
 
+/** @param {string} viewId */
 async function renderSurface(viewId) {
   currentView = viewId;
   const label = navigation.flatMap((group) => group.items).find(([id]) => id === viewId)?.[1] || viewId;
   title.textContent = label;
-  document.querySelectorAll(".nav-button").forEach((button) => {
+  document.querySelectorAll(".nav-button").forEach((element) => {
+    const button = /** @type {HTMLElement} */ (element);
     if (button.dataset.view === viewId) button.setAttribute("aria-current", "page");
     else button.removeAttribute("aria-current");
   });
@@ -216,13 +226,14 @@ async function renderSurface(viewId) {
     } else {
       for (const row of rows) grid.append(rowElement(row));
     }
-    article.replaceChildren(article.firstElementChild, grid);
+    const existingHeader = article.firstElementChild;
+    article.replaceChildren(...(existingHeader ? [existingHeader, grid] : [grid]));
     if (["documents", "issuances", "reconciliation"].includes(viewId)) {
       const action = document.createElement("button");
       action.className = "primary";
       action.type = "button";
       action.textContent = "Executar operação governada";
-      action.addEventListener("click", () => operationDialog?.showModal());
+      action.addEventListener("click", () => operationDialog.showModal());
       article.append(action);
     }
   } catch (error) {
@@ -253,14 +264,15 @@ function buildNavigation() {
   }
 }
 
+/** @param {BootstrapState} state */
 function applyBootstrap(state) {
   bootstrapState = state;
   showApp();
-  if (authorityContext) authorityContext.textContent = `${state.tenant_id} · ${state.role}`;
-  if (runtimeState) runtimeState.textContent = "API autenticada conectada";
-  const productionState = state.projection?.production_state || state.projection?.readiness || safetyStates.approval;
-  if (criticalTitle) criticalTitle.textContent = text(productionState);
-  if (criticalCopy) criticalCopy.textContent = /READY|APPROVED/i.test(text(productionState))
+  authorityContext.textContent = `${state.tenant_id} · ${state.role}`;
+  runtimeState.textContent = "API autenticada conectada";
+  const productionState = state.projection.production_state || state.projection.readiness || safetyStates.approval;
+  criticalTitle.textContent = text(productionState);
+  criticalCopy.textContent = /READY|APPROVED/i.test(text(productionState))
     ? "Readiness retornado pelo backend; operações continuam sujeitas a RBAC e gates fiscais."
     : `${safetyStates.blocked}: Produção permanece bloqueada até que o backend comprove os gates aplicáveis (${safetyStates.external} / ${safetyStates.approval}).`;
   buildNavigation();
@@ -269,29 +281,31 @@ function applyBootstrap(state) {
 
 async function bootstrap() {
   try {
+    /** @type {BootstrapState} */
     const state = await api("/v1/portal/bootstrap");
     applyBootstrap(state);
   } catch (error) {
-    if (error && error.status === 401) showLogin();
+    const status = error instanceof Error && "status" in error ? error.status : null;
+    if (status === 401) showLogin();
     else showLogin(error instanceof Error ? error.message : "Portal indisponível");
   }
 }
 
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (loginError) loginError.textContent = "";
-  const email = loginEmail instanceof HTMLInputElement ? loginEmail.value : "";
-  const password = loginPassword instanceof HTMLInputElement ? loginPassword.value : "";
+  loginError.textContent = "";
+  const email = loginEmail.value;
+  const password = loginPassword.value;
   try {
     await api("/v1/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
-    if (loginPassword instanceof HTMLInputElement) loginPassword.value = "";
+    loginPassword.value = "";
     await bootstrap();
   } catch (error) {
     showLogin(error instanceof Error ? error.message : "Falha ao autenticar");
   }
 });
 
-logoutAction?.addEventListener("click", async () => {
+logoutAction.addEventListener("click", async () => {
   try {
     await api("/v1/auth/logout", { method: "POST", headers: { "X-CSRF-Token": csrfToken() } });
   } finally {
@@ -300,16 +314,17 @@ logoutAction?.addEventListener("click", async () => {
   }
 });
 
-operationCancel?.addEventListener("click", () => operationDialog?.close());
-operationForm?.addEventListener("submit", async (event) => {
+operationCancel.addEventListener("click", () => operationDialog.close());
+operationForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (operationError) operationError.textContent = "";
+  operationError.textContent = "";
   try {
-    const selected = operationId instanceof HTMLSelectElement ? operationId.value : "";
-    const unitId = operationUnit instanceof HTMLInputElement ? operationUnit.value.trim() : "";
-    const parsed = operationPayload instanceof HTMLTextAreaElement ? JSON.parse(operationPayload.value) : {};
+    const selected = operationId.value;
+    const unitId = operationUnit.value.trim();
+    const parsed = JSON.parse(operationPayload.value);
     const payload = { ...parsed, unit_id: unitId };
     const mutation = selected !== "queryFiscalDocument";
+    /** @type {Record<string,string>} */
     const headers = { "X-CSRF-Token": csrfToken() };
     if (mutation) headers["Idempotency-Key"] = crypto.randomUUID();
     await api(`/v1/portal/operations/${encodeURIComponent(selected)}`, {
@@ -317,10 +332,10 @@ operationForm?.addEventListener("submit", async (event) => {
       headers,
       body: JSON.stringify(payload),
     });
-    operationDialog?.close();
+    operationDialog.close();
     await renderSurface(currentView);
   } catch (error) {
-    if (operationError) operationError.textContent = error instanceof Error ? error.message : "Operação rejeitada";
+    operationError.textContent = error instanceof Error ? error.message : "Operação rejeitada";
   }
 });
 
