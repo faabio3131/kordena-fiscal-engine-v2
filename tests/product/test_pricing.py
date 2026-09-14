@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
@@ -14,7 +14,7 @@ from kordena_fiscal.product.pricing import (
     TenantPriceOverride,
 )
 
-NOW = datetime(2026, 9, 14, 3, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 9, 14, 3, 0, tzinfo=UTC)
 
 
 def _configuration(*, version: int = 1) -> CommercialPricingConfiguration:
