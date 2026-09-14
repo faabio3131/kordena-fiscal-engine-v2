@@ -16,6 +16,7 @@ from .onboarding import (
     SelfServiceOnboardingCheckpoint,
     SelfServiceOnboardingError,
 )
+from .platform_configuration import PlatformExternalConfiguration
 from .tenant_configuration import (
     CommercialGatewayConfiguration,
     CommercialOfferConfiguration,
@@ -46,6 +47,7 @@ __all__ = [
     "ONBOARDING_SEQUENCE",
     "OnboardingEvidence",
     "OnboardingStep",
+    "PlatformExternalConfiguration",
     "PricingMode",
     "ProductIdentity",
     "SelfServiceOnboarding",
