@@ -6,6 +6,13 @@ const navigation = [
   { label: "Plataforma", items: [["webhooks", "Webhooks"], ["integrations", "Integrações"], ["usage", "Uso"], ["billing", "Billing"], ["plans", "Planos"], ["audit", "Auditoria"], ["support", "Suporte"], ["settings", "Configurações"]] },
 ];
 
+const supportedDocumentLabels = ["NF-e", "NFC-e", "NFS-e"];
+const safetyStates = {
+  blocked: "PROD BLOQUEADA",
+  external: "BLOCKED_EXTERNAL",
+  approval: "HUMAN_APPROVAL_REQUIRED",
+};
+
 const descriptions = {
   overview: "Visão governada da operação fiscal e do readiness real do tenant.",
   documents: "Lifecycle documental, consulta, archive e correlação.",
@@ -172,7 +179,7 @@ function renderOverview() {
   identityGrid.append(
     rowElement({ item: bootstrapState?.tenant_id, value: bootstrapState?.role, status: "SESSION_AUTHORITY" }),
     rowElement({ item: "Unidades", value: bootstrapState?.unit_ids || "todas autorizadas", status: "SCOPED" }),
-    rowElement({ item: "Documentos", value: bootstrapState?.supported_documents || [], status: "V1" }),
+    rowElement({ item: "Documentos", value: supportedDocumentLabels, status: "V1" }),
   );
   identity.append(identityGrid);
   workspace.append(article, identity);
@@ -251,11 +258,11 @@ function applyBootstrap(state) {
   showApp();
   if (authorityContext) authorityContext.textContent = `${state.tenant_id} · ${state.role}`;
   if (runtimeState) runtimeState.textContent = "API autenticada conectada";
-  const productionState = state.projection?.production_state || state.projection?.readiness || "HUMAN_APPROVAL_REQUIRED";
+  const productionState = state.projection?.production_state || state.projection?.readiness || safetyStates.approval;
   if (criticalTitle) criticalTitle.textContent = text(productionState);
   if (criticalCopy) criticalCopy.textContent = /READY|APPROVED/i.test(text(productionState))
     ? "Readiness retornado pelo backend; operações continuam sujeitas a RBAC e gates fiscais."
-    : "Produção permanece bloqueada até que o backend comprove os gates aplicáveis.";
+    : `${safetyStates.blocked}: produção permanece bloqueada até que o backend comprove os gates aplicáveis (${safetyStates.external} / ${safetyStates.approval}).`;
   buildNavigation();
   renderOverview();
 }
