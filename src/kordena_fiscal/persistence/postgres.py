@@ -186,7 +186,6 @@ class PostgresFiscalUnitOfWork:
             raise PersistenceStateError("unit of work cannot be entered twice")
         pool_context = self._database._pool.connection()
         raw = pool_context.__enter__()
-        raw.execute("BEGIN")
         compat = _PostgresCompatConnection(raw)
         sqlite_compat = cast(sqlite3.Connection, compat)
         self._pool_context = pool_context
@@ -395,7 +394,6 @@ class PostgresFiscalDatabase:
 
     def initialize(self) -> tuple[int, ...]:
         with self._pool.connection() as raw:
-            raw.execute("BEGIN")
             try:
                 raw.execute(
                     """
