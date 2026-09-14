@@ -234,11 +234,16 @@ def create_portal_router(
         _authorized(auth, PortalPermission.PORTAL_READ)
         projection = dict(require_executor().snapshot(authority=auth))
         _safe_payload(projection)
+        unit_ids = (
+            sorted(auth.account.unit_ids)
+            if auth.account.unit_ids is not None
+            else None
+        )
         return {
             "product": "FM NFCORE",
             "version": "1.0",
             "tenant_id": auth.account.tenant_id,
-            "unit_ids": sorted(auth.account.unit_ids) if auth.account.unit_ids is not None else None,
+            "unit_ids": unit_ids,
             "role": auth.account.role.value,
             "permissions": sorted(permission.value for permission in auth.permissions),
             "supported_documents": ["nfe", "nfce", "nfse"],
@@ -256,7 +261,11 @@ def create_portal_router(
         auth = authority(request)
         unit_id = request.query_params.get("unit_id")
         _authorized(auth, permission, unit_id=unit_id)
-        rows = [dict(row) for row in require_executor().surface(surface_id=surface_id, authority=auth)]
+        projected_rows = require_executor().surface(
+            surface_id=surface_id,
+            authority=auth,
+        )
+        rows = [dict(row) for row in projected_rows]
         _safe_payload(rows)
         return {"surface": surface_id, "rows": rows}
 
