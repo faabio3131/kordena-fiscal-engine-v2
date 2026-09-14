@@ -1,0 +1,35 @@
+{
+  "$schema": "https://design-tokens.org/community-group/format/",
+  "meta": {
+    "product": "FM Fiscal",
+    "owner": "FM Tecnologia",
+    "version": "1.0.0",
+    "status": "official-v2-01"
+  },
+  "color": {
+    "brand": {
+      "obsidian": { "$type": "color", "$value": "#0F172A" },
+      "cyan": { "$type": "color", "$value": "#0284C7" },
+      "canvas": { "$type": "color", "$value": "#F8FAFC" }
+    },
+    "status": {
+      "success": { "$type": "color", "$value": "#10B981" },
+      "warning": { "$type": "color", "$value": "#F59E0B" },
+      "danger": { "$type": "color", "$value": "#DC2626" },
+      "info": { "$type": "color", "$value": "#0284C7" }
+    },
+    "neutral": {
+      "50": { "$type": "color", "$value": "#F8FAFC" },
+      "100": { "$type": "color", "$value": "#F1F5F9" },
+      "200": { "$type": "color", "$value": "#E2E8F0" },
+      "500": { "$type": "color", "$value": "#64748B" },
+      "700": { "$type": "color", "$value": "#334155" },
+      "900": { "$type": "color", "$value": "#0F172A" }
+    }
+  },
+  "font": {
+    "display": { "$type": "fontFamily", "$value": ["Plus Jakarta Sans", "Inter", "sans-serif"] },
+    "interface": { "$type": "fontFamily", "$value": ["Inter", "sans-serif"] },
+    "mono": { "$type": "fontFamily", "$value": ["Geist Mono", "ui-monospace", "monospace"] }
+  }
+}
