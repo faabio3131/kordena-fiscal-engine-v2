@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 from typing import Any
 
 from fastapi.testclient import TestClient
@@ -142,13 +142,13 @@ def test_surface_enforces_role_and_unit_scope() -> None:
     assert forbidden_unit.status_code == 403
 
 
-def test_mutation_requires_csrf_and_idempotency_and_preserves_session_authority() -> None:
+def test_mutation_requires_csrf_and_idempotency() -> None:
     executor = RecordingPortalExecutor()
     web = logged_client(executor)
 
     no_csrf = web.post(
         "/v1/portal/operations/issueFiscalDocument",
-        json={"unit_id": "unit-a", "tenant_id": "attacker-tenant"},
+        json={"unit_id": "unit-a"},
         headers={"Idempotency-Key": "idem-1"},
     )
     assert no_csrf.status_code == 403
@@ -165,15 +165,32 @@ def test_mutation_requires_csrf_and_idempotency_and_preserves_session_authority(
 
     accepted = web.post(
         "/v1/portal/operations/issueFiscalDocument",
-        json={"unit_id": "unit-a", "tenant_id": "attacker-tenant"},
+        json={"unit_id": "unit-a", "document": {"model": "55"}},
         headers={CSRF_HEADER: csrf, "Idempotency-Key": "idem-2"},
     )
     assert accepted.status_code == 200
     assert accepted.json()["status"] == "ACCEPTED"
     assert executor.operation_authority is not None
     assert executor.operation_authority.account.tenant_id == "tenant-authoritative"
-    assert executor.operation_payload == {"unit_id": "unit-a", "tenant_id": "attacker-tenant"}
+    assert executor.operation_payload == {"unit_id": "unit-a", "document": {"model": "55"}}
     assert executor.operation_key == "idem-2"
+
+
+def test_browser_cannot_mass_assign_tenant_or_other_authority_fields() -> None:
+    executor = RecordingPortalExecutor()
+    web = logged_client(executor)
+    csrf = web.cookies.get(CSRF_COOKIE)
+    assert csrf
+
+    response = web.post(
+        "/v1/portal/operations/issueFiscalDocument",
+        json={"unit_id": "unit-a", "tenant_id": "attacker-tenant"},
+        headers={CSRF_HEADER: csrf, "Idempotency-Key": "idem-spoof"},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "BROWSER_AUTHORITY_REJECTED"
+    assert executor.operation_authority is None
 
 
 def test_query_operation_does_not_require_idempotency_key() -> None:
