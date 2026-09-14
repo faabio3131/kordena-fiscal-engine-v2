@@ -1,0 +1,38 @@
+{
+  "$schema": "https://design-tokens.org/community-group/format/",
+  "meta": {
+    "product": "FM NFCORE",
+    "owner": "FM Tecnologia",
+    "version": "1.0.0",
+    "status": "official-v1",
+    "positioning": "Infrastructure Mission Control",
+    "tagline": "Infraestrutura fiscal. Sob controle."
+  },
+  "color": {
+    "brand": {
+      "obsidian": { "$type": "color", "$value": "#08121F" },
+      "deepNavy": { "$type": "color", "$value": "#0F2747" },
+      "electricBlue": { "$type": "color", "$value": "#2563FF" },
+      "polarCyan": { "$type": "color", "$value": "#00E5FF" },
+      "slate": { "$type": "color", "$value": "#22344F" },
+      "mist": { "$type": "color", "$value": "#E8F1FF" },
+      "white": { "$type": "color", "$value": "#F8FAFC" }
+    },
+    "status": {
+      "success": { "$type": "color", "$value": "#22C55E" },
+      "warning": { "$type": "color", "$value": "#F59E0B" },
+      "danger": { "$type": "color", "$value": "#FB7185" },
+      "info": { "$type": "color", "$value": "#2563FF" }
+    }
+  },
+  "font": {
+    "display": { "$type": "fontFamily", "$value": ["Geist", "Inter", "ui-sans-serif", "system-ui", "sans-serif"] },
+    "interface": { "$type": "fontFamily", "$value": ["Inter", "ui-sans-serif", "system-ui", "sans-serif"] },
+    "mono": { "$type": "fontFamily", "$value": ["JetBrains Mono", "Geist Mono", "ui-monospace", "monospace"] }
+  },
+  "radius": {
+    "small": { "$type": "dimension", "$value": "12px" },
+    "medium": { "$type": "dimension", "$value": "16px" },
+    "large": { "$type": "dimension", "$value": "22px" }
+  }
+}

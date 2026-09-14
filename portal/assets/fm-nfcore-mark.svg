@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-labelledby="title desc">
+  <title id="title">FM NFCORE</title>
+  <desc id="desc">Monograma geométrico FM em azul elétrico e ciano.</desc>
+  <defs>
+    <linearGradient id="nfcoreBlue" x1="10" y1="86" x2="84" y2="10" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1457ff"/>
+      <stop offset="0.52" stop-color="#2563ff"/>
+      <stop offset="1" stop-color="#00e5ff"/>
+    </linearGradient>
+    <linearGradient id="nfcoreDeep" x1="13" y1="22" x2="82" y2="83" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0f2747"/>
+      <stop offset="1" stop-color="#08121f"/>
+    </linearGradient>
+  </defs>
+  <path d="M48 5 86 27v42L48 91 10 69V27L48 5Z" fill="url(#nfcoreDeep)" stroke="#2563ff" stroke-opacity=".65" stroke-width="2"/>
+  <path d="M19 31 48 14l29 17-10 6-19-11-19 11v36l-10-6V31Z" fill="url(#nfcoreBlue)"/>
+  <path d="m29 42 19 11 19-11v25l-10 6V59l-9 5-9-5v14l-10-6V42Z" fill="url(#nfcoreBlue)"/>
+  <path d="m29 31 19 11 19-11 10 6-29 17-29-17 10-6Z" fill="#00e5ff" fill-opacity=".92"/>
+</svg>

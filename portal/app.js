@@ -115,7 +115,7 @@ const environmentButton = document.getElementById("environment-button");
 const docsAction = document.getElementById("docs-action");
 
 if (!nav || !workspace || !title || !(dialog instanceof HTMLDialogElement)) {
-  throw new Error("FM Fiscal V1.0 portal shell is incomplete");
+  throw new Error("FM NFCORE V1.0 portal shell is incomplete");
 }
 
 function escapeText(value) {
@@ -166,7 +166,7 @@ function overviewMarkup() {
     <article class="panel full">
       <div class="panel-header">
         <div><p class="eyebrow">V1 Product pillars</p><h2>Infraestrutura fiscal governada</h2></div>
-        <span class="badge">FM FISCAL V1.0</span>
+        <span class="badge">FM NFCORE V1.0</span>
       </div>
       <div class="pillar-grid">
         <div class="pillar"><span>01 · EMIT</span><strong>Emissão fiscal</strong><p>NF-e, NFC-e e NFS-e por contratos versionados.</p></div>
@@ -197,7 +197,7 @@ function genericMarkup(viewId) {
   return `
     <article class="panel full">
       <div class="panel-header">
-        <div><p class="eyebrow">FM Fiscal V1.0</p><h2>${escapeText(descriptions[viewId] || "Superfície governada")}</h2></div>
+        <div><p class="eyebrow">FM NFCORE V1.0</p><h2>${escapeText(descriptions[viewId] || "Superfície governada")}</h2></div>
         <span class="badge neutral">DADOS SINTÉTICOS</span>
       </div>
       <div class="grid-list">${rowsHtml}</div>

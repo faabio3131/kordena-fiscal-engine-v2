@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="FM NFCORE">
+  <defs>
+    <linearGradient id="g" x1="8" y1="56" x2="56" y2="8" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1457ff"/><stop offset=".52" stop-color="#2563ff"/><stop offset="1" stop-color="#00e5ff"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="#08121f"/>
+  <path d="M32 7 56 21v22L32 57 8 43V21L32 7Z" fill="#0f2747" stroke="#2563ff" stroke-width="1.5"/>
+  <path d="M14 23 32 12l18 11-7 4-11-7-11 7v23l-7-4V23Zm7 8 11 7 11-7v15l-7 4v-9l-4 3-4-3v9l-7-4V31Z" fill="url(#g)"/>
+</svg>
