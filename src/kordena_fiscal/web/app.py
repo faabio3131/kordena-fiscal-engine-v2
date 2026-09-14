@@ -1,0 +1,239 @@
+"""Fail-closed ASGI/HTTP adapter for the public FM NFCORE Bridge API."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any, Mapping, Protocol, runtime_checkable
+
+from fastapi import Body, FastAPI, Request
+from fastapi.responses import JSONResponse
+
+
+@dataclass(frozen=True, slots=True)
+class BridgeHttpContext:
+    """Untrusted HTTP claims collected before workload authorization."""
+
+    host_namespace: str
+    tenant_id: str
+    unit_id: str
+    environment: str
+    correlation_id: str
+    causation_id: str | None
+    credential_id: str
+    presented_secret: str
+    idempotency_key: str | None
+
+    def __repr__(self) -> str:
+        return (
+            "BridgeHttpContext("
+            f"host_namespace={self.host_namespace!r}, tenant_id={self.tenant_id!r}, "
+            f"unit_id={self.unit_id!r}, environment={self.environment!r}, "
+            f"correlation_id={self.correlation_id!r}, causation_id={self.causation_id!r}, "
+            f"credential_id={self.credential_id!r}, presented_secret=<redacted>, "
+            f"idempotency_key={self.idempotency_key!r})"
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class AuthorizedBridgeContext:
+    """Opaque result of the security boundary used by the HTTP adapter."""
+
+    authority: object
+    correlation_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class BridgeExecutionResult:
+    status_code: int
+    body: Mapping[str, Any]
+
+
+@runtime_checkable
+class BridgeSecurityBoundary(Protocol):
+    def authorize(self, *, operation_id: str, context: BridgeHttpContext) -> AuthorizedBridgeContext:
+        """Authenticate and authorize one request or raise a security-domain error."""
+
+
+@runtime_checkable
+class BridgeRequestExecutor(Protocol):
+    def execute(
+        self,
+        *,
+        operation_id: str,
+        authorized: AuthorizedBridgeContext,
+        payload: Mapping[str, Any],
+        idempotency_key: str | None,
+    ) -> BridgeExecutionResult:
+        """Execute one already-authorized Bridge operation."""
+
+
+class HttpContractError(Exception):
+    def __init__(self, status_code: int, code: str, message: str, correlation_id: str = "unknown"):
+        super().__init__(message)
+        self.status_code = status_code
+        self.code = code
+        self.message = message
+        self.correlation_id = correlation_id
+
+
+_OPERATION_PATHS: tuple[tuple[str, str, int, bool], ...] = (
+    ("/v1/archive/references/query", "queryArchiveReference", 200, False),
+    ("/v1/cancellations", "cancelFiscalDocument", 202, True),
+    ("/v1/capabilities/query", "queryCapabilities", 200, False),
+    ("/v1/inutilizations", "inutilizeFiscalRange", 202, True),
+    ("/v1/issuances", "issueFiscalDocument", 202, True),
+    ("/v1/queries", "queryFiscalDocument", 200, False),
+    ("/v1/reconciliations", "reconcileFiscalOperation", 200, True),
+)
+
+
+def _required_header(request: Request, name: str, correlation_id: str) -> str:
+    value = request.headers.get(name, "").strip()
+    if not value:
+        raise HttpContractError(400, "MISSING_HEADER", f"Required header {name} is missing", correlation_id)
+    if len(value) > 256:
+        raise HttpContractError(400, "INVALID_HEADER", f"Header {name} is too long", correlation_id)
+    return value
+
+
+def _credentials(request: Request, correlation_id: str) -> tuple[str, str]:
+    credential_id = request.headers.get("X-FM-Workload-Credential-Id", "").strip()
+    authorization = request.headers.get("Authorization", "").strip()
+    if not credential_id or not authorization:
+        raise HttpContractError(401, "AUTHENTICATION_REQUIRED", "Workload authentication is required", correlation_id)
+    scheme, separator, secret = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not separator or not secret.strip():
+        raise HttpContractError(401, "INVALID_AUTHORIZATION", "Authorization must use Bearer credentials", correlation_id)
+    if len(credential_id) > 128 or len(secret) > 4096:
+        raise HttpContractError(401, "INVALID_AUTHORIZATION", "Workload credential is invalid", correlation_id)
+    return credential_id, secret.strip()
+
+
+def _context(request: Request, *, idempotency_required: bool) -> BridgeHttpContext:
+    correlation_id = request.headers.get("X-Correlation-Id", "").strip() or "unknown"
+    if correlation_id == "unknown" or len(correlation_id) > 256:
+        raise HttpContractError(400, "INVALID_CORRELATION_ID", "X-Correlation-Id is required", correlation_id)
+
+    credential_id, presented_secret = _credentials(request, correlation_id)
+    environment = _required_header(request, "X-FM-Environment", correlation_id)
+    if environment not in {"homologation", "production"}:
+        raise HttpContractError(400, "INVALID_ENVIRONMENT", "X-FM-Environment is invalid", correlation_id)
+
+    idempotency_key = request.headers.get("Idempotency-Key")
+    if idempotency_required and (idempotency_key is None or not idempotency_key.strip()):
+        raise HttpContractError(400, "MISSING_IDEMPOTENCY_KEY", "Idempotency-Key is required", correlation_id)
+    if idempotency_key is not None:
+        idempotency_key = idempotency_key.strip()
+        if len(idempotency_key) > 256:
+            raise HttpContractError(400, "INVALID_IDEMPOTENCY_KEY", "Idempotency-Key is too long", correlation_id)
+
+    causation_id = request.headers.get("X-Causation-Id")
+    if causation_id is not None:
+        causation_id = causation_id.strip() or None
+        if causation_id is not None and len(causation_id) > 256:
+            raise HttpContractError(400, "INVALID_CAUSATION_ID", "X-Causation-Id is too long", correlation_id)
+
+    return BridgeHttpContext(
+        host_namespace=_required_header(request, "X-FM-Host-Namespace", correlation_id),
+        tenant_id=_required_header(request, "X-FM-Tenant-Id", correlation_id),
+        unit_id=_required_header(request, "X-FM-Unit-Id", correlation_id),
+        environment=environment,
+        correlation_id=correlation_id,
+        causation_id=causation_id,
+        credential_id=credential_id,
+        presented_secret=presented_secret,
+        idempotency_key=idempotency_key,
+    )
+
+
+def _error_payload(error: HttpContractError) -> dict[str, str]:
+    return {
+        "code": error.code,
+        "message": error.message,
+        "correlation_id": error.correlation_id,
+    }
+
+
+def create_app(
+    *,
+    security: BridgeSecurityBoundary | None = None,
+    executor: BridgeRequestExecutor | None = None,
+) -> FastAPI:
+    """Create the web adapter.
+
+    Operational endpoints remain unavailable until both security and execution
+    adapters are explicitly injected. This prevents an HTTP deployment from
+    accidentally creating fiscal authority.
+    """
+
+    app = FastAPI(
+        title="FM NFCORE Bridge API",
+        version="1.0.0",
+        description="Web-first HTTP adapter for FM NFCORE fiscal infrastructure.",
+    )
+
+    @app.exception_handler(HttpContractError)
+    async def contract_error_handler(_request: Request, exc: HttpContractError) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=_error_payload(exc),
+            headers={"X-Correlation-Id": exc.correlation_id},
+        )
+
+    @app.get("/health/live", tags=["health"])
+    async def liveness() -> dict[str, str]:
+        return {"status": "live", "product": "FM NFCORE"}
+
+    @app.get("/health/ready", tags=["health"])
+    async def readiness() -> JSONResponse:
+        if security is None or executor is None:
+            return JSONResponse(
+                status_code=503,
+                content={"status": "not_ready", "reason": "bridge_dependencies_not_configured"},
+            )
+        return JSONResponse(status_code=200, content={"status": "ready"})
+
+    def endpoint_factory(operation_id: str, success_status: int, idempotency_required: bool):
+        async def endpoint(
+            request: Request,
+            payload: dict[str, Any] = Body(...),
+        ) -> JSONResponse:
+            context = _context(request, idempotency_required=idempotency_required)
+            if security is None or executor is None:
+                raise HttpContractError(
+                    503,
+                    "RUNTIME_NOT_READY",
+                    "Bridge security and execution adapters are not configured",
+                    context.correlation_id,
+                )
+            authorized = security.authorize(operation_id=operation_id, context=context)
+            result = executor.execute(
+                operation_id=operation_id,
+                authorized=authorized,
+                payload=payload,
+                idempotency_key=context.idempotency_key,
+            )
+            status_code = result.status_code or success_status
+            return JSONResponse(
+                status_code=status_code,
+                content=dict(result.body),
+                headers={"X-Correlation-Id": authorized.correlation_id},
+            )
+
+        endpoint.__name__ = operation_id
+        return endpoint
+
+    for path, operation_id, success_status, idempotency_required in _OPERATION_PATHS:
+        app.add_api_route(
+            path,
+            endpoint_factory(operation_id, success_status, idempotency_required),
+            methods=["POST"],
+            operation_id=operation_id,
+            status_code=success_status,
+            tags=["bridge"],
+        )
+
+    return app
+
+
+app = create_app()
