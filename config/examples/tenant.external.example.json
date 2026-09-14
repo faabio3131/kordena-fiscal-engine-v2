@@ -1,0 +1,65 @@
+{
+  "configuration_id": "tenant-example-v1",
+  "version": 1,
+  "tenant_id": "tenant-example",
+  "company_id": "company-example",
+  "unit_id": "unit-example",
+  "channels": [
+    {
+      "channel_id": "sp-nfe-prod",
+      "document_kind": "nfe",
+      "environment": "production",
+      "provider_profile_id": "sefaz-sp-direct-v1",
+      "uf": "SP",
+      "municipality_code": null,
+      "certificate": {
+        "state": "configured",
+        "reference_id": "vault://tenant-example/certificate"
+      },
+      "csc_identifier": {
+        "state": "missing"
+      },
+      "csc_token": {
+        "state": "missing"
+      },
+      "provider_credentials": {
+        "state": "configured",
+        "reference_id": "vault://tenant-example/provider"
+      },
+      "official_homologation": {
+        "state": "missing"
+      },
+      "enabled": true
+    }
+  ],
+  "gateway": {
+    "gateway_profile_id": "gateway-provider-v1",
+    "account_reference": {
+      "state": "configured",
+      "reference_id": "billing://tenant-example/account"
+    },
+    "webhook_secret_reference": {
+      "state": "configured",
+      "reference_id": "vault://tenant-example/billing-webhook"
+    },
+    "enabled": true
+  },
+  "offer": {
+    "offer_id": "growth-brl",
+    "edition_id": "growth",
+    "pricing_mode": "per_document",
+    "currency": "BRL",
+    "base_amount": "0.00",
+    "per_document_amount": "0.00",
+    "external_price_reference": "pricing://replace-with-approved-offer"
+  },
+  "legal_approval": {
+    "state": "missing"
+  },
+  "pilot_approval": {
+    "state": "missing"
+  },
+  "production_activation": {
+    "state": "missing"
+  }
+}
