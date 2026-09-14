@@ -100,7 +100,8 @@ class DurableFiscalOutboxWorker:
         now: datetime,
     ) -> FiscalOutboxEntry:
         if result.status is FiscalDispatchStatus.SUCCEEDED:
-            assert result.reference is not None
+            if result.reference is None:
+                raise OutboxStateError("successful dispatch result requires reference")
             with self._uow_factory() as uow:
                 updated = uow.outbox.mark_succeeded(
                     entry.entry_id,
@@ -116,7 +117,8 @@ class DurableFiscalOutboxWorker:
                 uow.commit()
                 return updated
 
-        assert result.error is not None
+        if result.error is None:
+            raise OutboxStateError("failed dispatch result requires error")
         if (
             result.status is FiscalDispatchStatus.FATAL_FAILURE
             or entry.attempt_count >= self._policy.max_attempts
