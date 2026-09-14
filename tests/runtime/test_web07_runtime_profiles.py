@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from kordena_fiscal.runtime.config import RuntimeConfigurationError, RuntimeEnvironment, RuntimeSettings
+from kordena_fiscal.runtime.config import (
+    RuntimeConfigurationError,
+    RuntimeEnvironment,
+    RuntimeSettings,
+)
 
 
 def test_development_defaults_are_explicitly_non_production() -> None:
