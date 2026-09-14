@@ -36,18 +36,22 @@ class RuntimeSettings:
         except ValueError as exc:
             raise RuntimeConfigurationError("NFCORE_ENVIRONMENT is invalid") from exc
 
+        is_local = environment in {
+            RuntimeEnvironment.DEVELOPMENT,
+            RuntimeEnvironment.TEST,
+        }
         persistence = values.get(
             "NFCORE_PERSISTENCE_BACKEND",
-            "sqlite" if environment in {RuntimeEnvironment.DEVELOPMENT, RuntimeEnvironment.TEST} else "postgres",
+            "sqlite" if is_local else "postgres",
         ).strip().lower()
         database_url = values.get("DATABASE_URL", "").strip() or None
         secret_backend = values.get(
             "NFCORE_SECRET_BACKEND",
-            "memory" if environment in {RuntimeEnvironment.DEVELOPMENT, RuntimeEnvironment.TEST} else "external",
+            "memory" if is_local else "external",
         ).strip().lower()
         https_raw = values.get(
             "NFCORE_REQUIRE_HTTPS",
-            "false" if environment in {RuntimeEnvironment.DEVELOPMENT, RuntimeEnvironment.TEST} else "true",
+            "false" if is_local else "true",
         ).strip().lower()
         if https_raw not in {"true", "false"}:
             raise RuntimeConfigurationError("NFCORE_REQUIRE_HTTPS must be true or false")
@@ -82,12 +86,17 @@ class RuntimeSettings:
         if production_like and self.persistence_backend != "postgres":
             raise RuntimeConfigurationError("staging/production persistence must be postgres")
         if self.persistence_backend == "postgres":
-            if not self.database_url or not self.database_url.startswith(("postgresql://", "postgres://")):
+            valid_dsn = self.database_url and self.database_url.startswith(
+                ("postgresql://", "postgres://")
+            )
+            if not valid_dsn:
                 raise RuntimeConfigurationError("DATABASE_URL PostgreSQL DSN is required")
         elif self.persistence_backend != "sqlite":
             raise RuntimeConfigurationError("unsupported persistence backend")
         if production_like and self.secret_backend in {"memory", "environment", "dev", "test"}:
-            raise RuntimeConfigurationError("staging/production requires an external secret backend")
+            raise RuntimeConfigurationError(
+                "staging/production requires an external secret backend"
+            )
         if production_like and self.secret_backend != "external":
             raise RuntimeConfigurationError("unsupported production secret backend profile")
         if self.environment is RuntimeEnvironment.PRODUCTION and not self.require_https:
