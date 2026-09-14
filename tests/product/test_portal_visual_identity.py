@@ -48,13 +48,15 @@ def test_commercial_surface_uses_nfcore_name_only() -> None:
     assert "FM NFCORE" in app
 
 
-def test_commercial_surface_does_not_claim_internal_release_language() -> None:
+def test_commercial_surface_is_real_api_connected_without_internal_release_language() -> None:
     html = read("index.html")
     app = read("app.js")
 
     assert "Release Candidate interno" not in html
     assert "DEMO INTERNA" not in app
-    assert "Dados exibidos nesta superfície são sintéticos" in html
+    assert "Dados operacionais carregados da API autenticada" in html
+    assert "Dados exibidos nesta superfície são sintéticos" not in html
+    assert "/v1/portal/bootstrap" in app
 
 
 def test_v1_scope_is_explicit_and_does_not_advertise_v2_documents() -> None:
