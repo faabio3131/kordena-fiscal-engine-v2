@@ -1,5 +1,14 @@
 """Public FM Fiscal application-service surface."""
 
+from .background_runtime import (
+    BackgroundCycleResult,
+    BackgroundWorkerRuntime,
+    NullWorkerObserver,
+    RoutedOutboxHandler,
+    SystemWorkerClock,
+    WorkerClock,
+    WorkerObserver,
+)
 from .outbox_worker import DurableFiscalOutboxWorker
 from .service import (
     DurableIssuanceReservation,
@@ -8,6 +17,7 @@ from .service import (
 )
 from .webhook_delivery import (
     FM_WEBHOOK_ATTEMPT_HEADER,
+    FM_WEBHOOK_CAUSATION_HEADER,
     FM_WEBHOOK_CORRELATION_HEADER,
     FM_WEBHOOK_OUTBOX_ENTRY_HEADER,
     FM_WEBHOOK_SIGNATURE_HEADER,
@@ -27,23 +37,31 @@ from .webhook_receiving import (
 )
 
 __all__ = [
+    "BackgroundCycleResult",
+    "BackgroundWorkerRuntime",
     "DurableFiscalOutboxWorker",
     "DurableIssuanceReservation",
     "FM_WEBHOOK_ATTEMPT_HEADER",
+    "FM_WEBHOOK_CAUSATION_HEADER",
     "FM_WEBHOOK_CORRELATION_HEADER",
     "FM_WEBHOOK_OUTBOX_ENTRY_HEADER",
     "FM_WEBHOOK_SIGNATURE_HEADER",
     "FiscalApplicationService",
     "FiscalWebhookConsumer",
     "IssuanceResumeDisposition",
+    "NullWorkerObserver",
+    "RoutedOutboxHandler",
     "SignedWebhookInboxReceiver",
     "SignedWebhookOutboxHandler",
     "SignedWebhookReceiveResult",
     "SystemWebhookDeliveryClock",
+    "SystemWorkerClock",
     "WebhookDeliveryClock",
     "WebhookDeliveryRequest",
     "WebhookDeliveryResponse",
     "WebhookDestination",
     "WebhookDestinationResolver",
     "WebhookTransport",
+    "WorkerClock",
+    "WorkerObserver",
 ]
