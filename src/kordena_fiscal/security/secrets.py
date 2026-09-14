@@ -6,11 +6,11 @@ resolved at the last responsible moment and wrapped in a redacted, zeroizable bu
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from enum import StrEnum
-import re
 from threading import RLock
 from typing import Protocol, runtime_checkable
 
