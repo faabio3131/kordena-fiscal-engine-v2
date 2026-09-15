@@ -10,8 +10,10 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
+from kordena_fiscal.product.cakto import CaktoWebhookReceiver
 from kordena_fiscal.web.app import create_app
 
+from .cakto import build_cakto_webhook_router
 from .config import RuntimeSettings
 from .observability import MetricsRegistry, RequestTimer, StructuredLogger
 from .security import configure_edge_security
@@ -54,6 +56,7 @@ def create_runtime_app(
     *,
     metrics: MetricsRegistry | None = None,
     logger: StructuredLogger | None = None,
+    cakto_receiver: CaktoWebhookReceiver | None = None,
 ) -> FastAPI:
     resolved = settings or RuntimeSettings.from_environ()
     runtime = RuntimeApi(resolved)
@@ -169,7 +172,11 @@ def create_runtime_app(
             "public_hostname_configured": resolved.public_hostname is not None,
             "trusted_proxy_networks_configured": len(resolved.trusted_proxy_cidrs),
             "fiscal_production_activated": False,
+            "cakto_webhook_configured": cakto_receiver is not None,
         }
+
+    if cakto_receiver is not None:
+        app.include_router(build_cakto_webhook_router(cakto_receiver))
 
     # Existing bridge remains fail-closed because no fiscal provider authority is invented.
     app.mount("/", create_app())

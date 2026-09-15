@@ -7,6 +7,11 @@ import hashlib
 import os
 import re
 
+from kordena_fiscal.persistence.cakto import (
+    CAKTO_SCHEMA_NAME,
+    CAKTO_SCHEMA_STATEMENTS,
+    CAKTO_SCHEMA_VERSION,
+)
 from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
 from kordena_fiscal.persistence.sqlite import _MIGRATIONS
 
@@ -29,6 +34,22 @@ def _statement_fingerprint(statement: str) -> str:
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
+def _reject_unapproved_destructive(
+    *,
+    version: int,
+    name: str,
+    statements: tuple[str, ...],
+) -> None:
+    for statement in statements:
+        if not _DESTRUCTIVE.search(statement):
+            continue
+        fingerprint = _statement_fingerprint(statement)
+        if (version, fingerprint) not in _APPROVED_LEGACY_DESTRUCTIVE:
+            raise RuntimeError(
+                f"destructive migration blocked: version={version} name={name}"
+            )
+
+
 def validate_policy() -> tuple[int, ...]:
     versions = tuple(migration.version for migration in _MIGRATIONS) + (
         PostgresFiscalDatabase.HUMAN_MIGRATION_VERSION,
@@ -37,16 +58,21 @@ def validate_policy() -> tuple[int, ...]:
         raise RuntimeError(f"migration versions must be contiguous from 1: {versions!r}")
 
     for migration in _MIGRATIONS:
-        for statement in migration.statements:
-            if not _DESTRUCTIVE.search(statement):
-                continue
-            fingerprint = _statement_fingerprint(statement)
-            if (migration.version, fingerprint) not in _APPROVED_LEGACY_DESTRUCTIVE:
-                raise RuntimeError(
-                    f"destructive migration blocked: version={migration.version} "
-                    f"name={migration.name}"
-                )
-    print(f"migration policy: PASS versions={','.join(str(item) for item in versions)}")
+        _reject_unapproved_destructive(
+            version=migration.version,
+            name=migration.name,
+            statements=migration.statements,
+        )
+    _reject_unapproved_destructive(
+        version=CAKTO_SCHEMA_VERSION,
+        name=CAKTO_SCHEMA_NAME,
+        statements=CAKTO_SCHEMA_STATEMENTS,
+    )
+    print(
+        "migration policy: PASS "
+        f"versions={','.join(str(item) for item in versions)} "
+        f"cakto_schema={CAKTO_SCHEMA_VERSION}"
+    )
     return versions
 
 
