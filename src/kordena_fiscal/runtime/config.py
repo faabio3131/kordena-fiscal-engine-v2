@@ -103,10 +103,9 @@ class RuntimeSettings:
         if public_hostname and not allowed_origins:
             allowed_origins = (f"https://{public_hostname}",)
         configured_hosts = _csv_tokens(values.get("NFCORE_TRUSTED_HOSTS", ""))
+        public_hosts = (public_hostname,) if public_hostname else ()
         trusted_hosts = tuple(
-            dict.fromkeys(
-                (*_INTERNAL_TRUSTED_HOSTS, *configured_hosts, *((public_hostname,) if public_hostname else ()))
-            )
+            dict.fromkeys((*_INTERNAL_TRUSTED_HOSTS, *configured_hosts, *public_hosts))
         )
         trusted_proxy_cidrs = _csv_tokens(values.get("NFCORE_TRUSTED_PROXY_CIDRS", ""))
 
