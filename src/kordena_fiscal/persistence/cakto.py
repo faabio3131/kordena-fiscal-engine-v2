@@ -46,7 +46,18 @@ class _Connection(Protocol):
     def rollback(self) -> None: ...
 
 
-ConnectionContextFactory = Callable[[], object]
+class _ConnectionContext(Protocol):
+    def __enter__(self) -> _Connection: ...
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> bool | None: ...
+
+
+ConnectionContextFactory = Callable[[], _ConnectionContext]
 
 CAKTO_SCHEMA_VERSION = 1
 CAKTO_SCHEMA_NAME = "web11_cakto_commercial_activation"
@@ -164,7 +175,8 @@ class CaktoSqlCommercialStore(CaktoCommercialStore):
         self._connection.execute(
             """
             INSERT INTO fm_cakto_plan_bindings (
-                external_product_id, external_offer_id, plan_id, entitlement_ids_json, enabled
+                external_product_id, external_offer_id, plan_id,
+                entitlement_ids_json, enabled
             ) VALUES (?, ?, ?, ?, ?)
             ON CONFLICT (external_product_id, external_offer_id) DO UPDATE SET
                 plan_id = excluded.plan_id,
@@ -330,7 +342,12 @@ class CaktoSqlCommercialStore(CaktoCommercialStore):
         )
         return self._required_event(event_key)
 
-    def mark_cakto_dead_letter(self, event_key: str, *, error: str) -> CaktoWebhookInboxEntry:
+    def mark_cakto_dead_letter(
+        self,
+        event_key: str,
+        *,
+        error: str,
+    ) -> CaktoWebhookInboxEntry:
         self._connection.execute(
             """
             UPDATE fm_cakto_webhook_inbox
@@ -363,7 +380,9 @@ class CaktoSqlCommercialStore(CaktoCommercialStore):
         existing = self.get_cakto_tenant_by_customer(tenant.external_customer_id)
         if existing is not None:
             if existing != tenant:
-                raise CaktoStateConflictError("Cakto customer is already bound to another tenant")
+                raise CaktoStateConflictError(
+                    "Cakto customer is already bound to another tenant"
+                )
             return existing
         try:
             self._connection.execute(
@@ -443,6 +462,11 @@ class CaktoSqlCommercialStore(CaktoCommercialStore):
     @staticmethod
     def _event(row: Sequence[object]) -> CaktoWebhookInboxEntry:
         next_attempt_raw = row[12]
+        next_attempt = (
+            None
+            if next_attempt_raw is None
+            else _dt(next_attempt_raw, "next_attempt_at")
+        )
         return CaktoWebhookInboxEntry(
             event_key=_text(row[0], "event_key"),
             event_type=CaktoWebhookEvent(_text(row[1], "event_type")),
@@ -456,7 +480,7 @@ class CaktoSqlCommercialStore(CaktoCommercialStore):
             received_at=_dt(row[9], "received_at"),
             status=CaktoInboxStatus(_text(row[10], "status")),
             attempt_count=_integer(row[11], "attempt_count"),
-            next_attempt_at=None if next_attempt_raw is None else _dt(next_attempt_raw, "next_attempt_at"),
+            next_attempt_at=next_attempt,
             last_error=_optional_text(row[13]),
             tenant_id=_optional_text(row[14]),
             outcome_reference=_optional_text(row[15]),
@@ -486,7 +510,9 @@ class CaktoSqlCommercialStore(CaktoCommercialStore):
             received.payload_sha256,
         )
         if immutable_existing != immutable_received:
-            raise CaktoStateConflictError("Cakto event identity was replayed with different content")
+            raise CaktoStateConflictError(
+                "Cakto event identity was replayed with different content"
+            )
 
     def _required_event(self, event_key: str) -> CaktoWebhookInboxEntry:
         entry = self.get_cakto_event(event_key)
@@ -496,17 +522,16 @@ class CaktoSqlCommercialStore(CaktoCommercialStore):
 
 
 class CaktoSqlUnitOfWork:
-    def __init__(self, acquire: Callable[[], object]) -> None:
+    def __init__(self, acquire: ConnectionContextFactory) -> None:
         self._acquire = acquire
-        self._context: object | None = None
+        self._context: _ConnectionContext | None = None
         self._connection: _Connection | None = None
         self._commercial: CaktoSqlCommercialStore | None = None
         self._committed = False
 
     def __enter__(self) -> Self:
         context = self._acquire()
-        enter = getattr(context, "__enter__")
-        connection = cast(_Connection, enter())
+        connection = context.__enter__()
         self._context = context
         self._connection = connection
         self._commercial = CaktoSqlCommercialStore(connection)
@@ -527,8 +552,7 @@ class CaktoSqlUnitOfWork:
             if exc_type is not None or not self._committed:
                 connection.rollback()
         finally:
-            exit_method = getattr(context, "__exit__")
-            exit_method(exc_type, exc, traceback)
+            context.__exit__(exc_type, exc, traceback)
             self._connection = None
             self._commercial = None
             self._context = None
@@ -549,13 +573,12 @@ class CaktoSqlUnitOfWork:
 class CaktoCommercialDatabase:
     """Schema owner and unit-of-work factory over any certified DB-API-like connection."""
 
-    def __init__(self, acquire: Callable[[], object]) -> None:
+    def __init__(self, acquire: ConnectionContextFactory) -> None:
         self._acquire = acquire
 
     def initialize(self) -> bool:
         context = self._acquire()
-        enter = getattr(context, "__enter__")
-        connection = cast(_Connection, enter())
+        connection = context.__enter__()
         try:
             connection.execute(
                 """
@@ -580,7 +603,11 @@ class CaktoCommercialDatabase:
                 INSERT INTO fm_cakto_schema_migrations (version, name, applied_at)
                 VALUES (?, ?, ?)
                 """,
-                (CAKTO_SCHEMA_VERSION, CAKTO_SCHEMA_NAME, datetime.now().astimezone().isoformat()),
+                (
+                    CAKTO_SCHEMA_VERSION,
+                    CAKTO_SCHEMA_NAME,
+                    datetime.now().astimezone().isoformat(),
+                ),
             )
             connection.commit()
             return True
@@ -588,8 +615,7 @@ class CaktoCommercialDatabase:
             connection.rollback()
             raise
         finally:
-            exit_method = getattr(context, "__exit__")
-            exit_method(None, None, None)
+            context.__exit__(None, None, None)
 
     def unit_of_work(self) -> CaktoSqlUnitOfWork:
         return CaktoSqlUnitOfWork(self._acquire)
@@ -612,7 +638,7 @@ class SqliteCaktoCommercialDatabase(CaktoCommercialDatabase):
             finally:
                 connection.close()
 
-        super().__init__(acquire)
+        super().__init__(cast(ConnectionContextFactory, acquire))
         self.path = resolved
 
 
@@ -622,4 +648,4 @@ def postgres_cakto_commercial_database(database: object) -> CaktoCommercialDatab
     connection_method = getattr(database, "connection", None)
     if not callable(connection_method):
         raise CaktoStateConflictError("database does not expose a connection context")
-    return CaktoCommercialDatabase(cast(Callable[[], object], connection_method))
+    return CaktoCommercialDatabase(cast(ConnectionContextFactory, connection_method))
