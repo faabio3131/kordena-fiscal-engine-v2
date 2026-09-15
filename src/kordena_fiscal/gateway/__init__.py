@@ -16,6 +16,19 @@ from .authorization import (
 from .fake import FakeFiscalGateway, FakeGatewayMode
 
 if TYPE_CHECKING:
+    from .production_activation import (
+        FiscalProductionActivationError,
+        FiscalProductionActivationRequiredError,
+        FiscalProductionActivationService,
+        FiscalProductionApprovalError,
+        GovernedProviderGatewayService,
+        HumanProductionApproval,
+        OfficialHomologationProof,
+        ProductionActivationKey,
+        ProductionActivationRecord,
+        ProductionActivationState,
+        ProductionExecutionAuthority,
+    )
     from .provider import (
         ConfiguredProviderAdapter,
         CscUnavailableError,
@@ -66,6 +79,19 @@ _PROVIDER_EXPORTS = {
     "UnsupportedJurisdictionError",
     "UnsupportedProviderError",
 }
+_PRODUCTION_EXPORTS = {
+    "FiscalProductionActivationError",
+    "FiscalProductionActivationRequiredError",
+    "FiscalProductionActivationService",
+    "FiscalProductionApprovalError",
+    "GovernedProviderGatewayService",
+    "HumanProductionApproval",
+    "OfficialHomologationProof",
+    "ProductionActivationKey",
+    "ProductionActivationRecord",
+    "ProductionActivationState",
+    "ProductionExecutionAuthority",
+}
 _SYNTHETIC_EXPORTS = {"SyntheticProviderTransport", "SyntheticTransportObservation"}
 
 
@@ -74,6 +100,10 @@ def __getattr__(name: str) -> Any:
         from . import provider
 
         return getattr(provider, name)
+    if name in _PRODUCTION_EXPORTS:
+        from . import production_activation
+
+        return getattr(production_activation, name)
     if name in _SYNTHETIC_EXPORTS:
         from . import synthetic_transport
 
@@ -91,10 +121,21 @@ __all__ = [
     "FakeGatewayMode",
     "FiscalGateway",
     "FiscalGatewayClient",
+    "FiscalProductionActivationError",
+    "FiscalProductionActivationRequiredError",
+    "FiscalProductionActivationService",
+    "FiscalProductionApprovalError",
     "FiscalProviderTransport",
     "GatewayContractError",
     "GatewayProviderMetadata",
+    "GovernedProviderGatewayService",
+    "HumanProductionApproval",
     "MalformedProviderResponseError",
+    "OfficialHomologationProof",
+    "ProductionActivationKey",
+    "ProductionActivationRecord",
+    "ProductionActivationState",
+    "ProductionExecutionAuthority",
     "ProviderAuthenticationError",
     "ProviderCredentialsUnavailableError",
     "ProviderDescriptor",
