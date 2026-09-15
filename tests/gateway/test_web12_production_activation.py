@@ -11,6 +11,7 @@ from kordena_fiscal.domain import (
     ExecutionScope,
     FiscalDocumentKind,
     FiscalEnvironment,
+    FiscalValidationError,
 )
 from kordena_fiscal.gateway.production_activation import (
     FiscalProductionActivationRequiredError,
@@ -115,7 +116,7 @@ def _evidence(
 
 
 def _actor(*, tenant_id: str = "tenant-a", allowed: bool = True) -> AdminPrincipal:
-    permissions = (
+    permissions: frozenset[ControlPlanePermission] = (
         frozenset({ControlPlanePermission.CAPABILITY_WRITE}) if allowed else frozenset()
     )
     return AdminPrincipal(
@@ -274,7 +275,7 @@ def test_invalid_human_decision_never_creates_approval() -> None:
 
 
 def test_nfse_activation_key_requires_exact_municipality() -> None:
-    with pytest.raises(Exception, match="municipality_ibge_code"):
+    with pytest.raises(FiscalValidationError, match="municipality_ibge_code"):
         ProductionActivationKey(
             tenant_id="tenant-a",
             unit_id="unit-a",
