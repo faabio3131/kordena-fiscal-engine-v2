@@ -114,3 +114,16 @@ def test_production_requires_public_hostname_authority() -> None:
 def test_invalid_trusted_proxy_network_is_rejected() -> None:
     with pytest.raises(RuntimeConfigurationError, match="invalid network"):
         RuntimeSettings.from_mapping({"NFCORE_TRUSTED_PROXY_CIDRS": "not-a-network"})
+
+
+def test_production_like_profile_rejects_global_proxy_trust() -> None:
+    with pytest.raises(RuntimeConfigurationError, match="cannot trust all addresses"):
+        RuntimeSettings.from_mapping(
+            {
+                "NFCORE_ENVIRONMENT": "staging",
+                "NFCORE_PERSISTENCE_BACKEND": "postgres",
+                "DATABASE_URL": "postgresql://user:password@db:5432/nfcore",
+                "NFCORE_SECRET_BACKEND": "external",
+                "NFCORE_TRUSTED_PROXY_CIDRS": "0.0.0.0/0",
+            }
+        )
