@@ -2,6 +2,9 @@ name: FM NFCORE V1 CI
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feat/nfcore-web-08-observability-recovery
 
 permissions:
   contents: read
@@ -9,7 +12,7 @@ permissions:
 jobs:
   quality:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     services:
       postgres:
         image: postgres:16-alpine
@@ -77,6 +80,11 @@ jobs:
       - name: Validate compose
         run: docker compose config --quiet
 
+      - name: Validate recovery scripts
+        run: |
+          sh -n scripts/postgres_backup.sh
+          sh -n scripts/postgres_restore.sh
+
       - name: Build runtime images
         run: |
           docker build -f Dockerfile.api -t nfcore-api:test .
@@ -116,6 +124,8 @@ jobs:
           done
           curl --fail http://127.0.0.1:8080/health/live
           curl --fail http://127.0.0.1:8080/health/ready
+          curl --fail http://127.0.0.1:8080/internal/metrics >/tmp/nfcore-metrics.json
+          ! grep -Eqi 'password|authorization|private key|begin certificate|csc=' /tmp/nfcore-metrics.json
           test "$(docker inspect nfcore-api-smoke --format '{{.State.Running}}')" = "true"
           docker stop --time 10 nfcore-api-smoke
           docker rm nfcore-api-smoke
@@ -147,3 +157,45 @@ jobs:
           for image in nfcore-api:test nfcore-worker:test nfcore-portal:test; do
             docker history --no-trunc "$image" | grep -Evi 'PASSWORD=|PRIVATE KEY|BEGIN CERTIFICATE|CSC=' >/dev/null
           done
+
+      - name: PostgreSQL backup and restore rehearsal
+        run: |
+          mkdir -p .tmp-backup
+          docker run --rm --network host \
+            -e PGPASSWORD=nfcore_test_password postgres:16-alpine \
+            psql -h 127.0.0.1 -U nfcore -d nfcore_test -v ON_ERROR_STOP=1 \
+            -c "CREATE TABLE IF NOT EXISTS wp08_restore_sentinel (id integer PRIMARY KEY, value text NOT NULL);" \
+            -c "INSERT INTO wp08_restore_sentinel (id,value) VALUES (1,'restore-ok') ON CONFLICT (id) DO UPDATE SET value=EXCLUDED.value;"
+          docker run --rm --network host \
+            -v "$PWD/.tmp-backup:/backup" \
+            -e PGPASSWORD=nfcore_test_password postgres:16-alpine \
+            pg_dump -h 127.0.0.1 -U nfcore -d nfcore_test -Fc -f /backup/nfcore.dump
+          sha256sum .tmp-backup/nfcore.dump > .tmp-backup/nfcore.dump.sha256
+          sha256sum --check .tmp-backup/nfcore.dump.sha256
+          docker run --rm --network host \
+            -e PGPASSWORD=nfcore_test_password postgres:16-alpine \
+            psql -h 127.0.0.1 -U nfcore -d nfcore_test -v ON_ERROR_STOP=1 \
+            -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+          docker run --rm --network host \
+            -v "$PWD/.tmp-backup:/backup" \
+            -e PGPASSWORD=nfcore_test_password postgres:16-alpine \
+            pg_restore -h 127.0.0.1 -U nfcore -d nfcore_test \
+            --no-owner --no-acl --exit-on-error /backup/nfcore.dump
+          test "$(docker run --rm --network host -e PGPASSWORD=nfcore_test_password postgres:16-alpine psql -h 127.0.0.1 -U nfcore -d nfcore_test -Atqc "SELECT value FROM wp08_restore_sentinel WHERE id=1")" = "restore-ok"
+
+      - name: Application readiness against restored database
+        env:
+          NFCORE_ENVIRONMENT: staging
+          NFCORE_PERSISTENCE_BACKEND: postgres
+          DATABASE_URL: postgresql://nfcore:nfcore_test_password@127.0.0.1:5432/nfcore_test
+          NFCORE_SECRET_BACKEND: external
+          NFCORE_REQUIRE_HTTPS: "true"
+        run: |
+          python - <<'PY'
+          from fastapi.testclient import TestClient
+          from kordena_fiscal.runtime.api import create_runtime_app
+
+          with TestClient(create_runtime_app()) as client:
+              response = client.get('/health/ready')
+              assert response.status_code == 200, response.text
+          PY
