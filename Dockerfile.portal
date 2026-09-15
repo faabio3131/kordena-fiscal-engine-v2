@@ -11,8 +11,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /srv/portal
 RUN addgroup -g 10001 nfcore && adduser -D -u 10001 -G nfcore nfcore
 COPY --from=build --chown=10001:10001 /build/dist/portal /srv/portal
+COPY --chown=10001:10001 scripts/serve_portal.py /srv/serve_portal.py
 USER 10001:10001
 EXPOSE 8081
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/', timeout=2).read()"
-CMD ["python", "-m", "http.server", "8081", "--bind", "0.0.0.0", "--directory", "/srv/portal"]
+CMD ["python", "/srv/serve_portal.py", "--directory", "/srv/portal", "--host", "0.0.0.0", "--port", "8081"]
