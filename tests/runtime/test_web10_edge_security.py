@@ -98,6 +98,19 @@ def test_production_like_profile_rejects_wildcard_cors() -> None:
         )
 
 
+def test_production_requires_public_hostname_authority() -> None:
+    with pytest.raises(RuntimeConfigurationError, match="NFCORE_PUBLIC_HOSTNAME"):
+        RuntimeSettings.from_mapping(
+            {
+                "NFCORE_ENVIRONMENT": "production",
+                "NFCORE_PERSISTENCE_BACKEND": "postgres",
+                "DATABASE_URL": "postgresql://user:password@db:5432/nfcore",
+                "NFCORE_SECRET_BACKEND": "external",
+                "NFCORE_REQUIRE_HTTPS": "true",
+            }
+        )
+
+
 def test_invalid_trusted_proxy_network_is_rejected() -> None:
     with pytest.raises(RuntimeConfigurationError, match="invalid network"):
         RuntimeSettings.from_mapping({"NFCORE_TRUSTED_PROXY_CIDRS": "not-a-network"})
