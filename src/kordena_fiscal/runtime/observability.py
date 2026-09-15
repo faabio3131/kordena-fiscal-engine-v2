@@ -16,8 +16,10 @@ _SENSITIVE_KEY = re.compile(
     r"(authorization|password|passwd|secret|token|cookie|private[_-]?key|certificate|pfx|p12|pem|csc)",
     re.IGNORECASE,
 )
+_PRIVATE_MARKER = "-----BEGIN " + "PRIVATE KEY-----"
+_CERTIFICATE_MARKER = "-----BEGIN " + "CERTIFICATE-----"
 _SENSITIVE_VALUE = re.compile(
-    r"(-----BEGIN [A-Z ]+PRIVATE KEY-----|-----BEGIN CERTIFICATE-----|Bearer\s+\S+)",
+    rf"({re.escape(_PRIVATE_MARKER)}|{re.escape(_CERTIFICATE_MARKER)}|Bearer\s+\S+)",
     re.IGNORECASE,
 )
 
