@@ -9,6 +9,7 @@ from uuid import uuid4
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from kordena_fiscal.gateway.production_activation import ProductionExecutionAuthority
 from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
 from kordena_fiscal.product.cakto import CaktoWebhookReceiver
 from kordena_fiscal.web.app import create_app
@@ -57,6 +58,7 @@ def create_runtime_app(
     metrics: MetricsRegistry | None = None,
     logger: StructuredLogger | None = None,
     cakto_receiver: CaktoWebhookReceiver | None = None,
+    production_authority: ProductionExecutionAuthority | None = None,
 ) -> FastAPI:
     resolved = settings or RuntimeSettings.from_environ()
     runtime = RuntimeApi(resolved)
@@ -77,6 +79,7 @@ def create_runtime_app(
     app.state.nfcore_runtime = runtime
     app.state.nfcore_metrics = runtime_metrics
     app.state.nfcore_logger = runtime_logger
+    app.state.nfcore_production_authority = production_authority
     configure_edge_security(app, resolved)
 
     @app.middleware("http")
@@ -164,6 +167,7 @@ def create_runtime_app(
 
     @app.get("/runtime/profile", tags=["health"])
     async def profile() -> dict[str, object]:
+        active_grants = 0 if production_authority is None else production_authority.active_count
         return {
             "environment": resolved.environment.value,
             "persistence_backend": resolved.persistence_backend,
@@ -171,14 +175,15 @@ def create_runtime_app(
             "https_required": resolved.require_https,
             "public_hostname_configured": resolved.public_hostname is not None,
             "trusted_proxy_networks_configured": len(resolved.trusted_proxy_cidrs),
-            "fiscal_production_activated": False,
+            "fiscal_production_activated": active_grants > 0,
+            "fiscal_production_active_grants": active_grants,
             "cakto_webhook_configured": cakto_receiver is not None,
         }
 
     if cakto_receiver is not None:
         app.include_router(build_cakto_webhook_router(cakto_receiver))
 
-    # Existing bridge remains fail-closed because no fiscal provider authority is invented.
+    # Fiscal production stays false unless a governed authority is explicitly injected.
     app.mount("/", create_app())
     return app
 
