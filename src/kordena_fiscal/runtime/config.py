@@ -158,7 +158,9 @@ class RuntimeSettings:
             if not _HOSTNAME.fullmatch(self.public_hostname) or ":" in self.public_hostname:
                 raise RuntimeConfigurationError("NFCORE_PUBLIC_HOSTNAME must be a DNS hostname")
         if production_like and "*" in self.trusted_hosts:
-            raise RuntimeConfigurationError("staging/production trusted hosts cannot contain wildcard")
+            raise RuntimeConfigurationError(
+                "staging/production trusted hosts cannot contain wildcard"
+            )
         for host in self.trusted_hosts:
             if host != "*" and not _HOSTNAME.fullmatch(host):
                 raise RuntimeConfigurationError("NFCORE_TRUSTED_HOSTS contains an invalid hostname")
