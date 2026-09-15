@@ -1,14 +1,17 @@
-"""Container-facing API assembly with infrastructure readiness checks."""
+"""Container-facing API assembly with infrastructure readiness and observability."""
 
 from __future__ import annotations
 
-from fastapi import FastAPI
+from uuid import uuid4
+
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
 from kordena_fiscal.web.app import create_app
 
 from .config import RuntimeSettings
+from .observability import MetricsRegistry, RequestTimer, StructuredLogger
 
 
 class RuntimeApi:
@@ -43,11 +46,85 @@ class RuntimeApi:
             self.database.close()
 
 
-def create_runtime_app(settings: RuntimeSettings | None = None) -> FastAPI:
+def create_runtime_app(
+    settings: RuntimeSettings | None = None,
+    *,
+    metrics: MetricsRegistry | None = None,
+    logger: StructuredLogger | None = None,
+) -> FastAPI:
     resolved = settings or RuntimeSettings.from_environ()
     runtime = RuntimeApi(resolved)
+    runtime_metrics = metrics or MetricsRegistry()
+    runtime_logger = logger or StructuredLogger(
+        service="nfcore-api",
+        environment=resolved.environment.value,
+    )
     app = FastAPI(title="FM NFCORE Runtime", version="1.0.0")
     app.state.nfcore_runtime = runtime
+    app.state.nfcore_metrics = runtime_metrics
+    app.state.nfcore_logger = runtime_logger
+
+    @app.middleware("http")
+    async def observe_request(request: Request, call_next):  # type: ignore[no-untyped-def]
+        timer = RequestTimer()
+        correlation_id = request.headers.get("X-Correlation-Id", "").strip() or uuid4().hex
+        causation_id = request.headers.get("X-Causation-Id", "").strip() or None
+        try:
+            response = await call_next(request)
+            status_code = response.status_code
+            outcome = "success" if status_code < 500 else "server_error"
+        except Exception as exc:
+            elapsed = timer.elapsed()
+            runtime_metrics.increment(
+                "nfcore_http_requests_total",
+                method=request.method,
+                status_class="5xx",
+            )
+            runtime_metrics.observe_seconds(
+                "nfcore_http_request",
+                elapsed,
+                method=request.method,
+                status_class="5xx",
+            )
+            runtime_logger.emit(
+                "ERROR",
+                "http_request_failed",
+                request_id=correlation_id,
+                correlation_id=correlation_id,
+                causation_id=causation_id,
+                method=request.method,
+                path=request.url.path,
+                duration_seconds=elapsed,
+                error_type=type(exc).__name__,
+            )
+            raise
+        elapsed = timer.elapsed()
+        status_class = f"{status_code // 100}xx"
+        runtime_metrics.increment(
+            "nfcore_http_requests_total",
+            method=request.method,
+            status_class=status_class,
+        )
+        runtime_metrics.observe_seconds(
+            "nfcore_http_request",
+            elapsed,
+            method=request.method,
+            status_class=status_class,
+        )
+        runtime_logger.emit(
+            "INFO",
+            "http_request_completed",
+            request_id=correlation_id,
+            correlation_id=correlation_id,
+            causation_id=causation_id,
+            method=request.method,
+            path=request.url.path,
+            status_code=status_code,
+            result=outcome,
+            duration_seconds=elapsed,
+        )
+        response.headers["X-Correlation-Id"] = correlation_id
+        return response
 
     @app.get("/health/live", tags=["health"])
     async def live() -> dict[str, str]:
@@ -56,10 +133,19 @@ def create_runtime_app(settings: RuntimeSettings | None = None) -> FastAPI:
     @app.get("/health/ready", tags=["health"])
     async def ready() -> JSONResponse:
         healthy, reason = runtime.ready()
+        runtime_metrics.increment(
+            "nfcore_dependency_checks_total",
+            service="postgres" if resolved.persistence_backend == "postgres" else "sqlite",
+            outcome="ready" if healthy else "not_ready",
+        )
         return JSONResponse(
             status_code=200 if healthy else 503,
             content={"status": "ready" if healthy else "not_ready", "reason": reason},
         )
+
+    @app.get("/internal/metrics", tags=["operability"])
+    async def metric_snapshot() -> dict[str, object]:
+        return {"metrics": runtime_metrics.as_dicts()}
 
     @app.get("/runtime/profile", tags=["health"])
     async def profile() -> dict[str, object]:
@@ -75,8 +161,7 @@ def create_runtime_app(settings: RuntimeSettings | None = None) -> FastAPI:
     async def close_runtime() -> None:
         runtime.close()
 
-    # The existing bridge remains fail-closed because no fiscal authority/provider
-    # adapter is invented by the container packaging work package.
+    # Existing bridge remains fail-closed because no fiscal provider authority is invented.
     app.mount("/", create_app())
     return app
 
