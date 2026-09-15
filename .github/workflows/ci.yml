@@ -2,9 +2,13 @@ name: FM NFCORE V1 CI
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
-      - feat/nfcore-web-08-observability-recovery
+      - main
+      - "feat/nfcore-web-*"
 
 permissions:
   contents: read
@@ -12,7 +16,7 @@ permissions:
 jobs:
   quality:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     services:
       postgres:
         image: postgres:16-alpine
@@ -39,8 +43,14 @@ jobs:
           python-version: "3.11"
           cache: pip
 
+      - name: Repository secret scan
+        run: python scripts/ci/check_repository_secrets.py
+
       - name: Install Python
         run: python -m pip install -e ".[dev]"
+
+      - name: Govern migration policy
+        run: python scripts/ci/migration_guard.py --check-policy
 
       - name: Ruff
         run: ruff check .
@@ -51,6 +61,11 @@ jobs:
       - name: Pytest
         run: pytest
 
+      - name: Python dependency audit
+        run: |
+          python -m pip install "pip-audit==2.10.1"
+          pip-audit --progress-spinner off .
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
@@ -58,6 +73,9 @@ jobs:
 
       - name: Install frontend
         run: npm install --no-audit --no-fund
+
+      - name: Node dependency audit
+        run: npm audit --audit-level=high
 
       - name: Frontend lint
         run: npm run lint:frontend
@@ -80,10 +98,16 @@ jobs:
       - name: Validate compose
         run: docker compose config --quiet
 
-      - name: Validate recovery scripts
+      - name: Validate operational scripts
         run: |
           sh -n scripts/postgres_backup.sh
           sh -n scripts/postgres_restore.sh
+          sh -n scripts/ci/staging_preflight.sh
+          sh -n scripts/ci/staging_smoke.sh
+          sh -n scripts/ci/run_staging_deploy.sh
+          sh -n scripts/ci/production_preflight.sh
+          sh -n scripts/ci/production_smoke.sh
+          sh -n scripts/ci/run_production_promotion.sh
 
       - name: Build runtime images
         run: |
@@ -160,6 +184,34 @@ jobs:
               exit 1
             fi
           done
+
+      - name: Container vulnerability policy
+        run: |
+          for image in nfcore-api:test nfcore-worker:test nfcore-portal:test; do
+            docker run --rm \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              aquasec/trivy:0.74.0 image \
+              --quiet --exit-code 1 --ignore-unfixed --severity CRITICAL "$image"
+          done
+
+      - name: Generate image SBOMs
+        run: |
+          mkdir -p .artifacts/sbom
+          for image in nfcore-api:test nfcore-worker:test nfcore-portal:test; do
+            output="$(echo "$image" | tr ':/' '--').cdx.json"
+            docker run --rm \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v "$PWD/.artifacts/sbom:/out" \
+              aquasec/trivy:0.74.0 image \
+              --quiet --format cyclonedx --output "/out/$output" "$image"
+          done
+
+      - name: Upload SBOM evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfcore-image-sbom-${{ github.sha }}
+          path: .artifacts/sbom/*.cdx.json
+          retention-days: 14
 
       - name: PostgreSQL backup and restore rehearsal
         run: |
