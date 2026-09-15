@@ -38,9 +38,13 @@ def _validate_origin(origin: str, *, production_like: bool) -> None:
             raise RuntimeConfigurationError("staging/production CORS cannot allow wildcard origin")
         return
     parsed = urlparse(origin)
+    try:
+        _ = parsed.port
+    except ValueError as exc:
+        raise RuntimeConfigurationError("CORS origins contain an invalid port") from exc
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         raise RuntimeConfigurationError("CORS origins must be absolute HTTP(S) origins")
-    if parsed.path not in {"", "/"} or parsed.query or parsed.fragment or parsed.username:
+    if parsed.path or parsed.query or parsed.fragment or parsed.username or parsed.password:
         raise RuntimeConfigurationError("CORS origins must not contain path, query or credentials")
     if production_like and parsed.scheme != "https":
         raise RuntimeConfigurationError("staging/production CORS origins must use HTTPS")
@@ -148,6 +152,8 @@ class RuntimeSettings:
             raise RuntimeConfigurationError("unsupported production secret backend profile")
         if self.environment is RuntimeEnvironment.PRODUCTION and not self.require_https:
             raise RuntimeConfigurationError("production requires HTTPS policy")
+        if self.environment is RuntimeEnvironment.PRODUCTION and self.public_hostname is None:
+            raise RuntimeConfigurationError("production requires NFCORE_PUBLIC_HOSTNAME")
 
         if self.public_hostname is not None:
             if not _HOSTNAME.fullmatch(self.public_hostname) or ":" in self.public_hostname:
