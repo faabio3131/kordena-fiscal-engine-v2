@@ -168,11 +168,15 @@ class RuntimeSettings:
             _validate_origin(origin, production_like=production_like)
         for cidr in self.trusted_proxy_cidrs:
             try:
-                ipaddress.ip_network(cidr, strict=False)
+                network = ipaddress.ip_network(cidr, strict=False)
             except ValueError as exc:
                 raise RuntimeConfigurationError(
                     "NFCORE_TRUSTED_PROXY_CIDRS contains an invalid network"
                 ) from exc
+            if production_like and network.prefixlen == 0:
+                raise RuntimeConfigurationError(
+                    "staging/production trusted proxy networks cannot trust all addresses"
+                )
 
     @property
     def is_production_like(self) -> bool:
