@@ -155,7 +155,10 @@ jobs:
       - name: Inspect images for forbidden secret artifacts
         run: |
           for image in nfcore-api:test nfcore-worker:test nfcore-portal:test; do
-            docker history --no-trunc "$image" | grep -Evi 'PASSWORD=|PRIVATE KEY|BEGIN CERTIFICATE|CSC=' >/dev/null
+            if docker history --no-trunc "$image" | grep -Ei 'PASSWORD=|PRIVATE KEY|BEGIN CERTIFICATE|CSC='; then
+              echo "forbidden secret material found in image history: $image"
+              exit 1
+            fi
           done
 
       - name: PostgreSQL backup and restore rehearsal
@@ -182,6 +185,7 @@ jobs:
             pg_restore -h 127.0.0.1 -U nfcore -d nfcore_test \
             --no-owner --no-acl --exit-on-error /backup/nfcore.dump
           test "$(docker run --rm --network host -e PGPASSWORD=nfcore_test_password postgres:16-alpine psql -h 127.0.0.1 -U nfcore -d nfcore_test -Atqc "SELECT value FROM wp08_restore_sentinel WHERE id=1")" = "restore-ok"
+          test "$(docker run --rm --network host -e PGPASSWORD=nfcore_test_password postgres:16-alpine psql -h 127.0.0.1 -U nfcore -d nfcore_test -Atqc "SELECT COUNT(*) FROM fm_schema_migrations")" -gt 0
 
       - name: Application readiness against restored database
         env:
