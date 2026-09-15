@@ -14,6 +14,7 @@ from kordena_fiscal.web.app import create_app
 
 from .config import RuntimeSettings
 from .observability import MetricsRegistry, RequestTimer, StructuredLogger
+from .security import configure_edge_security
 
 
 class RuntimeApi:
@@ -73,6 +74,7 @@ def create_runtime_app(
     app.state.nfcore_runtime = runtime
     app.state.nfcore_metrics = runtime_metrics
     app.state.nfcore_logger = runtime_logger
+    configure_edge_security(app, resolved)
 
     @app.middleware("http")
     async def observe_request(request: Request, call_next):  # type: ignore[no-untyped-def]
@@ -164,6 +166,8 @@ def create_runtime_app(
             "persistence_backend": resolved.persistence_backend,
             "secret_backend_profile": resolved.secret_backend,
             "https_required": resolved.require_https,
+            "public_hostname_configured": resolved.public_hostname is not None,
+            "trusted_proxy_networks_configured": len(resolved.trusted_proxy_cidrs),
             "fiscal_production_activated": False,
         }
 
