@@ -5,13 +5,14 @@ import hmac
 import json
 from datetime import UTC, datetime
 
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from kordena_fiscal.persistence.cakto import SqliteCaktoCommercialDatabase
 from kordena_fiscal.product.cakto import CaktoWebhookReceiver, CaktoWebhookVerifier
 from kordena_fiscal.runtime.api import create_runtime_app
-from kordena_fiscal.runtime.config import RuntimeSettings
 from kordena_fiscal.runtime.cakto import build_cakto_webhook_router
+from kordena_fiscal.runtime.config import RuntimeSettings
 
 NOW = datetime(2026, 9, 15, 20, 20, tzinfo=UTC)
 SECRET = b"test-only-webhook-key"
@@ -115,8 +116,6 @@ def test_http_boundary_rejects_missing_or_invalid_authentication(tmp_path) -> No
 
 def test_isolated_router_returns_400_for_authenticated_malformed_payload(tmp_path) -> None:
     receiver = _receiver(tmp_path)
-    from fastapi import FastAPI
-
     app = FastAPI()
     app.include_router(build_cakto_webhook_router(receiver, clock=lambda: NOW))
     client = TestClient(app)
