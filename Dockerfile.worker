@@ -1,0 +1,15 @@
+FROM python:3.11-slim-bookworm AS runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+WORKDIR /app
+RUN groupadd --gid 10001 nfcore && useradd --uid 10001 --gid 10001 --no-create-home nfcore
+
+COPY pyproject.toml README.md ./
+COPY src ./src
+RUN python -m pip install --upgrade pip && python -m pip install ".[postgres]"
+
+USER 10001:10001
+CMD ["python", "-m", "kordena_fiscal.runtime.worker_main"]

@@ -9,7 +9,7 @@ permissions:
 jobs:
   quality:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:16-alpine
@@ -73,3 +73,77 @@ jobs:
 
       - name: E2E critical
         run: npm run test:e2e
+
+      - name: Validate compose
+        run: docker compose config --quiet
+
+      - name: Build runtime images
+        run: |
+          docker build -f Dockerfile.api -t nfcore-api:test .
+          docker build -f Dockerfile.worker -t nfcore-worker:test .
+          docker build -f Dockerfile.portal -t nfcore-portal:test .
+
+      - name: Validate non-root images
+        run: |
+          test "$(docker image inspect nfcore-api:test --format '{{.Config.User}}')" = "10001:10001"
+          test "$(docker image inspect nfcore-worker:test --format '{{.Config.User}}')" = "10001:10001"
+          test "$(docker image inspect nfcore-portal:test --format '{{.Config.User}}')" = "10001:10001"
+
+      - name: Reject insecure production profile
+        run: |
+          if docker run --rm \
+            -e NFCORE_ENVIRONMENT=production \
+            -e NFCORE_PERSISTENCE_BACKEND=sqlite \
+            -e NFCORE_SECRET_BACKEND=memory \
+            -e NFCORE_REQUIRE_HTTPS=false \
+            nfcore-api:test; then
+            echo "insecure production profile unexpectedly started"
+            exit 1
+          fi
+
+      - name: API container smoke and readiness
+        run: |
+          docker run -d --name nfcore-api-smoke --network host \
+            -e NFCORE_ENVIRONMENT=staging \
+            -e NFCORE_PERSISTENCE_BACKEND=postgres \
+            -e DATABASE_URL="$NFCORE_TEST_POSTGRES_DSN" \
+            -e NFCORE_SECRET_BACKEND=external \
+            -e NFCORE_REQUIRE_HTTPS=true \
+            nfcore-api:test
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8080/health/ready; then break; fi
+            sleep 1
+          done
+          curl --fail http://127.0.0.1:8080/health/live
+          curl --fail http://127.0.0.1:8080/health/ready
+          test "$(docker inspect nfcore-api-smoke --format '{{.State.Running}}')" = "true"
+          docker stop --time 10 nfcore-api-smoke
+          docker rm nfcore-api-smoke
+
+      - name: Worker container startup and governed exit
+        run: |
+          docker run --rm --network host \
+            -e NFCORE_ENVIRONMENT=staging \
+            -e NFCORE_PERSISTENCE_BACKEND=postgres \
+            -e DATABASE_URL="$NFCORE_TEST_POSTGRES_DSN" \
+            -e NFCORE_SECRET_BACKEND=external \
+            -e NFCORE_REQUIRE_HTTPS=true \
+            -e NFCORE_WORKER_ONESHOT=true \
+            nfcore-worker:test
+
+      - name: Portal container smoke
+        run: |
+          docker run -d --name nfcore-portal-smoke --network host nfcore-portal:test
+          for i in $(seq 1 20); do
+            if curl --fail --silent http://127.0.0.1:8081/ >/dev/null; then break; fi
+            sleep 1
+          done
+          curl --fail http://127.0.0.1:8081/ >/dev/null
+          docker stop --time 10 nfcore-portal-smoke
+          docker rm nfcore-portal-smoke
+
+      - name: Inspect images for forbidden secret artifacts
+        run: |
+          for image in nfcore-api:test nfcore-worker:test nfcore-portal:test; do
+            docker history --no-trunc "$image" | grep -Evi 'PASSWORD=|PRIVATE KEY|BEGIN CERTIFICATE|CSC=' >/dev/null
+          done

@@ -1,0 +1,56 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: nfcore
+      POSTGRES_USER: nfcore
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nfcore_local_only}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nfcore -d nfcore"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - nfcore_postgres:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    environment:
+      NFCORE_ENVIRONMENT: ${NFCORE_ENVIRONMENT:-development}
+      NFCORE_PERSISTENCE_BACKEND: postgres
+      DATABASE_URL: postgresql://nfcore:${POSTGRES_PASSWORD:-nfcore_local_only}@postgres:5432/nfcore
+      NFCORE_SECRET_BACKEND: ${NFCORE_SECRET_BACKEND:-memory}
+      NFCORE_REQUIRE_HTTPS: ${NFCORE_REQUIRE_HTTPS:-false}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    stop_grace_period: 15s
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    environment:
+      NFCORE_ENVIRONMENT: ${NFCORE_ENVIRONMENT:-development}
+      NFCORE_PERSISTENCE_BACKEND: postgres
+      DATABASE_URL: postgresql://nfcore:${POSTGRES_PASSWORD:-nfcore_local_only}@postgres:5432/nfcore
+      NFCORE_SECRET_BACKEND: ${NFCORE_SECRET_BACKEND:-memory}
+      NFCORE_REQUIRE_HTTPS: ${NFCORE_REQUIRE_HTTPS:-false}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    stop_grace_period: 15s
+
+  portal:
+    build:
+      context: .
+      dockerfile: Dockerfile.portal
+    ports:
+      - "8081:8081"
+
+volumes:
+  nfcore_postgres:
