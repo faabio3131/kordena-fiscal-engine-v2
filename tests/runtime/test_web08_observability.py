@@ -128,7 +128,11 @@ def test_worker_observer_records_cycle_and_dead_letter_metrics_without_secrets()
             elapsed_seconds=0.5,
         )
     )
-    samples = {sample.labels: sample.value for sample in metrics.snapshot() if sample.name == "nfcore_worker_jobs_total"}
+    samples = {
+        sample.labels: sample.value
+        for sample in metrics.snapshot()
+        if sample.name == "nfcore_worker_jobs_total"
+    }
     assert (("outcome", "dead_letter"),) in samples
     assert samples[(("outcome", "dead_letter"),)] == 1.0
     assert output and SECRET not in output[0]
