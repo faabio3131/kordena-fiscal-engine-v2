@@ -52,10 +52,14 @@ def validate_policy() -> tuple[int, ...]:
 
 def _require_apply_approval(environment: str) -> None:
     if os.getenv("NFCORE_SCHEMA_MIGRATION_APPROVED", "").casefold() != "true":
-        raise RuntimeError("schema migration blocked: NFCORE_SCHEMA_MIGRATION_APPROVED=true required")
-    if environment == "production" and os.getenv("NFCORE_PRODUCTION_APPROVAL") != "PRODUCTION_APPROVED":
         raise RuntimeError(
-            "production migration blocked: NFCORE_PRODUCTION_APPROVAL=PRODUCTION_APPROVED required"
+            "schema migration blocked: NFCORE_SCHEMA_MIGRATION_APPROVED=true required"
+        )
+    production_approval = os.getenv("NFCORE_PRODUCTION_APPROVAL")
+    if environment == "production" and production_approval != "PRODUCTION_APPROVED":
+        raise RuntimeError(
+            "production migration blocked: "
+            "NFCORE_PRODUCTION_APPROVAL=PRODUCTION_APPROVED required"
         )
 
 
