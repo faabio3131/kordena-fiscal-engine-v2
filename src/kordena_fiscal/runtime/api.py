@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
@@ -59,7 +61,15 @@ def create_runtime_app(
         service="nfcore-api",
         environment=resolved.environment.value,
     )
-    app = FastAPI(title="FM NFCORE Runtime", version="1.0.0")
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        try:
+            yield
+        finally:
+            runtime.close()
+
+    app = FastAPI(title="FM NFCORE Runtime", version="1.0.0", lifespan=lifespan)
     app.state.nfcore_runtime = runtime
     app.state.nfcore_metrics = runtime_metrics
     app.state.nfcore_logger = runtime_logger
@@ -156,10 +166,6 @@ def create_runtime_app(
             "https_required": resolved.require_https,
             "fiscal_production_activated": False,
         }
-
-    @app.on_event("shutdown")
-    async def close_runtime() -> None:
-        runtime.close()
 
     # Existing bridge remains fail-closed because no fiscal provider authority is invented.
     app.mount("/", create_app())
