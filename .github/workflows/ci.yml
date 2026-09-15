@@ -2,9 +2,6 @@ name: FM NFCORE V1 CI
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - feat/nfcore-web-07-containers-environments
 
 permissions:
   contents: read
