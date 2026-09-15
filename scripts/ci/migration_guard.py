@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import re
 
@@ -13,6 +14,19 @@ _DESTRUCTIVE = re.compile(
     r"\b(?:DROP\s+(?:TABLE|SCHEMA|DATABASE|COLUMN)|TRUNCATE|DELETE\s+FROM)\b",
     re.IGNORECASE,
 )
+# Migration 5 predates WP-WEB-09 and was already certified. Its destructive step is
+# fingerprint-pinned so changing it, or adding any new destructive migration, fails closed.
+_APPROVED_LEGACY_DESTRUCTIVE = {
+    (
+        5,
+        "51652667759562a46b810dde224253444c5dc93916a601dc36205d3f4a8441d5",
+    ),
+}
+
+
+def _statement_fingerprint(statement: str) -> str:
+    normalized = " ".join(statement.split())
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
 def validate_policy() -> tuple[int, ...]:
@@ -24,7 +38,10 @@ def validate_policy() -> tuple[int, ...]:
 
     for migration in _MIGRATIONS:
         for statement in migration.statements:
-            if _DESTRUCTIVE.search(statement):
+            if not _DESTRUCTIVE.search(statement):
+                continue
+            fingerprint = _statement_fingerprint(statement)
+            if (migration.version, fingerprint) not in _APPROVED_LEGACY_DESTRUCTIVE:
                 raise RuntimeError(
                     f"destructive migration blocked: version={migration.version} "
                     f"name={migration.name}"
