@@ -2,10 +2,19 @@
 
 from __future__ import annotations
 
+import ipaddress
 import os
+import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
+from urllib.parse import urlparse
+
+_HOSTNAME = re.compile(
+    r"^(?=.{1,253}$)(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)*"
+    r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$"
+)
+_INTERNAL_TRUSTED_HOSTS = ("localhost", "127.0.0.1", "testserver")
 
 
 class RuntimeConfigurationError(RuntimeError):
@@ -19,6 +28,24 @@ class RuntimeEnvironment(StrEnum):
     PRODUCTION = "production"
 
 
+def _csv_tokens(value: str) -> tuple[str, ...]:
+    return tuple(dict.fromkeys(item.strip() for item in value.split(",") if item.strip()))
+
+
+def _validate_origin(origin: str, *, production_like: bool) -> None:
+    if origin == "*":
+        if production_like:
+            raise RuntimeConfigurationError("staging/production CORS cannot allow wildcard origin")
+        return
+    parsed = urlparse(origin)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise RuntimeConfigurationError("CORS origins must be absolute HTTP(S) origins")
+    if parsed.path not in {"", "/"} or parsed.query or parsed.fragment or parsed.username:
+        raise RuntimeConfigurationError("CORS origins must not contain path, query or credentials")
+    if production_like and parsed.scheme != "https":
+        raise RuntimeConfigurationError("staging/production CORS origins must use HTTPS")
+
+
 @dataclass(frozen=True, slots=True)
 class RuntimeSettings:
     environment: RuntimeEnvironment
@@ -27,6 +54,10 @@ class RuntimeSettings:
     secret_backend: str
     require_https: bool
     port: int
+    public_hostname: str | None = None
+    allowed_origins: tuple[str, ...] = ()
+    trusted_hosts: tuple[str, ...] = _INTERNAL_TRUSTED_HOSTS
+    trusted_proxy_cidrs: tuple[str, ...] = ()
 
     @classmethod
     def from_mapping(cls, values: Mapping[str, str]) -> RuntimeSettings:
@@ -63,6 +94,18 @@ class RuntimeSettings:
         if port < 1 or port > 65535:
             raise RuntimeConfigurationError("PORT must be between 1 and 65535")
 
+        public_hostname = values.get("NFCORE_PUBLIC_HOSTNAME", "").strip().lower() or None
+        allowed_origins = _csv_tokens(values.get("NFCORE_ALLOWED_ORIGINS", ""))
+        if public_hostname and not allowed_origins:
+            allowed_origins = (f"https://{public_hostname}",)
+        configured_hosts = _csv_tokens(values.get("NFCORE_TRUSTED_HOSTS", ""))
+        trusted_hosts = tuple(
+            dict.fromkeys(
+                (*_INTERNAL_TRUSTED_HOSTS, *configured_hosts, *((public_hostname,) if public_hostname else ()))
+            )
+        )
+        trusted_proxy_cidrs = _csv_tokens(values.get("NFCORE_TRUSTED_PROXY_CIDRS", ""))
+
         settings = cls(
             environment=environment,
             persistence_backend=persistence,
@@ -70,6 +113,10 @@ class RuntimeSettings:
             secret_backend=secret_backend,
             require_https=https_raw == "true",
             port=port,
+            public_hostname=public_hostname,
+            allowed_origins=allowed_origins,
+            trusted_hosts=trusted_hosts,
+            trusted_proxy_cidrs=trusted_proxy_cidrs,
         )
         settings.validate()
         return settings
@@ -101,6 +148,24 @@ class RuntimeSettings:
             raise RuntimeConfigurationError("unsupported production secret backend profile")
         if self.environment is RuntimeEnvironment.PRODUCTION and not self.require_https:
             raise RuntimeConfigurationError("production requires HTTPS policy")
+
+        if self.public_hostname is not None:
+            if not _HOSTNAME.fullmatch(self.public_hostname) or ":" in self.public_hostname:
+                raise RuntimeConfigurationError("NFCORE_PUBLIC_HOSTNAME must be a DNS hostname")
+        if production_like and "*" in self.trusted_hosts:
+            raise RuntimeConfigurationError("staging/production trusted hosts cannot contain wildcard")
+        for host in self.trusted_hosts:
+            if host != "*" and not _HOSTNAME.fullmatch(host):
+                raise RuntimeConfigurationError("NFCORE_TRUSTED_HOSTS contains an invalid hostname")
+        for origin in self.allowed_origins:
+            _validate_origin(origin, production_like=production_like)
+        for cidr in self.trusted_proxy_cidrs:
+            try:
+                ipaddress.ip_network(cidr, strict=False)
+            except ValueError as exc:
+                raise RuntimeConfigurationError(
+                    "NFCORE_TRUSTED_PROXY_CIDRS contains an invalid network"
+                ) from exc
 
     @property
     def is_production_like(self) -> bool:
