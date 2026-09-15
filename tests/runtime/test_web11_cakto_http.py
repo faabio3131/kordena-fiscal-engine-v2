@@ -14,7 +14,7 @@ from kordena_fiscal.runtime.api import create_runtime_app
 from kordena_fiscal.runtime.cakto import build_cakto_webhook_router
 from kordena_fiscal.runtime.config import RuntimeSettings
 
-NOW = datetime(2026, 9, 15, 20, 20, tzinfo=UTC)
+NOW = datetime.now(UTC)
 SECRET = b"test-only-webhook-key"
 
 
