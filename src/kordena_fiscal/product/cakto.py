@@ -13,6 +13,7 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
+from types import TracebackType
 from typing import Any, Protocol, Self
 
 
@@ -102,8 +103,16 @@ class CaktoPlanBinding:
     enabled: bool = True
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "external_product_id", _text(self.external_product_id, "product"))
-        object.__setattr__(self, "external_offer_id", _text(self.external_offer_id, "offer"))
+        object.__setattr__(
+            self,
+            "external_product_id",
+            _text(self.external_product_id, "product"),
+        )
+        object.__setattr__(
+            self,
+            "external_offer_id",
+            _text(self.external_offer_id, "offer"),
+        )
         object.__setattr__(self, "plan_id", _token(self.plan_id, "plan_id"))
         entitlements = tuple(_token(item, "entitlement_id") for item in self.entitlement_ids)
         if not entitlements or len(entitlements) != len(set(entitlements)):
@@ -140,9 +149,17 @@ class CaktoWebhookInboxEntry:
         object.__setattr__(self, "event_key", _text(self.event_key, "event_key", 320))
         if not isinstance(self.event_type, CaktoWebhookEvent):
             raise CaktoPayloadError("event_type must be CaktoWebhookEvent")
-        object.__setattr__(self, "external_product_id", _text(self.external_product_id, "product"))
+        object.__setattr__(
+            self,
+            "external_product_id",
+            _text(self.external_product_id, "product"),
+        )
         if self.external_offer_id is not None:
-            object.__setattr__(self, "external_offer_id", _text(self.external_offer_id, "offer"))
+            object.__setattr__(
+                self,
+                "external_offer_id",
+                _text(self.external_offer_id, "offer"),
+            )
         if self.external_customer_id is not None:
             object.__setattr__(
                 self,
@@ -152,7 +169,11 @@ class CaktoWebhookInboxEntry:
         if self.order_id is not None:
             object.__setattr__(self, "order_id", _text(self.order_id, "order_id", 160))
         if self.order_status is not None:
-            object.__setattr__(self, "order_status", _text(self.order_status, "order_status", 80))
+            object.__setattr__(
+                self,
+                "order_status",
+                _text(self.order_status, "order_status", 80),
+            )
         _aware(self.occurred_at, "occurred_at")
         _aware(self.received_at, "received_at")
         if len(self.payload_sha256) != 64:
@@ -202,7 +223,11 @@ class CaktoCommercialEntitlement:
         if not isinstance(self.status, CaktoEntitlementStatus):
             raise CaktoPayloadError("status must be CaktoEntitlementStatus")
         _aware(self.last_event_at, "last_event_at")
-        object.__setattr__(self, "last_event_key", _text(self.last_event_key, "last_event_key", 320))
+        object.__setattr__(
+            self,
+            "last_event_key",
+            _text(self.last_event_key, "last_event_key", 320),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -219,8 +244,16 @@ class CaktoReconciliationSnapshot:
             "external_customer_id",
             _text(self.external_customer_id, "external_customer_id", 160),
         )
-        object.__setattr__(self, "external_product_id", _text(self.external_product_id, "product"))
-        object.__setattr__(self, "external_offer_id", _text(self.external_offer_id, "offer"))
+        object.__setattr__(
+            self,
+            "external_product_id",
+            _text(self.external_product_id, "product"),
+        )
+        object.__setattr__(
+            self,
+            "external_offer_id",
+            _text(self.external_offer_id, "offer"),
+        )
         if not isinstance(self.status, CaktoExternalSubscriptionStatus):
             raise CaktoPayloadError("status must be CaktoExternalSubscriptionStatus")
         _aware(self.observed_at, "observed_at")
@@ -244,11 +277,18 @@ class CaktoCommercialStore(Protocol):
         offer_id: str | None,
     ) -> CaktoPlanBinding | None: ...
 
-    def receive_cakto_event(self, entry: CaktoWebhookInboxEntry) -> tuple[CaktoWebhookInboxEntry, bool]: ...
+    def receive_cakto_event(
+        self,
+        entry: CaktoWebhookInboxEntry,
+    ) -> tuple[CaktoWebhookInboxEntry, bool]: ...
 
     def get_cakto_event(self, event_key: str) -> CaktoWebhookInboxEntry | None: ...
 
-    def list_due_cakto_events(self, now: datetime, limit: int) -> tuple[CaktoWebhookInboxEntry, ...]: ...
+    def list_due_cakto_events(
+        self,
+        now: datetime,
+        limit: int,
+    ) -> tuple[CaktoWebhookInboxEntry, ...]: ...
 
     def mark_cakto_processed(
         self,
@@ -266,9 +306,17 @@ class CaktoCommercialStore(Protocol):
         error: str,
     ) -> CaktoWebhookInboxEntry: ...
 
-    def mark_cakto_dead_letter(self, event_key: str, *, error: str) -> CaktoWebhookInboxEntry: ...
+    def mark_cakto_dead_letter(
+        self,
+        event_key: str,
+        *,
+        error: str,
+    ) -> CaktoWebhookInboxEntry: ...
 
-    def get_cakto_tenant_by_customer(self, external_customer_id: str) -> CaktoCommercialTenant | None: ...
+    def get_cakto_tenant_by_customer(
+        self,
+        external_customer_id: str,
+    ) -> CaktoCommercialTenant | None: ...
 
     def put_cakto_tenant(self, tenant: CaktoCommercialTenant) -> CaktoCommercialTenant: ...
 
@@ -290,7 +338,12 @@ class CaktoUnitOfWork(Protocol):
 
     def __enter__(self) -> Self: ...
 
-    def __exit__(self, exc_type: object, exc: object, traceback: object) -> None: ...
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None: ...
 
     def commit(self) -> None: ...
 
@@ -342,9 +395,14 @@ class CaktoWebhookVerifier:
             hashlib.sha256,
         ).hexdigest()
         known_signatures = tuple(
-            item.strip() for item in signature_header.split(",") if item.strip().startswith("v1=")
+            item.strip()
+            for item in signature_header.split(",")
+            if item.strip().startswith("v1=")
         )
-        if not any(hmac.compare_digest(candidate, f"v1={expected}") for candidate in known_signatures):
+        if not any(
+            hmac.compare_digest(candidate, f"v1={expected}")
+            for candidate in known_signatures
+        ):
             raise CaktoAuthenticationError("Cakto webhook signature is invalid")
         try:
             payload = json.loads(raw_body.decode("utf-8"))
@@ -459,7 +517,7 @@ class CaktoWebhookReceiver:
             received_at=received_at,
         )
         accepted: list[CaktoWebhookInboxEntry] = []
-        with self._unit_of_work_factory() as uow:
+        with self._uow_factory() as uow:
             for entry in entries:
                 persisted, replay = uow.commercial.receive_cakto_event(entry)
                 accepted.append(persisted)
@@ -558,7 +616,10 @@ class CaktoCommercialProcessor:
                 tenant_id=tenant.tenant_id,
                 status=status,
                 event_at=snapshot.observed_at,
-                event_key=f"reconcile:{snapshot.status.value}:{int(snapshot.observed_at.timestamp())}",
+                event_key=(
+                    f"reconcile:{snapshot.status.value}:"
+                    f"{int(snapshot.observed_at.timestamp())}"
+                ),
             )
             uow.commercial.put_cakto_entitlement(entitlement)
             uow.commit()
@@ -572,7 +633,9 @@ class CaktoCommercialProcessor:
             if current_entry.status is CaktoInboxStatus.PROCESSED:
                 return current_entry.outcome_reference or "already_processed"
             if current_entry.status is CaktoInboxStatus.DEAD_LETTER:
-                raise CaktoPermanentProcessingError("dead-letter entry requires governed reprocessing")
+                raise CaktoPermanentProcessingError(
+                    "dead-letter entry requires governed reprocessing"
+                )
             if current_entry.event_type in self._INFORMATIONAL_EVENTS:
                 uow.commercial.mark_cakto_processed(
                     current_entry.event_key,
@@ -588,7 +651,9 @@ class CaktoCommercialProcessor:
             if binding is None or not binding.enabled:
                 raise CaktoTransientProcessingError("Cakto plan mapping is not configured")
             if current_entry.external_customer_id is None:
-                raise CaktoPermanentProcessingError("entitlement event has no documented customer.id")
+                raise CaktoPermanentProcessingError(
+                    "entitlement event has no documented customer.id"
+                )
             target = self._target_status(current_entry)
             if target is None:
                 uow.commercial.mark_cakto_processed(
@@ -695,7 +760,12 @@ class CaktoCommercialProcessor:
             last_event_key=event_key,
         )
 
-    def _retry(self, entry: CaktoWebhookInboxEntry, next_attempt_at: datetime, error: str) -> None:
+    def _retry(
+        self,
+        entry: CaktoWebhookInboxEntry,
+        next_attempt_at: datetime,
+        error: str,
+    ) -> None:
         with self._unit_of_work_factory() as uow:
             uow.commercial.mark_cakto_retry(
                 entry.event_key,
@@ -711,7 +781,10 @@ class CaktoCommercialProcessor:
 
     def _dead_letter(self, entry: CaktoWebhookInboxEntry, error: str) -> None:
         with self._unit_of_work_factory() as uow:
-            uow.commercial.mark_cakto_dead_letter(entry.event_key, error=_safe_error(error))
+            uow.commercial.mark_cakto_dead_letter(
+                entry.event_key,
+                error=_safe_error(error),
+            )
             uow.commit()
         self._metrics.increment(
             "nfcore_cakto_processing_total",
