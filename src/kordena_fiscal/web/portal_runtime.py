@@ -11,11 +11,16 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any, Protocol
 
-from kordena_fiscal.control_plane.models import ControlPlaneAuditAction
+from fastapi import HTTPException, status
+
+from kordena_fiscal.control_plane.models import (
+    ControlPlaneAuditAction,
+    ControlPlaneAuditEvent,
+    FiscalOrganization,
+    FiscalUnitRegistration,
+)
 from kordena_fiscal.persistence.ports import FiscalUnitOfWorkFactory
 from kordena_fiscal.security.human_identity import AuthenticatedHuman
-
-from .portal_api import PortalExecutorUnavailableError
 
 
 class PortalOperationExecutor(Protocol):
@@ -29,6 +34,13 @@ class PortalOperationExecutor(Protocol):
         payload: Mapping[str, Any],
         idempotency_key: str | None,
     ) -> Mapping[str, Any]: ...
+
+
+def _runtime_unavailable(message: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail={"code": "PORTAL_RUNTIME_NOT_READY", "message": message},
+    )
 
 
 class DurableHumanPortalExecutor:
@@ -80,8 +92,8 @@ class DurableHumanPortalExecutor:
         authority: AuthenticatedHuman,
     ) -> Sequence[Mapping[str, Any]]:
         if surface_id not in self._DURABLE_SURFACES:
-            raise PortalExecutorUnavailableError(
-                f"durable projection is not composed for portal surface: {surface_id}"
+            raise _runtime_unavailable(
+                f"Durable projection is not configured for portal surface {surface_id}"
             )
 
         organization, units, events = self._tenant_state(authority)
@@ -147,9 +159,7 @@ class DurableHumanPortalExecutor:
         idempotency_key: str | None,
     ) -> Mapping[str, Any]:
         if self._operation_executor is None:
-            raise PortalExecutorUnavailableError(
-                "fiscal portal operation executor is not configured"
-            )
+            raise _runtime_unavailable("Fiscal portal operation executor is not configured")
         return self._operation_executor.execute(
             operation_id=operation_id,
             authority=authority,
@@ -157,7 +167,14 @@ class DurableHumanPortalExecutor:
             idempotency_key=idempotency_key,
         )
 
-    def _tenant_state(self, authority: AuthenticatedHuman):  # type: ignore[no-untyped-def]
+    def _tenant_state(
+        self,
+        authority: AuthenticatedHuman,
+    ) -> tuple[
+        FiscalOrganization | None,
+        tuple[FiscalUnitRegistration, ...],
+        tuple[ControlPlaneAuditEvent, ...],
+    ]:
         tenant_id = authority.tenant_id
         with self._unit_of_work_factory() as uow:
             organization = uow.control_plane.get_organization(tenant_id)
