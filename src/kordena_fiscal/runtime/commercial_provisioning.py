@@ -176,5 +176,5 @@ class CommercialCustomerProvisioningService:
 
     @staticmethod
     def _account_id(tenant_id: str, email: str) -> str:
-        digest = hashlib.sha256(f"{tenant_id}|{email}".encode("utf-8")).hexdigest()
+        digest = hashlib.sha256(f"{tenant_id}|{email}".encode()).hexdigest()
         return f"commercial-owner-{digest[:32]}"
