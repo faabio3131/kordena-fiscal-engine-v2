@@ -1,0 +1,106 @@
+"""Password-recovery HTTP boundary for the NFCORE customer journey.
+
+Reset delivery is injected explicitly. The public request endpoint always returns the same
+accepted response for eligible and unknown accounts so account existence is not disclosed.
+Raw reset tokens are handed only to the delivery adapter and are never returned to browsers.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from datetime import UTC, datetime
+from typing import Annotated, Any, Protocol, runtime_checkable
+
+from fastapi import APIRouter, Body, HTTPException, status
+
+from kordena_fiscal.security.human_identity import HumanAuthenticationError
+from kordena_fiscal.security.human_recovery import (
+    IssuedPasswordReset,
+    PasswordRecoveryService,
+)
+
+
+@runtime_checkable
+class PasswordResetDelivery(Protocol):
+    """External delivery port; production implementations may enqueue email/SMS delivery."""
+
+    def deliver(
+        self,
+        *,
+        email: str,
+        reset: IssuedPasswordReset,
+    ) -> None: ...
+
+
+def create_password_recovery_router(
+    recovery: PasswordRecoveryService,
+    *,
+    delivery: PasswordResetDelivery | None,
+    now: Callable[[], datetime] | None = None,
+) -> APIRouter:
+    """Expose recovery without leaking account existence or reset tokens."""
+
+    now_provider = now or (lambda: datetime.now(UTC))
+    router = APIRouter(prefix="/v1/auth/password-reset", tags=["human-auth"])
+
+    @router.post("/request", status_code=status.HTTP_202_ACCEPTED)
+    async def request_reset(
+        payload: Annotated[dict[str, Any], Body()],
+    ) -> dict[str, str]:
+        email = payload.get("email")
+        if not isinstance(email, str) or not email.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "INVALID_PASSWORD_RESET_REQUEST",
+                    "message": "Email is required",
+                },
+            )
+
+        # Do not create an undeliverable token when the external delivery adapter has
+        # not been configured. The public response remains generic to avoid enumeration.
+        if delivery is None:
+            return {"status": "accepted"}
+
+        reset = recovery.request_reset(email=email, now=now_provider())
+        if reset is not None:
+            try:
+                delivery.deliver(email=email.strip().casefold(), reset=reset)
+            except Exception:
+                # Delivery health belongs to the external adapter/observability boundary.
+                # Returning a different status only for real accounts would disclose
+                # account existence, so the public response remains indistinguishable.
+                pass
+        return {"status": "accepted"}
+
+    @router.post("/complete", status_code=status.HTTP_204_NO_CONTENT)
+    async def complete_reset(
+        payload: Annotated[dict[str, Any], Body()],
+    ) -> None:
+        reset_token = payload.get("reset_token")
+        new_password = payload.get("new_password")
+        if not isinstance(reset_token, str) or not isinstance(new_password, str):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "INVALID_PASSWORD_RESET",
+                    "message": "Reset token and new password are required",
+                },
+            )
+        try:
+            recovery.complete_reset(
+                reset_token=reset_token,
+                new_password=new_password,
+                now=now_provider(),
+            )
+        except (HumanAuthenticationError, ValueError) as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "PASSWORD_RESET_NOT_USABLE",
+                    "message": "Password reset is not usable",
+                },
+            ) from exc
+        return None
+
+    return router
