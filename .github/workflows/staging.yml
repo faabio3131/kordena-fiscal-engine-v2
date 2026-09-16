@@ -35,7 +35,7 @@ jobs:
       - name: Record non-provisioned state
         if: ${{ !inputs.execute_deploy }}
         run: |
-          echo "### Staging state: BLOCKED_EXTERNAL" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Staging state: STAGING_READY_FOR_PROVISIONING / BLOCKED_EXTERNAL" >> "$GITHUB_STEP_SUMMARY"
           echo "Internal deployment contract is valid; no real infrastructure was requested." >> "$GITHUB_STEP_SUMMARY"
 
   deploy:
@@ -53,6 +53,7 @@ jobs:
       NFCORE_SECRET_BACKEND: external
       NFCORE_REQUIRE_HTTPS: "true"
       NFCORE_STAGING_BASE_URL: ${{ vars.NFCORE_STAGING_BASE_URL }}
+      NFCORE_STAGING_PORTAL_URL: ${{ vars.NFCORE_STAGING_PORTAL_URL }}
       NFCORE_STAGING_DEPLOY_DRIVER: ${{ vars.NFCORE_STAGING_DEPLOY_DRIVER }}
       DATABASE_URL: ${{ secrets.NFCORE_STAGING_DATABASE_URL }}
       NFCORE_DEPLOY_REVISION: ${{ github.sha }}
@@ -62,7 +63,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: python -m pip install -e ".[dev]"
-      - name: Fail-closed preflight, migrate, deploy and smoke
+      - name: Fail-closed preflight, backup, migrate, deploy and smoke
         run: sh scripts/ci/run_staging_deploy.sh
       - name: Write safe deployment evidence
         if: success()
