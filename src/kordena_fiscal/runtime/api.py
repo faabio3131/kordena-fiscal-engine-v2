@@ -13,31 +13,50 @@ from kordena_fiscal.gateway.production_activation import ProductionExecutionAuth
 from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
 from kordena_fiscal.product.cakto import CaktoWebhookReceiver
 from kordena_fiscal.web.app import create_app
+from kordena_fiscal.web.portal_runtime import PortalOperationExecutor
 
 from .cakto import build_cakto_webhook_router
+from .composition import RuntimeComposition, build_postgres_runtime_composition
 from .config import RuntimeSettings
 from .observability import MetricsRegistry, RequestTimer, StructuredLogger
 from .security import configure_edge_security
 
 
 class RuntimeApi:
-    def __init__(self, settings: RuntimeSettings) -> None:
+    def __init__(
+        self,
+        settings: RuntimeSettings,
+        *,
+        portal_operation_executor: PortalOperationExecutor | None = None,
+    ) -> None:
         self.settings = settings
         self.database: PostgresFiscalDatabase | None = None
+        self.composition: RuntimeComposition | None = None
         self._database_boot_error = False
+        self._composition_boot_error = False
         if settings.persistence_backend == "postgres":
             assert settings.database_url is not None
             try:
                 database = PostgresFiscalDatabase(settings.database_url)
                 database.initialize()
-                self.database = database
             except Exception:
                 self._database_boot_error = True
+            else:
+                self.database = database
+                try:
+                    self.composition = build_postgres_runtime_composition(
+                        database,
+                        portal_operation_executor=portal_operation_executor,
+                    )
+                except Exception:
+                    self._composition_boot_error = True
 
     def ready(self) -> tuple[bool, str]:
         if self.settings.persistence_backend == "postgres":
             if self._database_boot_error or self.database is None:
                 return False, "database_unavailable"
+            if self._composition_boot_error or self.composition is None:
+                return False, "composition_unavailable"
             try:
                 with self.database.connection() as connection:
                     connection.execute("SELECT 1").fetchone()
@@ -59,14 +78,19 @@ def create_runtime_app(
     logger: StructuredLogger | None = None,
     cakto_receiver: CaktoWebhookReceiver | None = None,
     production_authority: ProductionExecutionAuthority | None = None,
+    portal_operation_executor: PortalOperationExecutor | None = None,
 ) -> FastAPI:
     resolved = settings or RuntimeSettings.from_environ()
-    runtime = RuntimeApi(resolved)
+    runtime = RuntimeApi(
+        resolved,
+        portal_operation_executor=portal_operation_executor,
+    )
     runtime_metrics = metrics or MetricsRegistry()
     runtime_logger = logger or StructuredLogger(
         service="nfcore-api",
         environment=resolved.environment.value,
     )
+    composition = runtime.composition
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -77,6 +101,10 @@ def create_runtime_app(
 
     app = FastAPI(title="FM NFCORE Runtime", version="1.0.0", lifespan=lifespan)
     app.state.nfcore_runtime = runtime
+    app.state.nfcore_runtime_composition = composition
+    app.state.nfcore_password_recovery = (
+        None if composition is None else composition.password_recovery
+    )
     app.state.nfcore_metrics = runtime_metrics
     app.state.nfcore_logger = runtime_logger
     app.state.nfcore_production_authority = production_authority
@@ -175,6 +203,9 @@ def create_runtime_app(
             "https_required": resolved.require_https,
             "public_hostname_configured": resolved.public_hostname is not None,
             "trusted_proxy_networks_configured": len(resolved.trusted_proxy_cidrs),
+            "human_identity_configured": composition is not None,
+            "portal_executor_configured": composition is not None,
+            "password_recovery_configured": composition is not None,
             "fiscal_production_activated": active_grants > 0,
             "fiscal_production_active_grants": active_grants,
             "cakto_webhook_configured": cakto_receiver is not None,
@@ -183,8 +214,16 @@ def create_runtime_app(
     if cakto_receiver is not None:
         app.include_router(build_cakto_webhook_router(cakto_receiver))
 
+    human_identity = None if composition is None else composition.human_identity
+    portal_executor = None if composition is None else composition.portal_executor
     # Fiscal production stays false unless a governed authority is explicitly injected.
-    app.mount("/", create_app())
+    app.mount(
+        "/",
+        create_app(
+            human_identity=human_identity,
+            portal_executor=portal_executor,
+        ),
+    )
     return app
 
 
