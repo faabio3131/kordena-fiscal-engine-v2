@@ -104,6 +104,23 @@ class PilotDecision:
     official_evidence_present: bool
 
 
+@dataclass(frozen=True, slots=True)
+class PilotScopeReadiness:
+    """Read-only readiness of every operation explicitly included in one pilot."""
+
+    pilot_id: str
+    internal_reasons: tuple[str, ...]
+    external_reasons: tuple[str, ...]
+
+    @property
+    def internal_ready(self) -> bool:
+        return not self.internal_reasons
+
+    @property
+    def official_evidence_complete(self) -> bool:
+        return self.internal_ready and not self.external_reasons
+
+
 class ControlledPilotGovernanceService:
     """Fail-closed pilot activation, kill-switch and deterministic go/no-go decision."""
 
@@ -169,6 +186,50 @@ class ControlledPilotGovernanceService:
             correlation_id=correlation_id,
             now=now,
             detail="scope_changed",
+        )
+
+    def assess_external_scope(self, *, pilot: ControlledPilotScope) -> PilotScopeReadiness:
+        """Require every explicitly allowlisted pilot operation to be ready.
+
+        A successful cell never certifies another operation. This assessment does
+        not perform provider calls and does not mutate pilot or fiscal authority.
+        """
+
+        internal_reasons: list[str] = []
+        external_reasons: list[str] = []
+        for required_operation in sorted(
+            pilot.allowed_operations,
+            key=lambda item: item.value,
+        ):
+            assessment = self._readiness.assess(
+                scope=pilot.scope,
+                document_kind=pilot.document_kind,
+                jurisdiction=pilot.jurisdiction,
+                operation=required_operation,
+            )
+            if assessment.provider_id != pilot.provider_id:
+                internal_reasons.append(
+                    f"pilot_provider_mismatch:{required_operation.value}"
+                )
+                continue
+            if not assessment.internally_ready:
+                details = assessment.missing_configuration or (
+                    "technical_gate_not_ready",
+                )
+                internal_reasons.extend(
+                    f"pilot_operation_not_internally_ready:{required_operation.value}:{detail}"
+                    for detail in details
+                )
+                continue
+            if not assessment.officially_homologated:
+                external_reasons.append(
+                    f"external_official_evidence_missing:{required_operation.value}"
+                )
+
+        return PilotScopeReadiness(
+            pilot_id=pilot.pilot_id,
+            internal_reasons=tuple(dict.fromkeys(internal_reasons)),
+            external_reasons=tuple(dict.fromkeys(external_reasons)),
         )
 
     def decide(
@@ -262,9 +323,32 @@ class ControlledPilotGovernanceService:
 
         status = PilotDecisionStatus.GO_INTERNAL
         decision_reasons = ("internal_pilot_ready",)
-        if require_external and not assessment.officially_homologated:
-            status = PilotDecisionStatus.BLOCKED_EXTERNAL
-            decision_reasons = ("external_official_evidence_missing",)
+        official = assessment.officially_homologated
+        if require_external:
+            pilot_scope = self.assess_external_scope(pilot=pilot)
+            if not pilot_scope.internal_ready:
+                return self._decision(
+                    pilot=pilot,
+                    authorized_request=authorized_request,
+                    operation=operation,
+                    status=PilotDecisionStatus.NO_GO,
+                    reasons=pilot_scope.internal_reasons,
+                    provider_id=assessment.provider_id,
+                    internal_ready=False,
+                    official=False,
+                    correlation_id=correlation_id,
+                    now=now,
+                )
+            if not pilot_scope.official_evidence_complete:
+                status = PilotDecisionStatus.BLOCKED_EXTERNAL
+                decision_reasons = (
+                    ("external_official_evidence_missing",)
+                    if len(pilot.allowed_operations) == 1
+                    else pilot_scope.external_reasons
+                )
+                official = False
+            else:
+                official = True
         return self._decision(
             pilot=pilot,
             authorized_request=authorized_request,
@@ -273,7 +357,7 @@ class ControlledPilotGovernanceService:
             reasons=decision_reasons,
             provider_id=assessment.provider_id,
             internal_ready=True,
-            official=assessment.officially_homologated,
+            official=official,
             correlation_id=correlation_id,
             now=now,
         )
