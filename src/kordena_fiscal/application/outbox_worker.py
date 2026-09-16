@@ -183,6 +183,8 @@ class DurableFiscalOutboxWorker:
 
     @staticmethod
     def _exception_error(exc: Exception) -> str:
-        detail = str(exc).strip() or "no detail"
-        message = f"handler exception {type(exc).__name__}: {detail}"
-        return message[:1024]
+        # Unexpected exception text can contain provider payloads, credentials or
+        # certificate material. Durable retry/audit state therefore records only the
+        # exception class. Purpose-built handlers are responsible for returning already
+        # sanitized FiscalDispatchResult errors when additional diagnostics are safe.
+        return f"handler exception {type(exc).__name__}"
