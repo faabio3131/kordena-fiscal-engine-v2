@@ -8,6 +8,8 @@ external official evidence. It never promotes production readiness.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
+from enum import StrEnum
 
 from kordena_fiscal.control_plane import SecretReferenceKind
 from kordena_fiscal.control_plane.commercial import ConfiguredFiscalOperation
@@ -20,6 +22,12 @@ from kordena_fiscal.domain import (
     FiscalValidationError,
 )
 from kordena_fiscal.gateway import ProviderDescriptor, ProviderOperation
+from kordena_fiscal.gateway.production_activation import (
+    HumanProductionApproval,
+    ProductionActivationKey,
+    ProductionActivationRecord,
+    ProductionActivationState,
+)
 from kordena_fiscal.homologation import (
     HomologationEvidence,
     HomologationGateKey,
@@ -42,6 +50,7 @@ class HomologationEnvironmentReadinessAssessment:
     technical_state: TechnicalGateState
     external_official: bool
     external_evidence_id: str | None
+    external_recorded_at: datetime | None = None
 
     @property
     def internally_ready(self) -> bool:
@@ -57,7 +66,129 @@ class HomologationEnvironmentReadinessAssessment:
             self.internally_ready
             and self.external_official
             and self.external_evidence_id is not None
+            and self.external_recorded_at is not None
         )
+
+
+class ExternalReadinessFlag(StrEnum):
+    """Read-only reconciliation flags; none of them grants fiscal authority."""
+
+    READY_INTERNAL = "ready_internal"
+    MISSING_EXTERNAL_CREDENTIAL = "missing_external_credential"
+    MISSING_OFFICIAL_EVIDENCE = "missing_official_evidence"
+    MISSING_PILOT_AUTHORIZATION = "missing_pilot_authorization"
+    MISSING_HUMAN_APPROVAL = "missing_human_approval"
+    BLOCKED_EXTERNAL = "blocked_external"
+
+
+@dataclass(frozen=True, slots=True)
+class ExternalReadinessCellReport:
+    """Exact-cell projection over canonical readiness/approval/activation objects."""
+
+    assessment: HomologationEnvironmentReadinessAssessment
+    flags: frozenset[ExternalReadinessFlag]
+    pilot_authorized: bool
+    human_approval_present: bool
+    production_activation_present: bool
+
+    @property
+    def blocked_external(self) -> bool:
+        return ExternalReadinessFlag.BLOCKED_EXTERNAL in self.flags
+
+
+def _expected_production_key(
+    assessment: HomologationEnvironmentReadinessAssessment,
+) -> ProductionActivationKey:
+    provider_id = assessment.provider_id
+    if provider_id is None:
+        raise FiscalValidationError(
+            "exact production key cannot be reconciled without provider_id"
+        )
+    return ProductionActivationKey(
+        tenant_id=assessment.scope.tenant_id,
+        unit_id=assessment.scope.unit_id,
+        provider_id=provider_id,
+        document_kind=assessment.document_kind,
+        jurisdiction=assessment.jurisdiction,
+        operation=assessment.operation,
+    )
+
+
+def reconcile_external_readiness(
+    assessment: HomologationEnvironmentReadinessAssessment,
+    *,
+    pilot_authorized: bool = False,
+    human_approval: HumanProductionApproval | None = None,
+    activation_record: ProductionActivationRecord | None = None,
+) -> ExternalReadinessCellReport:
+    """Compose canonical facts into a report without creating readiness or authority.
+
+    This function is deliberately read-only. It never creates official evidence,
+    pilot authorization, human approval or production activation. Exact approval
+    and activation objects, when supplied, must match the assessed cell.
+    """
+
+    if not isinstance(assessment, HomologationEnvironmentReadinessAssessment):
+        raise FiscalValidationError(
+            "assessment must be HomologationEnvironmentReadinessAssessment"
+        )
+
+    flags: set[ExternalReadinessFlag] = set()
+    if assessment.internally_ready:
+        flags.add(ExternalReadinessFlag.READY_INTERNAL)
+
+    external_secret_markers = {
+        "provider_credentials_reference",
+        "certificate_reference",
+        "csc_reference",
+    }
+    if any(
+        item in external_secret_markers for item in assessment.missing_configuration
+    ):
+        flags.add(ExternalReadinessFlag.MISSING_EXTERNAL_CREDENTIAL)
+
+    if not assessment.officially_homologated:
+        flags.add(ExternalReadinessFlag.MISSING_OFFICIAL_EVIDENCE)
+    if not pilot_authorized:
+        flags.add(ExternalReadinessFlag.MISSING_PILOT_AUTHORIZATION)
+    if human_approval is None:
+        flags.add(ExternalReadinessFlag.MISSING_HUMAN_APPROVAL)
+
+    expected_key: ProductionActivationKey | None = None
+    if human_approval is not None or activation_record is not None:
+        expected_key = _expected_production_key(assessment)
+
+    if human_approval is not None and human_approval.key != expected_key:
+        raise FiscalValidationError(
+            "human production approval does not match the exact assessed cell"
+        )
+
+    production_activation_present = False
+    if activation_record is not None:
+        if activation_record.key != expected_key:
+            raise FiscalValidationError(
+                "production activation record does not match the exact assessed cell"
+            )
+        production_activation_present = (
+            activation_record.state is ProductionActivationState.ACTIVE
+        )
+
+    external_blockers = {
+        ExternalReadinessFlag.MISSING_EXTERNAL_CREDENTIAL,
+        ExternalReadinessFlag.MISSING_OFFICIAL_EVIDENCE,
+        ExternalReadinessFlag.MISSING_PILOT_AUTHORIZATION,
+        ExternalReadinessFlag.MISSING_HUMAN_APPROVAL,
+    }
+    if flags.intersection(external_blockers):
+        flags.add(ExternalReadinessFlag.BLOCKED_EXTERNAL)
+
+    return ExternalReadinessCellReport(
+        assessment=assessment,
+        flags=frozenset(flags),
+        pilot_authorized=pilot_authorized,
+        human_approval_present=human_approval is not None,
+        production_activation_present=production_activation_present,
+    )
 
 
 class DurableHomologationEnvironmentReadinessService:
@@ -247,5 +378,8 @@ class DurableHomologationEnvironmentReadinessService:
                 evidence_record.external_evidence_id
                 if evidence_record is not None
                 else None
+            ),
+            external_recorded_at=(
+                evidence_record.recorded_at if evidence_record is not None else None
             ),
         )
