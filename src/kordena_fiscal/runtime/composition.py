@@ -21,6 +21,8 @@ from kordena_fiscal.web.portal_runtime import (
     PortalOperationExecutor,
 )
 
+from .commercial_provisioning import CommercialCustomerProvisioningService
+
 
 @dataclass(frozen=True, slots=True)
 class RuntimeComposition:
@@ -28,6 +30,7 @@ class RuntimeComposition:
 
     human_identity: HumanIdentityService
     password_recovery: PasswordRecoveryService
+    commercial_provisioning: CommercialCustomerProvisioningService
     portal_executor: DurableHumanPortalExecutor
 
 
@@ -55,6 +58,12 @@ def build_postgres_runtime_composition(
         resets=password_resets,
         password_hasher=password_hasher,
     )
+    provisioning = CommercialCustomerProvisioningService(
+        unit_of_work_factory=database,
+        accounts=accounts,
+        password_hasher=password_hasher,
+        password_recovery=recovery,
+    )
     portal = DurableHumanPortalExecutor(
         database,
         operation_executor=portal_operation_executor,
@@ -62,5 +71,6 @@ def build_postgres_runtime_composition(
     return RuntimeComposition(
         human_identity=identity,
         password_recovery=recovery,
+        commercial_provisioning=provisioning,
         portal_executor=portal,
     )
