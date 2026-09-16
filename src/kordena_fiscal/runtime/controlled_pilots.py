@@ -322,7 +322,7 @@ class ControlledPilotGovernanceService:
             )
 
         status = PilotDecisionStatus.GO_INTERNAL
-        decision_reasons = ("internal_pilot_ready",)
+        decision_reasons: tuple[str, ...] = ("internal_pilot_ready",)
         official = assessment.officially_homologated
         if require_external:
             pilot_scope = self.assess_external_scope(pilot=pilot)
