@@ -23,7 +23,23 @@
         <label>E-mail<input id="login-email" name="email" type="email" autocomplete="username" required></label>
         <label>Senha<input id="login-password" name="password" type="password" autocomplete="current-password" required></label>
         <button class="primary" type="submit">Entrar</button>
+        <button class="ghost" id="forgot-password-action" type="button">Esqueci minha senha</button>
         <p id="login-error" class="form-error" role="alert" aria-live="polite"></p>
+      </form>
+
+      <form id="password-reset-request-form" hidden>
+        <p>Informe o e-mail da conta. Se ela for elegível, enviaremos as instruções de recuperação pelo canal configurado.</p>
+        <label>E-mail<input id="password-reset-email" name="email" type="email" autocomplete="email" required></label>
+        <button class="primary" type="submit">Solicitar recuperação</button>
+        <button class="ghost" id="password-reset-request-cancel" type="button">Voltar</button>
+        <p id="password-reset-request-status" class="form-error" role="status" aria-live="polite"></p>
+      </form>
+
+      <form id="password-reset-complete-form" hidden>
+        <p>Defina uma nova senha para concluir a recuperação.</p>
+        <label>Nova senha<input id="password-reset-new-password" name="new_password" type="password" autocomplete="new-password" minlength="12" required></label>
+        <button class="primary" type="submit">Alterar senha</button>
+        <p id="password-reset-complete-status" class="form-error" role="alert" aria-live="polite"></p>
       </form>
     </div>
   </section>
