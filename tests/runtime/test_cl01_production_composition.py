@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from types import TracebackType
-from typing import Iterator
 
 from fastapi.testclient import TestClient
 
