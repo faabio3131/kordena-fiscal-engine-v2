@@ -1,0 +1,177 @@
+"""Durable server-side portal projections for the commercial NFCORE runtime.
+
+The browser never chooses tenant authority. Every read is scoped from the authenticated
+human session and backed by the canonical fiscal/control-plane unit of work. Fiscal
+mutations remain delegated to an explicitly configured operation executor and fail
+closed when that execution boundary is not yet present.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
+from typing import Any, Protocol
+
+from kordena_fiscal.control_plane.models import ControlPlaneAuditAction
+from kordena_fiscal.persistence.ports import FiscalUnitOfWorkFactory
+from kordena_fiscal.security.human_identity import AuthenticatedHuman
+
+from .portal_api import PortalExecutorUnavailableError
+
+
+class PortalOperationExecutor(Protocol):
+    """Already-authorized fiscal operation boundary used by the human portal."""
+
+    def execute(
+        self,
+        *,
+        operation_id: str,
+        authority: AuthenticatedHuman,
+        payload: Mapping[str, Any],
+        idempotency_key: str | None,
+    ) -> Mapping[str, Any]: ...
+
+
+class DurableHumanPortalExecutor:
+    """Read canonical durable state and delegate mutations without parallel state."""
+
+    _DURABLE_SURFACES = frozenset(
+        {
+            "overview",
+            "onboarding",
+            "companies",
+            "units",
+            "environments",
+            "audit",
+            "settings",
+        }
+    )
+
+    def __init__(
+        self,
+        unit_of_work_factory: FiscalUnitOfWorkFactory,
+        *,
+        operation_executor: PortalOperationExecutor | None = None,
+    ) -> None:
+        self._unit_of_work_factory = unit_of_work_factory
+        self._operation_executor = operation_executor
+
+    def snapshot(self, *, authority: AuthenticatedHuman) -> Mapping[str, Any]:
+        organization, units, _events = self._tenant_state(authority)
+        environments = sorted(
+            {
+                environment.value
+                for unit in units
+                for environment in unit.enabled_environments
+            }
+        )
+        return {
+            "organization_onboarded": organization is not None,
+            "legal_name": None if organization is None else organization.legal_name,
+            "unit_count": len(units),
+            "unit_scope": "all" if authority.account.unit_ids is None else "restricted",
+            "enabled_environments": environments,
+            "fiscal_operations_configured": self._operation_executor is not None,
+        }
+
+    def surface(
+        self,
+        *,
+        surface_id: str,
+        authority: AuthenticatedHuman,
+    ) -> Sequence[Mapping[str, Any]]:
+        if surface_id not in self._DURABLE_SURFACES:
+            raise PortalExecutorUnavailableError(
+                f"durable projection is not composed for portal surface: {surface_id}"
+            )
+
+        organization, units, events = self._tenant_state(authority)
+        if surface_id == "companies":
+            if organization is None:
+                return ()
+            return (
+                {
+                    "tenant_id": organization.tenant_id,
+                    "legal_name": organization.legal_name,
+                    "status": "onboarded",
+                },
+            )
+        if surface_id == "units":
+            return tuple(
+                {
+                    "unit_id": unit.unit_id,
+                    "display_name": unit.display_name,
+                    "enabled_environments": sorted(
+                        environment.value for environment in unit.enabled_environments
+                    ),
+                }
+                for unit in units
+            )
+        if surface_id == "environments":
+            return tuple(
+                {
+                    "unit_id": unit.unit_id,
+                    "environment": environment.value,
+                    "enabled": True,
+                }
+                for unit in units
+                for environment in sorted(
+                    unit.enabled_environments,
+                    key=lambda item: item.value,
+                )
+            )
+        if surface_id == "audit":
+            return tuple(
+                {
+                    "event_id": event.event_id,
+                    "occurred_at": event.occurred_at.isoformat(),
+                    "action": event.action.value,
+                    "target_type": event.target_type,
+                    "target_id": event.target_id,
+                    "correlation_id": event.correlation_id,
+                    "unit_id": event.unit_id,
+                }
+                for event in events
+            )
+
+        row = dict(self.snapshot(authority=authority))
+        row["tenant_id"] = authority.tenant_id
+        row["surface"] = surface_id
+        return (row,)
+
+    def execute(
+        self,
+        *,
+        operation_id: str,
+        authority: AuthenticatedHuman,
+        payload: Mapping[str, Any],
+        idempotency_key: str | None,
+    ) -> Mapping[str, Any]:
+        if self._operation_executor is None:
+            raise PortalExecutorUnavailableError(
+                "fiscal portal operation executor is not configured"
+            )
+        return self._operation_executor.execute(
+            operation_id=operation_id,
+            authority=authority,
+            payload=payload,
+            idempotency_key=idempotency_key,
+        )
+
+    def _tenant_state(self, authority: AuthenticatedHuman):  # type: ignore[no-untyped-def]
+        tenant_id = authority.tenant_id
+        with self._unit_of_work_factory() as uow:
+            organization = uow.control_plane.get_organization(tenant_id)
+            events = uow.control_plane.list_audit(tenant_id)
+            discovered_unit_ids = {
+                event.target_id
+                for event in events
+                if event.action is ControlPlaneAuditAction.UNIT_ONBOARDED
+            }
+            if authority.account.unit_ids is not None:
+                discovered_unit_ids &= set(authority.account.unit_ids)
+            units = tuple(
+                unit
+                for unit_id in sorted(discovered_unit_ids)
+                if (unit := uow.control_plane.get_unit(tenant_id, unit_id)) is not None
+            )
+        return organization, units, events
