@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import secrets
 from dataclasses import dataclass
+from datetime import datetime
 
 from kordena_fiscal.control_plane.durable import DurableControlPlaneService
 from kordena_fiscal.control_plane.models import AdminPrincipal, ControlPlanePermission
@@ -72,7 +73,7 @@ class CommercialCustomerProvisioningService:
         legal_name: str,
         owner_email: str,
         correlation_id: str,
-        now,
+        now: datetime,
     ) -> CommercialCustomerProvisioningResult:
         normalized_tenant = tenant_id.strip().lower()
         normalized_name = legal_name.strip()
