@@ -29,6 +29,7 @@ def _account_payload(account: HumanAccount) -> dict[str, Any]:
         "tenant_id": account.tenant_id,
         "role": account.role.value,
         "unit_ids": sorted(account.unit_ids) if account.unit_ids is not None else None,
+        "platform_admin": account.platform_admin,
         "permissions": sorted(permission.value for permission in account.permissions),
     }
 
