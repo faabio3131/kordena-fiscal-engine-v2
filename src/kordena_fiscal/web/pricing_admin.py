@@ -48,39 +48,34 @@ def _platform_actor(
 def _public_catalog(
     configuration: CommercialPricingConfiguration,
 ) -> dict[str, object]:
-    """Project only public sellable configuration; tenant overrides stay private."""
+    """Project only public sellable configuration; private overrides stay internal."""
 
-    payload = configuration.to_mapping()
+    active_prices = tuple(price for price in configuration.prices if price.enabled)
+    active_price_ids = {price.price_id for price in active_prices}
     prices = [
         {
-            "price_id": item["price_id"],
-            "currency": item["currency"],
-            "cadence": item["cadence"],
-            "base_amount": item["base_amount"],
-            "per_document_amount": item["per_document_amount"],
-            "setup_amount": item["setup_amount"],
+            "price_id": price.price_id,
+            "currency": price.currency,
+            "cadence": price.cadence.value,
+            "base_amount": str(price.base_amount),
+            "per_document_amount": str(price.per_document_amount),
+            "setup_amount": str(price.setup_amount),
         }
-        for item in payload["prices"]
-        if isinstance(item, dict) and item.get("enabled") is True
+        for price in active_prices
     ]
-    active_price_ids = {
-        str(item["price_id"]) for item in prices if isinstance(item.get("price_id"), str)
-    }
     plans = [
         {
-            "plan_id": item["plan_id"],
-            "display_name": item["display_name"],
-            "edition_id": item["edition_id"],
+            "plan_id": plan.plan_id,
+            "display_name": plan.display_name,
+            "edition_id": plan.edition_id,
             "price_ids": [
-                price_id
-                for price_id in item["price_ids"]
-                if isinstance(price_id, str) and price_id in active_price_ids
+                price_id for price_id in plan.price_ids if price_id in active_price_ids
             ],
-            "trial_days": item["trial_days"],
-            "tags": item["tags"],
+            "trial_days": plan.trial_days,
+            "tags": list(plan.tags),
         }
-        for item in payload["plans"]
-        if isinstance(item, dict) and item.get("enabled") is True
+        for plan in configuration.plans
+        if plan.enabled
     ]
     return {
         "configuration_id": configuration.configuration_id,
