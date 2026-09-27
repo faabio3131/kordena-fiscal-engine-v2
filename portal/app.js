@@ -6,7 +6,7 @@
 const navigation = [
   { label: "Operação", items: [["overview", "Visão geral"], ["documents", "Documentos"], ["issuances", "Emissões"], ["errors", "Erros"], ["reconciliation", "Reconciliação"]] },
   { label: "Configuração", items: [["onboarding", "Onboarding"], ["companies", "Empresas"], ["units", "Unidades"], ["environments", "Ambientes"], ["capabilities", "Capabilities"], ["certificates", "Certificados"], ["providers", "Providers"], ["users", "Usuários"]] },
-  { label: "Plataforma", items: [["webhooks", "Webhooks"], ["integrations", "Integrações"], ["usage", "Uso"], ["billing", "Billing"], ["plans", "Planos"], ["pricing-admin", "Catálogo comercial"], ["commercial-release", "Liberação comercial"], ["audit", "Auditoria"], ["support", "Suporte"], ["settings", "Configurações"]] },
+  { label: "Plataforma", items: [["webhooks", "Webhooks"], ["integrations", "Integrações"], ["usage", "Uso"], ["billing", "Billing"], ["plans", "Planos"], ["pricing-admin", "Catálogo comercial"], ["commercial-release", "Liberação comercial"], ["checkout-admin", "Checkout Cakto"], ["audit", "Auditoria"], ["support", "Suporte"], ["settings", "Configurações"]] },
 ];
 
 const supportedDocumentLabels = ["NF-e", "NFC-e", "NFS-e"];
@@ -38,6 +38,7 @@ const descriptions = {
   plans: "Plano e entitlements comerciais configurados.",
   "pricing-admin": "Catálogo comercial versionado, durável e restrito à administração da plataforma.",
   "commercial-release": "Decisão humana versionada que governa a disponibilidade comercial pública do NFCore.",
+  "checkout-admin": "Bindings Cakto governados que conectam preços publicados a checkout e entitlements sem armazenar credenciais.",
   audit: "Auditoria administrativa e operacional.",
   support: "Saúde operacional, incidentes e suporte.",
   settings: "Políticas e configurações autorizadas.",
@@ -510,6 +511,133 @@ async function renderCommercialRelease() {
   }
 }
 
+async function renderCheckoutAdmin() {
+  workspace.replaceChildren();
+  const article = panel("Checkout Cakto", "Platform administration");
+  const statusLine = document.createElement("p");
+  statusLine.className = "form-error";
+  statusLine.setAttribute("role", "status");
+  article.append(statusLine);
+  workspace.append(article);
+
+  if (!bootstrapState?.platform_admin) {
+    statusLine.textContent = "A configuração de checkout exige autoridade explícita de plataforma.";
+    return;
+  }
+
+  try {
+    const response = await api("/v1/admin/checkout/cakto");
+    const bindings = Array.isArray(response.bindings) ? response.bindings : [];
+    const summary = document.createElement("div");
+    summary.className = "grid-list";
+
+    if (!bindings.length) {
+      const empty = document.createElement("div");
+      empty.className = "empty-state";
+      empty.textContent = "Nenhum binding Cakto configurado. Compra permanece fail-closed.";
+      summary.append(empty);
+    } else {
+      for (const binding of bindings) {
+        summary.append(
+          rowElement({
+            plano: binding.plan_id,
+            oferta: binding.external_offer_id,
+            status: binding.enabled ? "ENABLED" : "DISABLED",
+          }),
+        );
+      }
+    }
+
+    const form = document.createElement("form");
+    form.className = "panel-form";
+
+    const productLabel = document.createElement("label");
+    productLabel.textContent = "Cakto product ID";
+    const productInput = document.createElement("input");
+    productInput.required = true;
+    productInput.autocomplete = "off";
+    productLabel.append(productInput);
+
+    const offerLabel = document.createElement("label");
+    offerLabel.textContent = "Cakto offer ID";
+    const offerInput = document.createElement("input");
+    offerInput.required = true;
+    offerInput.autocomplete = "off";
+    offerLabel.append(offerInput);
+
+    const planLabel = document.createElement("label");
+    planLabel.textContent = "NFCore plan_id";
+    const planInput = document.createElement("input");
+    planInput.required = true;
+    planInput.autocomplete = "off";
+    planLabel.append(planInput);
+
+    const entitlementLabel = document.createElement("label");
+    entitlementLabel.textContent = "Entitlements (separados por vírgula)";
+    const entitlementInput = document.createElement("input");
+    entitlementInput.required = true;
+    entitlementInput.autocomplete = "off";
+    entitlementLabel.append(entitlementInput);
+
+    const enabledLabel = document.createElement("label");
+    const enabledInput = document.createElement("input");
+    enabledInput.type = "checkbox";
+    enabledInput.checked = true;
+    enabledLabel.append(enabledInput, document.createTextNode(" Binding habilitado"));
+
+    const warning = document.createElement("p");
+    warning.className = "empty-state";
+    warning.textContent = "O preço deve referenciar esta oferta como cakto://PRODUCT_ID/OFFER_ID. IDs não são credenciais. Client secret, token e webhook secret nunca pertencem a este formulário.";
+
+    const submit = document.createElement("button");
+    submit.className = "primary";
+    submit.type = "submit";
+    submit.textContent = "Salvar binding";
+
+    form.append(
+      productLabel,
+      offerLabel,
+      planLabel,
+      entitlementLabel,
+      enabledLabel,
+      warning,
+      submit,
+    );
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      submit.disabled = true;
+      statusLine.textContent = "";
+      try {
+        const entitlementIds = entitlementInput.value
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean);
+        await api("/v1/admin/checkout/cakto", {
+          method: "POST",
+          headers: { "X-CSRF-Token": csrfToken() },
+          body: JSON.stringify({
+            external_product_id: productInput.value.trim(),
+            external_offer_id: offerInput.value.trim(),
+            plan_id: planInput.value.trim(),
+            entitlement_ids: entitlementIds,
+            enabled: enabledInput.checked,
+          }),
+        });
+        await renderCheckoutAdmin();
+      } catch (error) {
+        statusLine.textContent = error instanceof Error ? error.message : "Não foi possível salvar o binding Cakto";
+      } finally {
+        submit.disabled = false;
+      }
+    });
+
+    article.replaceChildren(summary, form, statusLine);
+  } catch (error) {
+    statusLine.textContent = error instanceof Error ? error.message : "Falha ao carregar checkout Cakto";
+  }
+}
+
 /** @param {string} viewId */
 async function renderSurface(viewId) {
   currentView = viewId;
@@ -530,6 +658,10 @@ async function renderSurface(viewId) {
   }
   if (viewId === "commercial-release") {
     await renderCommercialRelease();
+    return;
+  }
+  if (viewId === "checkout-admin") {
+    await renderCheckoutAdmin();
     return;
   }
   workspace.replaceChildren();

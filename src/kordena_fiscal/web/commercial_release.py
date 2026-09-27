@@ -7,6 +7,11 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Body, HTTPException, Request, status
 
+from kordena_fiscal.control_plane.cakto_checkout import (
+    CaktoCheckoutAdministrationService,
+    CaktoCheckoutProjection,
+    CaktoCheckoutStatus,
+)
 from kordena_fiscal.control_plane.commercial_release import (
     CommercialReleaseAdministrationService,
 )
@@ -26,6 +31,9 @@ def create_commercial_release_router(
     identity: HumanIdentityService,
     pricing: CommercialPricingAdministrationService,
     release: CommercialReleaseAdministrationService,
+    checkout: CaktoCheckoutAdministrationService | None = None,
+    *,
+    cakto_processing_configured: bool = False,
 ) -> APIRouter:
     router = APIRouter(tags=["commercial-release"])
 
@@ -59,14 +67,37 @@ def create_commercial_release_router(
                 "commercially_approved": release_current.commercially_approved,
             }
 
-        # Checkout/billing are deliberately separate authorities. Until a real
-        # checkout configuration is introduced and verified, purchase stays closed.
+        checkout_projection = (
+            CaktoCheckoutProjection(
+                status=CaktoCheckoutStatus.UNCONFIGURED,
+                expected_count=0,
+                configured_count=0,
+                items=(),
+            )
+            if checkout is None
+            else checkout.project(pricing_current)
+        )
+        commercially_approved = (
+            release_current is not None and release_current.commercially_approved
+        )
+        purchase_enabled = bool(
+            commercially_approved
+            and checkout_projection.status is CaktoCheckoutStatus.CONFIGURED
+            and checkout_projection.items
+            and cakto_processing_configured
+        )
+        checkout_payload = checkout_projection.to_public_mapping(
+            processing_configured=cakto_processing_configured,
+            expose_urls=purchase_enabled,
+        )
+
         return {
             "product_id": "nfcore",
             "pricing": pricing_payload,
             "release": release_payload,
-            "checkout": {"status": "unconfigured"},
-            "purchase_enabled": False,
+            "checkout": checkout_payload,
+            "purchase_enabled": purchase_enabled,
+            # Trial release is a separate authority and is not inferred from trial_days.
             "trial_enabled": False,
         }
 

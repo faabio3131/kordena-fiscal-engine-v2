@@ -9,10 +9,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from kordena_fiscal.control_plane.cakto_checkout import (
+    CaktoCheckoutAdministrationService,
+)
 from kordena_fiscal.control_plane.commercial_release import (
     CommercialReleaseAdministrationService,
 )
 from kordena_fiscal.control_plane.pricing_admin import CommercialPricingAdministrationService
+from kordena_fiscal.persistence.cakto import postgres_cakto_commercial_database
 from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
 from kordena_fiscal.security.human_identity import (
     HumanIdentityService,
@@ -37,6 +41,7 @@ class RuntimeComposition:
     commercial_provisioning: CommercialCustomerProvisioningService
     pricing_administration: CommercialPricingAdministrationService
     commercial_release_administration: CommercialReleaseAdministrationService
+    cakto_checkout_administration: CaktoCheckoutAdministrationService
     portal_executor: DurableHumanPortalExecutor
 
 
@@ -76,6 +81,11 @@ def build_postgres_runtime_composition(
     commercial_release_administration = CommercialReleaseAdministrationService(
         database.commercial_release_catalog()
     )
+    cakto_commercial_database = postgres_cakto_commercial_database(database)
+    cakto_commercial_database.initialize()
+    cakto_checkout_administration = CaktoCheckoutAdministrationService(
+        cakto_commercial_database
+    )
     portal = DurableHumanPortalExecutor(
         database,
         operation_executor=portal_operation_executor,
@@ -86,5 +96,6 @@ def build_postgres_runtime_composition(
         commercial_provisioning=provisioning,
         pricing_administration=pricing_administration,
         commercial_release_administration=commercial_release_administration,
+        cakto_checkout_administration=cakto_checkout_administration,
         portal_executor=portal,
     )

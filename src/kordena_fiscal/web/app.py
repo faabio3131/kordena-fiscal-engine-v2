@@ -9,12 +9,16 @@ from typing import Annotated, Any, Protocol, runtime_checkable
 from fastapi import Body, FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from kordena_fiscal.control_plane.cakto_checkout import (
+    CaktoCheckoutAdministrationService,
+)
 from kordena_fiscal.control_plane.commercial_release import (
     CommercialReleaseAdministrationService,
 )
 from kordena_fiscal.control_plane.pricing_admin import CommercialPricingAdministrationService
 from kordena_fiscal.security.human_identity import HumanIdentityService
 from kordena_fiscal.security.human_recovery import PasswordRecoveryService
+from kordena_fiscal.web.cakto_checkout import create_cakto_checkout_router
 from kordena_fiscal.web.commercial_release import create_commercial_release_router
 from kordena_fiscal.web.human_auth import create_human_auth_router
 from kordena_fiscal.web.human_recovery import (
@@ -241,6 +245,8 @@ def create_app(
     portal_executor: HumanPortalExecutor | None = None,
     pricing_administration: CommercialPricingAdministrationService | None = None,
     commercial_release_administration: CommercialReleaseAdministrationService | None = None,
+    cakto_checkout_administration: CaktoCheckoutAdministrationService | None = None,
+    cakto_processing_configured: bool = False,
 ) -> FastAPI:
     """Create the web adapter without granting fiscal authority by default."""
 
@@ -260,6 +266,10 @@ def create_app(
                     "commercial-release",
                     commercial_release_administration is not None,
                 ),
+                (
+                    "checkout-admin",
+                    cakto_checkout_administration is not None,
+                ),
             )
             if configured
         )
@@ -274,6 +284,13 @@ def create_app(
             app.include_router(
                 create_pricing_router(human_identity, pricing_administration)
             )
+        if cakto_checkout_administration is not None:
+            app.include_router(
+                create_cakto_checkout_router(
+                    human_identity,
+                    cakto_checkout_administration,
+                )
+            )
         if (
             pricing_administration is not None
             and commercial_release_administration is not None
@@ -283,6 +300,8 @@ def create_app(
                     human_identity,
                     pricing_administration,
                     commercial_release_administration,
+                    cakto_checkout_administration,
+                    cakto_processing_configured=cakto_processing_configured,
                 )
             )
     if password_recovery is not None:

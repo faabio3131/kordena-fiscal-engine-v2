@@ -193,6 +193,17 @@ class CaktoSqlCommercialStore(CaktoCommercialStore):
         )
         return binding
 
+    def list_cakto_plan_bindings(self) -> tuple[CaktoPlanBinding, ...]:
+        rows = self._connection.execute(
+            """
+            SELECT external_product_id, external_offer_id, plan_id,
+                   entitlement_ids_json, enabled
+            FROM fm_cakto_plan_bindings
+            ORDER BY plan_id, external_product_id, external_offer_id
+            """
+        ).fetchall()
+        return tuple(self._binding(row) for row in rows)
+
     def resolve_cakto_plan_binding(
         self,
         product_id: str,

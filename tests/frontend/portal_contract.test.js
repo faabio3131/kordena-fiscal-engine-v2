@@ -93,3 +93,13 @@ test("commercial release governance is explicit, human-controlled and separated 
   assert.match(script, /COMMERCIAL_APPROVED nunca é inferido/);
   assert.match(script, /Checkout e produção fiscal permanecem autoridades separadas/);
 });
+
+
+test("Cakto checkout administration reuses governed bindings without secret material", () => {
+  assert.match(script, /checkout-admin/);
+  assert.match(script, /\/v1\/admin\/checkout\/cakto/);
+  assert.match(script, /cakto:\/\/PRODUCT_ID\/OFFER_ID/);
+  assert.match(script, /X-CSRF-Token/);
+  assert.match(script, /Client secret, token e webhook secret nunca pertencem/);
+  assert.doesNotMatch(script, /client_secret\s*[:=]/i);
+});
