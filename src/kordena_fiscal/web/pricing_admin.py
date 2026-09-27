@@ -7,6 +7,7 @@ tenant OWNER/ADMIN roles never imply platform authority.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import uuid4
 
@@ -20,15 +21,15 @@ from kordena_fiscal.product.pricing import (
     CommercialPricingConfiguration,
     CommercialPricingError,
 )
-from kordena_fiscal.security.human_identity import HumanIdentityService
+from kordena_fiscal.security.human_identity import AuthenticatedHuman, HumanIdentityService
 from kordena_fiscal.web.portal_api import _authenticated, _csrf
 
 
 def _platform_actor(
     request: Request,
     identity: HumanIdentityService,
-) -> tuple[object, AdminPrincipal]:
-    authority = _authenticated(request, identity, now=__import__("datetime").datetime.now(__import__("datetime").UTC))
+) -> tuple[AuthenticatedHuman, AdminPrincipal]:
+    authority = _authenticated(request, identity, now=datetime.now(UTC))
     if not authority.account.platform_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
