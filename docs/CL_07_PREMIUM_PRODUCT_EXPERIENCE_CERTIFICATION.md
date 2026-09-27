@@ -1,6 +1,6 @@
 # CL-07 — Premium Product Experience Certification
 
-Status: `CERTIFICATION_CANDIDATE`
+Status: `INTERNALLY_CERTIFIED / MAIN-INTEGRATED`
 
 Baseline funcional: `feat/nfcore-cl06-commercial-onboarding-e2e` @ `1da6f0651a6baf84b976b2983f21abc2bd68536a`.
 
@@ -48,3 +48,16 @@ A certificação final exige a matriz completa `FM NFCORE V1 CI` em `completed/s
 ## Governança
 
 Nenhum merge, deploy, DNS, cutover, emissão fiscal real ou `PRODUCTION_APPROVED` é autorizado por este documento.
+
+
+## Final integrated evidence
+
+CL-07 was reconciled with CL-02→CL-06 and Pricing Governance on controlled integration HEAD `89f048f392e460ad8cc2a9e44710c42dd8fa4f07`.
+
+`FM NFCORE V1 CI` #413 completed successfully on that integration HEAD.
+
+Human-authorized PR #55 then promoted the integrated lineage to `main` at commit `57812960ae09013a4540cfb01730facf47c37235`.
+
+Post-merge `FM NFCORE V1 CI` #414 completed successfully on that exact main commit.
+
+This certification remains internal/product-scoped. It does not assert deploy, external staging, fiscal homologation, pilot or commercial production activation.
