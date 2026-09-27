@@ -271,6 +271,8 @@ class CaktoProcessingResult:
 class CaktoCommercialStore(Protocol):
     def put_cakto_plan_binding(self, binding: CaktoPlanBinding) -> CaktoPlanBinding: ...
 
+    def list_cakto_plan_bindings(self) -> tuple[CaktoPlanBinding, ...]: ...
+
     def resolve_cakto_plan_binding(
         self,
         product_id: str,
