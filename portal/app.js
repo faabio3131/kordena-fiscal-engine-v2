@@ -1,12 +1,12 @@
 "use strict";
 
-/** @typedef {{tenant_id:string, role:string, unit_ids:string[]|null, permissions:string[], supported_documents:string[], projection:Record<string, unknown>}} BootstrapState */
+/** @typedef {{tenant_id:string, role:string, unit_ids:string[]|null, platform_admin:boolean, permissions:string[], supported_documents:string[], projection:Record<string, unknown>}} BootstrapState */
 /** @typedef {{method?:string, headers?:Record<string,string>, body?:string}} ApiOptions */
 
 const navigation = [
   { label: "Operação", items: [["overview", "Visão geral"], ["documents", "Documentos"], ["issuances", "Emissões"], ["errors", "Erros"], ["reconciliation", "Reconciliação"]] },
   { label: "Configuração", items: [["onboarding", "Onboarding"], ["companies", "Empresas"], ["units", "Unidades"], ["environments", "Ambientes"], ["capabilities", "Capabilities"], ["certificates", "Certificados"], ["providers", "Providers"], ["users", "Usuários"]] },
-  { label: "Plataforma", items: [["webhooks", "Webhooks"], ["integrations", "Integrações"], ["usage", "Uso"], ["billing", "Billing"], ["plans", "Planos"], ["audit", "Auditoria"], ["support", "Suporte"], ["settings", "Configurações"]] },
+  { label: "Plataforma", items: [["webhooks", "Webhooks"], ["integrations", "Integrações"], ["usage", "Uso"], ["billing", "Billing"], ["plans", "Planos"], ["pricing-admin", "Catálogo comercial"], ["audit", "Auditoria"], ["support", "Suporte"], ["settings", "Configurações"]] },
 ];
 
 const supportedDocumentLabels = ["NF-e", "NFC-e", "NFS-e"];
@@ -36,6 +36,7 @@ const descriptions = {
   usage: "Uso medido sem interferir na autoridade fiscal.",
   billing: "Cobrança separada da autoridade fiscal.",
   plans: "Plano e entitlements comerciais configurados.",
+  "pricing-admin": "Catálogo comercial versionado, durável e restrito à administração da plataforma.",
   audit: "Auditoria administrativa e operacional.",
   support: "Saúde operacional, incidentes e suporte.",
   settings: "Políticas e configurações autorizadas.",
@@ -296,6 +297,96 @@ function appendOnboardingControls(article) {
   article.append(form);
 }
 
+async function renderPricingAdmin() {
+  workspace.replaceChildren();
+  const article = panel("Catálogo comercial", "Platform administration");
+  const statusLine = document.createElement("p");
+  statusLine.className = "form-error";
+  statusLine.setAttribute("role", "status");
+  article.append(statusLine);
+  workspace.append(article);
+
+  if (!bootstrapState?.platform_admin) {
+    statusLine.textContent = "A administração do catálogo exige autoridade explícita de plataforma.";
+    return;
+  }
+
+  try {
+    const response = await api("/v1/admin/pricing");
+    const current = response.current && typeof response.current === "object" ? response.current : null;
+    const history = Array.isArray(response.history) ? response.history : [];
+
+    const summary = document.createElement("div");
+    summary.className = "grid-list";
+    summary.append(
+      rowElement({
+        item: "Estado",
+        value: current ? "Catálogo publicado" : "Sem preço comercial publicado",
+        status: current ? "PUBLISHED" : "UNPRICED",
+      }),
+      rowElement({
+        item: "Versão ativa",
+        value: current && typeof current.version === "number" ? current.version : "—",
+        status: "VERSIONED",
+      }),
+      rowElement({
+        item: "Histórico",
+        value: history.length,
+        status: "AUDITED",
+      }),
+    );
+
+    const form = document.createElement("form");
+    form.className = "panel-form";
+    const label = document.createElement("label");
+    label.textContent = "Próxima configuração JSON";
+    const editor = document.createElement("textarea");
+    editor.rows = 18;
+    editor.spellcheck = false;
+    const draft = current
+      ? { ...current, version: Number(current.version) + 1 }
+      : { configuration_id: "nfcore-commercial", version: 1, prices: [], plans: [] };
+    editor.value = JSON.stringify(draft, null, 2);
+    label.append(editor);
+
+    const publish = document.createElement("button");
+    publish.className = "primary";
+    publish.type = "submit";
+    publish.textContent = "Publicar nova versão";
+    const warning = document.createElement("p");
+    warning.className = "empty-state";
+    warning.textContent = "Preços são configuração operacional. Nenhum valor deve ser inventado ou copiado para o código-fonte.";
+
+    form.append(label, warning, publish);
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      publish.disabled = true;
+      statusLine.textContent = "";
+      try {
+        const configuration = JSON.parse(editor.value);
+        const expectedVersion = current && typeof current.version === "number" ? current.version : null;
+        await api("/v1/admin/pricing", {
+          method: "POST",
+          headers: { "X-CSRF-Token": csrfToken() },
+          body: JSON.stringify({
+            configuration,
+            expected_version: expectedVersion,
+          }),
+        });
+        await renderPricingAdmin();
+      } catch (error) {
+        statusLine.textContent = error instanceof Error ? error.message : "Não foi possível publicar o catálogo";
+      } finally {
+        publish.disabled = false;
+      }
+    });
+
+    article.replaceChildren(summary, form, statusLine);
+  } catch (error) {
+    statusLine.textContent = error instanceof Error ? error.message : "Falha ao carregar catálogo comercial";
+  }
+}
+
 /** @param {string} viewId */
 async function renderSurface(viewId) {
   currentView = viewId;
@@ -308,6 +399,10 @@ async function renderSurface(viewId) {
   });
   if (viewId === "overview") {
     renderOverview();
+    return;
+  }
+  if (viewId === "pricing-admin") {
+    await renderPricingAdmin();
     return;
   }
   workspace.replaceChildren();
