@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from datetime import timedelta
-from typing import Any
 from decimal import Decimal
+from typing import Any
 
 from fastapi.testclient import TestClient
 
