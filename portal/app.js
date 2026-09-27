@@ -6,7 +6,7 @@
 const navigation = [
   { label: "Operação", items: [["overview", "Visão geral"], ["documents", "Documentos"], ["issuances", "Emissões"], ["errors", "Erros"], ["reconciliation", "Reconciliação"]] },
   { label: "Configuração", items: [["onboarding", "Onboarding"], ["companies", "Empresas"], ["units", "Unidades"], ["environments", "Ambientes"], ["capabilities", "Capabilities"], ["certificates", "Certificados"], ["providers", "Providers"], ["users", "Usuários"]] },
-  { label: "Plataforma", items: [["webhooks", "Webhooks"], ["integrations", "Integrações"], ["usage", "Uso"], ["billing", "Billing"], ["plans", "Planos"], ["pricing-admin", "Catálogo comercial"], ["audit", "Auditoria"], ["support", "Suporte"], ["settings", "Configurações"]] },
+  { label: "Plataforma", items: [["webhooks", "Webhooks"], ["integrations", "Integrações"], ["usage", "Uso"], ["billing", "Billing"], ["plans", "Planos"], ["pricing-admin", "Catálogo comercial"], ["commercial-release", "Liberação comercial"], ["audit", "Auditoria"], ["support", "Suporte"], ["settings", "Configurações"]] },
 ];
 
 const supportedDocumentLabels = ["NF-e", "NFC-e", "NFS-e"];
@@ -37,6 +37,7 @@ const descriptions = {
   billing: "Cobrança separada da autoridade fiscal.",
   plans: "Plano e entitlements comerciais configurados.",
   "pricing-admin": "Catálogo comercial versionado, durável e restrito à administração da plataforma.",
+  "commercial-release": "Decisão humana versionada que governa a disponibilidade comercial pública do NFCore.",
   audit: "Auditoria administrativa e operacional.",
   support: "Saúde operacional, incidentes e suporte.",
   settings: "Políticas e configurações autorizadas.",
@@ -387,6 +388,128 @@ async function renderPricingAdmin() {
   }
 }
 
+async function renderCommercialRelease() {
+  workspace.replaceChildren();
+  const article = panel("Liberação comercial", "Platform administration");
+  const statusLine = document.createElement("p");
+  statusLine.className = "form-error";
+  statusLine.setAttribute("role", "status");
+  article.append(statusLine);
+  workspace.append(article);
+
+  if (!bootstrapState?.platform_admin) {
+    statusLine.textContent = "A decisão de liberação comercial exige autoridade explícita de plataforma.";
+    return;
+  }
+
+  try {
+    const response = await api("/v1/admin/commercial-release");
+    const current = response.current && typeof response.current === "object" ? response.current : null;
+    const history = Array.isArray(response.history) ? response.history : [];
+
+    const summary = document.createElement("div");
+    summary.className = "grid-list";
+    summary.append(
+      rowElement({
+        item: "Estado comercial",
+        value: current?.status || "unavailable",
+        status: current?.status || "UNAVAILABLE",
+      }),
+      rowElement({
+        item: "Versão",
+        value: typeof current?.version === "number" ? current.version : "—",
+        status: "VERSIONED",
+      }),
+      rowElement({
+        item: "Histórico",
+        value: history.length,
+        status: "AUDITED",
+      }),
+    );
+
+    const form = document.createElement("form");
+    form.className = "panel-form";
+
+    const statusLabel = document.createElement("label");
+    statusLabel.textContent = "Próximo estado";
+    const statusSelect = document.createElement("select");
+    for (const value of [
+      "unavailable",
+      "internal_only",
+      "waitlist",
+      "ready_for_checkout_configuration",
+      "ready_for_commercial_review",
+      "commercial_approved",
+    ]) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = value;
+      if ((current?.status || "unavailable") === value) option.selected = true;
+      statusSelect.append(option);
+    }
+    statusLabel.append(statusSelect);
+
+    const messageLabel = document.createElement("label");
+    messageLabel.textContent = "Mensagem pública";
+    const messageInput = document.createElement("textarea");
+    messageInput.rows = 3;
+    messageInput.value = typeof current?.public_message === "string" ? current.public_message : "";
+    messageLabel.append(messageInput);
+
+    const decisionLabel = document.createElement("label");
+    decisionLabel.textContent = "Referência da decisão humana";
+    const decisionInput = document.createElement("input");
+    decisionInput.type = "text";
+    decisionInput.value = typeof current?.human_decision_reference === "string"
+      ? current.human_decision_reference
+      : "";
+    decisionInput.placeholder = "Obrigatória para commercial_approved";
+    decisionLabel.append(decisionInput);
+
+    const warning = document.createElement("p");
+    warning.className = "empty-state";
+    warning.textContent = "COMMERCIAL_APPROVED nunca é inferido por pricing, CI, Cakto ou readiness fiscal. Checkout e produção fiscal permanecem autoridades separadas.";
+
+    const publish = document.createElement("button");
+    publish.className = "primary";
+    publish.type = "submit";
+    publish.textContent = "Registrar nova decisão";
+
+    form.append(statusLabel, messageLabel, decisionLabel, warning, publish);
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      publish.disabled = true;
+      statusLine.textContent = "";
+      try {
+        const expectedVersion = typeof current?.version === "number" ? current.version : null;
+        const decision = {
+          version: expectedVersion === null ? 1 : expectedVersion + 1,
+          status: statusSelect.value,
+          public_message: messageInput.value.trim() || null,
+          human_decision_reference: decisionInput.value.trim() || null,
+        };
+        await api("/v1/admin/commercial-release", {
+          method: "POST",
+          headers: { "X-CSRF-Token": csrfToken() },
+          body: JSON.stringify({
+            decision,
+            expected_version: expectedVersion,
+          }),
+        });
+        await renderCommercialRelease();
+      } catch (error) {
+        statusLine.textContent = error instanceof Error ? error.message : "Não foi possível registrar a decisão comercial";
+      } finally {
+        publish.disabled = false;
+      }
+    });
+
+    article.replaceChildren(summary, form, statusLine);
+  } catch (error) {
+    statusLine.textContent = error instanceof Error ? error.message : "Falha ao carregar a decisão comercial";
+  }
+}
+
 /** @param {string} viewId */
 async function renderSurface(viewId) {
   currentView = viewId;
@@ -403,6 +526,10 @@ async function renderSurface(viewId) {
   }
   if (viewId === "pricing-admin") {
     await renderPricingAdmin();
+    return;
+  }
+  if (viewId === "commercial-release") {
+    await renderCommercialRelease();
     return;
   }
   workspace.replaceChildren();

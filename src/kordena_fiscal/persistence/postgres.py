@@ -41,6 +41,7 @@ from kordena_fiscal.security.human_identity import (
 )
 from kordena_fiscal.security.human_recovery import PasswordResetRecord
 
+from .commercial_release import PostgresCommercialReleaseRepository
 from .ports import PersistenceStateError
 from .pricing_catalog import PostgresPricingCatalogRepository
 from .sqlite import _MIGRATIONS
@@ -367,6 +368,23 @@ _PRICING_SCHEMA = (
         "ON fm_commercial_pricing_catalog_versions (published_at DESC)"
     ),
 )
+_COMMERCIAL_RELEASE_SCHEMA = (
+    """
+    CREATE TABLE IF NOT EXISTS fm_commercial_release_versions (
+        version INTEGER PRIMARY KEY CHECK (version >= 1),
+        status TEXT NOT NULL,
+        public_message TEXT,
+        human_decision_reference TEXT,
+        actor_id TEXT NOT NULL,
+        correlation_id TEXT NOT NULL,
+        published_at TEXT NOT NULL
+    )
+    """,
+    (
+        "CREATE INDEX IF NOT EXISTS fm_commercial_release_published_idx "
+        "ON fm_commercial_release_versions (published_at DESC)"
+    ),
+)
 
 
 def _translate_ddl(statement: str) -> str:
@@ -380,6 +398,8 @@ class PostgresFiscalDatabase:
     HUMAN_MIGRATION_NAME = "web03_human_identity_and_sessions"
     PRICING_MIGRATION_VERSION = 7
     PRICING_MIGRATION_NAME = "cl08_durable_pricing_and_platform_admin"
+    COMMERCIAL_RELEASE_MIGRATION_VERSION = 8
+    COMMERCIAL_RELEASE_MIGRATION_NAME = "cl09_commercial_release_authority"
 
     def __init__(
         self,
@@ -481,6 +501,21 @@ class PostgresFiscalDatabase:
                         ),
                     )
                     new_versions.append(self.PRICING_MIGRATION_VERSION)
+                if self.COMMERCIAL_RELEASE_MIGRATION_VERSION not in applied:
+                    for statement in _COMMERCIAL_RELEASE_SCHEMA:
+                        raw.execute(statement)
+                    raw.execute(
+                        """
+                        INSERT INTO fm_schema_migrations (version, name, applied_at)
+                        VALUES (%s, %s, %s)
+                        """,
+                        (
+                            self.COMMERCIAL_RELEASE_MIGRATION_VERSION,
+                            self.COMMERCIAL_RELEASE_MIGRATION_NAME,
+                            datetime.now().astimezone().isoformat(),
+                        ),
+                    )
+                    new_versions.append(self.COMMERCIAL_RELEASE_MIGRATION_VERSION)
                 raw.commit()
                 return tuple(new_versions)
             except Exception:
@@ -515,6 +550,9 @@ class PostgresFiscalDatabase:
 
     def pricing_catalog(self) -> PostgresPricingCatalogRepository:
         return PostgresPricingCatalogRepository(self)
+
+    def commercial_release_catalog(self) -> PostgresCommercialReleaseRepository:
+        return PostgresCommercialReleaseRepository(self)
 
 
 class PostgresHumanAccountRepository:

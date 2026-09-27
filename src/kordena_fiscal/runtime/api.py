@@ -215,6 +215,15 @@ def create_runtime_app(
                 pricing_administration is not None
                 and pricing_administration.current is not None
             ),
+            "commercial_release_admin_configured": (
+                commercial_release_administration is not None
+            ),
+            "commercial_release_status": (
+                "unavailable"
+                if commercial_release_administration is None
+                or commercial_release_administration.current is None
+                else commercial_release_administration.current.status.value
+            ),
             "fiscal_production_activated": active_grants > 0,
             "fiscal_production_active_grants": active_grants,
             "cakto_webhook_configured": cakto_receiver is not None,
@@ -229,6 +238,11 @@ def create_runtime_app(
     pricing_administration = (
         None if composition is None else composition.pricing_administration
     )
+    commercial_release_administration = (
+        None
+        if composition is None
+        else composition.commercial_release_administration
+    )
     # Fiscal production stays false unless a governed authority is explicitly injected.
     app.mount(
         "/",
@@ -238,6 +252,7 @@ def create_runtime_app(
             password_reset_delivery=password_reset_delivery,
             portal_executor=portal_executor,
             pricing_administration=pricing_administration,
+            commercial_release_administration=commercial_release_administration,
         ),
     )
     return app

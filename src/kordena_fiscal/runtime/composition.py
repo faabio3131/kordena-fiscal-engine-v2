@@ -9,6 +9,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from kordena_fiscal.control_plane.commercial_release import (
+    CommercialReleaseAdministrationService,
+)
 from kordena_fiscal.control_plane.pricing_admin import CommercialPricingAdministrationService
 from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
 from kordena_fiscal.security.human_identity import (
@@ -33,6 +36,7 @@ class RuntimeComposition:
     password_recovery: PasswordRecoveryService
     commercial_provisioning: CommercialCustomerProvisioningService
     pricing_administration: CommercialPricingAdministrationService
+    commercial_release_administration: CommercialReleaseAdministrationService
     portal_executor: DurableHumanPortalExecutor
 
 
@@ -69,6 +73,9 @@ def build_postgres_runtime_composition(
     pricing_administration = CommercialPricingAdministrationService(
         database.pricing_catalog()
     )
+    commercial_release_administration = CommercialReleaseAdministrationService(
+        database.commercial_release_catalog()
+    )
     portal = DurableHumanPortalExecutor(
         database,
         operation_executor=portal_operation_executor,
@@ -78,5 +85,6 @@ def build_postgres_runtime_composition(
         password_recovery=recovery,
         commercial_provisioning=provisioning,
         pricing_administration=pricing_administration,
+        commercial_release_administration=commercial_release_administration,
         portal_executor=portal,
     )

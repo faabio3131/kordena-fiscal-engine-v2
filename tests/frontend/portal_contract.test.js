@@ -83,3 +83,13 @@ test("platform pricing administration is backend-authorized and zero-code", () =
   assert.match(script, /Sem preço comercial publicado|UNPRICED/);
   assert.doesNotMatch(script, /base_amount\s*:\s*["']\d/);
 });
+
+
+test("commercial release governance is explicit, human-controlled and separated from checkout", () => {
+  assert.match(script, /commercial-release/);
+  assert.match(script, /\/v1\/admin\/commercial-release/);
+  assert.match(script, /commercial_approved/);
+  assert.match(script, /human_decision_reference/);
+  assert.match(script, /COMMERCIAL_APPROVED nunca é inferido/);
+  assert.match(script, /Checkout e produção fiscal permanecem autoridades separadas/);
+});

@@ -12,7 +12,11 @@ from kordena_fiscal.persistence.cakto import (
     CAKTO_SCHEMA_STATEMENTS,
     CAKTO_SCHEMA_VERSION,
 )
-from kordena_fiscal.persistence.postgres import _PRICING_SCHEMA, PostgresFiscalDatabase
+from kordena_fiscal.persistence.postgres import (
+    _COMMERCIAL_RELEASE_SCHEMA,
+    _PRICING_SCHEMA,
+    PostgresFiscalDatabase,
+)
 from kordena_fiscal.persistence.sqlite import _MIGRATIONS
 
 _DESTRUCTIVE = re.compile(
@@ -54,6 +58,7 @@ def validate_policy() -> tuple[int, ...]:
     versions = tuple(migration.version for migration in _MIGRATIONS) + (
         PostgresFiscalDatabase.HUMAN_MIGRATION_VERSION,
         PostgresFiscalDatabase.PRICING_MIGRATION_VERSION,
+        PostgresFiscalDatabase.COMMERCIAL_RELEASE_MIGRATION_VERSION,
     )
     if versions != tuple(range(1, max(versions) + 1)):
         raise RuntimeError(f"migration versions must be contiguous from 1: {versions!r}")
@@ -68,6 +73,11 @@ def validate_policy() -> tuple[int, ...]:
         version=PostgresFiscalDatabase.PRICING_MIGRATION_VERSION,
         name=PostgresFiscalDatabase.PRICING_MIGRATION_NAME,
         statements=_PRICING_SCHEMA,
+    )
+    _reject_unapproved_destructive(
+        version=PostgresFiscalDatabase.COMMERCIAL_RELEASE_MIGRATION_VERSION,
+        name=PostgresFiscalDatabase.COMMERCIAL_RELEASE_MIGRATION_NAME,
+        statements=_COMMERCIAL_RELEASE_SCHEMA,
     )
     _reject_unapproved_destructive(
         version=CAKTO_SCHEMA_VERSION,

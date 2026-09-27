@@ -7,6 +7,7 @@ from types import TracebackType
 
 from fastapi.testclient import TestClient
 
+from kordena_fiscal.control_plane.commercial_release import InMemoryCommercialReleaseCatalog
 from kordena_fiscal.control_plane.models import (
     ControlPlaneAuditAction,
     ControlPlaneAuditEvent,
@@ -116,6 +117,7 @@ class _RuntimeDatabase:
         self.sessions = InMemoryWebSessionRepository()
         self.resets = InMemoryPasswordResetRepository()
         self.pricing = CommercialPricingRegistry()
+        self.commercial_release = InMemoryCommercialReleaseCatalog()
         self.control_plane = _ControlPlane()
         self.closed = False
 
@@ -140,6 +142,9 @@ class _RuntimeDatabase:
 
     def pricing_catalog(self) -> CommercialPricingRegistry:
         return self.pricing
+
+    def commercial_release_catalog(self) -> InMemoryCommercialReleaseCatalog:
+        return self.commercial_release
 
     def __call__(self) -> _UnitOfWork:
         return _UnitOfWork(self.control_plane)
@@ -173,6 +178,8 @@ def test_postgres_runtime_composes_human_identity_recovery_and_durable_portal(
         assert profile["human_identity_configured"] is True
         assert profile["portal_executor_configured"] is True
         assert profile["password_recovery_configured"] is True
+        assert profile["commercial_release_admin_configured"] is True
+        assert profile["commercial_release_status"] == "unavailable"
         assert profile["fiscal_production_activated"] is False
 
         login = client.post(
