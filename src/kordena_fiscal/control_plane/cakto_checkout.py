@@ -62,11 +62,18 @@ class CaktoCheckoutProjection:
                 "configured checkout count must match projected items"
             )
 
-    def to_public_mapping(self, *, expose_urls: bool) -> dict[str, object]:
+    def to_public_mapping(
+        self,
+        *,
+        processing_configured: bool,
+        expose_urls: bool,
+    ) -> dict[str, object]:
         return {
             "status": self.status.value,
             "provider": "cakto",
-            "processing_status": "configured" if expose_urls else "unconfigured",
+            "processing_status": (
+                "configured" if processing_configured else "unconfigured"
+            ),
             "items": [
                 item.to_mapping(expose_url=expose_urls)
                 for item in self.items
