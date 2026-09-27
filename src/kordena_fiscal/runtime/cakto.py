@@ -1,21 +1,95 @@
-"""Thin HTTP adapter for authenticated Cakto webhook ingestion."""
+"""Runtime composition and HTTP adapter for the Cakto commercial boundary.
+
+The runtime deliberately accepts webhook secret material only by injection. Secret
+resolution belongs to the external secret boundary; this module never reads secrets
+from environment variables, persists them, or grants fiscal production authority.
+"""
 
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
 
 from fastapi import APIRouter, Header, HTTPException, Request, status
 
+from kordena_fiscal.persistence.cakto import (
+    CaktoCommercialDatabase,
+    postgres_cakto_commercial_database,
+)
 from kordena_fiscal.product.cakto import (
     CaktoAuthenticationError,
+    CaktoCommercialProcessor,
+    CaktoMetricSink,
     CaktoPayloadError,
     CaktoStateConflictError,
     CaktoWebhookReceiver,
+    CaktoWebhookVerifier,
     utc_now,
 )
 
 Clock = Callable[[], datetime]
+
+
+@dataclass(frozen=True, slots=True)
+class CaktoCommercialRuntime:
+    """Canonical commercial runtime assembled around one durable database."""
+
+    database: CaktoCommercialDatabase
+    receiver: CaktoWebhookReceiver
+    processor: CaktoCommercialProcessor
+
+
+def compose_cakto_commercial_runtime(
+    *,
+    database: CaktoCommercialDatabase,
+    webhook_secret: bytes,
+    metrics: CaktoMetricSink | None = None,
+    initialize_schema: bool = True,
+) -> CaktoCommercialRuntime:
+    """Compose Cakto ingestion and processing without resolving secret material here.
+
+    ``webhook_secret`` must already have been resolved by the governed external secret
+    boundary. Keeping that resolution outside this function prevents a second secret
+    architecture and makes rotation observable on the next composition/reload.
+    """
+
+    if not isinstance(database, CaktoCommercialDatabase):
+        raise CaktoStateConflictError("Cakto commercial database is required")
+    if initialize_schema:
+        database.initialize()
+    verifier = CaktoWebhookVerifier(webhook_secret)
+    receiver = CaktoWebhookReceiver(
+        verifier=verifier,
+        unit_of_work_factory=database,
+        metrics=metrics,
+    )
+    processor = CaktoCommercialProcessor(
+        unit_of_work_factory=database,
+        metrics=metrics,
+    )
+    return CaktoCommercialRuntime(
+        database=database,
+        receiver=receiver,
+        processor=processor,
+    )
+
+
+def compose_postgres_cakto_commercial_runtime(
+    *,
+    fiscal_database: object,
+    webhook_secret: bytes,
+    metrics: CaktoMetricSink | None = None,
+) -> CaktoCommercialRuntime:
+    """Bind the commercial runtime to the canonical PostgreSQL connection boundary."""
+
+    database = postgres_cakto_commercial_database(fiscal_database)
+    return compose_cakto_commercial_runtime(
+        database=database,
+        webhook_secret=webhook_secret,
+        metrics=metrics,
+        initialize_schema=True,
+    )
 
 
 def build_cakto_webhook_router(

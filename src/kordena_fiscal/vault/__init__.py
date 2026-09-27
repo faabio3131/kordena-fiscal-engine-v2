@@ -14,6 +14,18 @@ from .contracts import (
     SecretUnavailableError,
     SecretUsagePurpose,
 )
+from .external import (
+    ExternalFiscalSecretVault,
+    ExternalSecretBackendError,
+    ExternalSecretBackendUnavailable,
+    ExternalSecretClient,
+    ExternalSecretPermissionDenied,
+    ExternalSecretRecord,
+    NullSecretAccessAuditSink,
+    SecretAccessAuditEvent,
+    SecretAccessAuditSink,
+    SystemExternalSecretClock,
+)
 from .in_memory import InMemorySyntheticFiscalSecretVault
 
 __all__ = [
@@ -21,8 +33,17 @@ __all__ = [
     "EphemeralCscMaterial",
     "EphemeralProviderCredentialsMaterial",
     "EphemeralSecretMaterial",
+    "ExternalFiscalSecretVault",
+    "ExternalSecretBackendError",
+    "ExternalSecretBackendUnavailable",
+    "ExternalSecretClient",
+    "ExternalSecretPermissionDenied",
+    "ExternalSecretRecord",
     "FiscalSecretVault",
     "InMemorySyntheticFiscalSecretVault",
+    "NullSecretAccessAuditSink",
+    "SecretAccessAuditEvent",
+    "SecretAccessAuditSink",
     "SecretAuthorizationError",
     "SecretMaterialTypeError",
     "SecretResolutionContext",
@@ -30,4 +51,5 @@ __all__ = [
     "SecretResolutionService",
     "SecretUnavailableError",
     "SecretUsagePurpose",
+    "SystemExternalSecretClock",
 ]

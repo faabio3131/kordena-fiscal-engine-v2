@@ -10,7 +10,12 @@ from fastapi import Body, FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from kordena_fiscal.security.human_identity import HumanIdentityService
+from kordena_fiscal.security.human_recovery import PasswordRecoveryService
 from kordena_fiscal.web.human_auth import create_human_auth_router
+from kordena_fiscal.web.human_recovery import (
+    PasswordResetDelivery,
+    create_password_recovery_router,
+)
 from kordena_fiscal.web.portal_api import HumanPortalExecutor, create_portal_router
 
 
@@ -225,6 +230,8 @@ def create_app(
     security: BridgeSecurityBoundary | None = None,
     executor: BridgeRequestExecutor | None = None,
     human_identity: HumanIdentityService | None = None,
+    password_recovery: PasswordRecoveryService | None = None,
+    password_reset_delivery: PasswordResetDelivery | None = None,
     portal_executor: HumanPortalExecutor | None = None,
 ) -> FastAPI:
     """Create the web adapter without granting fiscal authority by default."""
@@ -238,6 +245,13 @@ def create_app(
     if human_identity is not None:
         app.include_router(create_human_auth_router(human_identity))
         app.include_router(create_portal_router(human_identity, portal_executor))
+    if password_recovery is not None:
+        app.include_router(
+            create_password_recovery_router(
+                password_recovery,
+                delivery=password_reset_delivery,
+            )
+        )
 
     @app.exception_handler(HttpContractError)
     async def contract_error_handler(

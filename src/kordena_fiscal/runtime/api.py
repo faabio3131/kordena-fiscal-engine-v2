@@ -13,6 +13,7 @@ from kordena_fiscal.gateway.production_activation import ProductionExecutionAuth
 from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
 from kordena_fiscal.product.cakto import CaktoWebhookReceiver
 from kordena_fiscal.web.app import create_app
+from kordena_fiscal.web.human_recovery import PasswordResetDelivery
 from kordena_fiscal.web.portal_runtime import PortalOperationExecutor
 
 from .cakto import build_cakto_webhook_router
@@ -77,6 +78,7 @@ def create_runtime_app(
     metrics: MetricsRegistry | None = None,
     logger: StructuredLogger | None = None,
     cakto_receiver: CaktoWebhookReceiver | None = None,
+    password_reset_delivery: PasswordResetDelivery | None = None,
     production_authority: ProductionExecutionAuthority | None = None,
     portal_operation_executor: PortalOperationExecutor | None = None,
 ) -> FastAPI:
@@ -105,6 +107,7 @@ def create_runtime_app(
     app.state.nfcore_password_recovery = (
         None if composition is None else composition.password_recovery
     )
+    app.state.nfcore_password_reset_delivery = password_reset_delivery
     app.state.nfcore_metrics = runtime_metrics
     app.state.nfcore_logger = runtime_logger
     app.state.nfcore_production_authority = production_authority
@@ -206,6 +209,7 @@ def create_runtime_app(
             "human_identity_configured": composition is not None,
             "portal_executor_configured": composition is not None,
             "password_recovery_configured": composition is not None,
+            "password_reset_delivery_configured": password_reset_delivery is not None,
             "fiscal_production_activated": active_grants > 0,
             "fiscal_production_active_grants": active_grants,
             "cakto_webhook_configured": cakto_receiver is not None,
@@ -215,12 +219,15 @@ def create_runtime_app(
         app.include_router(build_cakto_webhook_router(cakto_receiver))
 
     human_identity = None if composition is None else composition.human_identity
+    password_recovery = None if composition is None else composition.password_recovery
     portal_executor = None if composition is None else composition.portal_executor
     # Fiscal production stays false unless a governed authority is explicitly injected.
     app.mount(
         "/",
         create_app(
             human_identity=human_identity,
+            password_recovery=password_recovery,
+            password_reset_delivery=password_reset_delivery,
             portal_executor=portal_executor,
         ),
     )

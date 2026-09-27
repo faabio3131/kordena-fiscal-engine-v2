@@ -1,10 +1,25 @@
 [hidden] { display: none !important; }
 
 .login-view {
+  position: relative;
+  isolation: isolate;
   min-height: 100vh;
   display: grid;
   place-items: center;
   padding: 32px 18px;
+  overflow: hidden;
+}
+
+.login-view::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: min(760px, 90vw);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(37, 99, 255, .18), rgba(0, 229, 255, .04) 42%, transparent 70%);
+  filter: blur(12px);
+  pointer-events: none;
 }
 
 .login-card {
@@ -14,11 +29,13 @@
   border-radius: 22px;
   background: linear-gradient(180deg, rgba(15, 39, 71, .96), rgba(8, 18, 31, .98));
   box-shadow: 0 28px 90px rgba(0, 0, 0, .38);
+  backdrop-filter: blur(20px);
 }
 
 .login-card .brand-mark { width: 58px; height: 58px; margin-bottom: 20px; }
 .login-card h1 { margin-bottom: 12px; }
 .login-card form { display: grid; gap: 16px; margin-top: 22px; }
+.login-card form > button { width: 100%; }
 
 label {
   display: grid;
@@ -36,16 +53,39 @@ input, select, textarea {
   background: #08121f;
   color: #f8fafc;
   outline: none;
+  transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
 }
 
+input::placeholder, textarea::placeholder { color: #6f8aa3; }
 textarea { resize: vertical; min-height: 132px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-input:focus, select:focus, textarea:focus { border-color: #00e5ff; box-shadow: 0 0 0 4px rgba(0, 229, 255, .10); }
+input:focus-visible, select:focus-visible, textarea:focus-visible {
+  border-color: #00e5ff;
+  box-shadow: 0 0 0 4px rgba(0, 229, 255, .10);
+}
+
+button:disabled, input:disabled, select:disabled, textarea:disabled {
+  cursor: not-allowed;
+  opacity: .58;
+}
+button:disabled { transform: none !important; box-shadow: none !important; }
+
 .form-error { min-height: 20px; margin: 0; color: #ff9cac; font-size: 12px; }
+.form-error:empty { visibility: hidden; }
 
 #operation-dialog form { display: grid; gap: 14px; }
 #operation-dialog .dialog-actions { display: flex; justify-content: flex-end; gap: 9px; }
 
 @media (max-width: 480px) {
+  .login-view { padding: 20px 12px; }
   .login-card { padding: 24px 18px; }
   #operation-dialog .dialog-actions { display: grid; grid-template-columns: 1fr; }
+}
+
+@media (prefers-contrast: more) {
+  .login-card, input, select, textarea { border-width: 2px; }
+  input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid #00e5ff; outline-offset: 2px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  input, select, textarea { transition: none; }
 }

@@ -47,6 +47,14 @@ const loginForm = /** @type {HTMLFormElement} */ (document.getElementById("login
 const loginEmail = /** @type {HTMLInputElement} */ (document.getElementById("login-email"));
 const loginPassword = /** @type {HTMLInputElement} */ (document.getElementById("login-password"));
 const loginError = /** @type {HTMLElement} */ (document.getElementById("login-error"));
+const forgotPasswordAction = /** @type {HTMLButtonElement} */ (document.getElementById("forgot-password-action"));
+const passwordResetRequestForm = /** @type {HTMLFormElement} */ (document.getElementById("password-reset-request-form"));
+const passwordResetEmail = /** @type {HTMLInputElement} */ (document.getElementById("password-reset-email"));
+const passwordResetRequestCancel = /** @type {HTMLButtonElement} */ (document.getElementById("password-reset-request-cancel"));
+const passwordResetRequestStatus = /** @type {HTMLElement} */ (document.getElementById("password-reset-request-status"));
+const passwordResetCompleteForm = /** @type {HTMLFormElement} */ (document.getElementById("password-reset-complete-form"));
+const passwordResetNewPassword = /** @type {HTMLInputElement} */ (document.getElementById("password-reset-new-password"));
+const passwordResetCompleteStatus = /** @type {HTMLElement} */ (document.getElementById("password-reset-complete-status"));
 const nav = /** @type {HTMLElement} */ (document.getElementById("nav"));
 const workspace = /** @type {HTMLElement} */ (document.getElementById("workspace"));
 const title = /** @type {HTMLElement} */ (document.getElementById("view-title"));
@@ -75,6 +83,17 @@ function csrfToken() {
   const prefix = "nfcore_csrf=";
   const entry = document.cookie.split(";").map((part) => part.trim()).find((part) => part.startsWith(prefix));
   return entry ? decodeURIComponent(entry.slice(prefix.length)) : "";
+}
+
+/** @returns {string|null} */
+function resetTokenFromLocation() {
+  return new URLSearchParams(window.location.search).get("reset_token");
+}
+
+function clearResetTokenFromLocation() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("reset_token");
+  window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
 }
 
 /** @param {string} path @param {ApiOptions} [options] @returns {Promise<any>} */
@@ -106,6 +125,27 @@ function showLogin(message = "") {
 function showApp() {
   loginView.hidden = true;
   appShell.hidden = false;
+}
+
+function showPasswordResetRequest() {
+  loginForm.hidden = true;
+  passwordResetCompleteForm.hidden = true;
+  passwordResetRequestForm.hidden = false;
+  passwordResetEmail.value = loginEmail.value;
+  passwordResetRequestStatus.textContent = "";
+}
+
+function showRegularLogin() {
+  passwordResetRequestForm.hidden = true;
+  passwordResetCompleteForm.hidden = true;
+  loginForm.hidden = false;
+}
+
+function showPasswordResetCompletion() {
+  loginForm.hidden = true;
+  passwordResetRequestForm.hidden = true;
+  passwordResetCompleteForm.hidden = false;
+  passwordResetCompleteStatus.textContent = "";
 }
 
 /** @param {unknown} value */
@@ -170,7 +210,7 @@ function renderOverview() {
   const article = panel("Estado operacional", "Control Plane");
   const grid = document.createElement("div");
   grid.className = "grid-list";
-  const visible = Object.entries(projection);
+  const visible = Object.entries(projection).filter(([key]) => key !== "available_surfaces");
   if (!visible.length) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
@@ -191,6 +231,69 @@ function renderOverview() {
   );
   identity.append(identityGrid);
   workspace.append(article, identity);
+}
+
+/** @param {HTMLElement} article */
+function appendOnboardingControls(article) {
+  const stage = bootstrapState?.projection.onboarding_stage;
+  if (stage === "commercial_provisioning_required") {
+    const notice = document.createElement("div");
+    notice.className = "empty-state";
+    notice.textContent = "O provisioning comercial confiável da organização precisa ser concluído antes da configuração da unidade.";
+    article.append(notice);
+    return;
+  }
+  if (stage !== "unit_setup_required" || !bootstrapState?.permissions.includes("configuration.write")) return;
+
+  const form = document.createElement("form");
+  form.className = "panel-form";
+  const unitLabel = document.createElement("label");
+  unitLabel.textContent = "Código da unidade";
+  const unitInput = document.createElement("input");
+  unitInput.name = "unit_id";
+  unitInput.required = true;
+  unitInput.autocomplete = "off";
+  const nameLabel = document.createElement("label");
+  nameLabel.textContent = "Nome da unidade";
+  const nameInput = document.createElement("input");
+  nameInput.name = "display_name";
+  nameInput.required = true;
+  nameInput.autocomplete = "organization";
+  unitLabel.append(unitInput);
+  nameLabel.append(nameInput);
+  const submit = document.createElement("button");
+  submit.className = "primary";
+  submit.type = "submit";
+  submit.textContent = "Cadastrar unidade em homologação";
+  const statusLine = document.createElement("p");
+  statusLine.className = "form-error";
+  statusLine.setAttribute("role", "status");
+  form.append(unitLabel, nameLabel, submit, statusLine);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    statusLine.textContent = "";
+    submit.disabled = true;
+    try {
+      await api("/v1/portal/operations/onboardUnit", {
+        method: "POST",
+        headers: {
+          "X-CSRF-Token": csrfToken(),
+          "Idempotency-Key": crypto.randomUUID(),
+        },
+        body: JSON.stringify({
+          unit_id: unitInput.value.trim(),
+          display_name: nameInput.value.trim(),
+        }),
+      });
+      await bootstrap();
+      await renderSurface("onboarding");
+    } catch (error) {
+      statusLine.textContent = error instanceof Error ? error.message : "Não foi possível cadastrar a unidade";
+    } finally {
+      submit.disabled = false;
+    }
+  });
+  article.append(form);
 }
 
 /** @param {string} viewId */
@@ -228,6 +331,7 @@ async function renderSurface(viewId) {
     }
     const existingHeader = article.firstElementChild;
     article.replaceChildren(...(existingHeader ? [existingHeader, grid] : [grid]));
+    if (viewId === "onboarding") appendOnboardingControls(article);
     if (["documents", "issuances", "reconciliation"].includes(viewId)) {
       const action = document.createElement("button");
       action.className = "primary";
@@ -242,16 +346,26 @@ async function renderSurface(viewId) {
   }
 }
 
+/** @returns {Set<string>|null} */
+function availableSurfaces() {
+  const value = bootstrapState?.projection.available_surfaces;
+  if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) return null;
+  return new Set(["overview", ...value]);
+}
+
 function buildNavigation() {
   nav.replaceChildren();
+  const allowed = availableSurfaces();
   for (const group of navigation) {
+    const visibleItems = group.items.filter(([id]) => allowed === null || allowed.has(id));
+    if (!visibleItems.length) continue;
     const section = document.createElement("section");
     section.className = "nav-group";
     const label = document.createElement("span");
     label.className = "nav-group-label";
     label.textContent = group.label;
     section.append(label);
-    for (const [id, itemLabel] of group.items) {
+    for (const [id, itemLabel] of visibleItems) {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "nav-button";
@@ -305,6 +419,47 @@ loginForm.addEventListener("submit", async (event) => {
   }
 });
 
+forgotPasswordAction.addEventListener("click", showPasswordResetRequest);
+passwordResetRequestCancel.addEventListener("click", showRegularLogin);
+passwordResetRequestForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  passwordResetRequestStatus.textContent = "";
+  try {
+    await api("/v1/auth/password-reset/request", {
+      method: "POST",
+      body: JSON.stringify({ email: passwordResetEmail.value }),
+    });
+    passwordResetRequestStatus.textContent = "Se a conta for elegível, as instruções de recuperação serão enviadas pelo canal configurado.";
+  } catch (error) {
+    passwordResetRequestStatus.textContent = error instanceof Error ? error.message : "Falha ao solicitar recuperação";
+  }
+});
+
+passwordResetCompleteForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  passwordResetCompleteStatus.textContent = "";
+  const resetToken = resetTokenFromLocation();
+  if (!resetToken) {
+    passwordResetCompleteStatus.textContent = "Link de recuperação inválido.";
+    return;
+  }
+  try {
+    await api("/v1/auth/password-reset/complete", {
+      method: "POST",
+      body: JSON.stringify({
+        reset_token: resetToken,
+        new_password: passwordResetNewPassword.value,
+      }),
+    });
+    passwordResetNewPassword.value = "";
+    clearResetTokenFromLocation();
+    showRegularLogin();
+    showLogin("Senha alterada. Entre novamente com a nova senha.");
+  } catch (error) {
+    passwordResetCompleteStatus.textContent = error instanceof Error ? error.message : "Não foi possível alterar a senha";
+  }
+});
+
 logoutAction.addEventListener("click", async () => {
   try {
     await api("/v1/auth/logout", { method: "POST", headers: { "X-CSRF-Token": csrfToken() } });
@@ -339,4 +494,5 @@ operationForm.addEventListener("submit", async (event) => {
   }
 });
 
+if (resetTokenFromLocation()) showPasswordResetCompletion();
 void bootstrap();

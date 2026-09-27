@@ -11,16 +11,19 @@ require_value() {
 }
 
 require_value NFCORE_STAGING_BASE_URL
+require_value NFCORE_STAGING_PORTAL_URL
 require_value NFCORE_STAGING_DEPLOY_DRIVER
 require_value DATABASE_URL
 
-case "$NFCORE_STAGING_BASE_URL" in
-  https://*) ;;
-  *)
-    echo "staging preflight: FAIL base URL must use HTTPS"
-    exit 1
-    ;;
-esac
+for url in "$NFCORE_STAGING_BASE_URL" "$NFCORE_STAGING_PORTAL_URL"; do
+  case "$url" in
+    https://*) ;;
+    *)
+      echo "staging preflight: FAIL public staging URLs must use HTTPS"
+      exit 1
+      ;;
+  esac
+done
 
 case "$NFCORE_STAGING_DEPLOY_DRIVER" in
   scripts/deploy/drivers/*.sh) ;;
@@ -34,6 +37,12 @@ if [ ! -f "$NFCORE_STAGING_DEPLOY_DRIVER" ]; then
   echo "staging preflight: BLOCKED_EXTERNAL deploy driver is not provisioned"
   exit 42
 fi
+
+contract="$(sh "$NFCORE_STAGING_DEPLOY_DRIVER" contract 2>/dev/null || true)"
+[ "$contract" = "nfcore-staging-driver-v1" ] || {
+  echo "staging preflight: FAIL incompatible deploy driver contract"
+  exit 1
+}
 
 [ "${NFCORE_ENVIRONMENT:-}" = "staging" ] || {
   echo "staging preflight: FAIL NFCORE_ENVIRONMENT must be staging"
