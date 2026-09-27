@@ -12,7 +12,7 @@ from kordena_fiscal.persistence.cakto import (
     CAKTO_SCHEMA_STATEMENTS,
     CAKTO_SCHEMA_VERSION,
 )
-from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase, _PRICING_SCHEMA
+from kordena_fiscal.persistence.postgres import _PRICING_SCHEMA, PostgresFiscalDatabase
 from kordena_fiscal.persistence.sqlite import _MIGRATIONS
 
 _DESTRUCTIVE = re.compile(
