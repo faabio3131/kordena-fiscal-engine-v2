@@ -101,6 +101,19 @@ class CommercialCheckoutProjection:
             raise FiscalValidationError(
                 "configured checkout count must match projected items"
             )
+        expected_status = (
+            CommercialCheckoutStatus.UNCONFIGURED
+            if self.expected_count == 0 or self.configured_count == 0
+            else (
+                CommercialCheckoutStatus.CONFIGURED
+                if self.configured_count == self.expected_count
+                else CommercialCheckoutStatus.PARTIAL
+            )
+        )
+        if self.status is not expected_status:
+            raise FiscalValidationError(
+                "checkout status is inconsistent with projection counts"
+            )
 
         provider = (
             None if self.provider is None else normalize_checkout_provider_id(self.provider)
