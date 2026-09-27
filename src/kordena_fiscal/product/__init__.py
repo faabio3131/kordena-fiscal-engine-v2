@@ -8,6 +8,12 @@ from .catalog import (
     EntitlementDefinition,
     ProductIdentity,
 )
+from .checkout import (
+    CommercialCheckoutItem,
+    CommercialCheckoutProjection,
+    CommercialCheckoutProjector,
+    CommercialCheckoutStatus,
+)
 from .onboarding import (
     ONBOARDING_SEQUENCE,
     OnboardingEvidence,
@@ -49,6 +55,10 @@ __all__ = [
     "AddOnDefinition",
     "BillingCadence",
     "CommercialCatalog",
+    "CommercialCheckoutItem",
+    "CommercialCheckoutProjection",
+    "CommercialCheckoutProjector",
+    "CommercialCheckoutStatus",
     "CommercialGatewayConfiguration",
     "CommercialModule",
     "CommercialOfferConfiguration",
