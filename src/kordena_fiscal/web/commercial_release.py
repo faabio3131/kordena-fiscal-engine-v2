@@ -7,16 +7,16 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Body, HTTPException, Request, status
 
-from kordena_fiscal.control_plane.cakto_checkout import (
-    CaktoCheckoutAdministrationService,
-    CaktoCheckoutProjection,
-    CaktoCheckoutStatus,
-)
 from kordena_fiscal.control_plane.commercial_release import (
     CommercialReleaseAdministrationService,
 )
 from kordena_fiscal.control_plane.pricing_admin import (
     CommercialPricingAdministrationService,
+)
+from kordena_fiscal.product.checkout import (
+    CommercialCheckoutProjector,
+    CommercialCheckoutStatus,
+    unconfigured_checkout_projection,
 )
 from kordena_fiscal.product.commercial_release import (
     CommercialReleaseDecision,
@@ -31,9 +31,9 @@ def create_commercial_release_router(
     identity: HumanIdentityService,
     pricing: CommercialPricingAdministrationService,
     release: CommercialReleaseAdministrationService,
-    checkout: CaktoCheckoutAdministrationService | None = None,
+    checkout: CommercialCheckoutProjector | None = None,
     *,
-    cakto_processing_configured: bool = False,
+    checkout_processing_configured: bool = False,
 ) -> APIRouter:
     router = APIRouter(tags=["commercial-release"])
 
@@ -68,12 +68,7 @@ def create_commercial_release_router(
             }
 
         checkout_projection = (
-            CaktoCheckoutProjection(
-                status=CaktoCheckoutStatus.UNCONFIGURED,
-                expected_count=0,
-                configured_count=0,
-                items=(),
-            )
+            unconfigured_checkout_projection()
             if checkout is None
             else checkout.project(pricing_current)
         )
@@ -82,12 +77,12 @@ def create_commercial_release_router(
         )
         purchase_enabled = bool(
             commercially_approved
-            and checkout_projection.status is CaktoCheckoutStatus.CONFIGURED
+            and checkout_projection.status is CommercialCheckoutStatus.CONFIGURED
             and checkout_projection.items
-            and cakto_processing_configured
+            and checkout_processing_configured
         )
         checkout_payload = checkout_projection.to_public_mapping(
-            processing_configured=cakto_processing_configured,
+            processing_configured=checkout_processing_configured,
             expose_urls=purchase_enabled,
         )
 
