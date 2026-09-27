@@ -99,7 +99,7 @@ class CommercialReleaseDecision:
         }
 
     @classmethod
-    def from_mapping(cls, payload: object) -> "CommercialReleaseDecision":
+    def from_mapping(cls, payload: object) -> CommercialReleaseDecision:
         if not isinstance(payload, dict):
             raise CommercialReleaseError("commercial release payload must be an object")
         version = payload.get("version")
