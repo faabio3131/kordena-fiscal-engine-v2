@@ -28,6 +28,7 @@ test("mutations carry CSRF and idempotency controls", () => {
   assert.match(script, /X-CSRF-Token/);
   assert.match(script, /Idempotency-Key/);
   assert.match(script, /crypto\.randomUUID\(\)/);
+  assert.match(script, /onboardUnit/);
 });
 
 
@@ -37,4 +38,22 @@ test("portal keeps accessible login and governed operation surfaces", () => {
   assert.match(html, /autocomplete="current-password"/);
   assert.match(html, /aria-labelledby="operation-dialog-title"/);
   assert.match(html, /role="alert"/);
+});
+
+
+test("commercial recovery is browser-usable without exposing reset token on request", () => {
+  assert.match(html, /id="forgot-password-action"/);
+  assert.match(html, /id="password-reset-request-form"/);
+  assert.match(html, /autocomplete="new-password"/);
+  assert.match(script, /\/v1\/auth\/password-reset\/request/);
+  assert.match(script, /\/v1\/auth\/password-reset\/complete/);
+  assert.match(script, /reset_token/);
+  assert.doesNotMatch(script, /console\.log/);
+});
+
+
+test("navigation is constrained by backend-declared durable surfaces", () => {
+  assert.match(script, /available_surfaces/);
+  assert.match(script, /availableSurfaces\(\)/);
+  assert.match(script, /allowed === null \|\| allowed\.has\(id\)/);
 });

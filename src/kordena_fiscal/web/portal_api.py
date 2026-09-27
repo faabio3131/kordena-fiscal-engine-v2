@@ -73,6 +73,7 @@ _SURFACE_PERMISSIONS: dict[str, PortalPermission] = {
 }
 
 _OPERATION_PERMISSIONS: dict[str, PortalPermission] = {
+    "onboardUnit": PortalPermission.CONFIGURATION_WRITE,
     "issueFiscalDocument": PortalPermission.DOCUMENT_ISSUE,
     "queryFiscalDocument": PortalPermission.DOCUMENT_QUERY,
     "cancelFiscalDocument": PortalPermission.DOCUMENT_CANCEL,
@@ -81,6 +82,7 @@ _OPERATION_PERMISSIONS: dict[str, PortalPermission] = {
 }
 
 _IDEMPOTENT_MUTATIONS = {
+    "onboardUnit",
     "issueFiscalDocument",
     "cancelFiscalDocument",
     "inutilizeFiscalRange",
