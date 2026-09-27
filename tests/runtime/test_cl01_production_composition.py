@@ -190,7 +190,11 @@ def test_postgres_runtime_composes_human_identity_recovery_and_durable_portal(
         assert profile["password_recovery_configured"] is True
         assert profile["commercial_release_admin_configured"] is True
         assert profile["commercial_release_status"] == "unavailable"
-        assert profile["cakto_checkout_admin_configured"] is True
+        assert profile["commercial_checkout_provider_configured"] is None
+        assert profile["commercial_checkout_provider_active"] is None
+        assert profile["commercial_checkout_status"] == "unconfigured"
+        assert profile["commercial_checkout_processing_configured"] is False
+        assert profile["cakto_checkout_admin_configured"] is False
         assert profile["cakto_checkout_status"] == "unconfigured"
         assert profile["cakto_webhook_configured"] is False
         assert profile["fiscal_production_activated"] is False
