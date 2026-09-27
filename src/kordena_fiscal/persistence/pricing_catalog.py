@@ -8,11 +8,8 @@ optimistic version checks under a PostgreSQL advisory lock.
 from __future__ import annotations
 
 import json
-from dataclasses import asdict
 from datetime import datetime
-from decimal import Decimal
-from enum import Enum
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast
 
 from kordena_fiscal.control_plane.pricing_admin import PricingCatalogPublication
 from kordena_fiscal.product.pricing import (
@@ -24,33 +21,16 @@ if TYPE_CHECKING:
     from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
 
 
-def _json_value(value: object) -> object:
-    if isinstance(value, Decimal):
-        return str(value)
-    if isinstance(value, datetime):
-        return value.isoformat()
-    if isinstance(value, Enum):
-        return value.value
-    if isinstance(value, dict):
-        return {str(key): _json_value(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_json_value(item) for item in value]
-    return value
-
-
 def pricing_configuration_payload(
     configuration: CommercialPricingConfiguration,
 ) -> dict[str, object]:
-    """Serialize a pricing configuration into the canonical JSON-compatible shape."""
+    """Serialize a pricing configuration using the canonical product mapping."""
 
     if not isinstance(configuration, CommercialPricingConfiguration):
         raise CommercialPricingError(
             "configuration must be CommercialPricingConfiguration"
         )
-    value = _json_value(asdict(configuration))
-    if not isinstance(value, dict):
-        raise CommercialPricingError("pricing configuration serialization failed")
-    return cast(dict[str, object], value)
+    return configuration.to_mapping()
 
 
 class PostgresPricingCatalogRepository:
