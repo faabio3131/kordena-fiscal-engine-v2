@@ -252,7 +252,24 @@ def create_app(
 
     if human_identity is not None:
         app.include_router(create_human_auth_router(human_identity))
-        app.include_router(create_portal_router(human_identity, portal_executor))
+        platform_surfaces = tuple(
+            surface
+            for surface, configured in (
+                ("pricing-admin", pricing_administration is not None),
+                (
+                    "commercial-release",
+                    commercial_release_administration is not None,
+                ),
+            )
+            if configured
+        )
+        app.include_router(
+            create_portal_router(
+                human_identity,
+                portal_executor,
+                platform_surfaces=platform_surfaces,
+            )
+        )
         if pricing_administration is not None:
             app.include_router(
                 create_pricing_router(human_identity, pricing_administration)
