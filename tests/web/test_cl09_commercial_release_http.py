@@ -155,7 +155,12 @@ def test_public_offer_defaults_fail_closed() -> None:
             "public_message": None,
             "commercially_approved": False,
         },
-        "checkout": {"status": "unconfigured"},
+        "checkout": {
+            "status": "unconfigured",
+            "provider": "cakto",
+            "processing_status": "unconfigured",
+            "items": [],
+        },
         "purchase_enabled": False,
         "trial_enabled": False,
     }
