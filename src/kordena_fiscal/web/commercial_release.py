@@ -75,14 +75,15 @@ def create_commercial_release_router(
         commercially_approved = (
             release_current is not None and release_current.commercially_approved
         )
+        processing_configured = checkout is not None and checkout_processing_configured
         purchase_enabled = bool(
             commercially_approved
             and checkout_projection.status is CommercialCheckoutStatus.CONFIGURED
             and checkout_projection.items
-            and checkout_processing_configured
+            and processing_configured
         )
         checkout_payload = checkout_projection.to_public_mapping(
-            processing_configured=checkout_processing_configured,
+            processing_configured=processing_configured,
             expose_urls=purchase_enabled,
         )
 
