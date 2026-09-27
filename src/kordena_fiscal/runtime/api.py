@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from kordena_fiscal.gateway.production_activation import ProductionExecutionAuthority
 from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
 from kordena_fiscal.product.cakto import CaktoWebhookReceiver
+from kordena_fiscal.product.checkout import CommercialCheckoutProjector
 from kordena_fiscal.web.app import create_app
 from kordena_fiscal.web.human_recovery import PasswordResetDelivery
 from kordena_fiscal.web.portal_runtime import PortalOperationExecutor
@@ -48,6 +49,9 @@ class RuntimeApi:
                     self.composition = build_postgres_runtime_composition(
                         database,
                         portal_operation_executor=portal_operation_executor,
+                        enable_cakto_checkout=(
+                            settings.commercial_checkout_provider == "cakto"
+                        ),
                     )
                 except Exception:
                     self._composition_boot_error = True
@@ -78,6 +82,8 @@ def create_runtime_app(
     metrics: MetricsRegistry | None = None,
     logger: StructuredLogger | None = None,
     cakto_receiver: CaktoWebhookReceiver | None = None,
+    commercial_checkout_projector: CommercialCheckoutProjector | None = None,
+    commercial_checkout_processing_configured: bool = False,
     password_reset_delivery: PasswordResetDelivery | None = None,
     production_authority: ProductionExecutionAuthority | None = None,
     portal_operation_executor: PortalOperationExecutor | None = None,
@@ -93,6 +99,23 @@ def create_runtime_app(
         environment=resolved.environment.value,
     )
     composition = runtime.composition
+    selected_checkout = commercial_checkout_projector
+    selected_checkout_processing = commercial_checkout_processing_configured
+    if (
+        selected_checkout is None
+        and resolved.commercial_checkout_provider == "cakto"
+        and composition is not None
+        and composition.cakto_checkout_administration is not None
+    ):
+        selected_checkout = composition.cakto_checkout_administration
+        selected_checkout_processing = cakto_receiver is not None
+    if (
+        selected_checkout is not None
+        and resolved.commercial_checkout_provider is not None
+        and selected_checkout.provider_id != resolved.commercial_checkout_provider
+    ):
+        selected_checkout = None
+        selected_checkout_processing = False
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -224,6 +247,24 @@ def create_runtime_app(
                 or commercial_release_administration.current is None
                 else commercial_release_administration.current.status.value
             ),
+            "commercial_checkout_provider_configured": (
+                resolved.commercial_checkout_provider
+            ),
+            "commercial_checkout_provider_active": (
+                None if selected_checkout is None else selected_checkout.provider_id
+            ),
+            "commercial_checkout_status": (
+                "unconfigured"
+                if selected_checkout is None
+                else selected_checkout.project(
+                    None
+                    if pricing_administration is None
+                    else pricing_administration.current
+                ).status.value
+            ),
+            "commercial_checkout_processing_configured": (
+                selected_checkout_processing
+            ),
             "cakto_checkout_admin_configured": (
                 cakto_checkout_administration is not None
             ),
@@ -270,8 +311,11 @@ def create_runtime_app(
             portal_executor=portal_executor,
             pricing_administration=pricing_administration,
             commercial_release_administration=commercial_release_administration,
+            commercial_checkout=selected_checkout,
+            commercial_checkout_processing_configured=(
+                selected_checkout_processing
+            ),
             cakto_checkout_administration=cakto_checkout_administration,
-            cakto_processing_configured=cakto_receiver is not None,
         ),
     )
     return app
