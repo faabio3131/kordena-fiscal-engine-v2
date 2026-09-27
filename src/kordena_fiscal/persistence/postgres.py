@@ -42,6 +42,7 @@ from kordena_fiscal.security.human_identity import (
 from kordena_fiscal.security.human_recovery import PasswordResetRecord
 
 from .ports import PersistenceStateError
+from .pricing_catalog import PostgresPricingCatalogRepository
 from .sqlite import _MIGRATIONS
 from .sqlite_commercial import SqliteCommercialConfigurationStore
 from .sqlite_control_plane import SqliteControlPlaneStore
@@ -55,7 +56,6 @@ from .sqlite_idempotency import SqliteIdempotencyStore
 from .sqlite_inbox import SqliteFiscalInboxStore
 from .sqlite_outbox_archive import SqliteFiscalArchiveStore, SqliteFiscalOutboxStore
 from .sqlite_reconciliation import SqliteReconciliationRepository
-from .pricing_catalog import PostgresPricingCatalogRepository
 
 _T = TypeVar("_T")
 
