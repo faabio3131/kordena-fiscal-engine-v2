@@ -1,16 +1,16 @@
 # FM NFCORE V1 — Commercial Launch CURRENT
 
 **Canonical status date:** 2026-09-27
-**Canonical repository:** `faabio3131/kordena-fiscal-engine-v2`
-**Canonical main baseline before CL-08:** `57812960ae09013a4540cfb01730facf47c37235`
+**Canonical NFCore repository:** `faabio3131/kordena-fiscal-engine-v2`
+**Canonical NFCore main:** `f9b94e0864301701c285e29117ddb9456ffcc3bf`
+**Canonical FM commercial-site repository:** `faabio3131/fm-tecnologia-web-platform`
+**Canonical site main:** `2dc20eb12bb3cd57d24dc5a36af4521bbdbcb7ef`
 
-This document supersedes the execution-state assumptions of PR #45. Historical plans remain evidence of prior decisions but do not override CURRENT Git/GitHub state.
+This document is a CURRENT tracker, not authority over GitHub. Every resume must revalidate the repositories before work.
 
-## Confirmed integrated baseline
+## Confirmed integrated NFCore baseline
 
-PR #55 was human-authorized and merged into `main`.
-
-The canonical main baseline above contains the integrated lineage:
+The canonical NFCore main contains:
 
 - CL-01 Production Composition Root;
 - CL-02 Production Worker Runtime;
@@ -19,29 +19,53 @@ The canonical main baseline above contains the integrated lineage:
 - CL-05 Cakto Commercial Runtime/E2E;
 - CL-06 Commercial Onboarding and Customer Recovery E2E;
 - Pricing Governance;
-- CL-07 Premium Product Experience.
+- CL-07 Premium Product Experience;
+- CL-08 Durable Pricing Administration Runtime.
 
-Post-merge `FM NFCORE V1 CI` #414 passed on the exact main merge commit.
+CL-08 was human-authorized through PR #62 and merged at `f9b94e0864301701c285e29117ddb9456ffcc3bf`.
+Post-merge `FM NFCORE V1 CI` #422 passed on that exact main commit.
+
+## Confirmed integrated FM commercial-site baseline
+
+The FM commercial site was reconciled from its previously cumulative branch chain:
+
+`DEV-001 -> Premium UX/UI -> Approved FM Hero/Site`
+
+and promoted through PR #19.
+
+Current site main:
+`2dc20eb12bb3cd57d24dc5a36af4521bbdbcb7ef`.
+
+The exact integrated content passed Site Validation and Cloudflare Worker Validation before promotion. Git compare from the validated integration HEAD to the main merge commit showed zero file changes.
+
+No Cloudflare deploy, DNS change or production publication was performed by that integration.
 
 ## Current internal closure block
 
-CL-08 — Durable Pricing Administration Runtime is implemented in PR #62.
+CL-09 — Commercial Release Authority is implemented in PR #63.
 
-Functional candidate HEAD `32f6993f3d5e06a729a5388bc8406eb808fa2968` passed the complete `FM NFCORE V1 CI` #417.
+Functional candidate HEAD:
+`923853e60be8a84c04a76f55c906f26bf13eff9e`
 
-CL-08 closes the internal gap previously documented by Pricing Governance: durable catalog versions, actor/time/correlation audit, explicit platform-admin authority, zero-code price publication, public active-catalog read surface and premium portal administration.
+`FM NFCORE V1 CI` #425 / run `36346135103`: **SUCCESS**.
 
-No real FM price has been introduced.
+CL-09 closes the authority gap between a published pricing catalog and authorization to offer NFCore commercially.
+
+The NFCore now models pricing and commercial release separately. It also keeps checkout/billing and fiscal production authority separate. The public commercial offer remains fail-closed: purchase and trial stay disabled while checkout is unconfigured, even when pricing exists and the human release state is `commercial_approved`.
 
 ## Commercial readiness classification
 
 ### A — Functional readiness
 
-Core V1, Web runtime, human auth/session/RBAC, tenant/unit authority, worker runtime, PostgreSQL persistence, Cakto internal boundary, customer onboarding/recovery, premium portal and pricing administration are implemented/certified internally, subject to final CL-08 documentary CI and authorized merge.
+Internally strong/certified through CL-08 on main. CL-09 is a certification candidate pending exact final documentary-head CI and authorized merge.
+
+The Core, Web runtime, human auth/session/RBAC, tenant/unit authority, worker runtime, PostgreSQL persistence, Cakto internal boundary, customer onboarding/recovery, premium portal, durable pricing administration and commercial release authority exist in the canonical product line.
 
 ### B — Commercial surface parity
 
-Premium NFCORE portal exists. The commercial website/public purchase surface remains an external repository/integration workstream and must consume the canonical pricing/checkout contracts rather than duplicate prices or billing logic.
+The FM commercial site is now consolidated in its canonical `main`.
+
+NFCore remains fail-closed on the site. The next integration block must consume the canonical NFCore `GET /v1/commercial/offer` contract without copying prices or release state into the site repository.
 
 ### C — Production technical readiness
 
@@ -55,39 +79,48 @@ Internal runbooks/gates and backup/restore evidence exist. Real external inciden
 
 ### E — Commercial readiness
 
-NOT YET COMMERCIAL LIVE.
+**NOT COMMERCIAL LIVE.**
 
-The following facts remain external or human-governed and cannot be fabricated:
+Current external/human dependencies include:
 
-1. choose/provision the real Secret Manager/Vault and install secret material there;
-2. choose/provision real staging/production hosting, PostgreSQL, ingress and HTTPS;
-3. materialize and execute the real provider deploy driver;
-4. configure real Cakto account/product/offer identifiers, credentials and webhook callback;
-5. connect the FM commercial website/post-purchase flow to NFCORE provisioning;
-6. configure real password-reset email/SMS delivery;
-7. define final plans/prices/promotions through the governed pricing interface after management approval;
-8. install real fiscal certificate/CSC/provider credentials through the secret boundary;
-9. establish the exact launch fiscal cells by document × operation × jurisdiction × provider;
-10. obtain official homologation evidence for each sold cell;
-11. execute the controlled real pilot;
-12. complete legal/LGPD operational validation where required;
-13. obtain explicit human Go/No-Go / `PRODUCTION_APPROVED`;
-14. authorize deployment, DNS/cutover and production smoke.
+1. final human approval/merge of CL-09 after final CI;
+2. Site FM consumer integration for the canonical NFCore commercial offer contract;
+3. final real plans/prices/promotions approved through governed pricing;
+4. real checkout/billing configuration and Cakto account/product/offer references;
+5. real Cakto credentials/webhook/callback/reconciliation;
+6. real password-reset email/SMS delivery;
+7. real Secret Manager/Vault provider and secret material;
+8. real staging/production hosting, PostgreSQL, ingress and HTTPS;
+9. real provider deploy driver and staging certification;
+10. real fiscal certificates/CSC/provider credentials through the approved secret boundary;
+11. exact launch fiscal cells by document × operation × jurisdiction × provider;
+12. official homologation evidence for every sold fiscal cell;
+13. controlled real pilot with external evidence;
+14. legal/LGPD operational review where required;
+15. explicit human Go/No-Go / `PRODUCTION_APPROVED`;
+16. authorized deploy, DNS/cutover and production smoke.
 
-## Security/governance risk
+## Repository visibility
 
-GitHub repository visibility is CURRENTLY **PUBLIC**. The repository secret scan and CI security gates are green, but public source visibility is a separate governance decision. If public visibility was temporary, it must be restored to PRIVATE through an authorized GitHub repository setting before commercial launch.
+NFCore and the FM commercial-site repositories are intentionally **PUBLIC temporarily** because the private GitHub Actions monthly quota was exhausted and CI runners were blocked.
+
+While public:
+
+- no real secrets, certificates, CSC, passwords, Cakto tokens, cloud credentials or webhook secrets may enter source/history;
+- secret/dependency/vulnerability scanning must remain enabled in every relevant CI;
+- before commercial launch, once the heavy internal CI cycle ends, the operator must be told explicitly that the repositories can return to PRIVATE.
 
 ## Next execution order
 
-1. Finish CL-08 documentary certification and authorized integration.
-2. Audit the canonical FM Tecnologia commercial-site repository CURRENT and connect it to canonical NFCORE pricing/provisioning contracts.
-3. Select the real external infrastructure/secret provider under explicit human decision.
-4. Provision staging and execute real staging gates.
-5. Configure/test real Cakto and reset delivery.
-6. Execute fiscal homologation matrix and controlled pilot with real credentials/evidence.
-7. Perform final production readiness audit.
-8. Human Go/No-Go.
-9. Authorized production cutover and hypercare.
+1. Finish CL-09 documentary certification and human-authorized integration into NFCore main.
+2. Implement Site FM -> NFCore commercial-offer consumption with fail-closed fallback and no duplicated pricing.
+3. Implement/verify real checkout authority when Cakto configuration exists; only then can `purchase_enabled` become eligible for a future true state.
+4. Select/provision external infrastructure and secret provider under explicit human decision.
+5. Provision staging and execute real staging gates.
+6. Configure/test real Cakto and password-reset delivery.
+7. Execute exact fiscal homologation matrix and controlled pilot with real evidence.
+8. Perform final production readiness audit.
+9. Human Go/No-Go.
+10. Authorized production cutover and hypercare.
 
 No later block may convert `BLOCKED_EXTERNAL` into READY without reproducible external evidence.
