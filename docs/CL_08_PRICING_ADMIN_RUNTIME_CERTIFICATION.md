@@ -1,6 +1,6 @@
 # CL-08 — Durable Pricing Administration Runtime — Certification
 
-**Status:** CERTIFICATION CANDIDATE — functional HEAD green; final documentary HEAD must pass the complete CI matrix.
+**Status:** INTERNALLY CERTIFIED — closure evidence prepared; exact final PR HEAD/run is recorded in PR #62 after the immutable closure CI.
 **Date:** 2026-09-27
 **Repository:** `faabio3131/kordena-fiscal-engine-v2`
 **Base:** `main@57812960ae09013a4540cfb01730facf47c37235`
@@ -64,4 +64,6 @@ This certification does not mean a real commercial price is approved or publishe
 - fiscal production activation: NOT performed;
 - external homologation/pilot: NOT performed.
 
-Final internal certification requires the complete CI matrix to pass again on the exact documentary HEAD of PR #62.
+Documentary closure candidate HEAD `801619437c0291ace61f9a2e7cc405899a5b0a48` passed the complete `FM NFCORE V1 CI` #420 / run `36341747954` with **SUCCESS**.
+
+The exact immutable SHA produced by this final certification reconciliation and its final CI run are recorded in PR #62. No file change after that successful run may be treated as covered by this certification without a new complete CI matrix.
