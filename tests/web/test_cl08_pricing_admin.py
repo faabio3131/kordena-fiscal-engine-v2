@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from collections.abc import Mapping, Sequence
+from datetime import timedelta
+from typing import Any
 from decimal import Decimal
 
 from fastapi.testclient import TestClient
@@ -26,6 +28,32 @@ from kordena_fiscal.web import create_app
 from kordena_fiscal.web.human_auth import CSRF_COOKIE, CSRF_HEADER
 
 PASSWORD = "platform-admin-password-2026"
+
+
+class PricingPortalExecutor:
+    def snapshot(self, *, authority: object) -> Mapping[str, Any]:
+        del authority
+        return {"available_surfaces": ["overview", "plans"]}
+
+    def surface(
+        self,
+        *,
+        surface_id: str,
+        authority: object,
+    ) -> Sequence[Mapping[str, Any]]:
+        del surface_id, authority
+        return ()
+
+    def execute(
+        self,
+        *,
+        operation_id: str,
+        authority: object,
+        payload: Mapping[str, Any],
+        idempotency_key: str | None,
+    ) -> Mapping[str, Any]:
+        del operation_id, authority, payload, idempotency_key
+        return {}
 
 
 def _configuration(version: int) -> CommercialPricingConfiguration:
@@ -79,6 +107,7 @@ def _client(*, platform_admin: bool) -> TestClient:
     return TestClient(
         create_app(
             human_identity=identity,
+            portal_executor=PricingPortalExecutor(),
             pricing_administration=pricing,
         ),
         base_url="https://nfcore.test",
@@ -177,3 +206,19 @@ def test_platform_admin_version_conflict_is_fail_closed() -> None:
     )
     assert conflict.status_code == 409
     assert conflict.json()["detail"]["code"] == "PRICING_PUBLICATION_REJECTED"
+
+
+def test_portal_bootstrap_exposes_pricing_workspace_only_to_platform_admin() -> None:
+    tenant = _client(platform_admin=False)
+    _login(tenant, platform_admin=False)
+    tenant_bootstrap = tenant.get("/v1/portal/bootstrap")
+    assert tenant_bootstrap.status_code == 200
+    assert tenant_bootstrap.json()["platform_admin"] is False
+    assert "pricing-admin" not in tenant_bootstrap.json()["projection"]["available_surfaces"]
+
+    platform = _client(platform_admin=True)
+    _login(platform, platform_admin=True)
+    platform_bootstrap = platform.get("/v1/portal/bootstrap")
+    assert platform_bootstrap.status_code == 200
+    assert platform_bootstrap.json()["platform_admin"] is True
+    assert "pricing-admin" in platform_bootstrap.json()["projection"]["available_surfaces"]
