@@ -224,6 +224,18 @@ def create_runtime_app(
                 or commercial_release_administration.current is None
                 else commercial_release_administration.current.status.value
             ),
+            "cakto_checkout_admin_configured": (
+                cakto_checkout_administration is not None
+            ),
+            "cakto_checkout_status": (
+                "unconfigured"
+                if cakto_checkout_administration is None
+                else cakto_checkout_administration.project(
+                    None
+                    if pricing_administration is None
+                    else pricing_administration.current
+                ).status.value
+            ),
             "fiscal_production_activated": active_grants > 0,
             "fiscal_production_active_grants": active_grants,
             "cakto_webhook_configured": cakto_receiver is not None,
@@ -243,6 +255,11 @@ def create_runtime_app(
         if composition is None
         else composition.commercial_release_administration
     )
+    cakto_checkout_administration = (
+        None
+        if composition is None
+        else composition.cakto_checkout_administration
+    )
     # Fiscal production stays false unless a governed authority is explicitly injected.
     app.mount(
         "/",
@@ -253,6 +270,8 @@ def create_runtime_app(
             portal_executor=portal_executor,
             pricing_administration=pricing_administration,
             commercial_release_administration=commercial_release_administration,
+            cakto_checkout_administration=cakto_checkout_administration,
+            cakto_processing_configured=cakto_receiver is not None,
         ),
     )
     return app
