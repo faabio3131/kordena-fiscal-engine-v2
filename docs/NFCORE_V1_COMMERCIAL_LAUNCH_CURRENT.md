@@ -1,152 +1,193 @@
 # FM NFCORE V1 — Commercial Launch CURRENT
 
-**Canonical status date:** 2026-09-27
-**Canonical NFCore repository:** `faabio3131/kordena-fiscal-engine-v2`
-**Canonical NFCore main before CL-10:** `f679a8a25012235a314ccef1cd78f67abc88ccfb`
-**Canonical FM commercial-site repository:** `faabio3131/fm-tecnologia-web-platform`
-**Canonical site main:** `f863930cbcf00cc3dfa8f489311274e62e655901`
+**Canonical status date:** 2026-09-27  
+**Canonical NFCore repository:** `faabio3131/kordena-fiscal-engine-v2`  
+**Canonical NFCore main before CL-10R:** `08294a0d86ee865bd5aa6eb9868885ae121d55c1`  
+**Canonical FM commercial-site repository:** `faabio3131/fm-tecnologia-web-platform`  
+**Canonical Site main before provider-neutral correction:** `34ca03515b3addf2c71497548445feba0b47dcf4`
 
 This document is a CURRENT tracker, not authority over GitHub. Every resume must revalidate both repositories before work.
 
-## Confirmed integrated NFCore baseline
+## Architecture authority reconciled
 
-The canonical NFCore main contains:
+The FM Master Foundation Architecture and the existing NFCore commercial configurability decisions require:
 
-- CL-01 Production Composition Root;
-- CL-02 Production Worker Runtime;
-- CL-03 Production External Secret Boundary;
-- CL-04 Staging Infrastructure Contract;
-- CL-05 Cakto Commercial Runtime/E2E;
-- CL-06 Commercial Onboarding and Customer Recovery E2E;
-- Pricing Governance;
-- CL-07 Premium Product Experience;
-- CL-08 Durable Pricing Administration Runtime;
-- CL-09 Commercial Release Authority.
+- one evolving product line;
+- domain/application authority independent from accidental infrastructure details;
+- external providers behind adapters/boundaries;
+- pricing, checkout, billing and fiscal production authority kept separate;
+- supported customer/provider differences resolved through governed configuration;
+- no customer-specific source fork;
+- no secret material in source;
+- no external sales channel becoming the canonical business authority.
 
-CL-09 was merged through PR #63 at `f679a8a25012235a314ccef1cd78f67abc88ccfb`.
+NFCore is a commercial, configurable SaaS. Cakto, Hotmart, Kax, a first-party FM checkout, marketplaces or future channels are external sales/integration options. A previously unsupported protocol/provider may require one reusable adapter implementation; after the capability exists, account/product/offer/secret differences are configuration.
 
-Post-merge `FM NFCORE V1 CI` #428 passed on that exact main commit.
+## Confirmed integrated NFCore main
 
-## Confirmed integrated FM commercial-site baseline
+Current `main` at the start of CL-10R:
 
-The FM commercial site contains the previously consolidated premium institutional/product surface plus the canonical NFCore commercial-offer consumer.
+`08294a0d86ee865bd5aa6eb9868885ae121d55c1`
 
-Site PR #20 was certified and merged.
+The integrated line contains the commercial/fiscal foundation through CL-10, including:
 
-Current site main:
-`f863930cbcf00cc3dfa8f489311274e62e655901`.
+- canonical auth/session/RBAC and tenant/unit authority;
+- durable Control Plane and PostgreSQL;
+- provider-neutral fiscal configuration and provider selection;
+- external secret boundaries;
+- billing plans/subscriptions/entitlements independent from fiscal authority;
+- governed pricing with generic `external_price_reference`;
+- CL-09 human Commercial Release Authority;
+- Cakto provider-specific webhook/persistence/reconciliation adapter;
+- CL-06 canonical commercial provisioning of organization + first OWNER;
+- CL-10 Cakto checkout administration and public checkout projection.
 
-The exact pre-merge content passed:
+Post-merge `FM NFCORE V1 CI` #432 previously passed on exact main `08294a0d...`.
 
-- Site Validation #518 / run `36351826809`: SUCCESS;
-- Cloudflare Worker Validation #92 / run `36351826818`: SUCCESS.
+## Confirmed integrated Site main
 
-Git compare from the validated PR HEAD `85ca357b5e015f5cf85b2353b2580bcb72fce53a` to the site main merge commit showed zero file changes.
+Current Site `main` at the start of the correction:
 
-The site now consumes NFCore through the server-side same-origin flow:
+`34ca03515b3addf2c71497548445feba0b47dcf4`
+
+The Site consumes NFCore server-side through:
 
 `Browser -> /api/nfcore/commercial-offer -> NFCORE_API_URL/v1/commercial/offer`
 
-`NFCORE_API_URL` is server-side only. Missing/unavailable/invalid upstream state fails closed.
+The BFF is fail-closed and `NFCORE_API_URL` remains server-side only.
 
-No Cloudflare deploy, DNS change or production publication was performed.
+## Reconciliation finding — localized CL-10 regression
 
-## Current internal closure block
+**FATO CONFIRMADO:** the pre-CL-10 commercial/billing/configuration foundation is provider-neutral.
 
-CL-10 — Governed Cakto Checkout Authority is implemented in PR #64.
+**FATO CONFIRMADO:** CL-10 introduced a localized architectural regression by making the canonical public commercial offer depend directly on Cakto checkout types/readiness. Site PR #21 mirrored that regression by requiring `provider="cakto"` and the canonical Cakto checkout host.
 
-Functional candidate HEAD:
-`d5423cd2e74dba19f129a84e259fd609d1fdcb3a`
+This did not invalidate the underlying billing, pricing, tenant, provisioning, fiscal or Cakto adapter architecture. The correction is localized.
 
-`FM NFCORE V1 CI` #429 / run `36352614997`: **SUCCESS**.
+## CL-10R — provider-independence correction
 
-Pytest: **953 passed, 1 warning**.
+PR #66: `CL-10R — restore commercial provider independence`  
+Branch: `fix/nfcore-commercial-provider-independence`  
+Status: **DRAFT / IMPLEMENTED / FINAL CI REQUIRED**
 
-CL-10 reuses the existing Cakto commercial store and `CaktoPlanBinding`; it does not create a second checkout database.
+CL-10R:
 
-Published prices may reference a Cakto product/offer using `cakto://product/offer`. The NFCore resolves that reference against the durable Cakto binding and derives the trusted Cakto checkout URL from the canonical binding.
+- adds the canonical provider-neutral `CommercialCheckoutProjector` contract;
+- removes Cakto imports/types from `web/commercial_release.py`;
+- preserves Cakto as a provider-specific adapter implementing the neutral contract;
+- makes Cakto checkout composition opt-in instead of unconditional;
+- adds `NFCORE_COMMERCIAL_CHECKOUT_PROVIDER` as runtime configuration;
+- keeps no-provider state fail-closed;
+- adds a provider-independence architecture fitness test using a synthetic non-Cakto provider;
+- does not create a second billing, pricing, tenant or checkout authority.
 
-Public purchase remains fail-closed. `purchase_enabled` requires:
+Formal candidate evidence:
+`docs/CL_10R_COMMERCIAL_PROVIDER_INDEPENDENCE_CERTIFICATION.md`.
 
-1. explicit human `commercial_approved`;
-2. published pricing;
-3. complete enabled Cakto mapping for every active public plan/price pair;
-4. Cakto webhook processing composed in runtime.
+## Site provider-neutral correction
 
-Trial release remains a separate authority and is not inferred from pricing `trial_days`.
+Site PR #22: `NFCore — restore provider-neutral checkout contract`  
+Branch: `fix/site-nfcore-provider-neutral-checkout`  
+Status: **DRAFT / IMPLEMENTED / FINAL DOCUMENTARY CI REQUIRED**
+
+The Site contract now:
+
+- accepts a governed provider identifier instead of literal Cakto;
+- uses no hardcoded checkout-provider host;
+- validates checkout URLs as HTTPS without embedded credentials;
+- preserves plan/price/provider coherence;
+- preserves fail-closed fallback with no provider selected;
+- proves a synthetic non-Cakto checkout projection is accepted.
+
+Code HEAD `878983f3289f75eee2901121f30f7eb3a240e58c` passed:
+
+- Site Validation #529 / run `36359210226`: SUCCESS;
+- Cloudflare Worker Validation #103 / run `36359210235`: SUCCESS.
+
+A later documentation commit requires the two workflows to pass again on the exact final PR HEAD.
+
+## CL-11 status
+
+PR #65 — `CL-11 — post-purchase provisioning bridge design` remains OPEN/DRAFT and unmerged.
+
+The Cakto-specific acquisition/callback design in PR #65 was created before the provider-independence reconciliation and is therefore **SUPERSEDED AS AN IMPLEMENTATION BASIS**.
+
+No CL-11 production code was implemented.
+
+After CL-10R and the Site correction are integrated, CL-11 must be re-derived from the provider-neutral architecture:
+
+`validated external commercial event -> canonical billing/entitlement -> CommercialCustomerProvisioningService -> organization + OWNER + activation`
+
+Provider-specific webhook/callback details belong to each external adapter and must not become canonical acquisition authority.
 
 ## Commercial readiness classification
 
 ### A — Functional readiness
 
-Internally strong/certified through CL-09 on main. CL-10 is a certification candidate pending exact final documentary-head CI and green-gated promotion.
-
-Core, Web runtime, auth/session/RBAC, tenant/unit authority, worker, PostgreSQL, onboarding/recovery, premium portal, durable pricing, commercial release and governed checkout configuration are implemented in the canonical line.
+Strong internal foundation. CL-10R must complete final exact-HEAD CI and controlled integration before the public commercial path is considered architecture-reconciled.
 
 ### B — Commercial surface parity
 
-The FM site and NFCore now share one commercial-offer contract.
+The current mains still contain the Cakto-specific CL-10/Site PR #21 projection until the corrective PRs are promoted.
 
-The site does not duplicate NFCore pricing, release or checkout authority. Until an authorized NFCore environment is configured through server-side `NFCORE_API_URL`, the public site remains visibly fail-closed.
-
-After CL-10 integration, a follow-up site contract block must accept the new checkout projection states and render a purchase CTA only when NFCore itself returns `purchase_enabled=true` plus a validated canonical Cakto checkout URL.
+The corrective branches restore provider-neutral parity without duplicating pricing or release authority.
 
 ### C — Production technical readiness
 
-Internal provider-neutral contracts exist for secrets, staging/deploy, observability, backup/recovery and runtime profiles.
-
-Real provider-specific staging/production infrastructure is not yet evidenced.
+Internal contracts exist for secrets, staging/deploy, observability, backup/recovery and provider-neutral fiscal runtime. Real external infrastructure is still not evidenced.
 
 ### D — Operational readiness
 
-Internal runbooks/gates and backup/restore evidence exist. Real external incident/monitoring endpoints, production credentials, provider driver and operational cutover have not yet been evidenced.
+Internal runbooks, CI/security gates and backup/restore evidence exist. Real production monitoring endpoints, credentials, deployment driver and cutover evidence remain external.
 
 ### E — Commercial readiness
 
 **NOT COMMERCIAL LIVE.**
 
-Remaining external/human dependencies include:
+## Remaining external/human dependencies after internal provider-independence closure
 
-1. real approved plans/prices/promotions published through governed pricing;
-2. real Cakto product/offer identifiers configured through checkout administration;
-3. real Cakto API credentials and webhook secret stored in the approved external secret manager;
-4. public HTTPS Cakto callback;
-5. controlled authenticated real Cakto event plus successful reconciliation;
-6. authorized NFCore environment URL configured server-side in the FM site;
-7. real password-reset email/SMS delivery;
-8. real Secret Manager/Vault provider and all required secret material;
-9. real staging/production hosting, PostgreSQL, ingress and HTTPS;
-10. real provider deploy driver and staging certification;
-11. real fiscal certificates/CSC/provider credentials;
-12. exact launch fiscal cells by document × operation × jurisdiction × provider;
-13. official homologation evidence for every sold cell;
-14. controlled real fiscal pilot;
-15. legal/LGPD operational review where required;
-16. explicit human Go/No-Go / `PRODUCTION_APPROVED`;
-17. authorized deploy, DNS/cutover and production smoke.
+Depending on the selected launch channels/providers:
+
+- approved real plans/prices/promotions;
+- selected commercial checkout/sales provider account(s), if used;
+- real product/offer identifiers or equivalent provider configuration;
+- provider API/webhook credentials in approved Secret Manager/Vault;
+- public HTTPS callbacks where required;
+- controlled authenticated event delivery and reconciliation;
+- real password-reset email/SMS provider and credentials;
+- real staging/production hosting, PostgreSQL, ingress and HTTPS;
+- real fiscal certificates/CSC/provider credentials;
+- exact launch fiscal cells by document × operation × jurisdiction × provider;
+- official homologation evidence for every sold fiscal cell;
+- controlled fiscal pilot;
+- legal/LGPD operational review where required;
+- explicit human Go/No-Go / `PRODUCTION_APPROVED`;
+- authorized deploy, DNS/cutover and production smoke.
+
+No external provider is mandatory by architecture. A provider becomes a dependency only when selected for a concrete launch channel/capability.
 
 ## Repository visibility
 
-NFCore and the FM commercial-site repositories remain intentionally **PUBLIC temporarily** because the private GitHub Actions monthly quota was exhausted and CI runners were blocked.
+NFCore and Site FM remain intentionally **PUBLIC temporarily** because private GitHub Actions quota previously blocked CI.
 
 While public:
 
-- no real secrets, certificates, CSC, passwords, Cakto tokens, cloud credentials or webhook secrets may enter source/history;
-- real Cakto product/offer IDs should be configured through runtime administration, not committed as source fixtures;
-- secret/dependency/vulnerability scanning must remain enabled;
-- once the heavy internal CI cycle ends, explicitly notify the operator that the repositories can return to PRIVATE.
+- no real secrets, certificates, CSC, passwords, provider tokens, cloud credentials or webhook secrets may enter source/history;
+- provider IDs in fixtures remain synthetic;
+- secret/dependency/vulnerability scanning remains mandatory;
+- repositories must return to PRIVATE when the heavy internal CI cycle is complete and the operator authorizes the visibility change.
 
 ## Next execution order
 
-1. Finish CL-10 exact-head certification and green-gated promotion to NFCore main.
-2. Update the FM site contract to consume CL-10 checkout projection and render purchase CTA only from canonical `purchase_enabled=true` + trusted Cakto URL.
-3. Audit and close any remaining internally solvable commercial/onboarding/recovery/observability gaps.
-4. Select/provision external infrastructure and Secret Manager/Vault under explicit human decision.
-5. Provision real staging and execute staging gates.
-6. Configure/test real Cakto, callback/reconciliation and password-reset delivery.
-7. Execute exact fiscal homologation matrix and controlled fiscal pilot with real evidence.
-8. Perform final production readiness audit.
-9. Human Go/No-Go.
-10. Authorized production cutover and hypercare.
+1. Certify exact final HEAD of NFCore PR #66.
+2. Certify exact final HEAD of Site PR #22.
+3. Promote the corrective PRs only under the applicable merge authorization.
+4. Close/supersede the old CL-11 design PR #65.
+5. Re-audit the integrated mains for provider independence.
+6. Redesign CL-11 as provider-neutral post-purchase provisioning orchestration.
+7. Close remaining internally solvable commercial/onboarding/recovery gaps.
+8. Configure selected external launch channel(s), staging, Secret Manager/Vault and communication provider.
+9. Execute fiscal homologation matrix and controlled pilot with real evidence.
+10. Final production readiness audit -> human Go/No-Go -> authorized cutover.
 
 No later block may convert `BLOCKED_EXTERNAL` into READY without reproducible external evidence.
