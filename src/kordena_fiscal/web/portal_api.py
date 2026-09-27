@@ -213,6 +213,8 @@ def _authorized(
 def create_portal_router(
     identity: HumanIdentityService,
     executor: HumanPortalExecutor | None,
+    *,
+    platform_surfaces: tuple[str, ...] = (),
 ) -> APIRouter:
     router = APIRouter(prefix="/v1/portal", tags=["human-portal"])
 
@@ -238,7 +240,7 @@ def create_portal_router(
         available = projection.get("available_surfaces")
         if auth.account.platform_admin and isinstance(available, (list, tuple)):
             normalized = [str(item) for item in available]
-            for platform_surface in ("pricing-admin", "commercial-release"):
+            for platform_surface in platform_surfaces:
                 if platform_surface not in normalized:
                     normalized.append(platform_surface)
             projection["available_surfaces"] = normalized
