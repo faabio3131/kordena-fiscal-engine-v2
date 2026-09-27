@@ -210,6 +210,11 @@ def create_runtime_app(
             "portal_executor_configured": composition is not None,
             "password_recovery_configured": composition is not None,
             "password_reset_delivery_configured": password_reset_delivery is not None,
+            "pricing_admin_configured": pricing_administration is not None,
+            "pricing_catalog_published": (
+                pricing_administration is not None
+                and pricing_administration.current is not None
+            ),
             "fiscal_production_activated": active_grants > 0,
             "fiscal_production_active_grants": active_grants,
             "cakto_webhook_configured": cakto_receiver is not None,
@@ -221,6 +226,9 @@ def create_runtime_app(
     human_identity = None if composition is None else composition.human_identity
     password_recovery = None if composition is None else composition.password_recovery
     portal_executor = None if composition is None else composition.portal_executor
+    pricing_administration = (
+        None if composition is None else composition.pricing_administration
+    )
     # Fiscal production stays false unless a governed authority is explicitly injected.
     app.mount(
         "/",
@@ -229,6 +237,7 @@ def create_runtime_app(
             password_recovery=password_recovery,
             password_reset_delivery=password_reset_delivery,
             portal_executor=portal_executor,
+            pricing_administration=pricing_administration,
         ),
     )
     return app
