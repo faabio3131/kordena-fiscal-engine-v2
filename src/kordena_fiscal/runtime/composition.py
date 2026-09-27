@@ -41,7 +41,7 @@ class RuntimeComposition:
     commercial_provisioning: CommercialCustomerProvisioningService
     pricing_administration: CommercialPricingAdministrationService
     commercial_release_administration: CommercialReleaseAdministrationService
-    cakto_checkout_administration: CaktoCheckoutAdministrationService
+    cakto_checkout_administration: CaktoCheckoutAdministrationService | None
     portal_executor: DurableHumanPortalExecutor
 
 
@@ -49,6 +49,7 @@ def build_postgres_runtime_composition(
     database: PostgresFiscalDatabase,
     *,
     portal_operation_executor: PortalOperationExecutor | None = None,
+    enable_cakto_checkout: bool = False,
 ) -> RuntimeComposition:
     """Compose human web services over the canonical PostgreSQL repositories."""
 
@@ -81,11 +82,13 @@ def build_postgres_runtime_composition(
     commercial_release_administration = CommercialReleaseAdministrationService(
         database.commercial_release_catalog()
     )
-    cakto_commercial_database = postgres_cakto_commercial_database(database)
-    cakto_commercial_database.initialize()
-    cakto_checkout_administration = CaktoCheckoutAdministrationService(
-        cakto_commercial_database
-    )
+    cakto_checkout_administration: CaktoCheckoutAdministrationService | None = None
+    if enable_cakto_checkout:
+        cakto_commercial_database = postgres_cakto_commercial_database(database)
+        cakto_commercial_database.initialize()
+        cakto_checkout_administration = CaktoCheckoutAdministrationService(
+            cakto_commercial_database
+        )
     portal = DurableHumanPortalExecutor(
         database,
         operation_executor=portal_operation_executor,

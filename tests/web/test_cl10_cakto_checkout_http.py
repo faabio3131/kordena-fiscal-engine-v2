@@ -123,8 +123,9 @@ def _client(
             portal_executor=CheckoutPortalExecutor(),
             pricing_administration=pricing,
             commercial_release_administration=release,
+            commercial_checkout=checkout,
+            commercial_checkout_processing_configured=processing_configured,
             cakto_checkout_administration=checkout,
-            cakto_processing_configured=processing_configured,
         ),
         base_url="https://nfcore.test",
     )

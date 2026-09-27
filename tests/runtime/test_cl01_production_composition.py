@@ -190,7 +190,11 @@ def test_postgres_runtime_composes_human_identity_recovery_and_durable_portal(
         assert profile["password_recovery_configured"] is True
         assert profile["commercial_release_admin_configured"] is True
         assert profile["commercial_release_status"] == "unavailable"
-        assert profile["cakto_checkout_admin_configured"] is True
+        assert profile["commercial_checkout_provider_configured"] is None
+        assert profile["commercial_checkout_provider_active"] is None
+        assert profile["commercial_checkout_status"] == "unconfigured"
+        assert profile["commercial_checkout_processing_configured"] is False
+        assert profile["cakto_checkout_admin_configured"] is False
         assert profile["cakto_checkout_status"] == "unconfigured"
         assert profile["cakto_webhook_configured"] is False
         assert profile["fiscal_production_activated"] is False
@@ -220,6 +224,34 @@ def test_postgres_runtime_composes_human_identity_recovery_and_durable_portal(
     database = _RuntimeDatabase.last
     assert database is not None
     assert database.closed is True
+
+
+def test_postgres_runtime_activates_cakto_checkout_only_by_explicit_provider_config(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(runtime_api, "PostgresFiscalDatabase", _RuntimeDatabase)
+    settings = RuntimeSettings.from_mapping(
+        {
+            "NFCORE_ENVIRONMENT": "staging",
+            "NFCORE_PERSISTENCE_BACKEND": "postgres",
+            "DATABASE_URL": "postgresql://user:password@db:5432/nfcore",
+            "NFCORE_SECRET_BACKEND": "external",
+            "NFCORE_REQUIRE_HTTPS": "true",
+            "NFCORE_COMMERCIAL_CHECKOUT_PROVIDER": "cakto",
+        }
+    )
+
+    with TestClient(
+        runtime_api.create_runtime_app(settings),
+        base_url="https://testserver",
+    ) as client:
+        profile = client.get("/runtime/profile").json()
+        assert profile["commercial_checkout_provider_configured"] == "cakto"
+        assert profile["commercial_checkout_provider_active"] == "cakto"
+        assert profile["commercial_checkout_status"] == "unconfigured"
+        assert profile["commercial_checkout_processing_configured"] is False
+        assert profile["cakto_checkout_admin_configured"] is True
+        assert profile["cakto_webhook_configured"] is False
 
 
 def test_postgres_runtime_reports_composition_failure_separately(monkeypatch) -> None:

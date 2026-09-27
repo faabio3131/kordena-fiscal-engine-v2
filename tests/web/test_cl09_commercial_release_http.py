@@ -157,7 +157,7 @@ def test_public_offer_defaults_fail_closed() -> None:
         },
         "checkout": {
             "status": "unconfigured",
-            "provider": "cakto",
+            "provider": None,
             "processing_status": "unconfigured",
             "items": [],
         },

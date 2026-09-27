@@ -15,6 +15,7 @@ _HOSTNAME = re.compile(
     r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$"
 )
 _INTERNAL_TRUSTED_HOSTS = ("localhost", "127.0.0.1", "testserver")
+_PROVIDER_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 
 
 class RuntimeConfigurationError(RuntimeError):
@@ -62,6 +63,7 @@ class RuntimeSettings:
     allowed_origins: tuple[str, ...] = ()
     trusted_hosts: tuple[str, ...] = _INTERNAL_TRUSTED_HOSTS
     trusted_proxy_cidrs: tuple[str, ...] = ()
+    commercial_checkout_provider: str | None = None
 
     @classmethod
     def from_mapping(cls, values: Mapping[str, str]) -> RuntimeSettings:
@@ -108,6 +110,9 @@ class RuntimeSettings:
             dict.fromkeys((*_INTERNAL_TRUSTED_HOSTS, *configured_hosts, *public_hosts))
         )
         trusted_proxy_cidrs = _csv_tokens(values.get("NFCORE_TRUSTED_PROXY_CIDRS", ""))
+        commercial_checkout_provider = (
+            values.get("NFCORE_COMMERCIAL_CHECKOUT_PROVIDER", "").strip().lower() or None
+        )
 
         settings = cls(
             environment=environment,
@@ -120,6 +125,7 @@ class RuntimeSettings:
             allowed_origins=allowed_origins,
             trusted_hosts=trusted_hosts,
             trusted_proxy_cidrs=trusted_proxy_cidrs,
+            commercial_checkout_provider=commercial_checkout_provider,
         )
         settings.validate()
         return settings
@@ -166,6 +172,13 @@ class RuntimeSettings:
                 raise RuntimeConfigurationError("NFCORE_TRUSTED_HOSTS contains an invalid hostname")
         for origin in self.allowed_origins:
             _validate_origin(origin, production_like=production_like)
+        if (
+            self.commercial_checkout_provider is not None
+            and not _PROVIDER_ID.fullmatch(self.commercial_checkout_provider)
+        ):
+            raise RuntimeConfigurationError(
+                "NFCORE_COMMERCIAL_CHECKOUT_PROVIDER is invalid"
+            )
         for cidr in self.trusted_proxy_cidrs:
             try:
                 network = ipaddress.ip_network(cidr, strict=False)

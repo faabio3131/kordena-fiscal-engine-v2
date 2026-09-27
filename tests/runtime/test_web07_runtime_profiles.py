@@ -15,6 +15,7 @@ def test_development_defaults_are_explicitly_non_production() -> None:
     assert settings.persistence_backend == "sqlite"
     assert settings.secret_backend == "memory"
     assert settings.require_https is False
+    assert settings.commercial_checkout_provider is None
     assert settings.is_production_like is False
 
 
@@ -82,4 +83,18 @@ def test_postgres_profile_requires_real_dsn_shape() -> None:
                 "DATABASE_URL": "sqlite:///nfcore.db",
                 "NFCORE_SECRET_BACKEND": "external",
             }
+        )
+
+
+def test_commercial_checkout_provider_is_configuration_not_code_policy() -> None:
+    settings = RuntimeSettings.from_mapping(
+        {"NFCORE_COMMERCIAL_CHECKOUT_PROVIDER": "HotMart"}
+    )
+    assert settings.commercial_checkout_provider == "hotmart"
+
+
+def test_commercial_checkout_provider_rejects_invalid_identifier() -> None:
+    with pytest.raises(RuntimeConfigurationError, match="COMMERCIAL_CHECKOUT_PROVIDER"):
+        RuntimeSettings.from_mapping(
+            {"NFCORE_COMMERCIAL_CHECKOUT_PROVIDER": "https://provider.example"}
         )
