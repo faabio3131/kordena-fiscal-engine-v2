@@ -7,7 +7,7 @@ separate from fiscal authority so commercial changes never rewrite fiscal-domain
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
@@ -644,6 +644,27 @@ class CommercialPricingConfiguration:
             applied_promotion_ids=tuple(applied_promotions),
             bonus_trial_days=bonus_trial_days,
         )
+
+    def to_mapping(self) -> dict[str, object]:
+        """Return a JSON-compatible mapping without changing pricing semantics."""
+
+        def convert(value: object) -> object:
+            if isinstance(value, Decimal):
+                return str(value)
+            if isinstance(value, datetime):
+                return value.isoformat()
+            if isinstance(value, StrEnum):
+                return value.value
+            if isinstance(value, dict):
+                return {str(key): convert(item) for key, item in value.items()}
+            if isinstance(value, (list, tuple)):
+                return [convert(item) for item in value]
+            return value
+
+        payload = convert(asdict(self))
+        if not isinstance(payload, dict):
+            raise CommercialPricingError("pricing configuration serialization failed")
+        return payload
 
     @classmethod
     def from_mapping(
