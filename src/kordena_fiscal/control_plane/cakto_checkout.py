@@ -1,15 +1,12 @@
-"""Governed Cakto checkout configuration and projection for FM NFCORE.
+"""Governed Cakto checkout adapter for FM NFCORE.
 
-This module composes existing authorities instead of introducing a second checkout
-store. Pricing owns the external reference, CaktoPlanBinding owns provider mapping,
-commercial release owns human sale approval and the Cakto runtime owns webhook
-processing readiness.
+This provider-specific module maps configured Cakto product/offer bindings onto the
+provider-neutral commercial checkout contract. Cakto remains an infrastructure boundary;
+canonical pricing, release and public commercial-offer code must not depend on Cakto types.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from enum import StrEnum
 from urllib.parse import urlsplit
 
 from kordena_fiscal.control_plane.models import AdminPrincipal, ControlPlanePermission
@@ -19,70 +16,22 @@ from kordena_fiscal.product.cakto import (
     CaktoPlanBinding,
     CaktoUnitOfWorkFactory,
 )
+from kordena_fiscal.product.checkout import (
+    CommercialCheckoutItem,
+    CommercialCheckoutProjection,
+    CommercialCheckoutStatus,
+)
 from kordena_fiscal.product.pricing import CommercialPricingConfiguration
 
-
-class CaktoCheckoutStatus(StrEnum):
-    UNCONFIGURED = "unconfigured"
-    PARTIAL = "partial"
-    CONFIGURED = "configured"
-
-
-@dataclass(frozen=True, slots=True)
-class CaktoCheckoutItem:
-    plan_id: str
-    price_id: str
-    checkout_url: str
-
-    def to_mapping(self, *, expose_url: bool) -> dict[str, object]:
-        return {
-            "plan_id": self.plan_id,
-            "price_id": self.price_id,
-            "provider": "cakto",
-            "checkout_url": self.checkout_url if expose_url else None,
-        }
-
-
-@dataclass(frozen=True, slots=True)
-class CaktoCheckoutProjection:
-    status: CaktoCheckoutStatus
-    expected_count: int
-    configured_count: int
-    items: tuple[CaktoCheckoutItem, ...]
-
-    def __post_init__(self) -> None:
-        if self.expected_count < 0 or self.configured_count < 0:
-            raise FiscalValidationError("checkout projection counts cannot be negative")
-        if self.configured_count > self.expected_count:
-            raise FiscalValidationError(
-                "configured checkout count cannot exceed expected count"
-            )
-        if self.configured_count != len(self.items):
-            raise FiscalValidationError(
-                "configured checkout count must match projected items"
-            )
-
-    def to_public_mapping(
-        self,
-        *,
-        processing_configured: bool,
-        expose_urls: bool,
-    ) -> dict[str, object]:
-        return {
-            "status": self.status.value,
-            "provider": "cakto",
-            "processing_status": (
-                "configured" if processing_configured else "unconfigured"
-            ),
-            "items": [
-                item.to_mapping(expose_url=expose_urls)
-                for item in self.items
-            ],
-        }
+# Backward-compatible provider-local names. Canonical consumers must import
+# the provider-neutral contract from kordena_fiscal.product.checkout.
+CaktoCheckoutItem = CommercialCheckoutItem
+CaktoCheckoutProjection = CommercialCheckoutProjection
+CaktoCheckoutStatus = CommercialCheckoutStatus
 
 
 def parse_cakto_external_price_reference(reference: str | None) -> tuple[str, str] | None:
-    """Parse the provider-neutral pricing reference into the canonical Cakto IDs."""
+    """Parse one Cakto adapter reference into external product and offer IDs."""
 
     if reference is None:
         return None
@@ -113,7 +62,9 @@ def parse_cakto_external_price_reference(reference: str | None) -> tuple[str, st
 
 
 class CaktoCheckoutAdministrationService:
-    """Configure and resolve Cakto checkout using the existing durable binding store."""
+    """Configure Cakto bindings and project them through the canonical checkout port."""
+
+    provider_id = "cakto"
 
     def __init__(self, unit_of_work_factory: CaktoUnitOfWorkFactory) -> None:
         self._unit_of_work_factory = unit_of_work_factory
@@ -140,10 +91,11 @@ class CaktoCheckoutAdministrationService:
     def project(
         self,
         pricing: CommercialPricingConfiguration | None,
-    ) -> CaktoCheckoutProjection:
+    ) -> CommercialCheckoutProjection:
         if pricing is None:
-            return CaktoCheckoutProjection(
-                status=CaktoCheckoutStatus.UNCONFIGURED,
+            return CommercialCheckoutProjection(
+                status=CommercialCheckoutStatus.UNCONFIGURED,
+                provider=self.provider_id,
                 expected_count=0,
                 configured_count=0,
                 items=(),
@@ -151,7 +103,7 @@ class CaktoCheckoutAdministrationService:
 
         active_prices = {price.price_id: price for price in pricing.prices if price.enabled}
         expected: list[tuple[str, str]] = []
-        projected: list[CaktoCheckoutItem] = []
+        projected: list[CommercialCheckoutItem] = []
 
         with self._unit_of_work_factory() as uow:
             for plan in pricing.plans:
@@ -179,9 +131,10 @@ class CaktoCheckoutAdministrationService:
                     ):
                         continue
                     projected.append(
-                        CaktoCheckoutItem(
+                        CommercialCheckoutItem(
                             plan_id=plan.plan_id,
                             price_id=price.price_id,
+                            provider=self.provider_id,
                             checkout_url=binding.checkout_url,
                         )
                     )
@@ -189,14 +142,15 @@ class CaktoCheckoutAdministrationService:
         expected_count = len(expected)
         configured_count = len(projected)
         if expected_count == 0 or configured_count == 0:
-            status = CaktoCheckoutStatus.UNCONFIGURED
+            status = CommercialCheckoutStatus.UNCONFIGURED
         elif configured_count == expected_count:
-            status = CaktoCheckoutStatus.CONFIGURED
+            status = CommercialCheckoutStatus.CONFIGURED
         else:
-            status = CaktoCheckoutStatus.PARTIAL
+            status = CommercialCheckoutStatus.PARTIAL
 
-        return CaktoCheckoutProjection(
+        return CommercialCheckoutProjection(
             status=status,
+            provider=self.provider_id,
             expected_count=expected_count,
             configured_count=configured_count,
             items=tuple(projected),
