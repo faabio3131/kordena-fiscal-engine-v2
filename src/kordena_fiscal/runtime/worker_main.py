@@ -1,51 +1,74 @@
 """Container entrypoint for the FM NFCORE worker process.
 
-The process validates production dependencies and remains idle until concrete fiscal
-operation handlers are configured by a later externally-authorized integration. It does
-not consume or dead-letter unknown jobs merely to appear healthy.
+The worker validates durable production dependencies before doing work. Continuous
+execution requires an explicit handler registry; an empty/unconfigured registry fails
+closed instead of idling forever or consuming unknown jobs. The CI ``ONESHOT`` probe
+continues to validate database/migration readiness without dispatching any operation.
 """
 
 from __future__ import annotations
 
 import os
 import signal
+from collections.abc import Callable, Mapping
 from threading import Event
 
+from kordena_fiscal.contingency import FiscalOutboxHandler
 from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
 
-from .config import RuntimeSettings
+from .config import RuntimeConfigurationError, RuntimeSettings
+from .worker_composition import build_production_worker_runtime
 
 _STOP = Event()
+WorkerHandlerFactory = Callable[
+    [PostgresFiscalDatabase, RuntimeSettings],
+    Mapping[str, FiscalOutboxHandler],
+]
 
 
 def _stop(_signum: int, _frame: object) -> None:
     _STOP.set()
 
 
-def run() -> int:
+def _oneshot_requested() -> bool:
+    return os.environ.get("NFCORE_WORKER_ONESHOT", "").strip().lower() == "true"
+
+
+def run(*, handler_factory: WorkerHandlerFactory | None = None) -> int:
     settings = RuntimeSettings.from_environ()
-    database: PostgresFiscalDatabase | None = None
-    if settings.persistence_backend == "postgres":
-        assert settings.database_url is not None
-        database = PostgresFiscalDatabase(settings.database_url)
+    if settings.persistence_backend != "postgres":
+        raise RuntimeConfigurationError("durable worker runtime requires PostgreSQL persistence")
+    assert settings.database_url is not None
+
+    database = PostgresFiscalDatabase(settings.database_url)
+    try:
         database.initialize()
         with database.connection() as connection:
             connection.execute("SELECT 1").fetchone()
 
-    if os.environ.get("NFCORE_WORKER_ONESHOT", "").strip().lower() == "true":
-        if database is not None:
-            database.close()
-        return 0
+        # This is a dependency/readiness probe only. It must never dispatch fiscal or
+        # commercial work and therefore does not require external handler composition.
+        if _oneshot_requested():
+            return 0
 
-    signal.signal(signal.SIGTERM, _stop)
-    signal.signal(signal.SIGINT, _stop)
-    try:
-        while not _STOP.wait(1.0):
-            pass
+        if handler_factory is None:
+            raise RuntimeConfigurationError(
+                "continuous worker requires an explicitly configured handler factory"
+            )
+        handlers = handler_factory(database, settings)
+        composition = build_production_worker_runtime(
+            uow_factory=database,
+            handlers=handlers,
+            environment=settings.environment.value,
+        )
+
+        _STOP.clear()
+        signal.signal(signal.SIGTERM, _stop)
+        signal.signal(signal.SIGINT, _stop)
+        composition.runtime.run_forever(_STOP)
+        return 0
     finally:
-        if database is not None:
-            database.close()
-    return 0
+        database.close()
 
 
 if __name__ == "__main__":
