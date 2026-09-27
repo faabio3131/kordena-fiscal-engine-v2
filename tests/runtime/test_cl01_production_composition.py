@@ -37,8 +37,18 @@ class _Cursor:
 
 
 class _Connection:
-    def execute(self, _statement: str) -> _Cursor:
+    def execute(
+        self,
+        _statement: str,
+        _parameters: tuple[object, ...] = (),
+    ) -> _Cursor:
         return _Cursor()
+
+    def commit(self) -> None:
+        return None
+
+    def rollback(self) -> None:
+        return None
 
 
 class _ControlPlane:
@@ -180,6 +190,9 @@ def test_postgres_runtime_composes_human_identity_recovery_and_durable_portal(
         assert profile["password_recovery_configured"] is True
         assert profile["commercial_release_admin_configured"] is True
         assert profile["commercial_release_status"] == "unavailable"
+        assert profile["cakto_checkout_admin_configured"] is True
+        assert profile["cakto_checkout_status"] == "unconfigured"
+        assert profile["cakto_webhook_configured"] is False
         assert profile["fiscal_production_activated"] is False
 
         login = client.post(
