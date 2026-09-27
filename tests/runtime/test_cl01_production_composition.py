@@ -14,6 +14,7 @@ from kordena_fiscal.control_plane.models import (
     FiscalUnitRegistration,
 )
 from kordena_fiscal.domain import FiscalEnvironment
+from kordena_fiscal.product.pricing import CommercialPricingRegistry
 from kordena_fiscal.runtime import api as runtime_api
 from kordena_fiscal.runtime.config import RuntimeSettings
 from kordena_fiscal.security.human_identity import (
@@ -114,6 +115,7 @@ class _RuntimeDatabase:
         )
         self.sessions = InMemoryWebSessionRepository()
         self.resets = InMemoryPasswordResetRepository()
+        self.pricing = CommercialPricingRegistry()
         self.control_plane = _ControlPlane()
         self.closed = False
 
@@ -135,6 +137,9 @@ class _RuntimeDatabase:
 
     def password_resets(self) -> InMemoryPasswordResetRepository:
         return self.resets
+
+    def pricing_catalog(self) -> CommercialPricingRegistry:
+        return self.pricing
 
     def __call__(self) -> _UnitOfWork:
         return _UnitOfWork(self.control_plane)

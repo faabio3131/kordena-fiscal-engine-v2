@@ -235,6 +235,12 @@ def create_portal_router(
         auth = authority(request)
         _authorized(auth, PortalPermission.PORTAL_READ)
         projection = dict(require_executor().snapshot(authority=auth))
+        available = projection.get("available_surfaces")
+        if auth.account.platform_admin and isinstance(available, (list, tuple)):
+            normalized = [str(item) for item in available]
+            if "pricing-admin" not in normalized:
+                normalized.append("pricing-admin")
+            projection["available_surfaces"] = normalized
         _safe_payload(projection)
         unit_ids = (
             sorted(auth.account.unit_ids)
@@ -247,6 +253,7 @@ def create_portal_router(
             "tenant_id": auth.account.tenant_id,
             "unit_ids": unit_ids,
             "role": auth.account.role.value,
+            "platform_admin": auth.account.platform_admin,
             "permissions": sorted(permission.value for permission in auth.permissions),
             "supported_documents": ["nfe", "nfce", "nfse"],
             "projection": projection,

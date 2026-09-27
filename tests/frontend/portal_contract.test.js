@@ -72,3 +72,14 @@ test("premium design system preserves responsive and accessibility contracts", (
   assert.match(runtimeStyles, /prefers-contrast: more/);
   assert.match(runtimeStyles, /prefers-reduced-motion: reduce/);
 });
+
+
+test("platform pricing administration is backend-authorized and zero-code", () => {
+  assert.match(script, /pricing-admin/);
+  assert.match(script, /\/v1\/admin\/pricing/);
+  assert.match(script, /expected_version/);
+  assert.match(script, /X-CSRF-Token/);
+  assert.match(script, /platform_admin/);
+  assert.match(script, /Sem preço comercial publicado|UNPRICED/);
+  assert.doesNotMatch(script, /base_amount\s*:\s*["']\d/);
+});
