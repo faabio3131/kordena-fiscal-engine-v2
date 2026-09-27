@@ -45,6 +45,8 @@ def test_cakto_schema_and_plan_mapping_are_durable_on_postgres() -> None:
             restored = uow.commercial.resolve_cakto_plan_binding(
                 "product-postgres", "offer-postgres"
             )
+            listed = uow.commercial.list_cakto_plan_bindings()
         assert restored == binding
+        assert listed == (binding,)
     finally:
         core.close()
