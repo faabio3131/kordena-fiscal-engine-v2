@@ -4,6 +4,7 @@ from decimal import Decimal
 from inspect import getsource
 from typing import cast
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -18,6 +19,7 @@ from kordena_fiscal.control_plane.models import (
 from kordena_fiscal.control_plane.pricing_admin import (
     CommercialPricingAdministrationService,
 )
+from kordena_fiscal.domain import FiscalValidationError
 from kordena_fiscal.product.checkout import (
     CommercialCheckoutItem,
     CommercialCheckoutProjection,
@@ -147,3 +149,14 @@ def test_non_cakto_checkout_can_enable_canonical_public_purchase() -> None:
             "checkout_url": "https://pay.hotmart.com/example?src=nfcore",
         }
     ]
+
+
+def test_checkout_projection_rejects_status_count_mismatch() -> None:
+    with pytest.raises(FiscalValidationError, match="status is inconsistent"):
+        CommercialCheckoutProjection(
+            status=CommercialCheckoutStatus.CONFIGURED,
+            provider="hotmart",
+            expected_count=1,
+            configured_count=0,
+            items=(),
+        )
