@@ -210,6 +210,7 @@ class HumanAccount:
     tenant_id: str
     role: PortalRole
     unit_ids: frozenset[str] | None = None
+    platform_admin: bool = False
     enabled: bool = True
     session_epoch: int = 0
 
@@ -234,6 +235,8 @@ class HumanAccount:
             if not normalized_units:
                 raise ValueError("unit_ids must be None or contain at least one unit")
             object.__setattr__(self, "unit_ids", normalized_units)
+        if not isinstance(self.platform_admin, bool):
+            raise ValueError("platform_admin must be bool")
         if not isinstance(self.enabled, bool):
             raise ValueError("enabled must be bool")
         valid_epoch = (
@@ -247,6 +250,12 @@ class HumanAccount:
     @property
     def permissions(self) -> frozenset[PortalPermission]:
         return _ROLE_PERMISSIONS[self.role]
+
+    @property
+    def is_platform_admin(self) -> bool:
+        """Platform administration is explicit and never inferred from tenant role."""
+
+        return self.platform_admin
 
 
 @runtime_checkable
