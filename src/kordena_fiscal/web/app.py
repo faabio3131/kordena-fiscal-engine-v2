@@ -9,6 +9,7 @@ from typing import Annotated, Any, Protocol, runtime_checkable
 from fastapi import Body, FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from kordena_fiscal.control_plane.pricing_admin import CommercialPricingAdministrationService
 from kordena_fiscal.security.human_identity import HumanIdentityService
 from kordena_fiscal.security.human_recovery import PasswordRecoveryService
 from kordena_fiscal.web.human_auth import create_human_auth_router
@@ -17,6 +18,7 @@ from kordena_fiscal.web.human_recovery import (
     create_password_recovery_router,
 )
 from kordena_fiscal.web.portal_api import HumanPortalExecutor, create_portal_router
+from kordena_fiscal.web.pricing_admin import create_pricing_router
 
 
 @dataclass(frozen=True, slots=True)
@@ -233,6 +235,7 @@ def create_app(
     password_recovery: PasswordRecoveryService | None = None,
     password_reset_delivery: PasswordResetDelivery | None = None,
     portal_executor: HumanPortalExecutor | None = None,
+    pricing_administration: CommercialPricingAdministrationService | None = None,
 ) -> FastAPI:
     """Create the web adapter without granting fiscal authority by default."""
 
@@ -245,6 +248,10 @@ def create_app(
     if human_identity is not None:
         app.include_router(create_human_auth_router(human_identity))
         app.include_router(create_portal_router(human_identity, portal_executor))
+        if pricing_administration is not None:
+            app.include_router(
+                create_pricing_router(human_identity, pricing_administration)
+            )
     if password_recovery is not None:
         app.include_router(
             create_password_recovery_router(
