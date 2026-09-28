@@ -242,6 +242,25 @@ class CommercialSqlStore(CanonicalCommercialStore):
         ).fetchone()
         return None if row is None else self._purchase(row)
 
+    def get_purchase_by_account(
+        self,
+        account_id: str,
+    ) -> CommercialPurchaseRecord | None:
+        row = self._connection.execute(
+            """
+            SELECT purchase_id, provider_id, external_order_id, plan_id, state,
+                   created_at, updated_at, last_event_at, last_event_id, price_id,
+                   external_subscription_id, external_customer_id, buyer_email,
+                   legal_name, tenant_id, account_id
+            FROM fm_commercial_purchases
+            WHERE account_id = ?
+            ORDER BY updated_at DESC, purchase_id DESC
+            LIMIT 1
+            """,
+            (account_id.strip().lower(),),
+        ).fetchone()
+        return None if row is None else self._purchase(row)
+
     def put_purchase(
         self,
         purchase: CommercialPurchaseRecord,

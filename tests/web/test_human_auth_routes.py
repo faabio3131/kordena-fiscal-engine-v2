@@ -126,3 +126,46 @@ def test_invalid_credentials_return_generic_response() -> None:
         "code": "INVALID_CREDENTIALS",
         "message": "Invalid email or password",
     }
+
+
+def test_successful_login_invokes_optional_reconciliation_callback() -> None:
+    callbacks: list[tuple[str, datetime]] = []
+
+    web = TestClient(
+        create_app(
+            human_identity=identity(),
+            human_login_completed=lambda account_id, instant: callbacks.append(
+                (account_id, instant)
+            ),
+        ),
+        base_url="https://nfcore.test",
+    )
+
+    response = web.post(
+        "/v1/auth/login",
+        json={"email": "owner@example.com", "password": PASSWORD},
+    )
+
+    assert response.status_code == 200
+    assert callbacks == [("account-web-1", callbacks[0][1])]
+    assert callbacks[0][1].tzinfo is not None
+
+
+def test_login_remains_successful_if_optional_reconciliation_callback_fails() -> None:
+    def fail(_account_id: str, _instant: datetime) -> None:
+        raise RuntimeError("synthetic reconciliation outage")
+
+    web = TestClient(
+        create_app(
+            human_identity=identity(),
+            human_login_completed=fail,
+        ),
+        base_url="https://nfcore.test",
+    )
+
+    response = web.post(
+        "/v1/auth/login",
+        json={"email": "owner@example.com", "password": PASSWORD},
+    )
+
+    assert response.status_code == 200

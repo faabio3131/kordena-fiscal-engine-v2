@@ -62,6 +62,8 @@ class PasswordResetRepository(Protocol):
 
     def mark_used(self, reset_id: str) -> None: ...
 
+    def invalidate_account(self, account_id: str) -> None: ...
+
 
 class InMemoryPasswordResetRepository:
     """Thread-safe reference store; durable implementation belongs to WP-WEB-03."""
@@ -88,6 +90,13 @@ class InMemoryPasswordResetRepository:
             record = self._by_id.get(reset_id)
             if record is not None and not record.used:
                 self._by_id[reset_id] = replace(record, used=True)
+
+    def invalidate_account(self, account_id: str) -> None:
+        normalized = account_id.strip()
+        with self._lock:
+            for reset_id, record in tuple(self._by_id.items()):
+                if record.account_id == normalized and not record.used:
+                    self._by_id[reset_id] = replace(record, used=True)
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,6 +149,7 @@ class PasswordRecoveryService:
         account = self._accounts.by_email(email.strip().casefold())
         if account is None or not account.enabled:
             return None
+        self._resets.invalidate_account(account.account_id)
         token = secrets.token_urlsafe(48)
         expires_at = now + self._reset_ttl
         record = PasswordResetRecord(
@@ -162,7 +172,7 @@ class PasswordRecoveryService:
         reset_token: str,
         new_password: str,
         now: datetime,
-    ) -> None:
+    ) -> str:
         _aware(now, "now")
         record = self._resets.by_token_digest(_digest(reset_token))
         if record is None or record.used or now >= record.expires_at:
@@ -180,3 +190,4 @@ class PasswordRecoveryService:
         self._accounts.save(updated)
         self._sessions.revoke_account(account.account_id)
         self._resets.mark_used(record.reset_id)
+        return account.account_id

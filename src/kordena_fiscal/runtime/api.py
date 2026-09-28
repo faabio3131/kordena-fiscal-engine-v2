@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import datetime
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
@@ -131,6 +132,9 @@ def create_runtime_app(
         None if composition is None else composition.password_recovery
     )
     app.state.nfcore_password_reset_delivery = password_reset_delivery
+    app.state.nfcore_commercial_activation = (
+        None if composition is None else composition.commercial_activation
+    )
     app.state.nfcore_metrics = runtime_metrics
     app.state.nfcore_logger = runtime_logger
     app.state.nfcore_production_authority = production_authority
@@ -233,6 +237,10 @@ def create_runtime_app(
             "portal_executor_configured": composition is not None,
             "password_recovery_configured": composition is not None,
             "password_reset_delivery_configured": password_reset_delivery is not None,
+            "commercial_activation_configured": (
+                composition is not None
+                and composition.commercial_activation is not None
+            ),
             "pricing_admin_configured": pricing_administration is not None,
             "pricing_catalog_published": (
                 pricing_administration is not None
@@ -301,13 +309,24 @@ def create_runtime_app(
         if composition is None
         else composition.cakto_checkout_administration
     )
+    def mark_commercial_active(account_id: str, now: datetime) -> None:
+        if composition is None:
+            return
+        composition.commercial_activation.mark_active(account_id=account_id, now=now)
+
+    commercial_activation_completed = (
+        None if composition is None else mark_commercial_active
+    )
+
     # Fiscal production stays false unless a governed authority is explicitly injected.
     app.mount(
         "/",
         create_app(
             human_identity=human_identity,
+            human_login_completed=commercial_activation_completed,
             password_recovery=password_recovery,
             password_reset_delivery=password_reset_delivery,
+            password_reset_completed=commercial_activation_completed,
             portal_executor=portal_executor,
             pricing_administration=pricing_administration,
             commercial_release_administration=commercial_release_administration,

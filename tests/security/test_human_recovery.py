@@ -142,3 +142,36 @@ def test_reset_request_for_unknown_account_returns_no_delivery_grant() -> None:
     )
 
     assert recovery.request_reset(email="missing@example.com", now=NOW) is None
+
+
+def test_new_reset_invalidates_all_previous_pending_resets_for_account() -> None:
+    hasher, accounts, sessions = foundation()
+    recovery = PasswordRecoveryService(
+        accounts=accounts,
+        sessions=sessions,
+        resets=InMemoryPasswordResetRepository(),
+        password_hasher=hasher,
+    )
+
+    first = recovery.request_reset(email="reset@example.com", now=NOW)
+    second = recovery.request_reset(
+        email="reset@example.com",
+        now=NOW + timedelta(minutes=1),
+    )
+    assert first is not None
+    assert second is not None
+    assert first.reset_token != second.reset_token
+
+    with pytest.raises(HumanAuthenticationError, match="password reset token is not usable"):
+        recovery.complete_reset(
+            reset_token=first.reset_token,
+            new_password=NEW_PASSWORD,
+            now=NOW + timedelta(minutes=2),
+        )
+
+    account_id = recovery.complete_reset(
+        reset_token=second.reset_token,
+        new_password=NEW_PASSWORD,
+        now=NOW + timedelta(minutes=2),
+    )
+    assert account_id == "account-reset"

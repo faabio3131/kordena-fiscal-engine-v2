@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Annotated, Any, Protocol, runtime_checkable
 
 from fastapi import Body, FastAPI, Request
@@ -241,8 +242,10 @@ def create_app(
     security: BridgeSecurityBoundary | None = None,
     executor: BridgeRequestExecutor | None = None,
     human_identity: HumanIdentityService | None = None,
+    human_login_completed: Callable[[str, datetime], None] | None = None,
     password_recovery: PasswordRecoveryService | None = None,
     password_reset_delivery: PasswordResetDelivery | None = None,
+    password_reset_completed: Callable[[str, datetime], None] | None = None,
     portal_executor: HumanPortalExecutor | None = None,
     pricing_administration: CommercialPricingAdministrationService | None = None,
     commercial_release_administration: CommercialReleaseAdministrationService | None = None,
@@ -259,7 +262,12 @@ def create_app(
     )
 
     if human_identity is not None:
-        app.include_router(create_human_auth_router(human_identity))
+        app.include_router(
+            create_human_auth_router(
+                human_identity,
+                on_login=human_login_completed,
+            )
+        )
         platform_surfaces = tuple(
             surface
             for surface, configured in (
@@ -313,6 +321,7 @@ def create_app(
             create_password_recovery_router(
                 password_recovery,
                 delivery=password_reset_delivery,
+                on_completed=password_reset_completed,
             )
         )
 
