@@ -44,7 +44,7 @@ def database() -> PostgresFiscalDatabase:
         connection.execute("DROP SCHEMA public CASCADE")
         connection.execute("CREATE SCHEMA public")
     database = PostgresFiscalDatabase(dsn)
-    assert database.initialize() == (1, 2, 3, 4, 5, 6, 7, 8, 9)
+    assert database.initialize() == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
     try:
         yield database
     finally:
@@ -266,8 +266,8 @@ def test_migration_9_upgrades_an_existing_version_8_database() -> None:
 
     database = PostgresFiscalDatabase(dsn)
     try:
-        assert database.initialize() == (9,)
-        assert database.applied_migrations() == (1, 2, 3, 4, 5, 6, 7, 8, 9)
+        assert database.initialize() == (9, 10)
+        assert database.applied_migrations() == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
         with database.connection() as connection:
             assert connection.execute(
                 "SELECT COUNT(*) FROM fm_commercial_purchases"
