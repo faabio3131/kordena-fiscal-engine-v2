@@ -18,7 +18,10 @@ from kordena_fiscal.product.checkout import (
     CommercialCheckoutStatus,
     unconfigured_checkout_projection,
 )
-from kordena_fiscal.product.commercial_readiness import CommercialDeliveryPathReadiness
+from kordena_fiscal.product.commercial_readiness import (
+    CommercialDeliveryPathReadiness,
+    commercial_purchase_ready,
+)
 from kordena_fiscal.product.commercial_release import (
     CommercialReleaseDecision,
     CommercialReleaseError,
