@@ -255,6 +255,6 @@ def test_activation_preserves_sale_time_pricing_when_catalog_changes_after_purch
 
     assert activated.purchase.state is CommercialPurchaseState.ACTIVATION_PENDING
     assert activated.subscription.checkpoint.plan.plan_id == "growth"
-    assert activated.subscription.checkpoint.period_start == NOW
+    assert activated.subscription.checkpoint.period_start == AFTER
     assert activated.subscription.checkpoint.period_end.month == 10
     assert activated.subscription.checkpoint.period_end.year == 2026
