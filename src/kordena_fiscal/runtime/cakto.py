@@ -19,6 +19,7 @@ from kordena_fiscal.persistence.cakto import (
 )
 from kordena_fiscal.product.cakto import (
     CaktoAuthenticationError,
+    CaktoCanonicalCommercialBridge,
     CaktoCommercialProcessor,
     CaktoMetricSink,
     CaktoPayloadError,
@@ -45,6 +46,7 @@ def compose_cakto_commercial_runtime(
     database: CaktoCommercialDatabase,
     webhook_secret: bytes,
     metrics: CaktoMetricSink | None = None,
+    canonical_bridge: CaktoCanonicalCommercialBridge | None = None,
     initialize_schema: bool = True,
 ) -> CaktoCommercialRuntime:
     """Compose Cakto ingestion and processing without resolving secret material here.
@@ -66,6 +68,7 @@ def compose_cakto_commercial_runtime(
     )
     processor = CaktoCommercialProcessor(
         unit_of_work_factory=database,
+        canonical_bridge=canonical_bridge,
         metrics=metrics,
     )
     return CaktoCommercialRuntime(
@@ -80,6 +83,7 @@ def compose_postgres_cakto_commercial_runtime(
     fiscal_database: object,
     webhook_secret: bytes,
     metrics: CaktoMetricSink | None = None,
+    canonical_bridge: CaktoCanonicalCommercialBridge | None = None,
 ) -> CaktoCommercialRuntime:
     """Bind the commercial runtime to the canonical PostgreSQL connection boundary."""
 
@@ -88,6 +92,7 @@ def compose_postgres_cakto_commercial_runtime(
         database=database,
         webhook_secret=webhook_secret,
         metrics=metrics,
+        canonical_bridge=canonical_bridge,
         initialize_schema=True,
     )
 
