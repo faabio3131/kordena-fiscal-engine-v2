@@ -136,10 +136,10 @@ class CaktoWebhookInboxEntry:
     external_customer_id: str | None
     order_status: str | None
     occurred_at: datetime
-    callback_token: str | None = None
-    external_subscription_id: str | None = None
     payload_sha256: str
     received_at: datetime
+    callback_token: str | None = None
+    external_subscription_id: str | None = None
     status: CaktoInboxStatus = CaktoInboxStatus.RECEIVED
     attempt_count: int = 0
     next_attempt_at: datetime | None = None
