@@ -268,7 +268,7 @@ def test_migration_9_upgrades_an_existing_version_8_database() -> None:
 
     database = PostgresFiscalDatabase(dsn)
     try:
-        assert database.initialize() == (9, 10, 11)
+        assert database.initialize() == (9, 10, 11, 12)
         assert database.applied_migrations() == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
         with database.connection() as connection:
             assert connection.execute(
@@ -460,5 +460,41 @@ def test_migration_11_upgrades_existing_version_10_state() -> None:
             assert connection.execute(
                 "SELECT COUNT(*) FROM fm_commercial_acquisitions"
             ).fetchone() == (0,)
+    finally:
+        database.close()
+
+
+def test_migration_12_upgrades_existing_version_11_state() -> None:
+    dsn = _dsn()
+    database = PostgresFiscalDatabase(dsn)
+    try:
+        database.initialize()
+    finally:
+        database.close()
+
+    with psycopg.connect(dsn, autocommit=True) as connection:
+        connection.execute("DELETE FROM fm_schema_migrations WHERE version = 12")
+        connection.execute(
+            "ALTER TABLE fm_commercial_purchases DROP COLUMN IF EXISTS billing_status"
+        )
+        connection.execute(
+            "DROP INDEX IF EXISTS fm_commercial_purchases_subscription_idx"
+        )
+
+    database = PostgresFiscalDatabase(dsn)
+    try:
+        assert database.initialize() == (12,)
+        assert database.applied_migrations() == (
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12
+        )
+        with database.connection() as connection:
+            columns = connection.execute(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'fm_commercial_purchases'
+                """
+            ).fetchall()
+            assert ("billing_status",) in columns
     finally:
         database.close()
