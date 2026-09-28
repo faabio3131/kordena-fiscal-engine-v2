@@ -36,6 +36,7 @@ def create_password_recovery_router(
     recovery: PasswordRecoveryService,
     *,
     delivery: PasswordResetDelivery | None,
+    on_completed: Callable[[str, datetime], None] | None = None,
     now: Callable[[], datetime] | None = None,
 ) -> APIRouter:
     """Expose recovery without leaking account existence or reset tokens."""
@@ -87,11 +88,12 @@ def create_password_recovery_router(
                     "message": "Reset token and new password are required",
                 },
             )
+        instant = now_provider()
         try:
-            recovery.complete_reset(
+            account_id = recovery.complete_reset(
                 reset_token=reset_token,
                 new_password=new_password,
-                now=now_provider(),
+                now=instant,
             )
         except (HumanAuthenticationError, ValueError) as exc:
             raise HTTPException(
@@ -101,6 +103,14 @@ def create_password_recovery_router(
                     "message": "Password reset is not usable",
                 },
             ) from exc
+        if on_completed is not None:
+            try:
+                on_completed(account_id, instant)
+            except Exception:
+                # Credential activation has already completed successfully. Commercial
+                # projection can be reconciled/retried without making the password result
+                # ambiguous to the human user.
+                pass
         return None
 
     return router
