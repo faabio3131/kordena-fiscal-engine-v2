@@ -458,6 +458,28 @@ _COMMERCIAL_FULFILLMENT_SCHEMA = (
     ),
 )
 
+_COMMERCIAL_CLAIM_SCHEMA = (
+    """
+    ALTER TABLE fm_commercial_purchases
+    ADD COLUMN IF NOT EXISTS legal_name TEXT
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS fm_commercial_claims (
+        claim_id TEXT PRIMARY KEY,
+        purchase_id TEXT NOT NULL UNIQUE,
+        token_sha256 TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        used_at TEXT,
+        FOREIGN KEY (purchase_id) REFERENCES fm_commercial_purchases(purchase_id)
+    )
+    """,
+    (
+        "CREATE INDEX IF NOT EXISTS fm_commercial_claims_expiry_idx "
+        "ON fm_commercial_claims (expires_at, used_at)"
+    ),
+)
+
 
 def _translate_ddl(statement: str) -> str:
     return statement.replace(" BLOB ", " BYTEA ").replace(" BLOB\n", " BYTEA\n")
@@ -474,6 +496,8 @@ class PostgresFiscalDatabase:
     COMMERCIAL_RELEASE_MIGRATION_NAME = "cl09_commercial_release_authority"
     COMMERCIAL_FULFILLMENT_MIGRATION_VERSION = 9
     COMMERCIAL_FULFILLMENT_MIGRATION_NAME = "cl11_canonical_commercial_state"
+    COMMERCIAL_CLAIM_MIGRATION_VERSION = 10
+    COMMERCIAL_CLAIM_MIGRATION_NAME = "cl11_secure_customer_claim"
 
     def __init__(
         self,
@@ -605,6 +629,21 @@ class PostgresFiscalDatabase:
                         ),
                     )
                     new_versions.append(self.COMMERCIAL_FULFILLMENT_MIGRATION_VERSION)
+                if self.COMMERCIAL_CLAIM_MIGRATION_VERSION not in applied:
+                    for statement in _COMMERCIAL_CLAIM_SCHEMA:
+                        raw.execute(statement)
+                    raw.execute(
+                        """
+                        INSERT INTO fm_schema_migrations (version, name, applied_at)
+                        VALUES (%s, %s, %s)
+                        """,
+                        (
+                            self.COMMERCIAL_CLAIM_MIGRATION_VERSION,
+                            self.COMMERCIAL_CLAIM_MIGRATION_NAME,
+                            datetime.now().astimezone().isoformat(),
+                        ),
+                    )
+                    new_versions.append(self.COMMERCIAL_CLAIM_MIGRATION_VERSION)
                 raw.commit()
                 return tuple(new_versions)
             except Exception:
