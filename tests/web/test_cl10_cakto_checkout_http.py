@@ -157,8 +157,8 @@ def _login(web: TestClient, *, platform_admin: bool) -> str:
     return csrf
 
 
-def _configure_ready_offer(web: TestClient, csrf: str) -> None:
-    pricing = web.post(
+def _publish_pricing(web: TestClient, csrf: str) -> None:
+    response = web.post(
         "/v1/admin/pricing",
         headers={CSRF_HEADER: csrf},
         json={
@@ -166,9 +166,11 @@ def _configure_ready_offer(web: TestClient, csrf: str) -> None:
             "expected_version": None,
         },
     )
-    assert pricing.status_code == 200
+    assert response.status_code == 200
 
-    release = web.post(
+
+def _approve_release(web: TestClient, csrf: str) -> None:
+    response = web.post(
         "/v1/admin/commercial-release",
         headers={CSRF_HEADER: csrf},
         json={
@@ -181,9 +183,11 @@ def _configure_ready_offer(web: TestClient, csrf: str) -> None:
             "expected_version": None,
         },
     )
-    assert release.status_code == 200
+    assert response.status_code == 200
 
-    checkout = web.post(
+
+def _configure_checkout(web: TestClient, csrf: str) -> None:
+    response = web.post(
         "/v1/admin/checkout/cakto",
         headers={CSRF_HEADER: csrf},
         json={
@@ -194,7 +198,13 @@ def _configure_ready_offer(web: TestClient, csrf: str) -> None:
             "enabled": True,
         },
     )
-    assert checkout.status_code == 200
+    assert response.status_code == 200
+
+
+def _configure_ready_offer(web: TestClient, csrf: str) -> None:
+    _publish_pricing(web, csrf)
+    _approve_release(web, csrf)
+    _configure_checkout(web, csrf)
 
 
 def test_tenant_owner_cannot_read_or_write_platform_checkout(
@@ -281,6 +291,67 @@ def test_complete_mapping_stays_blocked_when_cakto_processing_is_not_composed(
     assert body["purchase_enabled"] is False
     assert body["trial_enabled"] is False
     assert "external_price_reference" not in str(body["pricing"])
+
+
+def test_missing_pricing_blocks_purchase_with_other_dependencies_ready(
+    tmp_path: Path,
+) -> None:
+    web = _client(
+        tmp_path,
+        platform_admin=True,
+        processing_configured=True,
+        delivery_readiness=FULL_DELIVERY_READINESS,
+    )
+    csrf = _login(web, platform_admin=True)
+    _approve_release(web, csrf)
+    _configure_checkout(web, csrf)
+
+    body = web.get("/v1/commercial/offer").json()
+
+    assert body["pricing"]["status"] == "unpriced"
+    assert body["purchase_enabled"] is False
+    assert body["checkout"]["items"] == []
+
+
+def test_missing_release_blocks_purchase_with_other_dependencies_ready(
+    tmp_path: Path,
+) -> None:
+    web = _client(
+        tmp_path,
+        platform_admin=True,
+        processing_configured=True,
+        delivery_readiness=FULL_DELIVERY_READINESS,
+    )
+    csrf = _login(web, platform_admin=True)
+    _publish_pricing(web, csrf)
+    _configure_checkout(web, csrf)
+
+    body = web.get("/v1/commercial/offer").json()
+
+    assert body["pricing"]["status"] == "published"
+    assert body["release"]["commercially_approved"] is False
+    assert body["checkout"]["status"] == "configured"
+    assert body["purchase_enabled"] is False
+    assert body["checkout"]["items"][0]["checkout_url"] is None
+
+
+def test_missing_checkout_mapping_blocks_purchase_with_other_dependencies_ready(
+    tmp_path: Path,
+) -> None:
+    web = _client(
+        tmp_path,
+        platform_admin=True,
+        processing_configured=True,
+        delivery_readiness=FULL_DELIVERY_READINESS,
+    )
+    csrf = _login(web, platform_admin=True)
+    _publish_pricing(web, csrf)
+    _approve_release(web, csrf)
+
+    body = web.get("/v1/commercial/offer").json()
+
+    assert body["checkout"]["status"] == "unconfigured"
+    assert body["purchase_enabled"] is False
 
 
 @pytest.mark.parametrize(
