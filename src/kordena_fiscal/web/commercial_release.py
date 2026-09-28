@@ -77,16 +77,13 @@ def create_commercial_release_router(
             if checkout is None
             else checkout.project(pricing_current)
         )
-        commercially_approved = (
-            release_current is not None and release_current.commercially_approved
-        )
         processing_configured = checkout is not None and checkout_processing_configured
-        purchase_enabled = bool(
-            commercially_approved
-            and checkout_projection.status is CommercialCheckoutStatus.CONFIGURED
-            and checkout_projection.items
-            and processing_configured
-            and resolved_delivery_readiness.ready
+        purchase_enabled = commercial_purchase_ready(
+            release=release_current,
+            pricing=pricing_current,
+            checkout=checkout_projection,
+            checkout_processing_configured=processing_configured,
+            delivery=resolved_delivery_readiness,
         )
         checkout_payload = checkout_projection.to_public_mapping(
             processing_configured=processing_configured,
