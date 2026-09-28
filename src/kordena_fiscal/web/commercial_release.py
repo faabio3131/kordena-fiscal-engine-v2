@@ -15,7 +15,6 @@ from kordena_fiscal.control_plane.pricing_admin import (
 )
 from kordena_fiscal.product.checkout import (
     CommercialCheckoutProjector,
-    CommercialCheckoutStatus,
     unconfigured_checkout_projection,
 )
 from kordena_fiscal.product.commercial_readiness import (
