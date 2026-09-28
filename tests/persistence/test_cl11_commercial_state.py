@@ -17,6 +17,7 @@ from kordena_fiscal.product.billing import (
     SubscriptionStatus,
 )
 from kordena_fiscal.product.commercial_fulfillment import (
+    CommercialAcquisitionRecord,
     CommercialClaimRecord,
     CommercialEventReceipt,
     CommercialEventType,
@@ -45,7 +46,7 @@ def database() -> PostgresFiscalDatabase:
         connection.execute("DROP SCHEMA public CASCADE")
         connection.execute("CREATE SCHEMA public")
     database = PostgresFiscalDatabase(dsn)
-    assert database.initialize() == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+    assert database.initialize() == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
     try:
         yield database
     finally:
@@ -267,8 +268,8 @@ def test_migration_9_upgrades_an_existing_version_8_database() -> None:
 
     database = PostgresFiscalDatabase(dsn)
     try:
-        assert database.initialize() == (9, 10)
-        assert database.applied_migrations() == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+        assert database.initialize() == (9, 10, 11)
+        assert database.applied_migrations() == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
         with database.connection() as connection:
             assert connection.execute(
                 "SELECT COUNT(*) FROM fm_commercial_purchases"
@@ -370,7 +371,7 @@ def test_migration_10_upgrades_existing_version_9_state() -> None:
     database = PostgresFiscalDatabase(dsn)
     try:
         assert database.initialize() == (10,)
-        assert database.applied_migrations() == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+        assert database.applied_migrations() == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
         with database.connection() as connection:
             columns = connection.execute(
                 """
@@ -382,6 +383,82 @@ def test_migration_10_upgrades_existing_version_9_state() -> None:
             assert ("legal_name",) in columns
             assert connection.execute(
                 "SELECT COUNT(*) FROM fm_commercial_claims"
+            ).fetchone() == (0,)
+    finally:
+        database.close()
+
+
+def test_first_party_acquisition_is_durable_and_idempotency_is_hashed(
+    database: PostgresFiscalDatabase,
+) -> None:
+    commercial = postgres_canonical_commercial_database(database)
+    acquisition = CommercialAcquisitionRecord(
+        acquisition_id="acq-0123456789abcdef0123456789abcdef",
+        idempotency_sha256="c" * 64,
+        request_sha256="d" * 64,
+        provider_id="synthetic",
+        plan_id="growth",
+        price_id="growth-monthly",
+        buyer_email="owner@example.com",
+        legal_name="ACME Tecnologia LTDA",
+        created_at=NOW,
+        expires_at=NOW + timedelta(minutes=30),
+    )
+
+    with commercial() as uow:
+        uow.commercial.put_acquisition(acquisition)
+        uow.commit()
+
+    with commercial() as uow:
+        assert uow.commercial.get_acquisition(acquisition.acquisition_id) == acquisition
+        assert (
+            uow.commercial.get_acquisition_by_idempotency("c" * 64)
+            == acquisition
+        )
+
+    with database.connection() as connection:
+        row = connection.execute(
+            """
+            SELECT idempotency_sha256, request_sha256
+            FROM fm_commercial_acquisitions
+            WHERE acquisition_id = ?
+            """,
+            (acquisition.acquisition_id,),
+        ).fetchone()
+    assert row == ("c" * 64, "d" * 64)
+
+
+def test_migration_11_upgrades_existing_version_10_state() -> None:
+    dsn = _dsn()
+    database = PostgresFiscalDatabase(dsn)
+    try:
+        database.initialize()
+    finally:
+        database.close()
+
+    with psycopg.connect(dsn, autocommit=True) as connection:
+        connection.execute("DELETE FROM fm_schema_migrations WHERE version = 11")
+        connection.execute("DROP TABLE IF EXISTS fm_commercial_acquisitions")
+
+    database = PostgresFiscalDatabase(dsn)
+    try:
+        assert database.initialize() == (11,)
+        assert database.applied_migrations() == (
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+        )
+        with database.connection() as connection:
+            assert connection.execute(
+                "SELECT COUNT(*) FROM fm_commercial_acquisitions"
             ).fetchone() == (0,)
     finally:
         database.close()

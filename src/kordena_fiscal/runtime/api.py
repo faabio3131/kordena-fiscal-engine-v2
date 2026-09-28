@@ -10,12 +10,23 @@ from uuid import uuid4
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from kordena_fiscal.application.commercial_acquisition import CommercialAcquisitionService
 from kordena_fiscal.gateway.production_activation import ProductionExecutionAuthority
+from kordena_fiscal.persistence.commercial_fulfillment import (
+    postgres_canonical_commercial_database,
+)
 from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
 from kordena_fiscal.product.cakto import CaktoWebhookReceiver
-from kordena_fiscal.product.checkout import CommercialCheckoutProjector
+from kordena_fiscal.product.checkout import (
+    CommercialCheckoutProjector,
+    CommercialCheckoutStarter,
+)
 from kordena_fiscal.product.commercial_readiness import CommercialDeliveryPathReadiness
+from kordena_fiscal.security.s2s import FixedWindowRateLimiter, WebhookSecurity
 from kordena_fiscal.web.app import create_app
+from kordena_fiscal.web.commercial_acquisition import (
+    create_commercial_acquisition_router,
+)
 from kordena_fiscal.web.human_recovery import PasswordResetDelivery
 from kordena_fiscal.web.portal_runtime import PortalOperationExecutor
 
@@ -85,7 +96,10 @@ def create_runtime_app(
     logger: StructuredLogger | None = None,
     cakto_receiver: CaktoWebhookReceiver | None = None,
     commercial_checkout_projector: CommercialCheckoutProjector | None = None,
+    commercial_checkout_starter: CommercialCheckoutStarter | None = None,
     commercial_checkout_processing_configured: bool = False,
+    commercial_acquisition_security: WebhookSecurity | None = None,
+    commercial_acquisition_rate_limiter: FixedWindowRateLimiter | None = None,
     password_reset_delivery: PasswordResetDelivery | None = None,
     production_authority: ProductionExecutionAuthority | None = None,
     portal_operation_executor: PortalOperationExecutor | None = None,
@@ -130,6 +144,27 @@ def create_runtime_app(
         ),
     )
 
+    commercial_acquisition: CommercialAcquisitionService | None = None
+    if (
+        composition is not None
+        and runtime.database is not None
+        and selected_checkout is not None
+        and commercial_checkout_starter is not None
+        and commercial_acquisition_security is not None
+        and selected_checkout.provider_id == commercial_checkout_starter.provider_id
+    ):
+        commercial_acquisition = CommercialAcquisitionService(
+            unit_of_work_factory=postgres_canonical_commercial_database(
+                runtime.database
+            ),
+            pricing=composition.pricing_administration,
+            release=composition.commercial_release_administration,
+            checkout=selected_checkout,
+            checkout_starter=commercial_checkout_starter,
+            checkout_processing_configured=selected_checkout_processing,
+            delivery_readiness=commercial_delivery_readiness,
+        )
+
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         try:
@@ -147,6 +182,7 @@ def create_runtime_app(
     app.state.nfcore_commercial_activation = (
         None if composition is None else composition.commercial_activation
     )
+    app.state.nfcore_commercial_acquisition = commercial_acquisition
     app.state.nfcore_metrics = runtime_metrics
     app.state.nfcore_logger = runtime_logger
     app.state.nfcore_production_authority = production_authority
@@ -298,6 +334,9 @@ def create_runtime_app(
                 commercial_delivery_readiness.activation_delivery
             ),
             "commercial_delivery_path_ready": commercial_delivery_readiness.ready,
+            "commercial_first_party_acquisition_configured": (
+                commercial_acquisition is not None
+            ),
             "cakto_checkout_admin_configured": (
                 cakto_checkout_administration is not None
             ),
@@ -317,6 +356,21 @@ def create_runtime_app(
 
     if cakto_receiver is not None:
         app.include_router(build_cakto_webhook_router(cakto_receiver))
+
+    if commercial_acquisition is not None and commercial_acquisition_security is not None:
+        app.include_router(
+            create_commercial_acquisition_router(
+                commercial_acquisition,
+                security=commercial_acquisition_security,
+                rate_limiter=(
+                    commercial_acquisition_rate_limiter
+                    or FixedWindowRateLimiter(
+                        max_requests=30,
+                        window_seconds=60,
+                    )
+                ),
+            )
+        )
 
     human_identity = None if composition is None else composition.human_identity
     password_recovery = None if composition is None else composition.password_recovery

@@ -56,7 +56,7 @@ def database() -> Iterator[PostgresFiscalDatabase]:
         connection.execute("DROP SCHEMA public CASCADE")
         connection.execute("CREATE SCHEMA public")
     database = PostgresFiscalDatabase(dsn, min_pool_size=1, max_pool_size=12)
-    assert database.initialize() == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+    assert database.initialize() == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
     try:
         yield database
     finally:
@@ -90,7 +90,7 @@ def test_postgres_migrations_are_real_reproducible_and_fail_closed(
     database: PostgresFiscalDatabase,
 ) -> None:
     assert database.initialize() == ()
-    assert database.applied_migrations() == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+    assert database.applied_migrations() == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
     assert database.dsn_redacted == "postgresql://<redacted>"
 
     with pytest.raises(PersistenceStateError, match="backend must be postgres"):

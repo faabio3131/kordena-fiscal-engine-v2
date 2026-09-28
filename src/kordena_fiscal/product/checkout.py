@@ -161,6 +161,21 @@ def unconfigured_checkout_projection(
 
 
 @runtime_checkable
+class CommercialCheckoutStarter(Protocol):
+    @property
+    def provider_id(self) -> str:
+        """Stable provider identifier for one checkout-start adapter."""
+
+    def start_checkout(
+        self,
+        *,
+        item: CommercialCheckoutItem,
+        acquisition_reference: str,
+    ) -> str:
+        """Return the governed provider checkout URL for one NFCore acquisition."""
+
+
+@runtime_checkable
 class CommercialCheckoutProjector(Protocol):
     @property
     def provider_id(self) -> str:
@@ -177,6 +192,7 @@ __all__ = [
     "CommercialCheckoutItem",
     "CommercialCheckoutProjection",
     "CommercialCheckoutProjector",
+    "CommercialCheckoutStarter",
     "CommercialCheckoutStatus",
     "normalize_checkout_provider_id",
     "unconfigured_checkout_projection",

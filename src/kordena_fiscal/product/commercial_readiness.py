@@ -9,6 +9,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from kordena_fiscal.product.checkout import (
+    CommercialCheckoutProjection,
+    CommercialCheckoutStatus,
+)
+from kordena_fiscal.product.commercial_release import CommercialReleaseDecision
+from kordena_fiscal.product.pricing import CommercialPricingConfiguration
+
 
 @dataclass(frozen=True, slots=True)
 class CommercialDeliveryPathReadiness:
@@ -38,4 +45,28 @@ class CommercialDeliveryPathReadiness:
         }
 
 
-__all__ = ["CommercialDeliveryPathReadiness"]
+def commercial_purchase_ready(
+    *,
+    release: CommercialReleaseDecision | None,
+    pricing: CommercialPricingConfiguration | None,
+    checkout: CommercialCheckoutProjection,
+    checkout_processing_configured: bool,
+    delivery: CommercialDeliveryPathReadiness,
+) -> bool:
+    """Return the single provider-neutral public charge gate."""
+
+    return bool(
+        release is not None
+        and release.commercially_approved
+        and pricing is not None
+        and checkout.status is CommercialCheckoutStatus.CONFIGURED
+        and checkout.items
+        and checkout_processing_configured
+        and delivery.ready
+    )
+
+
+__all__ = [
+    "CommercialDeliveryPathReadiness",
+    "commercial_purchase_ready",
+]

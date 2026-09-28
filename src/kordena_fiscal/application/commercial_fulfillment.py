@@ -11,6 +11,7 @@ from datetime import datetime
 
 from kordena_fiscal.product.commercial_fulfillment import (
     CanonicalCommercialUnitOfWorkFactory,
+    CommercialAcquisitionRecord,
     CommercialEventReceipt,
     CommercialEventType,
     CommercialFulfillmentError,
@@ -79,13 +80,26 @@ class CommercialFulfillmentService:
                     )
                 return CommercialFulfillmentResult(purchase=purchase, replay=True)
 
+            acquisition = self._resolve_acquisition(
+                uow.commercial,
+                event,
+                received_at=received_at,
+            )
             current = uow.commercial.get_purchase(event.purchase_id)
             if current is None:
-                purchase = self._create_purchase(event, received_at)
+                purchase = self._create_purchase(
+                    event,
+                    received_at,
+                    acquisition=acquisition,
+                )
             else:
                 purchase = self._transition_purchase(current, event, received_at)
 
             uow.commercial.put_purchase(purchase)
+            if acquisition is not None:
+                uow.commercial.put_acquisition(
+                    replace(acquisition, linked_purchase_id=purchase.purchase_id)
+                )
             uow.commit()
             return CommercialFulfillmentResult(purchase=purchase, replay=False)
 
@@ -94,14 +108,21 @@ class CommercialFulfillmentService:
         cls,
         event: ValidatedCommercialEvent,
         received_at: datetime,
+        *,
+        acquisition: CommercialAcquisitionRecord | None = None,
     ) -> CommercialPurchaseRecord:
         if event.event_type not in cls._OPENING_EVENTS:
             raise CommercialFulfillmentError(
                 "commercial lifecycle event cannot create an unknown purchase"
             )
+        buyer_email = (
+            event.buyer_email
+            if event.buyer_email is not None
+            else None if acquisition is None else acquisition.buyer_email
+        )
         state = (
             CommercialPurchaseState.UNCLAIMED
-            if event.buyer_email is not None
+            if buyer_email is not None
             else CommercialPurchaseState.IDENTITY_REQUIRED
         )
         return CommercialPurchaseRecord(
@@ -117,7 +138,8 @@ class CommercialFulfillmentService:
             last_event_id=event.event_id,
             external_subscription_id=event.external_subscription_id,
             external_customer_id=event.external_customer_id,
-            buyer_email=event.buyer_email,
+            buyer_email=buyer_email,
+            legal_name=None if acquisition is None else acquisition.legal_name,
         )
 
     @classmethod
@@ -168,6 +190,44 @@ class CommercialFulfillmentService:
             external_customer_id=current.external_customer_id or event.external_customer_id,
             buyer_email=current.buyer_email or event.buyer_email,
         )
+
+    @staticmethod
+    def _resolve_acquisition(
+        store: object,
+        event: ValidatedCommercialEvent,
+        *,
+        received_at: datetime,
+    ) -> CommercialAcquisitionRecord | None:
+        if event.acquisition_id is None:
+            return None
+        get_acquisition = getattr(store, "get_acquisition", None)
+        if not callable(get_acquisition):
+            raise CommercialFulfillmentError(
+                "canonical acquisition persistence is unavailable"
+            )
+        acquisition = get_acquisition(event.acquisition_id)
+        if not isinstance(acquisition, CommercialAcquisitionRecord):
+            raise CommercialFulfillmentError("commercial acquisition was not found")
+        if received_at >= acquisition.expires_at:
+            raise CommercialFulfillmentError(
+                "commercial acquisition reference has expired"
+            )
+        if acquisition.linked_purchase_id not in {None, event.purchase_id}:
+            raise CommercialFulfillmentError(
+                "commercial acquisition is already linked to another purchase"
+            )
+        if acquisition.provider_id != event.provider_id:
+            raise CommercialFulfillmentError("acquisition provider identity mismatch")
+        if acquisition.plan_id != event.plan_id:
+            raise CommercialFulfillmentError("acquisition plan identity mismatch")
+        if event.price_id is None or acquisition.price_id != event.price_id:
+            raise CommercialFulfillmentError("acquisition price identity mismatch")
+        if (
+            event.buyer_email is not None
+            and event.buyer_email != acquisition.buyer_email
+        ):
+            raise CommercialFulfillmentError("acquisition buyer email identity mismatch")
+        return acquisition
 
     @staticmethod
     def _require_same_identity(
