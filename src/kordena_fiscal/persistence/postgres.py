@@ -386,6 +386,78 @@ _COMMERCIAL_RELEASE_SCHEMA = (
     ),
 )
 
+_COMMERCIAL_FULFILLMENT_SCHEMA = (
+    """
+    CREATE TABLE IF NOT EXISTS fm_commercial_event_receipts (
+        provider_id TEXT NOT NULL,
+        event_id TEXT NOT NULL,
+        event_type TEXT NOT NULL,
+        external_order_id TEXT NOT NULL,
+        purchase_id TEXT NOT NULL,
+        occurred_at TEXT NOT NULL,
+        received_at TEXT NOT NULL,
+        PRIMARY KEY (provider_id, event_id)
+    )
+    """,
+    (
+        "CREATE INDEX IF NOT EXISTS fm_commercial_event_purchase_idx "
+        "ON fm_commercial_event_receipts (purchase_id, occurred_at)"
+    ),
+    """
+    CREATE TABLE IF NOT EXISTS fm_commercial_purchases (
+        purchase_id TEXT PRIMARY KEY,
+        provider_id TEXT NOT NULL,
+        external_order_id TEXT NOT NULL,
+        plan_id TEXT NOT NULL,
+        state TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        last_event_at TEXT NOT NULL,
+        last_event_id TEXT NOT NULL,
+        price_id TEXT,
+        external_subscription_id TEXT,
+        external_customer_id TEXT,
+        buyer_email TEXT,
+        tenant_id TEXT,
+        account_id TEXT,
+        UNIQUE (provider_id, external_order_id)
+    )
+    """,
+    (
+        "CREATE INDEX IF NOT EXISTS fm_commercial_purchases_state_idx "
+        "ON fm_commercial_purchases (state, updated_at, purchase_id)"
+    ),
+    (
+        "CREATE INDEX IF NOT EXISTS fm_commercial_purchases_tenant_idx "
+        "ON fm_commercial_purchases (tenant_id, updated_at, purchase_id)"
+    ),
+    """
+    CREATE TABLE IF NOT EXISTS fm_commercial_subscriptions (
+        subscription_id TEXT PRIMARY KEY,
+        purchase_id TEXT NOT NULL UNIQUE,
+        tenant_id TEXT NOT NULL,
+        plan_id TEXT NOT NULL,
+        entitlement_ids_json TEXT NOT NULL,
+        quotas_json TEXT NOT NULL,
+        status TEXT NOT NULL,
+        period_start TEXT NOT NULL,
+        period_end TEXT NOT NULL,
+        usage_json TEXT NOT NULL,
+        provider_id TEXT NOT NULL,
+        external_subscription_id TEXT,
+        last_event_id TEXT NOT NULL,
+        last_event_at TEXT NOT NULL,
+        UNIQUE (provider_id, external_subscription_id),
+        FOREIGN KEY (purchase_id) REFERENCES fm_commercial_purchases(purchase_id),
+        FOREIGN KEY (tenant_id) REFERENCES fm_control_plane_organizations(tenant_id)
+    )
+    """,
+    (
+        "CREATE INDEX IF NOT EXISTS fm_commercial_subscriptions_tenant_idx "
+        "ON fm_commercial_subscriptions (tenant_id, status, last_event_at)"
+    ),
+)
+
 
 def _translate_ddl(statement: str) -> str:
     return statement.replace(" BLOB ", " BYTEA ").replace(" BLOB\n", " BYTEA\n")
@@ -400,6 +472,8 @@ class PostgresFiscalDatabase:
     PRICING_MIGRATION_NAME = "cl08_durable_pricing_and_platform_admin"
     COMMERCIAL_RELEASE_MIGRATION_VERSION = 8
     COMMERCIAL_RELEASE_MIGRATION_NAME = "cl09_commercial_release_authority"
+    COMMERCIAL_FULFILLMENT_MIGRATION_VERSION = 9
+    COMMERCIAL_FULFILLMENT_MIGRATION_NAME = "cl11_canonical_commercial_state"
 
     def __init__(
         self,
@@ -516,6 +590,21 @@ class PostgresFiscalDatabase:
                         ),
                     )
                     new_versions.append(self.COMMERCIAL_RELEASE_MIGRATION_VERSION)
+                if self.COMMERCIAL_FULFILLMENT_MIGRATION_VERSION not in applied:
+                    for statement in _COMMERCIAL_FULFILLMENT_SCHEMA:
+                        raw.execute(statement)
+                    raw.execute(
+                        """
+                        INSERT INTO fm_schema_migrations (version, name, applied_at)
+                        VALUES (%s, %s, %s)
+                        """,
+                        (
+                            self.COMMERCIAL_FULFILLMENT_MIGRATION_VERSION,
+                            self.COMMERCIAL_FULFILLMENT_MIGRATION_NAME,
+                            datetime.now().astimezone().isoformat(),
+                        ),
+                    )
+                    new_versions.append(self.COMMERCIAL_FULFILLMENT_MIGRATION_VERSION)
                 raw.commit()
                 return tuple(new_versions)
             except Exception:
