@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -233,8 +234,20 @@ def test_activation_preserves_sale_time_pricing_when_catalog_changes_after_purch
     _publish_growth_pricing(database)
     original = _ready_purchase(database)
     _publish_disabled_growth_pricing_v2(database)
-    composition = build_postgres_runtime_composition(database)
 
+    commercial = postgres_canonical_commercial_database(database)
+    with commercial() as uow:
+        uow.commercial.put_purchase(
+            replace(
+                original,
+                updated_at=AFTER,
+                last_event_at=AFTER,
+                last_event_id="evt-renewed-after-pricing-change",
+            )
+        )
+        uow.commit()
+
+    composition = build_postgres_runtime_composition(database)
     activated = composition.commercial_activation.provision(
         purchase_id=original.purchase_id,
         now=AFTER,
