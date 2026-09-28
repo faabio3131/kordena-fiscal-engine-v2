@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import psycopg
@@ -131,16 +132,14 @@ def test_canonical_purchase_rejects_tenant_rewrite_and_stale_event(
 ) -> None:
     commercial = postgres_canonical_commercial_database(database)
     original = _purchase("cakto", "order-tenant")
-    bound = CommercialPurchaseRecord(
-        **{
-            **original.__dict__,
-            "state": CommercialPurchaseState.PROVISIONED,
-            "tenant_id": "tenant-a",
-            "account_id": "owner-a",
-            "updated_at": NOW + timedelta(seconds=1),
-            "last_event_at": NOW + timedelta(seconds=1),
-            "last_event_id": "evt-bound",
-        }
+    bound = replace(
+        original,
+        state=CommercialPurchaseState.PROVISIONED,
+        tenant_id="tenant-a",
+        account_id="owner-a",
+        updated_at=NOW + timedelta(seconds=1),
+        last_event_at=NOW + timedelta(seconds=1),
+        last_event_id="evt-bound",
     )
 
     with commercial() as uow:
@@ -148,26 +147,22 @@ def test_canonical_purchase_rejects_tenant_rewrite_and_stale_event(
         uow.commercial.put_purchase(bound)
         uow.commit()
 
-    rewritten = CommercialPurchaseRecord(
-        **{
-            **bound.__dict__,
-            "tenant_id": "tenant-b",
-            "updated_at": NOW + timedelta(seconds=2),
-            "last_event_at": NOW + timedelta(seconds=2),
-            "last_event_id": "evt-rewrite",
-        }
+    rewritten = replace(
+        bound,
+        tenant_id="tenant-b",
+        updated_at=NOW + timedelta(seconds=2),
+        last_event_at=NOW + timedelta(seconds=2),
+        last_event_id="evt-rewrite",
     )
     with pytest.raises(CommercialFulfillmentError, match="tenant cannot change"):
         with commercial() as uow:
             uow.commercial.put_purchase(rewritten)
 
-    stale = CommercialPurchaseRecord(
-        **{
-            **bound.__dict__,
-            "updated_at": NOW,
-            "last_event_at": NOW,
-            "last_event_id": "evt-stale",
-        }
+    stale = replace(
+        bound,
+        updated_at=NOW,
+        last_event_at=NOW,
+        last_event_id="evt-stale",
     )
     with pytest.raises(CommercialFulfillmentError, match="stale"):
         with commercial() as uow:
@@ -189,16 +184,14 @@ def test_subscription_snapshot_is_durable_and_tenant_scoped(
 
     with commercial() as uow:
         uow.commercial.put_purchase(
-            CommercialPurchaseRecord(
-                **{
-                    **purchase.__dict__,
-                    "state": CommercialPurchaseState.PROVISIONED,
-                    "tenant_id": "tenant-a",
-                    "account_id": "owner-a",
-                    "updated_at": NOW + timedelta(seconds=1),
-                    "last_event_at": NOW + timedelta(seconds=1),
-                    "last_event_id": "evt-provisioned",
-                }
+            replace(
+                purchase,
+                state=CommercialPurchaseState.PROVISIONED,
+                tenant_id="tenant-a",
+                account_id="owner-a",
+                updated_at=NOW + timedelta(seconds=1),
+                last_event_at=NOW + timedelta(seconds=1),
+                last_event_id="evt-provisioned",
             )
         )
         uow.commit()
