@@ -22,6 +22,7 @@ from kordena_fiscal.product.billing import (
 )
 from kordena_fiscal.product.commercial_fulfillment import (
     CanonicalCommercialStore,
+    CommercialClaimRecord,
     CommercialEventReceipt,
     CommercialEventType,
     CommercialFulfillmentError,
@@ -215,7 +216,7 @@ class CommercialSqlStore(CanonicalCommercialStore):
             SELECT purchase_id, provider_id, external_order_id, plan_id, state,
                    created_at, updated_at, last_event_at, last_event_id, price_id,
                    external_subscription_id, external_customer_id, buyer_email,
-                   tenant_id, account_id
+                   legal_name, tenant_id, account_id
             FROM fm_commercial_purchases
             WHERE purchase_id = ?
             """,
@@ -233,7 +234,7 @@ class CommercialSqlStore(CanonicalCommercialStore):
             SELECT purchase_id, provider_id, external_order_id, plan_id, state,
                    created_at, updated_at, last_event_at, last_event_id, price_id,
                    external_subscription_id, external_customer_id, buyer_email,
-                   tenant_id, account_id
+                   legal_name, tenant_id, account_id
             FROM fm_commercial_purchases
             WHERE provider_id = ? AND external_order_id = ?
             """,
@@ -280,6 +281,8 @@ class CommercialSqlStore(CanonicalCommercialStore):
                 raise CommercialFulfillmentError("canonical purchase account cannot change")
             if current.buyer_email is not None and purchase.buyer_email != current.buyer_email:
                 raise CommercialFulfillmentError("canonical purchase buyer email cannot change")
+            if current.legal_name is not None and purchase.legal_name != current.legal_name:
+                raise CommercialFulfillmentError("canonical purchase legal name cannot change")
 
         try:
             self._connection.execute(
@@ -288,8 +291,8 @@ class CommercialSqlStore(CanonicalCommercialStore):
                     purchase_id, provider_id, external_order_id, plan_id, state,
                     created_at, updated_at, last_event_at, last_event_id, price_id,
                     external_subscription_id, external_customer_id, buyer_email,
-                    tenant_id, account_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    legal_name, tenant_id, account_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (purchase_id) DO UPDATE SET
                     state = excluded.state,
                     updated_at = excluded.updated_at,
@@ -298,6 +301,7 @@ class CommercialSqlStore(CanonicalCommercialStore):
                     external_subscription_id = excluded.external_subscription_id,
                     external_customer_id = excluded.external_customer_id,
                     buyer_email = excluded.buyer_email,
+                    legal_name = excluded.legal_name,
                     tenant_id = excluded.tenant_id,
                     account_id = excluded.account_id
                 """,
@@ -315,6 +319,7 @@ class CommercialSqlStore(CanonicalCommercialStore):
                     purchase.external_subscription_id,
                     purchase.external_customer_id,
                     purchase.buyer_email,
+                    purchase.legal_name,
                     purchase.tenant_id,
                     purchase.account_id,
                 ),
@@ -324,6 +329,68 @@ class CommercialSqlStore(CanonicalCommercialStore):
                 "canonical commercial purchase conflicts with durable state"
             ) from exc
         return purchase
+
+    def get_claim_by_digest(self, token_sha256: str) -> CommercialClaimRecord | None:
+        row = self._connection.execute(
+            """
+            SELECT claim_id, purchase_id, token_sha256, created_at, expires_at, used_at
+            FROM fm_commercial_claims
+            WHERE token_sha256 = ?
+            """,
+            (token_sha256.strip().lower(),),
+        ).fetchone()
+        return None if row is None else self._claim(row)
+
+    def get_claim_for_purchase(self, purchase_id: str) -> CommercialClaimRecord | None:
+        row = self._connection.execute(
+            """
+            SELECT claim_id, purchase_id, token_sha256, created_at, expires_at, used_at
+            FROM fm_commercial_claims
+            WHERE purchase_id = ?
+            """,
+            (purchase_id.strip().lower(),),
+        ).fetchone()
+        return None if row is None else self._claim(row)
+
+    def put_claim(self, claim: CommercialClaimRecord) -> CommercialClaimRecord:
+        try:
+            self._connection.execute(
+                """
+                INSERT INTO fm_commercial_claims (
+                    claim_id, purchase_id, token_sha256, created_at, expires_at, used_at
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT (purchase_id) DO UPDATE SET
+                    claim_id = excluded.claim_id,
+                    token_sha256 = excluded.token_sha256,
+                    created_at = excluded.created_at,
+                    expires_at = excluded.expires_at,
+                    used_at = excluded.used_at
+                """,
+                (
+                    claim.claim_id,
+                    claim.purchase_id,
+                    claim.token_sha256,
+                    _iso(claim.created_at),
+                    _iso(claim.expires_at),
+                    None if claim.used_at is None else _iso(claim.used_at),
+                ),
+            )
+        except sqlite3.IntegrityError as exc:
+            raise CommercialFulfillmentError(
+                "commercial claim conflicts with durable state"
+            ) from exc
+        return claim
+
+    def consume_claim(self, claim_id: str, used_at: datetime) -> bool:
+        cursor = self._connection.execute(
+            """
+            UPDATE fm_commercial_claims
+            SET used_at = ?
+            WHERE claim_id = ? AND used_at IS NULL
+            """,
+            (_iso(used_at), claim_id.strip().lower()),
+        )
+        return cursor.rowcount == 1
 
     def get_subscription(
         self,
@@ -494,8 +561,20 @@ class CommercialSqlStore(CanonicalCommercialStore):
             external_subscription_id=_optional_text(row[10]),
             external_customer_id=_optional_text(row[11]),
             buyer_email=_optional_text(row[12]),
-            tenant_id=_optional_text(row[13]),
-            account_id=_optional_text(row[14]),
+            legal_name=_optional_text(row[13]),
+            tenant_id=_optional_text(row[14]),
+            account_id=_optional_text(row[15]),
+        )
+
+    @staticmethod
+    def _claim(row: Sequence[object]) -> CommercialClaimRecord:
+        return CommercialClaimRecord(
+            claim_id=_text(row[0], "claim_id"),
+            purchase_id=_text(row[1], "purchase_id"),
+            token_sha256=_text(row[2], "token_sha256"),
+            created_at=_dt(row[3], "created_at"),
+            expires_at=_dt(row[4], "expires_at"),
+            used_at=None if row[5] is None else _dt(row[5], "used_at"),
         )
 
     @staticmethod
