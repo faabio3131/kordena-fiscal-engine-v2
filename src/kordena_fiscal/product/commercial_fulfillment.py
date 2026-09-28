@@ -181,6 +181,18 @@ class CommercialAcquisitionRecord:
                 _token(self.linked_purchase_id, "linked_purchase_id"),
             )
 
+    def __repr__(self) -> str:
+        return (
+            "CommercialAcquisitionRecord("
+            f"acquisition_id={self.acquisition_id!r}, "
+            f"provider_id={self.provider_id!r}, plan_id={self.plan_id!r}, "
+            f"price_id={self.price_id!r}, buyer_email=<redacted>, "
+            "legal_name=<redacted>, "
+            f"created_at={self.created_at!r}, expires_at={self.expires_at!r}, "
+            f"linked_purchase_id={self.linked_purchase_id!r})"
+        )
+
+
 @dataclass(frozen=True, slots=True)
 class ValidatedCommercialEvent:
     """Sanitized provider-neutral fact emitted only by an authenticated adapter."""
