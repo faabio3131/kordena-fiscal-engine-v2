@@ -35,9 +35,13 @@ from kordena_fiscal.security.human_recovery import (
 )
 
 
+class CommercialPricingPublicationReader(Protocol):
+    configuration: CommercialPricingConfiguration
+    published_at: datetime
+
+
 class CommercialPricingReader(Protocol):
-    @property
-    def current(self) -> CommercialPricingConfiguration | None: ...
+    def history(self) -> tuple[CommercialPricingPublicationReader, ...]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -226,9 +230,7 @@ class CommercialCustomerActivationService:
         self,
         purchase: CommercialPurchaseRecord,
     ) -> tuple[CommercialPlan, BillingCadence]:
-        pricing = self._pricing.current
-        if pricing is None:
-            raise CommercialFulfillmentError("commercial pricing is not published")
+        pricing = self._pricing_at_purchase(purchase)
         plan_definition = next(
             (
                 plan
@@ -238,7 +240,9 @@ class CommercialCustomerActivationService:
             None,
         )
         if plan_definition is None:
-            raise CommercialFulfillmentError("commercial plan is not currently available")
+            raise CommercialFulfillmentError(
+                "commercial plan was not available at purchase time"
+            )
         if purchase.price_id is None or purchase.price_id not in plan_definition.price_ids:
             raise CommercialFulfillmentError(
                 "commercial purchase price does not belong to its plan"
@@ -251,7 +255,9 @@ class CommercialCustomerActivationService:
                 "commercial plan cannot resolve canonical pricing/catalog"
             ) from exc
         if not price.enabled:
-            raise CommercialFulfillmentError("commercial price is disabled")
+            raise CommercialFulfillmentError(
+                "commercial price was not enabled at purchase time"
+            )
         return (
             CommercialPlan(
                 plan_id=plan_definition.plan_id,
@@ -259,6 +265,28 @@ class CommercialCustomerActivationService:
             ),
             price.cadence,
         )
+
+    def _pricing_at_purchase(
+        self,
+        purchase: CommercialPurchaseRecord,
+    ) -> CommercialPricingConfiguration:
+        history = self._pricing.history()
+        if not history:
+            raise CommercialFulfillmentError("commercial pricing is not published")
+        publication = max(
+            (
+                item
+                for item in history
+                if item.published_at <= purchase.last_event_at
+            ),
+            key=lambda item: (item.published_at, item.configuration.version),
+            default=None,
+        )
+        if publication is None:
+            raise CommercialFulfillmentError(
+                "commercial pricing snapshot is unavailable for purchase"
+            )
+        return publication.configuration
 
     def _subscription(
         self,
@@ -319,5 +347,6 @@ class CommercialCustomerActivationService:
 __all__ = [
     "CommercialActivationProvisioningResult",
     "CommercialCustomerActivationService",
+    "CommercialPricingPublicationReader",
     "CommercialPricingReader",
 ]
