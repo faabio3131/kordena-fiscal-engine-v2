@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Annotated, Any, Protocol, runtime_checkable
 
 from fastapi import Body, FastAPI, Request
@@ -243,6 +244,7 @@ def create_app(
     human_identity: HumanIdentityService | None = None,
     password_recovery: PasswordRecoveryService | None = None,
     password_reset_delivery: PasswordResetDelivery | None = None,
+    password_reset_completed: Callable[[str, datetime], None] | None = None,
     portal_executor: HumanPortalExecutor | None = None,
     pricing_administration: CommercialPricingAdministrationService | None = None,
     commercial_release_administration: CommercialReleaseAdministrationService | None = None,
@@ -313,6 +315,7 @@ def create_app(
             create_password_recovery_router(
                 password_recovery,
                 delivery=password_reset_delivery,
+                on_completed=password_reset_completed,
             )
         )
 
