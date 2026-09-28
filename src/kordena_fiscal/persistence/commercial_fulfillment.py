@@ -434,7 +434,7 @@ class CommercialSqlStore(CanonicalCommercialStore):
                     created_at, updated_at, last_event_at, last_event_id, price_id,
                     external_subscription_id, external_customer_id, buyer_email,
                     legal_name, tenant_id, account_id, billing_status
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (purchase_id) DO UPDATE SET
                     state = excluded.state,
                     updated_at = excluded.updated_at,
