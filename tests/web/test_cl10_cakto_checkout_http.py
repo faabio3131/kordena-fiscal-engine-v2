@@ -6,6 +6,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+import pytest
 from fastapi.testclient import TestClient
 
 from kordena_fiscal.control_plane.cakto_checkout import (
@@ -19,6 +20,7 @@ from kordena_fiscal.control_plane.pricing_admin import (
     CommercialPricingAdministrationService,
 )
 from kordena_fiscal.persistence.cakto import SqliteCaktoCommercialDatabase
+from kordena_fiscal.product.commercial_readiness import CommercialDeliveryPathReadiness
 from kordena_fiscal.product.pricing import (
     BillingCadence,
     CommercialPricingConfiguration,
@@ -38,6 +40,14 @@ from kordena_fiscal.web import create_app
 from kordena_fiscal.web.human_auth import CSRF_COOKIE, CSRF_HEADER
 
 PASSWORD = "checkout-admin-password-2026"
+
+
+FULL_DELIVERY_READINESS = CommercialDeliveryPathReadiness(
+    canonical_commercial_persistence=True,
+    fulfillment=True,
+    provisioning=True,
+    activation_delivery=True,
+)
 
 
 class CheckoutPortalExecutor:
@@ -94,6 +104,7 @@ def _client(
     *,
     platform_admin: bool,
     processing_configured: bool,
+    delivery_readiness: CommercialDeliveryPathReadiness | None = None,
 ) -> TestClient:
     hasher = ScryptPasswordHasher()
     account = HumanAccount(
@@ -125,6 +136,7 @@ def _client(
             commercial_release_administration=release,
             commercial_checkout=checkout,
             commercial_checkout_processing_configured=processing_configured,
+            commercial_delivery_readiness=delivery_readiness,
             cakto_checkout_administration=checkout,
         ),
         base_url="https://nfcore.test",
@@ -145,8 +157,8 @@ def _login(web: TestClient, *, platform_admin: bool) -> str:
     return csrf
 
 
-def _configure_ready_offer(web: TestClient, csrf: str) -> None:
-    pricing = web.post(
+def _publish_pricing(web: TestClient, csrf: str) -> None:
+    response = web.post(
         "/v1/admin/pricing",
         headers={CSRF_HEADER: csrf},
         json={
@@ -154,9 +166,11 @@ def _configure_ready_offer(web: TestClient, csrf: str) -> None:
             "expected_version": None,
         },
     )
-    assert pricing.status_code == 200
+    assert response.status_code == 200
 
-    release = web.post(
+
+def _approve_release(web: TestClient, csrf: str) -> None:
+    response = web.post(
         "/v1/admin/commercial-release",
         headers={CSRF_HEADER: csrf},
         json={
@@ -169,9 +183,11 @@ def _configure_ready_offer(web: TestClient, csrf: str) -> None:
             "expected_version": None,
         },
     )
-    assert release.status_code == 200
+    assert response.status_code == 200
 
-    checkout = web.post(
+
+def _configure_checkout(web: TestClient, csrf: str) -> None:
+    response = web.post(
         "/v1/admin/checkout/cakto",
         headers={CSRF_HEADER: csrf},
         json={
@@ -182,7 +198,13 @@ def _configure_ready_offer(web: TestClient, csrf: str) -> None:
             "enabled": True,
         },
     )
-    assert checkout.status_code == 200
+    assert response.status_code == 200
+
+
+def _configure_ready_offer(web: TestClient, csrf: str) -> None:
+    _publish_pricing(web, csrf)
+    _approve_release(web, csrf)
+    _configure_checkout(web, csrf)
 
 
 def test_tenant_owner_cannot_read_or_write_platform_checkout(
@@ -192,6 +214,7 @@ def test_tenant_owner_cannot_read_or_write_platform_checkout(
         tmp_path,
         platform_admin=False,
         processing_configured=False,
+        delivery_readiness=FULL_DELIVERY_READINESS,
     )
     csrf = _login(web, platform_admin=False)
 
@@ -244,6 +267,7 @@ def test_complete_mapping_stays_blocked_when_cakto_processing_is_not_composed(
         tmp_path,
         platform_admin=True,
         processing_configured=False,
+        delivery_readiness=FULL_DELIVERY_READINESS,
     )
     csrf = _login(web, platform_admin=True)
     _configure_ready_offer(web, csrf)
@@ -269,6 +293,129 @@ def test_complete_mapping_stays_blocked_when_cakto_processing_is_not_composed(
     assert "external_price_reference" not in str(body["pricing"])
 
 
+def test_missing_pricing_blocks_purchase_with_other_dependencies_ready(
+    tmp_path: Path,
+) -> None:
+    web = _client(
+        tmp_path,
+        platform_admin=True,
+        processing_configured=True,
+        delivery_readiness=FULL_DELIVERY_READINESS,
+    )
+    csrf = _login(web, platform_admin=True)
+    _approve_release(web, csrf)
+    _configure_checkout(web, csrf)
+
+    body = web.get("/v1/commercial/offer").json()
+
+    assert body["pricing"]["status"] == "unpriced"
+    assert body["purchase_enabled"] is False
+    assert body["checkout"]["items"] == []
+
+
+def test_missing_release_blocks_purchase_with_other_dependencies_ready(
+    tmp_path: Path,
+) -> None:
+    web = _client(
+        tmp_path,
+        platform_admin=True,
+        processing_configured=True,
+        delivery_readiness=FULL_DELIVERY_READINESS,
+    )
+    csrf = _login(web, platform_admin=True)
+    _publish_pricing(web, csrf)
+    _configure_checkout(web, csrf)
+
+    body = web.get("/v1/commercial/offer").json()
+
+    assert body["pricing"]["status"] == "published"
+    assert body["release"]["commercially_approved"] is False
+    assert body["checkout"]["status"] == "configured"
+    assert body["purchase_enabled"] is False
+    assert body["checkout"]["items"][0]["checkout_url"] is None
+
+
+def test_missing_checkout_mapping_blocks_purchase_with_other_dependencies_ready(
+    tmp_path: Path,
+) -> None:
+    web = _client(
+        tmp_path,
+        platform_admin=True,
+        processing_configured=True,
+        delivery_readiness=FULL_DELIVERY_READINESS,
+    )
+    csrf = _login(web, platform_admin=True)
+    _publish_pricing(web, csrf)
+    _approve_release(web, csrf)
+
+    body = web.get("/v1/commercial/offer").json()
+
+    assert body["checkout"]["status"] == "unconfigured"
+    assert body["purchase_enabled"] is False
+
+
+@pytest.mark.parametrize(
+    ("processing_configured", "delivery_readiness"),
+    (
+        (False, FULL_DELIVERY_READINESS),
+        (
+            True,
+            CommercialDeliveryPathReadiness(
+                canonical_commercial_persistence=False,
+                fulfillment=True,
+                provisioning=True,
+                activation_delivery=True,
+            ),
+        ),
+        (
+            True,
+            CommercialDeliveryPathReadiness(
+                canonical_commercial_persistence=True,
+                fulfillment=False,
+                provisioning=True,
+                activation_delivery=True,
+            ),
+        ),
+        (
+            True,
+            CommercialDeliveryPathReadiness(
+                canonical_commercial_persistence=True,
+                fulfillment=True,
+                provisioning=False,
+                activation_delivery=True,
+            ),
+        ),
+        (
+            True,
+            CommercialDeliveryPathReadiness(
+                canonical_commercial_persistence=True,
+                fulfillment=True,
+                provisioning=True,
+                activation_delivery=False,
+            ),
+        ),
+    ),
+)
+def test_each_missing_purchase_delivery_dependency_fails_closed(
+    tmp_path: Path,
+    processing_configured: bool,
+    delivery_readiness: CommercialDeliveryPathReadiness,
+) -> None:
+    web = _client(
+        tmp_path,
+        platform_admin=True,
+        processing_configured=processing_configured,
+        delivery_readiness=delivery_readiness,
+    )
+    csrf = _login(web, platform_admin=True)
+    _configure_ready_offer(web, csrf)
+
+    body = web.get("/v1/commercial/offer").json()
+
+    assert body["purchase_enabled"] is False
+    assert body["checkout"]["items"][0]["checkout_url"] is None
+
+
 def test_purchase_is_projected_only_after_release_mapping_and_processing_are_ready(
     tmp_path: Path,
 ) -> None:
@@ -276,6 +423,7 @@ def test_purchase_is_projected_only_after_release_mapping_and_processing_are_rea
         tmp_path,
         platform_admin=True,
         processing_configured=True,
+        delivery_readiness=FULL_DELIVERY_READINESS,
     )
     csrf = _login(web, platform_admin=True)
     _configure_ready_offer(web, csrf)

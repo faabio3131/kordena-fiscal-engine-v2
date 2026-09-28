@@ -25,10 +25,23 @@ from kordena_fiscal.security.human_identity import (
     PortalRole,
     ScryptPasswordHasher,
 )
-from kordena_fiscal.security.human_recovery import InMemoryPasswordResetRepository
+from kordena_fiscal.security.human_recovery import (
+    InMemoryPasswordResetRepository,
+    IssuedPasswordReset,
+)
 
 PASSWORD = "commercial-runtime-password-2026"
 NOW = datetime(2026, 9, 16, 15, 30, tzinfo=UTC)
+
+
+class _ResetDelivery:
+    def deliver(
+        self,
+        *,
+        email: str,
+        reset: IssuedPasswordReset,
+    ) -> None:
+        del email, reset
 
 
 class _Cursor:
@@ -194,6 +207,11 @@ def test_postgres_runtime_composes_human_identity_recovery_and_durable_portal(
         assert profile["commercial_checkout_provider_active"] is None
         assert profile["commercial_checkout_status"] == "unconfigured"
         assert profile["commercial_checkout_processing_configured"] is False
+        assert profile["canonical_commercial_persistence_configured"] is True
+        assert profile["commercial_fulfillment_configured"] is True
+        assert profile["commercial_provisioning_configured"] is True
+        assert profile["commercial_activation_delivery_configured"] is False
+        assert profile["commercial_delivery_path_ready"] is False
         assert profile["cakto_checkout_admin_configured"] is False
         assert profile["cakto_checkout_status"] == "unconfigured"
         assert profile["cakto_webhook_configured"] is False
@@ -224,6 +242,26 @@ def test_postgres_runtime_composes_human_identity_recovery_and_durable_portal(
     database = _RuntimeDatabase.last
     assert database is not None
     assert database.closed is True
+
+
+def test_postgres_runtime_projects_ready_delivery_path_only_with_activation_delivery(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(runtime_api, "PostgresFiscalDatabase", _RuntimeDatabase)
+
+    with TestClient(
+        runtime_api.create_runtime_app(
+            _settings(),
+            password_reset_delivery=_ResetDelivery(),
+        ),
+        base_url="https://testserver",
+    ) as client:
+        profile = client.get("/runtime/profile").json()
+        assert profile["canonical_commercial_persistence_configured"] is True
+        assert profile["commercial_fulfillment_configured"] is True
+        assert profile["commercial_provisioning_configured"] is True
+        assert profile["commercial_activation_delivery_configured"] is True
+        assert profile["commercial_delivery_path_ready"] is True
 
 
 def test_postgres_runtime_activates_cakto_checkout_only_by_explicit_provider_config(

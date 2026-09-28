@@ -14,6 +14,7 @@ from kordena_fiscal.gateway.production_activation import ProductionExecutionAuth
 from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
 from kordena_fiscal.product.cakto import CaktoWebhookReceiver
 from kordena_fiscal.product.checkout import CommercialCheckoutProjector
+from kordena_fiscal.product.commercial_readiness import CommercialDeliveryPathReadiness
 from kordena_fiscal.web.app import create_app
 from kordena_fiscal.web.human_recovery import PasswordResetDelivery
 from kordena_fiscal.web.portal_runtime import PortalOperationExecutor
@@ -117,6 +118,17 @@ def create_runtime_app(
     ):
         selected_checkout = None
         selected_checkout_processing = False
+
+    commercial_delivery_readiness = CommercialDeliveryPathReadiness(
+        canonical_commercial_persistence=(
+            composition is not None and runtime.database is not None
+        ),
+        fulfillment=composition is not None,
+        provisioning=composition is not None,
+        activation_delivery=(
+            composition is not None and password_reset_delivery is not None
+        ),
+    )
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -273,6 +285,19 @@ def create_runtime_app(
             "commercial_checkout_processing_configured": (
                 selected_checkout_processing
             ),
+            "canonical_commercial_persistence_configured": (
+                commercial_delivery_readiness.canonical_commercial_persistence
+            ),
+            "commercial_fulfillment_configured": (
+                commercial_delivery_readiness.fulfillment
+            ),
+            "commercial_provisioning_configured": (
+                commercial_delivery_readiness.provisioning
+            ),
+            "commercial_activation_delivery_configured": (
+                commercial_delivery_readiness.activation_delivery
+            ),
+            "commercial_delivery_path_ready": commercial_delivery_readiness.ready,
             "cakto_checkout_admin_configured": (
                 cakto_checkout_administration is not None
             ),
@@ -334,6 +359,7 @@ def create_runtime_app(
             commercial_checkout_processing_configured=(
                 selected_checkout_processing
             ),
+            commercial_delivery_readiness=commercial_delivery_readiness,
             cakto_checkout_administration=cakto_checkout_administration,
         ),
     )

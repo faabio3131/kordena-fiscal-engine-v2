@@ -25,6 +25,7 @@ from kordena_fiscal.product.checkout import (
     CommercialCheckoutProjection,
     CommercialCheckoutStatus,
 )
+from kordena_fiscal.product.commercial_readiness import CommercialDeliveryPathReadiness
 from kordena_fiscal.product.commercial_release import (
     CommercialReleaseDecision,
     CommercialReleaseStatus,
@@ -132,6 +133,12 @@ def test_non_cakto_checkout_can_enable_canonical_public_purchase() -> None:
             release,
             SyntheticExternalCheckout(),
             checkout_processing_configured=True,
+            delivery_readiness=CommercialDeliveryPathReadiness(
+                canonical_commercial_persistence=True,
+                fulfillment=True,
+                provisioning=True,
+                activation_delivery=True,
+            ),
         )
     )
 

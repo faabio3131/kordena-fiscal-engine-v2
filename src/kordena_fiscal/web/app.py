@@ -18,6 +18,7 @@ from kordena_fiscal.control_plane.commercial_release import (
 )
 from kordena_fiscal.control_plane.pricing_admin import CommercialPricingAdministrationService
 from kordena_fiscal.product.checkout import CommercialCheckoutProjector
+from kordena_fiscal.product.commercial_readiness import CommercialDeliveryPathReadiness
 from kordena_fiscal.security.human_identity import HumanIdentityService
 from kordena_fiscal.security.human_recovery import PasswordRecoveryService
 from kordena_fiscal.web.cakto_checkout import create_cakto_checkout_router
@@ -251,6 +252,7 @@ def create_app(
     commercial_release_administration: CommercialReleaseAdministrationService | None = None,
     commercial_checkout: CommercialCheckoutProjector | None = None,
     commercial_checkout_processing_configured: bool = False,
+    commercial_delivery_readiness: CommercialDeliveryPathReadiness | None = None,
     cakto_checkout_administration: CaktoCheckoutAdministrationService | None = None,
 ) -> FastAPI:
     """Create the web adapter without granting fiscal authority by default."""
@@ -314,6 +316,7 @@ def create_app(
                     checkout_processing_configured=(
                         commercial_checkout_processing_configured
                     ),
+                    delivery_readiness=commercial_delivery_readiness,
                 )
             )
     if password_recovery is not None:
