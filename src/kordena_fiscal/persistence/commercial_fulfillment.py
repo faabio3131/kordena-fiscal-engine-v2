@@ -22,6 +22,7 @@ from kordena_fiscal.product.billing import (
 )
 from kordena_fiscal.product.commercial_fulfillment import (
     CanonicalCommercialStore,
+    CommercialAcquisitionRecord,
     CommercialClaimRecord,
     CommercialEventReceipt,
     CommercialEventType,
@@ -149,6 +150,108 @@ def _json_usage(value: object) -> tuple[tuple[str, int], ...]:
 class CommercialSqlStore(CanonicalCommercialStore):
     def __init__(self, connection: _Connection) -> None:
         self._connection = connection
+
+    def get_acquisition(
+        self,
+        acquisition_id: str,
+    ) -> CommercialAcquisitionRecord | None:
+        row = self._connection.execute(
+            """
+            SELECT acquisition_id, idempotency_sha256, request_sha256, provider_id,
+                   plan_id, price_id, buyer_email, legal_name, created_at, expires_at,
+                   linked_purchase_id
+            FROM fm_commercial_acquisitions
+            WHERE acquisition_id = ?
+            """,
+            (acquisition_id.strip().lower(),),
+        ).fetchone()
+        return None if row is None else self._acquisition(row)
+
+    def get_acquisition_by_idempotency(
+        self,
+        idempotency_sha256: str,
+    ) -> CommercialAcquisitionRecord | None:
+        row = self._connection.execute(
+            """
+            SELECT acquisition_id, idempotency_sha256, request_sha256, provider_id,
+                   plan_id, price_id, buyer_email, legal_name, created_at, expires_at,
+                   linked_purchase_id
+            FROM fm_commercial_acquisitions
+            WHERE idempotency_sha256 = ?
+            """,
+            (idempotency_sha256.strip().lower(),),
+        ).fetchone()
+        return None if row is None else self._acquisition(row)
+
+    def put_acquisition(
+        self,
+        acquisition: CommercialAcquisitionRecord,
+    ) -> CommercialAcquisitionRecord:
+        current = self.get_acquisition(acquisition.acquisition_id)
+        if current is not None:
+            immutable_current = (
+                current.idempotency_sha256,
+                current.request_sha256,
+                current.provider_id,
+                current.plan_id,
+                current.price_id,
+                current.buyer_email,
+                current.legal_name,
+                current.created_at,
+                current.expires_at,
+            )
+            immutable_candidate = (
+                acquisition.idempotency_sha256,
+                acquisition.request_sha256,
+                acquisition.provider_id,
+                acquisition.plan_id,
+                acquisition.price_id,
+                acquisition.buyer_email,
+                acquisition.legal_name,
+                acquisition.created_at,
+                acquisition.expires_at,
+            )
+            if immutable_current != immutable_candidate:
+                raise CommercialFulfillmentError(
+                    "canonical acquisition identity cannot be rewritten"
+                )
+            if (
+                current.linked_purchase_id is not None
+                and acquisition.linked_purchase_id != current.linked_purchase_id
+            ):
+                raise CommercialFulfillmentError(
+                    "canonical acquisition purchase link cannot change"
+                )
+        try:
+            self._connection.execute(
+                """
+                INSERT INTO fm_commercial_acquisitions (
+                    acquisition_id, idempotency_sha256, request_sha256, provider_id,
+                    plan_id, price_id, buyer_email, legal_name, created_at, expires_at,
+                    linked_purchase_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (acquisition_id) DO UPDATE SET
+                    linked_purchase_id = excluded.linked_purchase_id
+                """,
+                (
+                    acquisition.acquisition_id,
+                    acquisition.idempotency_sha256,
+                    acquisition.request_sha256,
+                    acquisition.provider_id,
+                    acquisition.plan_id,
+                    acquisition.price_id,
+                    acquisition.buyer_email,
+                    acquisition.legal_name,
+                    _iso(acquisition.created_at),
+                    _iso(acquisition.expires_at),
+                    acquisition.linked_purchase_id,
+                ),
+            )
+        except sqlite3.IntegrityError as exc:
+            raise CommercialFulfillmentError(
+                "canonical commercial acquisition conflicts with durable state"
+            ) from exc
+        return acquisition
 
     def receive_event(
         self,
@@ -539,6 +642,22 @@ class CommercialSqlStore(CanonicalCommercialStore):
                 "canonical commercial subscription conflicts with durable state"
             ) from exc
         return subscription
+
+    @staticmethod
+    def _acquisition(row: Sequence[object]) -> CommercialAcquisitionRecord:
+        return CommercialAcquisitionRecord(
+            acquisition_id=_text(row[0], "acquisition_id"),
+            idempotency_sha256=_text(row[1], "idempotency_sha256"),
+            request_sha256=_text(row[2], "request_sha256"),
+            provider_id=_text(row[3], "provider_id"),
+            plan_id=_text(row[4], "plan_id"),
+            price_id=_text(row[5], "price_id"),
+            buyer_email=_text(row[6], "buyer_email"),
+            legal_name=_text(row[7], "legal_name"),
+            created_at=_dt(row[8], "created_at"),
+            expires_at=_dt(row[9], "expires_at"),
+            linked_purchase_id=_optional_text(row[10]),
+        )
 
     @staticmethod
     def _validate_event_replay(
