@@ -1,5 +1,11 @@
 """Public durable persistence ports and SQLite reference adapter."""
 
+from .commercial_fulfillment import (
+    CanonicalCommercialDatabase,
+    CommercialSqlStore,
+    CommercialSqlUnitOfWork,
+    postgres_canonical_commercial_database,
+)
 from .ports import (
     ControlPlaneStore,
     FiscalBindingRepository,
@@ -24,6 +30,9 @@ from .sqlite_outbox_archive import SqliteFiscalArchiveStore, SqliteFiscalOutboxS
 from .sqlite_reconciliation import SqliteReconciliationRepository
 
 __all__ = [
+    "CanonicalCommercialDatabase",
+    "CommercialSqlStore",
+    "CommercialSqlUnitOfWork",
     "ControlPlaneStore",
     "FiscalBindingRepository",
     "FiscalLifecycleRepository",
@@ -44,4 +53,5 @@ __all__ = [
     "SqliteIdempotencyStore",
     "SqliteLifecycleRepository",
     "SqliteReconciliationRepository",
+    "postgres_canonical_commercial_database",
 ]
