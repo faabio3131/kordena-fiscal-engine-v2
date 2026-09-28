@@ -128,6 +128,60 @@ def commercial_purchase_id(provider_id: str, external_order_id: str) -> str:
 
 
 @dataclass(frozen=True, slots=True)
+class CommercialAcquisitionRecord:
+    """Pre-payment first-party intent owned by NFCore, never by the browser/provider."""
+
+    acquisition_id: str
+    idempotency_sha256: str
+    request_sha256: str
+    provider_id: str
+    plan_id: str
+    price_id: str
+    buyer_email: str
+    legal_name: str
+    created_at: datetime
+    expires_at: datetime
+    linked_purchase_id: str | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "acquisition_id",
+            _token(self.acquisition_id, "acquisition_id"),
+        )
+        object.__setattr__(
+            self,
+            "idempotency_sha256",
+            _sha256_hex(self.idempotency_sha256, "idempotency_sha256"),
+        )
+        object.__setattr__(
+            self,
+            "request_sha256",
+            _sha256_hex(self.request_sha256, "request_sha256"),
+        )
+        object.__setattr__(self, "provider_id", _provider(self.provider_id))
+        object.__setattr__(self, "plan_id", _token(self.plan_id, "plan_id"))
+        object.__setattr__(self, "price_id", _token(self.price_id, "price_id"))
+        buyer_email = _optional_email(self.buyer_email)
+        if buyer_email is None:
+            raise CommercialFulfillmentError("buyer_email is required")
+        legal_name = _optional_legal_name(self.legal_name)
+        if legal_name is None:
+            raise CommercialFulfillmentError("legal_name is required")
+        object.__setattr__(self, "buyer_email", buyer_email)
+        object.__setattr__(self, "legal_name", legal_name)
+        _aware(self.created_at, "created_at")
+        _aware(self.expires_at, "expires_at")
+        if self.expires_at <= self.created_at:
+            raise CommercialFulfillmentError("acquisition expires_at must follow created_at")
+        if self.linked_purchase_id is not None:
+            object.__setattr__(
+                self,
+                "linked_purchase_id",
+                _token(self.linked_purchase_id, "linked_purchase_id"),
+            )
+
+@dataclass(frozen=True, slots=True)
 class ValidatedCommercialEvent:
     """Sanitized provider-neutral fact emitted only by an authenticated adapter."""
 
@@ -141,6 +195,7 @@ class ValidatedCommercialEvent:
     external_subscription_id: str | None = None
     external_customer_id: str | None = None
     buyer_email: str | None = None
+    acquisition_id: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "provider_id", _provider(self.provider_id))
@@ -169,6 +224,12 @@ class ValidatedCommercialEvent:
             _optional_external(self.external_customer_id, "external_customer_id"),
         )
         object.__setattr__(self, "buyer_email", _optional_email(self.buyer_email))
+        if self.acquisition_id is not None:
+            object.__setattr__(
+                self,
+                "acquisition_id",
+                _token(self.acquisition_id, "acquisition_id"),
+            )
         _aware(self.occurred_at, "occurred_at")
 
     @property
@@ -338,6 +399,21 @@ class DurableCommercialSubscription:
 
 
 class CanonicalCommercialStore(Protocol):
+    def get_acquisition(
+        self,
+        acquisition_id: str,
+    ) -> CommercialAcquisitionRecord | None: ...
+
+    def get_acquisition_by_idempotency(
+        self,
+        idempotency_sha256: str,
+    ) -> CommercialAcquisitionRecord | None: ...
+
+    def put_acquisition(
+        self,
+        acquisition: CommercialAcquisitionRecord,
+    ) -> CommercialAcquisitionRecord: ...
+
     def receive_event(
         self,
         receipt: CommercialEventReceipt,
@@ -416,6 +492,7 @@ class CanonicalCommercialUnitOfWorkFactory(Protocol):
 
 __all__ = [
     "CanonicalCommercialStore",
+    "CommercialAcquisitionRecord",
     "CanonicalCommercialUnitOfWork",
     "CanonicalCommercialUnitOfWorkFactory",
     "CommercialClaimRecord",
