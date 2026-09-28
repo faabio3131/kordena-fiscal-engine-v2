@@ -313,6 +313,11 @@ def create_runtime_app(
         "/",
         create_app(
             human_identity=human_identity,
+            human_login_completed=(
+                None
+                if composition is None
+                else composition.commercial_activation.mark_active
+            ),
             password_recovery=password_recovery,
             password_reset_delivery=password_reset_delivery,
             password_reset_completed=(
