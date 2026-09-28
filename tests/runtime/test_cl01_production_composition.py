@@ -34,7 +34,6 @@ PASSWORD = "commercial-runtime-password-2026"
 NOW = datetime(2026, 9, 16, 15, 30, tzinfo=UTC)
 
 
-
 class _ResetDelivery:
     def deliver(
         self,
