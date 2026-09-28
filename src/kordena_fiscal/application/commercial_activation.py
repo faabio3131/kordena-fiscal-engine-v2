@@ -277,7 +277,7 @@ class CommercialCustomerActivationService:
             (
                 item
                 for item in history
-                if item.published_at <= purchase.last_event_at
+                if item.published_at <= purchase.created_at
             ),
             key=lambda item: (item.published_at, item.configuration.version),
             default=None,
