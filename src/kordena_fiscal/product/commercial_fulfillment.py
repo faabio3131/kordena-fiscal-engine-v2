@@ -98,6 +98,26 @@ def _optional_email(value: str | None) -> str | None:
     return normalized
 
 
+def _optional_legal_name(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    if not normalized or len(normalized) > 256:
+        raise CommercialFulfillmentError("legal_name must be non-blank and <= 256 chars")
+    return normalized
+
+
+def _sha256_hex(value: str, field_name: str) -> str:
+    normalized = value.strip().lower()
+    if len(normalized) != 64:
+        raise CommercialFulfillmentError(f"{field_name} must be SHA-256 hex")
+    try:
+        int(normalized, 16)
+    except ValueError as exc:
+        raise CommercialFulfillmentError(f"{field_name} must be SHA-256 hex") from exc
+    return normalized
+
+
 def commercial_purchase_id(provider_id: str, external_order_id: str) -> str:
     """Return a deterministic internal ID without exposing the external order value."""
 
@@ -204,6 +224,7 @@ class CommercialPurchaseRecord:
     external_subscription_id: str | None = None
     external_customer_id: str | None = None
     buyer_email: str | None = None
+    legal_name: str | None = None
     tenant_id: str | None = None
     account_id: str | None = None
 
@@ -234,6 +255,7 @@ class CommercialPurchaseRecord:
             _optional_external(self.external_customer_id, "external_customer_id"),
         )
         object.__setattr__(self, "buyer_email", _optional_email(self.buyer_email))
+        object.__setattr__(self, "legal_name", _optional_legal_name(self.legal_name))
         if self.tenant_id is not None:
             object.__setattr__(self, "tenant_id", _token(self.tenant_id, "tenant_id"))
         if self.account_id is not None:
@@ -248,6 +270,35 @@ class CommercialPurchaseRecord:
         _aware(self.last_event_at, "last_event_at")
         if self.updated_at < self.created_at:
             raise CommercialFulfillmentError("updated_at cannot precede created_at")
+
+
+@dataclass(frozen=True, slots=True)
+class CommercialClaimRecord:
+    """Hashed one-time claim grant for one canonical commercial purchase."""
+
+    claim_id: str
+    purchase_id: str
+    token_sha256: str
+    created_at: datetime
+    expires_at: datetime
+    used_at: datetime | None = None
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "claim_id", _token(self.claim_id, "claim_id"))
+        object.__setattr__(self, "purchase_id", _token(self.purchase_id, "purchase_id"))
+        object.__setattr__(
+            self,
+            "token_sha256",
+            _sha256_hex(self.token_sha256, "token_sha256"),
+        )
+        _aware(self.created_at, "created_at")
+        _aware(self.expires_at, "expires_at")
+        if self.expires_at <= self.created_at:
+            raise CommercialFulfillmentError("claim expires_at must be after created_at")
+        if self.used_at is not None:
+            _aware(self.used_at, "used_at")
+            if self.used_at < self.created_at:
+                raise CommercialFulfillmentError("claim used_at cannot precede created_at")
 
 
 @dataclass(frozen=True, slots=True)
@@ -308,6 +359,14 @@ class CanonicalCommercialStore(Protocol):
 
     def put_purchase(self, purchase: CommercialPurchaseRecord) -> CommercialPurchaseRecord: ...
 
+    def get_claim_by_digest(self, token_sha256: str) -> CommercialClaimRecord | None: ...
+
+    def get_claim_for_purchase(self, purchase_id: str) -> CommercialClaimRecord | None: ...
+
+    def put_claim(self, claim: CommercialClaimRecord) -> CommercialClaimRecord: ...
+
+    def consume_claim(self, claim_id: str, used_at: datetime) -> bool: ...
+
     def get_subscription(
         self,
         subscription_id: str,
@@ -354,6 +413,7 @@ __all__ = [
     "CanonicalCommercialStore",
     "CanonicalCommercialUnitOfWork",
     "CanonicalCommercialUnitOfWorkFactory",
+    "CommercialClaimRecord",
     "CommercialEventReceipt",
     "CommercialEventType",
     "CommercialFulfillmentError",
