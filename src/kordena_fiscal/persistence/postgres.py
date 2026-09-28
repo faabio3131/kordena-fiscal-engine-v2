@@ -915,6 +915,18 @@ class PostgresPasswordResetRepository:
             )
             raw.commit()
 
+    def invalidate_account(self, account_id: str) -> None:
+        with self._database._pool.connection() as raw:
+            raw.execute(
+                """
+                UPDATE fm_password_resets
+                SET used = 1
+                WHERE account_id = %s AND used = 0
+                """,
+                (account_id.strip(),),
+            )
+            raw.commit()
+
 
 def production_database_from_env(
     environ: Iterable[tuple[str, str]] | None = None,
