@@ -257,6 +257,7 @@ def test_complete_mapping_stays_blocked_when_cakto_processing_is_not_composed(
         tmp_path,
         platform_admin=True,
         processing_configured=False,
+        delivery_readiness=FULL_DELIVERY_READINESS,
     )
     csrf = _login(web, platform_admin=True)
     _configure_ready_offer(web, csrf)
