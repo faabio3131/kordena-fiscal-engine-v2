@@ -8,6 +8,12 @@ from .catalog import (
     EntitlementDefinition,
     ProductIdentity,
 )
+from .checkout import (
+    CommercialCheckoutItem,
+    CommercialCheckoutProjection,
+    CommercialCheckoutProjector,
+    CommercialCheckoutStatus,
+)
 from .commercial_fulfillment import (
     CanonicalCommercialStore,
     CanonicalCommercialUnitOfWork,
@@ -20,12 +26,6 @@ from .commercial_fulfillment import (
     DurableCommercialSubscription,
     ValidatedCommercialEvent,
     commercial_purchase_id,
-)
-from .checkout import (
-    CommercialCheckoutItem,
-    CommercialCheckoutProjection,
-    CommercialCheckoutProjector,
-    CommercialCheckoutStatus,
 )
 from .onboarding import (
     ONBOARDING_SEQUENCE,
