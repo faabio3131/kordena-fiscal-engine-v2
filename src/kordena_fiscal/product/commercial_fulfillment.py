@@ -313,6 +313,17 @@ class CanonicalCommercialStore(Protocol):
         subscription_id: str,
     ) -> DurableCommercialSubscription | None: ...
 
+    def get_subscription_by_external_reference(
+        self,
+        provider_id: str,
+        external_subscription_id: str,
+    ) -> DurableCommercialSubscription | None: ...
+
+    def get_subscription_for_tenant(
+        self,
+        tenant_id: str,
+    ) -> DurableCommercialSubscription | None: ...
+
     def put_subscription(
         self,
         subscription: DurableCommercialSubscription,
