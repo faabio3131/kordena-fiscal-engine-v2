@@ -59,9 +59,10 @@ class _ConnectionContext(Protocol):
 
 ConnectionContextFactory = Callable[[], _ConnectionContext]
 
-CAKTO_SCHEMA_VERSION = 1
-CAKTO_SCHEMA_NAME = "web11_cakto_commercial_activation"
-CAKTO_SCHEMA_STATEMENTS: tuple[str, ...] = (
+CAKTO_SCHEMA_VERSION = 2
+CAKTO_SCHEMA_NAME = "cl11_cakto_canonical_reconciliation"
+CAKTO_SCHEMA_V1_NAME = "web11_cakto_commercial_activation"
+CAKTO_SCHEMA_V1_STATEMENTS: tuple[str, ...] = (
     """
     CREATE TABLE IF NOT EXISTS fm_cakto_plan_bindings (
         external_product_id TEXT NOT NULL,
@@ -116,6 +117,20 @@ CAKTO_SCHEMA_STATEMENTS: tuple[str, ...] = (
     )
     """,
 )
+CAKTO_SCHEMA_V2_STATEMENTS: tuple[str, ...] = (
+    "ALTER TABLE fm_cakto_webhook_inbox ADD COLUMN callback_token TEXT",
+    "ALTER TABLE fm_cakto_webhook_inbox ADD COLUMN external_subscription_id TEXT",
+    (
+        "CREATE INDEX IF NOT EXISTS fm_cakto_webhook_subscription_idx "
+        "ON fm_cakto_webhook_inbox (external_subscription_id, occurred_at)"
+    ),
+)
+
+CAKTO_SCHEMA_STATEMENTS: tuple[str, ...] = (
+    *CAKTO_SCHEMA_V1_STATEMENTS,
+    *CAKTO_SCHEMA_V2_STATEMENTS,
+)
+
 
 
 def _iso(value: datetime) -> str:
@@ -248,7 +263,8 @@ class CaktoSqlCommercialStore(CaktoCommercialStore):
                     event_key, event_type, order_id, external_product_id,
                     external_offer_id, external_customer_id, order_status,
                     occurred_at, payload_sha256, received_at, status, attempt_count,
-                    next_attempt_at, last_error, tenant_id, outcome_reference
+                    next_attempt_at, last_error, tenant_id, outcome_reference,
+                   callback_token, external_subscription_id
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
@@ -268,6 +284,8 @@ class CaktoSqlCommercialStore(CaktoCommercialStore):
                     entry.last_error,
                     entry.tenant_id,
                     entry.outcome_reference,
+                    entry.callback_token,
+                    entry.external_subscription_id,
                 ),
             )
         except sqlite3.IntegrityError:
@@ -284,7 +302,8 @@ class CaktoSqlCommercialStore(CaktoCommercialStore):
             SELECT event_key, event_type, order_id, external_product_id,
                    external_offer_id, external_customer_id, order_status,
                    occurred_at, payload_sha256, received_at, status, attempt_count,
-                   next_attempt_at, last_error, tenant_id, outcome_reference
+                   next_attempt_at, last_error, tenant_id, outcome_reference,
+                   callback_token, external_subscription_id
             FROM fm_cakto_webhook_inbox WHERE event_key = ?
             """,
             (event_key,),
@@ -301,7 +320,8 @@ class CaktoSqlCommercialStore(CaktoCommercialStore):
             SELECT event_key, event_type, order_id, external_product_id,
                    external_offer_id, external_customer_id, order_status,
                    occurred_at, payload_sha256, received_at, status, attempt_count,
-                   next_attempt_at, last_error, tenant_id, outcome_reference
+                   next_attempt_at, last_error, tenant_id, outcome_reference,
+                   callback_token, external_subscription_id
             FROM fm_cakto_webhook_inbox
             WHERE status IN (?, ?)
               AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
@@ -495,6 +515,8 @@ class CaktoSqlCommercialStore(CaktoCommercialStore):
             last_error=_optional_text(row[13]),
             tenant_id=_optional_text(row[14]),
             outcome_reference=_optional_text(row[15]),
+            callback_token=_optional_text(row[16]),
+            external_subscription_id=_optional_text(row[17]),
         )
 
     @staticmethod
@@ -508,6 +530,8 @@ class CaktoSqlCommercialStore(CaktoCommercialStore):
             existing.external_product_id,
             existing.external_offer_id,
             existing.external_customer_id,
+            existing.callback_token,
+            existing.external_subscription_id,
             existing.occurred_at,
             existing.payload_sha256,
         )
@@ -517,6 +541,8 @@ class CaktoSqlCommercialStore(CaktoCommercialStore):
             received.external_product_id,
             received.external_offer_id,
             received.external_customer_id,
+            received.callback_token,
+            received.external_subscription_id,
             received.occurred_at,
             received.payload_sha256,
         )
@@ -600,28 +626,34 @@ class CaktoCommercialDatabase:
                 )
                 """
             )
-            row = connection.execute(
-                "SELECT version FROM fm_cakto_schema_migrations WHERE version = ?",
-                (CAKTO_SCHEMA_VERSION,),
-            ).fetchone()
-            if row is not None:
-                connection.commit()
-                return False
-            for statement in CAKTO_SCHEMA_STATEMENTS:
-                connection.execute(statement)
-            connection.execute(
-                """
-                INSERT INTO fm_cakto_schema_migrations (version, name, applied_at)
-                VALUES (?, ?, ?)
-                """,
-                (
-                    CAKTO_SCHEMA_VERSION,
-                    CAKTO_SCHEMA_NAME,
-                    datetime.now().astimezone().isoformat(),
-                ),
+            rows = connection.execute(
+                "SELECT version FROM fm_cakto_schema_migrations ORDER BY version"
+            ).fetchall()
+            applied = {int(row[0]) for row in rows}
+            changed = False
+            migrations = (
+                (1, CAKTO_SCHEMA_V1_NAME, CAKTO_SCHEMA_V1_STATEMENTS),
+                (2, CAKTO_SCHEMA_NAME, CAKTO_SCHEMA_V2_STATEMENTS),
             )
+            for version, name, statements in migrations:
+                if version in applied:
+                    continue
+                for statement in statements:
+                    connection.execute(statement)
+                connection.execute(
+                    """
+                    INSERT INTO fm_cakto_schema_migrations (version, name, applied_at)
+                    VALUES (?, ?, ?)
+                    """,
+                    (
+                        version,
+                        name,
+                        datetime.now().astimezone().isoformat(),
+                    ),
+                )
+                changed = True
             connection.commit()
-            return True
+            return changed
         except Exception:
             connection.rollback()
             raise
