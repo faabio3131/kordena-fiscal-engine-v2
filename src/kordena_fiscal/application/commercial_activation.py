@@ -13,7 +13,7 @@ from kordena_fiscal.product.billing import (
     CommercialSubscription,
     SubscriptionStatus,
 )
-from kordena_fiscal.product.catalog import CommercialCatalog, DEFAULT_COMMERCIAL_CATALOG
+from kordena_fiscal.product.catalog import DEFAULT_COMMERCIAL_CATALOG, CommercialCatalog
 from kordena_fiscal.product.commercial_fulfillment import (
     CanonicalCommercialUnitOfWorkFactory,
     CommercialFulfillmentError,
