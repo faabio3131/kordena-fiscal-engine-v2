@@ -212,6 +212,7 @@ def test_postgres_runtime_composes_human_identity_recovery_and_durable_portal(
         assert profile["commercial_provisioning_configured"] is True
         assert profile["commercial_activation_delivery_configured"] is False
         assert profile["commercial_delivery_path_ready"] is False
+        assert profile["commercial_first_party_acquisition_configured"] is False
         assert profile["cakto_checkout_admin_configured"] is False
         assert profile["cakto_checkout_status"] == "unconfigured"
         assert profile["cakto_webhook_configured"] is False
@@ -262,6 +263,7 @@ def test_postgres_runtime_projects_ready_delivery_path_only_with_activation_deli
         assert profile["commercial_provisioning_configured"] is True
         assert profile["commercial_activation_delivery_configured"] is True
         assert profile["commercial_delivery_path_ready"] is True
+        assert profile["commercial_first_party_acquisition_configured"] is False
 
 
 def test_postgres_runtime_activates_cakto_checkout_only_by_explicit_provider_config(
