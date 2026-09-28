@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -200,7 +200,8 @@ def test_expired_acquisition_cannot_be_correlated_to_paid_event() -> None:
     database = MemoryDatabase()
     original = replace(
         acquisition(),
-        expires_at=NOW,
+        created_at=NOW - timedelta(hours=1),
+        expires_at=NOW - timedelta(minutes=1),
     )
     database.store.acquisitions[original.acquisition_id] = original
     fulfillment = CommercialFulfillmentService(database)
