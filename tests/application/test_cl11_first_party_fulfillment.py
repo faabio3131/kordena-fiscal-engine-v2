@@ -196,6 +196,23 @@ def test_acquisition_identity_collision_rolls_back_event_and_purchase(
     assert database.store.acquisitions[original.acquisition_id] == original
 
 
+def test_expired_acquisition_cannot_be_correlated_to_paid_event() -> None:
+    database = MemoryDatabase()
+    original = replace(
+        acquisition(),
+        expires_at=NOW,
+    )
+    database.store.acquisitions[original.acquisition_id] = original
+    fulfillment = CommercialFulfillmentService(database)
+
+    with pytest.raises(CommercialFulfillmentError, match="expired"):
+        fulfillment.process(event=event(), received_at=NOW)
+
+    assert database.store.events == {}
+    assert database.store.purchases == {}
+    assert database.store.acquisitions[original.acquisition_id] == original
+
+
 def test_acquisition_cannot_be_rebound_to_another_purchase() -> None:
     database = MemoryDatabase()
     original = replace(
