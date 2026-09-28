@@ -34,7 +34,6 @@ from kordena_fiscal.product.commercial_fulfillment import (
     DurableCommercialSubscription,
     commercial_purchase_id,
 )
-from kordena_fiscal.product.pricing import CommercialPricingConfiguration
 
 DSN_ENV = "NFCORE_TEST_POSTGRES_DSN"
 NOW = datetime(2026, 9, 28, 15, 0, tzinfo=UTC)
