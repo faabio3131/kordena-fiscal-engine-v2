@@ -18,6 +18,7 @@ from kordena_fiscal.product.checkout import (
     CommercialCheckoutStatus,
     unconfigured_checkout_projection,
 )
+from kordena_fiscal.product.commercial_readiness import CommercialDeliveryPathReadiness
 from kordena_fiscal.product.commercial_release import (
     CommercialReleaseDecision,
     CommercialReleaseError,
@@ -34,8 +35,10 @@ def create_commercial_release_router(
     checkout: CommercialCheckoutProjector | None = None,
     *,
     checkout_processing_configured: bool = False,
+    delivery_readiness: CommercialDeliveryPathReadiness | None = None,
 ) -> APIRouter:
     router = APIRouter(tags=["commercial-release"])
+    resolved_delivery_readiness = delivery_readiness or CommercialDeliveryPathReadiness()
 
     @router.get("/v1/commercial/offer")
     async def public_offer() -> dict[str, object]:
@@ -81,6 +84,7 @@ def create_commercial_release_router(
             and checkout_projection.status is CommercialCheckoutStatus.CONFIGURED
             and checkout_projection.items
             and processing_configured
+            and resolved_delivery_readiness.ready
         )
         checkout_payload = checkout_projection.to_public_mapping(
             processing_configured=processing_configured,
