@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from kordena_fiscal.application.commercial_fulfillment import CommercialFulfillmentService
 from kordena_fiscal.control_plane.cakto_checkout import (
     CaktoCheckoutAdministrationService,
 )
@@ -17,6 +18,9 @@ from kordena_fiscal.control_plane.commercial_release import (
 )
 from kordena_fiscal.control_plane.pricing_admin import CommercialPricingAdministrationService
 from kordena_fiscal.persistence.cakto import postgres_cakto_commercial_database
+from kordena_fiscal.persistence.commercial_fulfillment import (
+    postgres_canonical_commercial_database,
+)
 from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
 from kordena_fiscal.security.human_identity import (
     HumanIdentityService,
@@ -39,6 +43,7 @@ class RuntimeComposition:
     human_identity: HumanIdentityService
     password_recovery: PasswordRecoveryService
     commercial_provisioning: CommercialCustomerProvisioningService
+    commercial_fulfillment: CommercialFulfillmentService
     pricing_administration: CommercialPricingAdministrationService
     commercial_release_administration: CommercialReleaseAdministrationService
     cakto_checkout_administration: CaktoCheckoutAdministrationService | None
@@ -76,6 +81,9 @@ def build_postgres_runtime_composition(
         password_hasher=password_hasher,
         password_recovery=recovery,
     )
+    commercial_fulfillment = CommercialFulfillmentService(
+        postgres_canonical_commercial_database(database)
+    )
     pricing_administration = CommercialPricingAdministrationService(
         database.pricing_catalog()
     )
@@ -97,6 +105,7 @@ def build_postgres_runtime_composition(
         human_identity=identity,
         password_recovery=recovery,
         commercial_provisioning=provisioning,
+        commercial_fulfillment=commercial_fulfillment,
         pricing_administration=pricing_administration,
         commercial_release_administration=commercial_release_administration,
         cakto_checkout_administration=cakto_checkout_administration,

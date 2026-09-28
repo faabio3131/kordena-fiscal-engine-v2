@@ -9,6 +9,10 @@ from .background_runtime import (
     WorkerClock,
     WorkerObserver,
 )
+from .commercial_fulfillment import (
+    CommercialFulfillmentResult,
+    CommercialFulfillmentService,
+)
 from .outbox_worker import DurableFiscalOutboxWorker
 from .service import (
     DurableIssuanceReservation,
@@ -39,6 +43,8 @@ from .webhook_receiving import (
 __all__ = [
     "BackgroundCycleResult",
     "BackgroundWorkerRuntime",
+    "CommercialFulfillmentResult",
+    "CommercialFulfillmentService",
     "DurableFiscalOutboxWorker",
     "DurableIssuanceReservation",
     "FM_WEBHOOK_ATTEMPT_HEADER",
