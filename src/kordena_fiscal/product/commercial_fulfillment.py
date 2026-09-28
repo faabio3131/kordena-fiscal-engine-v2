@@ -103,7 +103,7 @@ def commercial_purchase_id(provider_id: str, external_order_id: str) -> str:
 
     provider = _provider(provider_id)
     order_id = _external(external_order_id, "external_order_id")
-    digest = hashlib.sha256(f"{provider}|{order_id}".encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(f"{provider}|{order_id}".encode()).hexdigest()
     return f"commercial-purchase-{digest[:32]}"
 
 
