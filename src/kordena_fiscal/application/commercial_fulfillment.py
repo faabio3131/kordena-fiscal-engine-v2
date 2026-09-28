@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from datetime import datetime
 
+from kordena_fiscal.product.billing import CommercialSubscription, SubscriptionStatus
 from kordena_fiscal.product.commercial_fulfillment import (
     CanonicalCommercialUnitOfWorkFactory,
     CommercialAcquisitionRecord,
@@ -42,6 +43,7 @@ class CommercialFulfillmentService:
             CommercialEventType.SUBSCRIPTION_ACTIVATED,
             CommercialEventType.SUBSCRIPTION_RENEWED,
             CommercialEventType.SUBSCRIPTION_PAYMENT_LATE,
+            CommercialEventType.SUBSCRIPTION_PAUSED,
             CommercialEventType.SUBSCRIPTION_RECOVERED,
         }
     )
@@ -96,6 +98,11 @@ class CommercialFulfillmentService:
                 purchase = self._transition_purchase(current, event, received_at)
 
             uow.commercial.put_purchase(purchase)
+            self._sync_subscription_status(
+                uow.commercial,
+                purchase=purchase,
+                event=event,
+            )
             if acquisition is not None:
                 uow.commercial.put_acquisition(
                     replace(acquisition, linked_purchase_id=purchase.purchase_id)
@@ -140,6 +147,7 @@ class CommercialFulfillmentService:
             external_customer_id=event.external_customer_id,
             buyer_email=buyer_email,
             legal_name=None if acquisition is None else acquisition.legal_name,
+            billing_status=cls._billing_status(event.event_type),
         )
 
     @classmethod
@@ -181,6 +189,7 @@ class CommercialFulfillmentService:
         return replace(
             current,
             state=state,
+            billing_status=cls._billing_status(event.event_type),
             updated_at=received_at,
             last_event_at=event.occurred_at,
             last_event_id=event.event_id,
@@ -189,6 +198,64 @@ class CommercialFulfillmentService:
             ),
             external_customer_id=current.external_customer_id or event.external_customer_id,
             buyer_email=current.buyer_email or event.buyer_email,
+        )
+
+    @staticmethod
+    def _billing_status(event_type: CommercialEventType) -> SubscriptionStatus:
+        if event_type in {
+            CommercialEventType.SALE_CONFIRMED,
+            CommercialEventType.SUBSCRIPTION_ACTIVATED,
+            CommercialEventType.SUBSCRIPTION_RENEWED,
+            CommercialEventType.SUBSCRIPTION_RECOVERED,
+        }:
+            return SubscriptionStatus.ACTIVE
+        if event_type is CommercialEventType.SUBSCRIPTION_PAYMENT_LATE:
+            return SubscriptionStatus.GRACE
+        if event_type is CommercialEventType.SUBSCRIPTION_PAUSED:
+            return SubscriptionStatus.SUSPENDED
+        if event_type in {
+            CommercialEventType.SUBSCRIPTION_CANCELED,
+            CommercialEventType.REFUND_CONFIRMED,
+            CommercialEventType.CHARGEBACK_CONFIRMED,
+        }:
+            return SubscriptionStatus.CANCELED
+        raise CommercialFulfillmentError("unsupported commercial billing transition")
+
+    @staticmethod
+    def _sync_subscription_status(
+        store: object,
+        *,
+        purchase: CommercialPurchaseRecord,
+        event: ValidatedCommercialEvent,
+    ) -> None:
+        get_subscription = getattr(store, "get_subscription_for_purchase", None)
+        put_subscription = getattr(store, "put_subscription", None)
+        if not callable(get_subscription) or not callable(put_subscription):
+            return
+        durable = get_subscription(purchase.purchase_id)
+        if durable is None:
+            return
+        target = purchase.billing_status
+        if target is None:
+            return
+        subscription = CommercialSubscription.restore(durable.checkpoint)
+        try:
+            subscription.transition(target)
+        except ValueError as exc:
+            raise CommercialFulfillmentError(
+                "canonical subscription lifecycle transition is invalid"
+            ) from exc
+        put_subscription(
+            replace(
+                durable,
+                checkpoint=subscription.checkpoint(),
+                external_subscription_id=(
+                    durable.external_subscription_id
+                    or event.external_subscription_id
+                ),
+                last_event_id=event.event_id,
+                last_event_at=event.occurred_at,
+            )
         )
 
     @staticmethod
