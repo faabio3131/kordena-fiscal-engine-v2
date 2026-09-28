@@ -481,6 +481,34 @@ _COMMERCIAL_CLAIM_SCHEMA = (
 )
 
 
+_COMMERCIAL_ACQUISITION_SCHEMA = (
+    """
+    CREATE TABLE IF NOT EXISTS fm_commercial_acquisitions (
+        acquisition_id TEXT PRIMARY KEY,
+        idempotency_sha256 TEXT NOT NULL UNIQUE,
+        request_sha256 TEXT NOT NULL,
+        provider_id TEXT NOT NULL,
+        plan_id TEXT NOT NULL,
+        price_id TEXT NOT NULL,
+        buyer_email TEXT NOT NULL,
+        legal_name TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        linked_purchase_id TEXT UNIQUE,
+        FOREIGN KEY (linked_purchase_id) REFERENCES fm_commercial_purchases(purchase_id)
+    )
+    """,
+    (
+        "CREATE INDEX IF NOT EXISTS fm_commercial_acquisitions_expiry_idx "
+        "ON fm_commercial_acquisitions (expires_at, linked_purchase_id)"
+    ),
+    (
+        "CREATE INDEX IF NOT EXISTS fm_commercial_acquisitions_provider_idx "
+        "ON fm_commercial_acquisitions (provider_id, plan_id, price_id)"
+    ),
+)
+
+
 def _translate_ddl(statement: str) -> str:
     return statement.replace(" BLOB ", " BYTEA ").replace(" BLOB\n", " BYTEA\n")
 
@@ -498,6 +526,8 @@ class PostgresFiscalDatabase:
     COMMERCIAL_FULFILLMENT_MIGRATION_NAME = "cl11_canonical_commercial_state"
     COMMERCIAL_CLAIM_MIGRATION_VERSION = 10
     COMMERCIAL_CLAIM_MIGRATION_NAME = "cl11_secure_customer_claim"
+    COMMERCIAL_ACQUISITION_MIGRATION_VERSION = 11
+    COMMERCIAL_ACQUISITION_MIGRATION_NAME = "cl11_first_party_acquisition"
 
     def __init__(
         self,
@@ -644,6 +674,21 @@ class PostgresFiscalDatabase:
                         ),
                     )
                     new_versions.append(self.COMMERCIAL_CLAIM_MIGRATION_VERSION)
+                if self.COMMERCIAL_ACQUISITION_MIGRATION_VERSION not in applied:
+                    for statement in _COMMERCIAL_ACQUISITION_SCHEMA:
+                        raw.execute(statement)
+                    raw.execute(
+                        """
+                        INSERT INTO fm_schema_migrations (version, name, applied_at)
+                        VALUES (%s, %s, %s)
+                        """,
+                        (
+                            self.COMMERCIAL_ACQUISITION_MIGRATION_VERSION,
+                            self.COMMERCIAL_ACQUISITION_MIGRATION_NAME,
+                            datetime.now().astimezone().isoformat(),
+                        ),
+                    )
+                    new_versions.append(self.COMMERCIAL_ACQUISITION_MIGRATION_VERSION)
                 raw.commit()
                 return tuple(new_versions)
             except Exception:
