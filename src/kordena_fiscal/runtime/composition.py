@@ -9,6 +9,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from kordena_fiscal.application.commercial_activation import (
+    CommercialCustomerActivationService,
+)
 from kordena_fiscal.application.commercial_claim import CommercialClaimService
 from kordena_fiscal.application.commercial_fulfillment import CommercialFulfillmentService
 from kordena_fiscal.control_plane.cakto_checkout import (
@@ -46,6 +49,7 @@ class RuntimeComposition:
     commercial_provisioning: CommercialCustomerProvisioningService
     commercial_fulfillment: CommercialFulfillmentService
     commercial_claim: CommercialClaimService
+    commercial_activation: CommercialCustomerActivationService
     pricing_administration: CommercialPricingAdministrationService
     commercial_release_administration: CommercialReleaseAdministrationService
     cakto_checkout_administration: CaktoCheckoutAdministrationService | None
@@ -94,6 +98,12 @@ def build_postgres_runtime_composition(
     pricing_administration = CommercialPricingAdministrationService(
         database.pricing_catalog()
     )
+    commercial_activation = CommercialCustomerActivationService(
+        unit_of_work_factory=canonical_commercial_database,
+        provisioning=provisioning,
+        password_recovery=recovery,
+        pricing=pricing_administration,
+    )
     commercial_release_administration = CommercialReleaseAdministrationService(
         database.commercial_release_catalog()
     )
@@ -114,6 +124,7 @@ def build_postgres_runtime_composition(
         commercial_provisioning=provisioning,
         commercial_fulfillment=commercial_fulfillment,
         commercial_claim=commercial_claim,
+        commercial_activation=commercial_activation,
         pricing_administration=pricing_administration,
         commercial_release_administration=commercial_release_administration,
         cakto_checkout_administration=cakto_checkout_administration,
