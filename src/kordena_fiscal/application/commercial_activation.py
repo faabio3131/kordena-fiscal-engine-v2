@@ -304,7 +304,7 @@ class CommercialCustomerActivationService:
         subscription = CommercialSubscription(
             tenant_id=purchase.tenant_id,
             plan=plan,
-            status=SubscriptionStatus.ACTIVE,
+            status=purchase.billing_status or SubscriptionStatus.ACTIVE,
             period_start=start,
             period_end=end,
         )
