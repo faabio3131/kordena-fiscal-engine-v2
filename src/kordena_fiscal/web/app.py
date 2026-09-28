@@ -242,6 +242,7 @@ def create_app(
     security: BridgeSecurityBoundary | None = None,
     executor: BridgeRequestExecutor | None = None,
     human_identity: HumanIdentityService | None = None,
+    human_login_completed: Callable[[str, datetime], None] | None = None,
     password_recovery: PasswordRecoveryService | None = None,
     password_reset_delivery: PasswordResetDelivery | None = None,
     password_reset_completed: Callable[[str, datetime], None] | None = None,
@@ -261,7 +262,12 @@ def create_app(
     )
 
     if human_identity is not None:
-        app.include_router(create_human_auth_router(human_identity))
+        app.include_router(
+            create_human_auth_router(
+                human_identity,
+                on_login=human_login_completed,
+            )
+        )
         platform_surfaces = tuple(
             surface
             for surface, configured in (
