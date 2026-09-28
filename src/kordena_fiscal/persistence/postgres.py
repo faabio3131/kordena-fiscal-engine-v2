@@ -514,8 +514,9 @@ _COMMERCIAL_LIFECYCLE_SCHEMA = (
     ADD COLUMN IF NOT EXISTS billing_status TEXT
     """,
     (
-        "CREATE INDEX IF NOT EXISTS fm_commercial_purchases_subscription_idx "
-        "ON fm_commercial_purchases (provider_id, external_subscription_id)"
+        "CREATE UNIQUE INDEX IF NOT EXISTS fm_commercial_purchases_subscription_idx "
+        "ON fm_commercial_purchases (provider_id, external_subscription_id) "
+        "WHERE external_subscription_id IS NOT NULL"
     ),
 )
 
