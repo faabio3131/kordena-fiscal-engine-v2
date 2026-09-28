@@ -82,7 +82,8 @@ def test_password_reset_completion_notifies_commercial_activation_without_exposi
     assert callbacks[0][1].tzinfo is not None
 
 
-def test_password_reset_remains_successful_when_commercial_callback_is_temporarily_unavailable(\n) -> None:
+def test_password_reset_remains_successful_when_commercial_callback_is_temporarily_unavailable(
+) -> None:
     hasher = ScryptPasswordHasher()
     accounts = InMemoryHumanAccountRepository(
         (
