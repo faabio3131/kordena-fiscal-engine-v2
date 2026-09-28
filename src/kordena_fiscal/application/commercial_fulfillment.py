@@ -80,7 +80,11 @@ class CommercialFulfillmentService:
                     )
                 return CommercialFulfillmentResult(purchase=purchase, replay=True)
 
-            acquisition = self._resolve_acquisition(uow.commercial, event)
+            acquisition = self._resolve_acquisition(
+                uow.commercial,
+                event,
+                received_at=received_at,
+            )
             current = uow.commercial.get_purchase(event.purchase_id)
             if current is None:
                 purchase = self._create_purchase(
@@ -191,6 +195,8 @@ class CommercialFulfillmentService:
     def _resolve_acquisition(
         store: object,
         event: ValidatedCommercialEvent,
+        *,
+        received_at: datetime,
     ) -> CommercialAcquisitionRecord | None:
         if event.acquisition_id is None:
             return None
@@ -202,6 +208,10 @@ class CommercialFulfillmentService:
         acquisition = get_acquisition(event.acquisition_id)
         if not isinstance(acquisition, CommercialAcquisitionRecord):
             raise CommercialFulfillmentError("commercial acquisition was not found")
+        if received_at >= acquisition.expires_at:
+            raise CommercialFulfillmentError(
+                "commercial acquisition reference has expired"
+            )
         if acquisition.linked_purchase_id not in {None, event.purchase_id}:
             raise CommercialFulfillmentError(
                 "commercial acquisition is already linked to another purchase"
