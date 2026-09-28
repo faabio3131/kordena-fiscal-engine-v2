@@ -265,7 +265,7 @@ class CaktoSqlCommercialStore(CaktoCommercialStore):
                     occurred_at, payload_sha256, received_at, status, attempt_count,
                     next_attempt_at, last_error, tenant_id, outcome_reference,
                    callback_token, external_subscription_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     entry.event_key,
