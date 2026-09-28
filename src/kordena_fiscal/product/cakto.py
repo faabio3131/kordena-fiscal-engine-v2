@@ -136,6 +136,8 @@ class CaktoWebhookInboxEntry:
     external_customer_id: str | None
     order_status: str | None
     occurred_at: datetime
+    callback_token: str | None = None
+    external_subscription_id: str | None = None
     payload_sha256: str
     received_at: datetime
     status: CaktoInboxStatus = CaktoInboxStatus.RECEIVED
@@ -173,6 +175,24 @@ class CaktoWebhookInboxEntry:
                 self,
                 "order_status",
                 _text(self.order_status, "order_status", 80),
+            )
+        if self.callback_token is not None:
+            callback = _text(self.callback_token, "callback", 255)
+            allowed = set(
+                "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._~-"
+            )
+            if any(character not in allowed for character in callback):
+                raise CaktoPayloadError("callback contains invalid token characters")
+            object.__setattr__(self, "callback_token", callback)
+        if self.external_subscription_id is not None:
+            object.__setattr__(
+                self,
+                "external_subscription_id",
+                _text(
+                    self.external_subscription_id,
+                    "external_subscription_id",
+                    160,
+                ),
             )
         _aware(self.occurred_at, "occurred_at")
         _aware(self.received_at, "received_at")
@@ -237,6 +257,8 @@ class CaktoReconciliationSnapshot:
     external_offer_id: str
     status: CaktoExternalSubscriptionStatus
     observed_at: datetime
+    external_subscription_id: str | None = None
+    external_order_id: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -256,7 +278,45 @@ class CaktoReconciliationSnapshot:
         )
         if not isinstance(self.status, CaktoExternalSubscriptionStatus):
             raise CaktoPayloadError("status must be CaktoExternalSubscriptionStatus")
+        if self.external_subscription_id is not None:
+            object.__setattr__(
+                self,
+                "external_subscription_id",
+                _text(
+                    self.external_subscription_id,
+                    "external_subscription_id",
+                    160,
+                ),
+            )
+        if self.external_order_id is not None:
+            object.__setattr__(
+                self,
+                "external_order_id",
+                _text(self.external_order_id, "external_order_id", 160),
+            )
         _aware(self.observed_at, "observed_at")
+
+
+@dataclass(frozen=True, slots=True)
+class CaktoReconciliationResult:
+    canonical_purchase_id: str | None
+    external_status: CaktoExternalSubscriptionStatus
+    canonical_status: str | None
+    drift: bool
+
+
+class CaktoCanonicalCommercialBridge(Protocol):
+    def process(
+        self,
+        entry: CaktoWebhookInboxEntry,
+        binding: CaktoPlanBinding,
+    ) -> str: ...
+
+    def reconcile(
+        self,
+        snapshot: CaktoReconciliationSnapshot,
+        binding: CaktoPlanBinding,
+    ) -> CaktoReconciliationResult: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -475,6 +535,21 @@ class CaktoWebhookVerifier:
         if not isinstance(customer_id, (str, int)) or isinstance(customer_id, bool):
             raise CaktoPayloadError("customer.id must be string or integer")
         order_status = _text(data.get("status"), "status", 80)
+        callback_raw = data.get("callback")
+        if callback_raw is not None and not isinstance(callback_raw, str):
+            raise CaktoPayloadError("callback must be string or null")
+        subscription_raw = data.get("subscription")
+        external_subscription_id: str | None = None
+        if subscription_raw is not None:
+            subscription = _object(subscription_raw, "subscription")
+            subscription_id = subscription.get("id")
+            if subscription_id is not None:
+                if not isinstance(subscription_id, (str, int)) or isinstance(
+                    subscription_id,
+                    bool,
+                ):
+                    raise CaktoPayloadError("subscription.id must be string or integer")
+                external_subscription_id = str(subscription_id)
         occurred_at = _business_time(event_type, data, created_at)
         return CaktoWebhookInboxEntry(
             event_key=f"{event_type.value}:{order_id}",
@@ -485,6 +560,8 @@ class CaktoWebhookVerifier:
             external_customer_id=str(customer_id),
             order_status=order_status,
             occurred_at=occurred_at,
+            callback_token=callback_raw,
+            external_subscription_id=external_subscription_id,
             payload_sha256=payload_hash,
             received_at=received_at,
         )
@@ -560,9 +637,11 @@ class CaktoCommercialProcessor:
         self,
         *,
         unit_of_work_factory: CaktoUnitOfWorkFactory,
+        canonical_bridge: CaktoCanonicalCommercialBridge | None = None,
         metrics: CaktoMetricSink | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
+        self._canonical_bridge = canonical_bridge
         self._metrics = metrics or NullCaktoMetricSink()
 
     def process_due(self, *, now: datetime, limit: int = 100) -> CaktoProcessingResult:
@@ -597,35 +676,22 @@ class CaktoCommercialProcessor:
             stale_ignored=stale_ignored,
         )
 
-    def reconcile(self, snapshot: CaktoReconciliationSnapshot) -> CaktoCommercialEntitlement:
+    def reconcile(
+        self,
+        snapshot: CaktoReconciliationSnapshot,
+    ) -> CaktoReconciliationResult:
+        if self._canonical_bridge is None:
+            raise CaktoTransientProcessingError(
+                "canonical commercial bridge is unavailable"
+            )
         with self._unit_of_work_factory() as uow:
             binding = uow.commercial.resolve_cakto_plan_binding(
                 snapshot.external_product_id,
                 snapshot.external_offer_id,
             )
-            if binding is None or not binding.enabled:
-                raise CaktoTransientProcessingError("Cakto plan mapping is not configured")
-            tenant = self._ensure_tenant(
-                uow.commercial,
-                snapshot.external_customer_id,
-                snapshot.observed_at,
-            )
-            current = uow.commercial.get_cakto_entitlement(tenant.tenant_id, binding.plan_id)
-            status = _reconciled_status(snapshot.status)
-            entitlement = self._next_entitlement(
-                current=current,
-                binding=binding,
-                tenant_id=tenant.tenant_id,
-                status=status,
-                event_at=snapshot.observed_at,
-                event_key=(
-                    f"reconcile:{snapshot.status.value}:"
-                    f"{int(snapshot.observed_at.timestamp())}"
-                ),
-            )
-            uow.commercial.put_cakto_entitlement(entitlement)
-            uow.commit()
-            return entitlement
+        if binding is None or not binding.enabled:
+            raise CaktoTransientProcessingError("Cakto plan mapping is not configured")
+        return self._canonical_bridge.reconcile(snapshot, binding)
 
     def _process_one(self, entry: CaktoWebhookInboxEntry) -> str:
         with self._unit_of_work_factory() as uow:
@@ -651,55 +717,31 @@ class CaktoCommercialProcessor:
                 current_entry.external_offer_id,
             )
             if binding is None or not binding.enabled:
-                raise CaktoTransientProcessingError("Cakto plan mapping is not configured")
-            if current_entry.external_customer_id is None:
-                raise CaktoPermanentProcessingError(
-                    "entitlement event has no documented customer.id"
+                raise CaktoTransientProcessingError(
+                    "Cakto plan mapping is not configured"
                 )
-            target = self._target_status(current_entry)
-            if target is None:
-                uow.commercial.mark_cakto_processed(
-                    current_entry.event_key,
-                    tenant_id=None,
-                    outcome_reference="no_entitlement_change",
+            if self._canonical_bridge is None:
+                raise CaktoTransientProcessingError(
+                    "canonical commercial bridge is unavailable"
                 )
-                uow.commit()
-                return "no_entitlement_change"
-            tenant = self._ensure_tenant(
-                uow.commercial,
-                current_entry.external_customer_id,
-                current_entry.occurred_at,
-            )
-            existing = uow.commercial.get_cakto_entitlement(tenant.tenant_id, binding.plan_id)
-            if existing is not None and current_entry.occurred_at <= existing.last_event_at:
-                uow.commercial.mark_cakto_processed(
-                    current_entry.event_key,
-                    tenant_id=tenant.tenant_id,
-                    outcome_reference="ignored_stale",
-                )
-                uow.commit()
-                return "ignored_stale"
-            entitlement = self._next_entitlement(
-                current=existing,
-                binding=binding,
-                tenant_id=tenant.tenant_id,
-                status=target,
-                event_at=current_entry.occurred_at,
-                event_key=current_entry.event_key,
-            )
-            uow.commercial.put_cakto_entitlement(entitlement)
+
+        outcome_reference = self._canonical_bridge.process(
+            current_entry,
+            binding,
+        )
+        with self._unit_of_work_factory() as uow:
             uow.commercial.mark_cakto_processed(
                 current_entry.event_key,
-                tenant_id=tenant.tenant_id,
-                outcome_reference=f"entitlement:{binding.plan_id}:{target.value}",
+                tenant_id=None,
+                outcome_reference=outcome_reference,
             )
             uow.commit()
-            self._metrics.increment(
-                "nfcore_cakto_entitlement_transitions_total",
-                operation=current_entry.event_type.value,
-                outcome=target.value,
-            )
-            return f"entitlement:{target.value}"
+        self._metrics.increment(
+            "nfcore_cakto_processing_total",
+            operation=current_entry.event_type.value,
+            outcome="canonical",
+        )
+        return outcome_reference
 
     @classmethod
     def _target_status(cls, entry: CaktoWebhookInboxEntry) -> CaktoEntitlementStatus | None:
