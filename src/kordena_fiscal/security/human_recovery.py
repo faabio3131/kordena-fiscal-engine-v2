@@ -162,7 +162,7 @@ class PasswordRecoveryService:
         reset_token: str,
         new_password: str,
         now: datetime,
-    ) -> None:
+    ) -> str:
         _aware(now, "now")
         record = self._resets.by_token_digest(_digest(reset_token))
         if record is None or record.used or now >= record.expires_at:
@@ -180,3 +180,4 @@ class PasswordRecoveryService:
         self._accounts.save(updated)
         self._sessions.revoke_account(account.account_id)
         self._resets.mark_used(record.reset_id)
+        return account.account_id
