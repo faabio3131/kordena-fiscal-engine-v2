@@ -9,6 +9,11 @@ from .background_runtime import (
     WorkerClock,
     WorkerObserver,
 )
+from .commercial_claim import (
+    CommercialClaimCompletion,
+    CommercialClaimService,
+    IssuedCommercialClaim,
+)
 from .commercial_fulfillment import (
     CommercialFulfillmentResult,
     CommercialFulfillmentService,
@@ -43,8 +48,11 @@ from .webhook_receiving import (
 __all__ = [
     "BackgroundCycleResult",
     "BackgroundWorkerRuntime",
+    "CommercialClaimCompletion",
+    "CommercialClaimService",
     "CommercialFulfillmentResult",
     "CommercialFulfillmentService",
+    "IssuedCommercialClaim",
     "DurableFiscalOutboxWorker",
     "DurableIssuanceReservation",
     "FM_WEBHOOK_ATTEMPT_HEADER",

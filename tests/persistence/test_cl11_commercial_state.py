@@ -17,6 +17,7 @@ from kordena_fiscal.product.billing import (
     SubscriptionStatus,
 )
 from kordena_fiscal.product.commercial_fulfillment import (
+    CommercialClaimRecord,
     CommercialEventReceipt,
     CommercialEventType,
     CommercialFulfillmentError,
@@ -44,7 +45,7 @@ def database() -> PostgresFiscalDatabase:
         connection.execute("DROP SCHEMA public CASCADE")
         connection.execute("CREATE SCHEMA public")
     database = PostgresFiscalDatabase(dsn)
-    assert database.initialize() == (1, 2, 3, 4, 5, 6, 7, 8, 9)
+    assert database.initialize() == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
     try:
         yield database
     finally:
@@ -266,11 +267,121 @@ def test_migration_9_upgrades_an_existing_version_8_database() -> None:
 
     database = PostgresFiscalDatabase(dsn)
     try:
-        assert database.initialize() == (9,)
-        assert database.applied_migrations() == (1, 2, 3, 4, 5, 6, 7, 8, 9)
+        assert database.initialize() == (9, 10)
+        assert database.applied_migrations() == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
         with database.connection() as connection:
             assert connection.execute(
                 "SELECT COUNT(*) FROM fm_commercial_purchases"
+            ).fetchone() == (0,)
+    finally:
+        database.close()
+
+
+def test_commercial_claim_rotates_digest_and_consumes_once(
+    database: PostgresFiscalDatabase,
+) -> None:
+    commercial = postgres_canonical_commercial_database(database)
+    candidate = _purchase("hotmart", "order-claim")
+
+    with commercial() as uow:
+        uow.commercial.put_purchase(candidate)
+        first = CommercialClaimRecord(
+            claim_id="claim-first",
+            purchase_id=candidate.purchase_id,
+            token_sha256="a" * 64,
+            created_at=NOW,
+            expires_at=NOW + timedelta(hours=1),
+        )
+        uow.commercial.put_claim(first)
+        uow.commit()
+
+    with commercial() as uow:
+        assert uow.commercial.get_claim_by_digest("a" * 64) == first
+        rotated = CommercialClaimRecord(
+            claim_id="claim-second",
+            purchase_id=candidate.purchase_id,
+            token_sha256="b" * 64,
+            created_at=NOW + timedelta(minutes=1),
+            expires_at=NOW + timedelta(hours=1, minutes=1),
+        )
+        uow.commercial.put_claim(rotated)
+        uow.commit()
+
+    with commercial() as uow:
+        assert uow.commercial.get_claim_by_digest("a" * 64) is None
+        assert uow.commercial.get_claim_by_digest("b" * 64) == rotated
+        assert uow.commercial.consume_claim(
+            rotated.claim_id,
+            NOW + timedelta(minutes=2),
+        )
+        assert not uow.commercial.consume_claim(
+            rotated.claim_id,
+            NOW + timedelta(minutes=3),
+        )
+        uow.commit()
+
+    with commercial() as uow:
+        used = uow.commercial.get_claim_for_purchase(candidate.purchase_id)
+        assert used is not None
+        assert used.used_at == NOW + timedelta(minutes=2)
+
+
+def test_legal_name_becomes_immutable_after_claim_identity_resolution(
+    database: PostgresFiscalDatabase,
+) -> None:
+    commercial = postgres_canonical_commercial_database(database)
+    original = _purchase("cakto", "order-legal-name")
+    resolved = replace(
+        original,
+        legal_name="ACME Tecnologia LTDA",
+        tenant_id="tenant-internal-1",
+        state=CommercialPurchaseState.READY_TO_PROVISION,
+        updated_at=NOW + timedelta(minutes=1),
+    )
+
+    with commercial() as uow:
+        uow.commercial.put_purchase(original)
+        uow.commercial.put_purchase(resolved)
+        uow.commit()
+
+    conflicting = replace(
+        resolved,
+        legal_name="Outra Empresa LTDA",
+        updated_at=NOW + timedelta(minutes=2),
+    )
+    with pytest.raises(CommercialFulfillmentError, match="legal name cannot change"):
+        with commercial() as uow:
+            uow.commercial.put_purchase(conflicting)
+
+
+def test_migration_10_upgrades_existing_version_9_state() -> None:
+    dsn = _dsn()
+    database = PostgresFiscalDatabase(dsn)
+    try:
+        database.initialize()
+    finally:
+        database.close()
+
+    with psycopg.connect(dsn, autocommit=True) as connection:
+        connection.execute("DELETE FROM fm_schema_migrations WHERE version = 10")
+        connection.execute("DROP TABLE IF EXISTS fm_commercial_claims")
+        connection.execute("ALTER TABLE fm_commercial_purchases DROP COLUMN IF EXISTS legal_name")
+
+    database = PostgresFiscalDatabase(dsn)
+    try:
+        assert database.initialize() == (10,)
+        assert database.applied_migrations() == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+        with database.connection() as connection:
+            columns = connection.execute(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'fm_commercial_purchases'
+                """
+            ).fetchall()
+            assert ("legal_name",) in columns
+            assert connection.execute(
+                "SELECT COUNT(*) FROM fm_commercial_claims"
             ).fetchone() == (0,)
     finally:
         database.close()
