@@ -170,3 +170,34 @@ def test_checkout_binding_write_requires_global_platform_authority(
 
     with pytest.raises(ControlPlaneAuthorizationError, match="global"):
         service.set_binding(actor=_actor(global_scope=False), binding=binding)
+
+
+def test_checkout_start_carries_only_opaque_nfcore_callback(tmp_path: Path) -> None:
+    service = CaktoCheckoutAdministrationService(_database(tmp_path))
+    pricing = _configuration("cakto://product-1/offer-1")
+    binding = CaktoPlanBinding(
+        external_product_id="product-1",
+        external_offer_id="offer-1",
+        plan_id="nfcore-pro",
+        entitlement_ids=("portal",),
+    )
+    service.set_binding(actor=_actor(), binding=binding)
+    item = service.project(pricing).items[0]
+
+    started = service.start_checkout(
+        item=item,
+        acquisition_reference="acq-0123456789abcdef0123456789abcdef",
+    )
+
+    assert started == (
+        "https://pay.cakto.com.br/offer-1"
+        "?callback=acq-0123456789abcdef0123456789abcdef"
+    )
+    assert "@" not in started
+    assert "tenant" not in started
+
+    with pytest.raises(Exception, match="callback"):
+        service.start_checkout(
+            item=item,
+            acquisition_reference="acq-invalid/value",
+        )
