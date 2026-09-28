@@ -37,6 +37,7 @@ def _account_payload(account: HumanAccount) -> dict[str, Any]:
 def create_human_auth_router(
     identity: HumanIdentityService,
     *,
+    on_login: Callable[[str, datetime], None] | None = None,
     now: Callable[[], datetime] | None = None,
 ) -> APIRouter:
     """Create cookie-session routes without accepting tenant authority from headers."""
@@ -92,8 +93,9 @@ def create_human_auth_router(
                     "message": "Email and password are required",
                 },
             )
+        instant = now_provider()
         try:
-            issued = identity.login(email=email, password=password, now=now_provider())
+            issued = identity.login(email=email, password=password, now=instant)
         except HumanRateLimitError as exc:
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -105,7 +107,14 @@ def create_human_auth_router(
                 detail={"code": "INVALID_CREDENTIALS", "message": "Invalid email or password"},
             ) from exc
 
-        ttl = max(1, int((issued.expires_at - now_provider()).total_seconds()))
+        if on_login is not None:
+            try:
+                on_login(issued.account.account_id, instant)
+            except Exception:
+                # Authentication remains authoritative and successful. Commercial
+                # activation reconciliation is retryable and must not lock the user out.
+                pass
+        ttl = max(1, int((issued.expires_at - instant).total_seconds()))
         response.set_cookie(
             SESSION_COOKIE,
             issued.session_token,
