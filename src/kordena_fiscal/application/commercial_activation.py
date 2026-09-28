@@ -36,8 +36,11 @@ from kordena_fiscal.security.human_recovery import (
 
 
 class CommercialPricingPublicationReader(Protocol):
-    configuration: CommercialPricingConfiguration
-    published_at: datetime
+    @property
+    def configuration(self) -> CommercialPricingConfiguration: ...
+
+    @property
+    def published_at(self) -> datetime: ...
 
 
 class CommercialPricingReader(Protocol):
