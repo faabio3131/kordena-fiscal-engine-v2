@@ -48,6 +48,9 @@ class _Cursor:
     def fetchone(self) -> tuple[int]:
         return (1,)
 
+    def fetchall(self) -> tuple[tuple[int, ...], ...]:
+        return ()
+
 
 class _Connection:
     def execute(

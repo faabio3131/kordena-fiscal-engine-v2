@@ -15,7 +15,7 @@ from enum import StrEnum
 from types import TracebackType
 from typing import Protocol, Self
 
-from kordena_fiscal.product.billing import SubscriptionCheckpoint
+from kordena_fiscal.product.billing import SubscriptionCheckpoint, SubscriptionStatus
 
 _PROVIDER_ID = re.compile(r"^[a-z0-9][a-z0-9._-]{0,63}$")
 _TOKEN = re.compile(r"^[a-z0-9][a-z0-9._-]{0,127}$")
@@ -30,6 +30,7 @@ class CommercialEventType(StrEnum):
     SUBSCRIPTION_ACTIVATED = "subscription_activated"
     SUBSCRIPTION_RENEWED = "subscription_renewed"
     SUBSCRIPTION_PAYMENT_LATE = "subscription_payment_late"
+    SUBSCRIPTION_PAUSED = "subscription_paused"
     SUBSCRIPTION_RECOVERED = "subscription_recovered"
     SUBSCRIPTION_CANCELED = "subscription_canceled"
     REFUND_CONFIRMED = "refund_confirmed"
@@ -300,6 +301,7 @@ class CommercialPurchaseRecord:
     legal_name: str | None = None
     tenant_id: str | None = None
     account_id: str | None = None
+    billing_status: SubscriptionStatus | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "purchase_id", _token(self.purchase_id, "purchase_id"))
@@ -333,6 +335,13 @@ class CommercialPurchaseRecord:
             object.__setattr__(self, "tenant_id", _token(self.tenant_id, "tenant_id"))
         if self.account_id is not None:
             object.__setattr__(self, "account_id", _token(self.account_id, "account_id"))
+        if self.billing_status is not None and not isinstance(
+            self.billing_status,
+            SubscriptionStatus,
+        ):
+            raise CommercialFulfillmentError(
+                "billing_status must be SubscriptionStatus or null"
+            )
         object.__setattr__(
             self,
             "last_event_id",
@@ -450,6 +459,12 @@ class CanonicalCommercialStore(Protocol):
         account_id: str,
     ) -> CommercialPurchaseRecord | None: ...
 
+    def get_purchase_by_external_subscription(
+        self,
+        provider_id: str,
+        external_subscription_id: str,
+    ) -> CommercialPurchaseRecord | None: ...
+
     def put_purchase(self, purchase: CommercialPurchaseRecord) -> CommercialPurchaseRecord: ...
 
     def get_claim_by_digest(self, token_sha256: str) -> CommercialClaimRecord | None: ...
@@ -474,6 +489,11 @@ class CanonicalCommercialStore(Protocol):
     def get_subscription_for_tenant(
         self,
         tenant_id: str,
+    ) -> DurableCommercialSubscription | None: ...
+
+    def get_subscription_for_purchase(
+        self,
+        purchase_id: str,
     ) -> DurableCommercialSubscription | None: ...
 
     def put_subscription(

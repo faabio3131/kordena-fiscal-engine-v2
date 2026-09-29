@@ -7,7 +7,7 @@ canonical pricing, release and public commercial-offer code must not depend on C
 
 from __future__ import annotations
 
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from kordena_fiscal.control_plane.models import AdminPrincipal, ControlPlanePermission
 from kordena_fiscal.control_plane.service import ControlPlaneAuthorizationError
@@ -87,6 +87,40 @@ class CaktoCheckoutAdministrationService:
             persisted = uow.commercial.put_cakto_plan_binding(binding)
             uow.commit()
             return persisted
+
+    def start_checkout(
+        self,
+        *,
+        item: CommercialCheckoutItem,
+        acquisition_reference: str,
+    ) -> str:
+        if not isinstance(item, CommercialCheckoutItem):
+            raise FiscalValidationError("checkout item must be CommercialCheckoutItem")
+        if item.provider != self.provider_id:
+            raise FiscalValidationError("checkout item does not belong to Cakto")
+        callback = acquisition_reference.strip().lower()
+        allowed = set("abcdefghijklmnopqrstuvwxyz0123456789._~-")
+        if (
+            not callback
+            or len(callback) > 255
+            or any(character not in allowed for character in callback)
+        ):
+            raise FiscalValidationError("Cakto callback token is invalid")
+
+        parsed = urlsplit(item.checkout_url)
+        query = parse_qsl(parsed.query, keep_blank_values=True)
+        if any(key.casefold() == "callback" for key, _value in query):
+            raise FiscalValidationError("Cakto checkout URL already contains callback")
+        query.append(("callback", callback))
+        return urlunsplit(
+            (
+                parsed.scheme,
+                parsed.netloc,
+                parsed.path,
+                urlencode(query),
+                parsed.fragment,
+            )
+        )
 
     def project(
         self,

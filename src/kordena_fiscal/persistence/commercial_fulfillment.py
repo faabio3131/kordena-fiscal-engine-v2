@@ -319,7 +319,7 @@ class CommercialSqlStore(CanonicalCommercialStore):
             SELECT purchase_id, provider_id, external_order_id, plan_id, state,
                    created_at, updated_at, last_event_at, last_event_id, price_id,
                    external_subscription_id, external_customer_id, buyer_email,
-                   legal_name, tenant_id, account_id
+                   legal_name, tenant_id, account_id, billing_status
             FROM fm_commercial_purchases
             WHERE purchase_id = ?
             """,
@@ -337,7 +337,7 @@ class CommercialSqlStore(CanonicalCommercialStore):
             SELECT purchase_id, provider_id, external_order_id, plan_id, state,
                    created_at, updated_at, last_event_at, last_event_id, price_id,
                    external_subscription_id, external_customer_id, buyer_email,
-                   legal_name, tenant_id, account_id
+                   legal_name, tenant_id, account_id, billing_status
             FROM fm_commercial_purchases
             WHERE provider_id = ? AND external_order_id = ?
             """,
@@ -354,13 +354,33 @@ class CommercialSqlStore(CanonicalCommercialStore):
             SELECT purchase_id, provider_id, external_order_id, plan_id, state,
                    created_at, updated_at, last_event_at, last_event_id, price_id,
                    external_subscription_id, external_customer_id, buyer_email,
-                   legal_name, tenant_id, account_id
+                   legal_name, tenant_id, account_id, billing_status
             FROM fm_commercial_purchases
             WHERE account_id = ?
             ORDER BY updated_at DESC, purchase_id DESC
             LIMIT 1
             """,
             (account_id.strip().lower(),),
+        ).fetchone()
+        return None if row is None else self._purchase(row)
+
+    def get_purchase_by_external_subscription(
+        self,
+        provider_id: str,
+        external_subscription_id: str,
+    ) -> CommercialPurchaseRecord | None:
+        row = self._connection.execute(
+            """
+            SELECT purchase_id, provider_id, external_order_id, plan_id, state,
+                   created_at, updated_at, last_event_at, last_event_id, price_id,
+                   external_subscription_id, external_customer_id, buyer_email,
+                   legal_name, tenant_id, account_id, billing_status
+            FROM fm_commercial_purchases
+            WHERE provider_id = ? AND external_subscription_id = ?
+            ORDER BY created_at, purchase_id
+            LIMIT 1
+            """,
+            (provider_id.strip().lower(), external_subscription_id.strip()),
         ).fetchone()
         return None if row is None else self._purchase(row)
 
@@ -413,8 +433,8 @@ class CommercialSqlStore(CanonicalCommercialStore):
                     purchase_id, provider_id, external_order_id, plan_id, state,
                     created_at, updated_at, last_event_at, last_event_id, price_id,
                     external_subscription_id, external_customer_id, buyer_email,
-                    legal_name, tenant_id, account_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    legal_name, tenant_id, account_id, billing_status
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (purchase_id) DO UPDATE SET
                     state = excluded.state,
                     updated_at = excluded.updated_at,
@@ -425,7 +445,8 @@ class CommercialSqlStore(CanonicalCommercialStore):
                     buyer_email = excluded.buyer_email,
                     legal_name = excluded.legal_name,
                     tenant_id = excluded.tenant_id,
-                    account_id = excluded.account_id
+                    account_id = excluded.account_id,
+                    billing_status = excluded.billing_status
                 """,
                 (
                     purchase.purchase_id,
@@ -444,6 +465,7 @@ class CommercialSqlStore(CanonicalCommercialStore):
                     purchase.legal_name,
                     purchase.tenant_id,
                     purchase.account_id,
+                    None if purchase.billing_status is None else purchase.billing_status.value,
                 ),
             )
         except sqlite3.IntegrityError as exc:
@@ -565,6 +587,23 @@ class CommercialSqlStore(CanonicalCommercialStore):
             LIMIT 1
             """,
             (tenant_id.strip().lower(),),
+        ).fetchone()
+        return None if row is None else self._subscription(row)
+
+    def get_subscription_for_purchase(
+        self,
+        purchase_id: str,
+    ) -> DurableCommercialSubscription | None:
+        row = self._connection.execute(
+            """
+            SELECT subscription_id, purchase_id, tenant_id, plan_id,
+                   entitlement_ids_json, quotas_json, status, period_start, period_end,
+                   usage_json, provider_id, external_subscription_id,
+                   last_event_id, last_event_at
+            FROM fm_commercial_subscriptions
+            WHERE purchase_id = ?
+            """,
+            (purchase_id.strip().lower(),),
         ).fetchone()
         return None if row is None else self._subscription(row)
 
@@ -702,6 +741,11 @@ class CommercialSqlStore(CanonicalCommercialStore):
             legal_name=_optional_text(row[13]),
             tenant_id=_optional_text(row[14]),
             account_id=_optional_text(row[15]),
+            billing_status=(
+                None
+                if row[16] is None
+                else SubscriptionStatus(_text(row[16], "billing_status"))
+            ),
         )
 
     @staticmethod

@@ -116,6 +116,7 @@ def create_runtime_app(
     )
     composition = runtime.composition
     selected_checkout = commercial_checkout_projector
+    selected_checkout_starter = commercial_checkout_starter
     selected_checkout_processing = commercial_checkout_processing_configured
     if (
         selected_checkout is None
@@ -124,6 +125,7 @@ def create_runtime_app(
         and composition.cakto_checkout_administration is not None
     ):
         selected_checkout = composition.cakto_checkout_administration
+        selected_checkout_starter = composition.cakto_checkout_administration
         selected_checkout_processing = cakto_receiver is not None
     if (
         selected_checkout is not None
@@ -131,6 +133,7 @@ def create_runtime_app(
         and selected_checkout.provider_id != resolved.commercial_checkout_provider
     ):
         selected_checkout = None
+        selected_checkout_starter = None
         selected_checkout_processing = False
 
     commercial_delivery_readiness = CommercialDeliveryPathReadiness(
@@ -149,9 +152,9 @@ def create_runtime_app(
         composition is not None
         and runtime.database is not None
         and selected_checkout is not None
-        and commercial_checkout_starter is not None
+        and selected_checkout_starter is not None
         and commercial_acquisition_security is not None
-        and selected_checkout.provider_id == commercial_checkout_starter.provider_id
+        and selected_checkout.provider_id == selected_checkout_starter.provider_id
     ):
         commercial_acquisition = CommercialAcquisitionService(
             unit_of_work_factory=postgres_canonical_commercial_database(
@@ -160,7 +163,7 @@ def create_runtime_app(
             pricing=composition.pricing_administration,
             release=composition.commercial_release_administration,
             checkout=selected_checkout,
-            checkout_starter=commercial_checkout_starter,
+            checkout_starter=selected_checkout_starter,
             checkout_processing_configured=selected_checkout_processing,
             delivery_readiness=commercial_delivery_readiness,
         )

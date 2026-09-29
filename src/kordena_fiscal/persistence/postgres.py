@@ -508,6 +508,20 @@ _COMMERCIAL_ACQUISITION_SCHEMA = (
     ),
 )
 
+_COMMERCIAL_LIFECYCLE_SCHEMA = (
+    """
+    ALTER TABLE fm_commercial_purchases
+    ADD COLUMN IF NOT EXISTS billing_status TEXT
+    """,
+    (
+        "CREATE UNIQUE INDEX IF NOT EXISTS fm_commercial_purchases_subscription_idx "
+        "ON fm_commercial_purchases (provider_id, external_subscription_id) "
+        "WHERE external_subscription_id IS NOT NULL"
+    ),
+)
+
+
+
 
 def _translate_ddl(statement: str) -> str:
     return statement.replace(" BLOB ", " BYTEA ").replace(" BLOB\n", " BYTEA\n")
@@ -528,6 +542,8 @@ class PostgresFiscalDatabase:
     COMMERCIAL_CLAIM_MIGRATION_NAME = "cl11_secure_customer_claim"
     COMMERCIAL_ACQUISITION_MIGRATION_VERSION = 11
     COMMERCIAL_ACQUISITION_MIGRATION_NAME = "cl11_first_party_acquisition"
+    COMMERCIAL_LIFECYCLE_MIGRATION_VERSION = 12
+    COMMERCIAL_LIFECYCLE_MIGRATION_NAME = "cl11_canonical_billing_lifecycle"
 
     def __init__(
         self,
@@ -689,6 +705,21 @@ class PostgresFiscalDatabase:
                         ),
                     )
                     new_versions.append(self.COMMERCIAL_ACQUISITION_MIGRATION_VERSION)
+                if self.COMMERCIAL_LIFECYCLE_MIGRATION_VERSION not in applied:
+                    for statement in _COMMERCIAL_LIFECYCLE_SCHEMA:
+                        raw.execute(statement)
+                    raw.execute(
+                        """
+                        INSERT INTO fm_schema_migrations (version, name, applied_at)
+                        VALUES (%s, %s, %s)
+                        """,
+                        (
+                            self.COMMERCIAL_LIFECYCLE_MIGRATION_VERSION,
+                            self.COMMERCIAL_LIFECYCLE_MIGRATION_NAME,
+                            datetime.now().astimezone().isoformat(),
+                        ),
+                    )
+                    new_versions.append(self.COMMERCIAL_LIFECYCLE_MIGRATION_VERSION)
                 raw.commit()
                 return tuple(new_versions)
             except Exception:
