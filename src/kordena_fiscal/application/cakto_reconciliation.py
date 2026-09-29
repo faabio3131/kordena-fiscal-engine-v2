@@ -93,6 +93,7 @@ class CaktoCanonicalCommercialBridgeService(CaktoCanonicalCommercialBridge):
             binding=binding,
             existing=existing,
         )
+        price_id: str | None
         if existing is None:
             plan_id = binding.plan_id
             price_id = (
