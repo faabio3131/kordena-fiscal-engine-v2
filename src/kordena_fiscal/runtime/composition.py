@@ -14,6 +14,7 @@ from kordena_fiscal.application.commercial_activation import (
 )
 from kordena_fiscal.application.commercial_claim import CommercialClaimService
 from kordena_fiscal.application.commercial_fulfillment import CommercialFulfillmentService
+from kordena_fiscal.application.commercial_trial import GovernedTrialService
 from kordena_fiscal.control_plane.cakto_checkout import (
     CaktoCheckoutAdministrationService,
 )
@@ -50,6 +51,7 @@ class RuntimeComposition:
     commercial_fulfillment: CommercialFulfillmentService
     commercial_claim: CommercialClaimService
     commercial_activation: CommercialCustomerActivationService
+    commercial_trial: GovernedTrialService
     pricing_administration: CommercialPricingAdministrationService
     commercial_release_administration: CommercialReleaseAdministrationService
     cakto_checkout_administration: CaktoCheckoutAdministrationService | None
@@ -104,6 +106,12 @@ def build_postgres_runtime_composition(
         password_recovery=recovery,
         pricing=pricing_administration,
     )
+    commercial_trial = GovernedTrialService(
+        unit_of_work_factory=canonical_commercial_database,
+        activation=commercial_activation,
+        pricing=pricing_administration,
+        accounts=accounts,
+    )
     commercial_release_administration = CommercialReleaseAdministrationService(
         database.commercial_release_catalog()
     )
@@ -125,6 +133,7 @@ def build_postgres_runtime_composition(
         commercial_fulfillment=commercial_fulfillment,
         commercial_claim=commercial_claim,
         commercial_activation=commercial_activation,
+        commercial_trial=commercial_trial,
         pricing_administration=pricing_administration,
         commercial_release_administration=commercial_release_administration,
         cakto_checkout_administration=cakto_checkout_administration,

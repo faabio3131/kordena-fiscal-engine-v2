@@ -27,6 +27,7 @@ from kordena_fiscal.web.app import create_app
 from kordena_fiscal.web.commercial_acquisition import (
     create_commercial_acquisition_router,
 )
+from kordena_fiscal.web.commercial_trial import create_commercial_trial_router
 from kordena_fiscal.web.human_recovery import PasswordResetDelivery
 from kordena_fiscal.web.portal_runtime import PortalOperationExecutor
 
@@ -100,6 +101,8 @@ def create_runtime_app(
     commercial_checkout_processing_configured: bool = False,
     commercial_acquisition_security: WebhookSecurity | None = None,
     commercial_acquisition_rate_limiter: FixedWindowRateLimiter | None = None,
+    commercial_trial_security: WebhookSecurity | None = None,
+    commercial_trial_rate_limiter: FixedWindowRateLimiter | None = None,
     password_reset_delivery: PasswordResetDelivery | None = None,
     production_authority: ProductionExecutionAuthority | None = None,
     portal_operation_executor: PortalOperationExecutor | None = None,
@@ -186,6 +189,9 @@ def create_runtime_app(
         None if composition is None else composition.commercial_activation
     )
     app.state.nfcore_commercial_acquisition = commercial_acquisition
+    app.state.nfcore_commercial_trial = (
+        None if composition is None else composition.commercial_trial
+    )
     app.state.nfcore_metrics = runtime_metrics
     app.state.nfcore_logger = runtime_logger
     app.state.nfcore_production_authority = production_authority
@@ -340,6 +346,11 @@ def create_runtime_app(
             "commercial_first_party_acquisition_configured": (
                 commercial_acquisition is not None
             ),
+            "commercial_trial_configured": (
+                composition is not None
+                and commercial_trial_security is not None
+                and password_reset_delivery is not None
+            ),
             "cakto_checkout_admin_configured": (
                 cakto_checkout_administration is not None
             ),
@@ -372,6 +383,26 @@ def create_runtime_app(
                         window_seconds=60,
                     )
                 ),
+            )
+        )
+
+    if (
+        composition is not None
+        and commercial_trial_security is not None
+        and password_reset_delivery is not None
+    ):
+        app.include_router(
+            create_commercial_trial_router(
+                composition.commercial_trial,
+                security=commercial_trial_security,
+                rate_limiter=(
+                    commercial_trial_rate_limiter
+                    or FixedWindowRateLimiter(
+                        max_requests=10,
+                        window_seconds=3600,
+                    )
+                ),
+                delivery=password_reset_delivery,
             )
         )
 
