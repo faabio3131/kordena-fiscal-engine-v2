@@ -5,7 +5,7 @@ from __future__ import annotations
 import calendar
 import hashlib
 from dataclasses import dataclass, replace
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Protocol
 
 from kordena_fiscal.product.billing import (
@@ -108,7 +108,7 @@ class CommercialCustomerActivationService:
                 "commercial purchase canonical identity is incomplete"
             )
 
-        plan, cadence = self._resolve_plan(purchase)
+        plan, cadence, trial_days = self._resolve_plan(purchase)
         provisioned = self._provisioning.provision(
             tenant_id=purchase.tenant_id,
             legal_name=purchase.legal_name,
@@ -131,6 +131,7 @@ class CommercialCustomerActivationService:
             purchase=purchase,
             plan=plan,
             cadence=cadence,
+            trial_days=trial_days,
         )
         updated = replace(
             purchase,
@@ -232,7 +233,7 @@ class CommercialCustomerActivationService:
     def _resolve_plan(
         self,
         purchase: CommercialPurchaseRecord,
-    ) -> tuple[CommercialPlan, BillingCadence]:
+    ) -> tuple[CommercialPlan, BillingCadence, int]:
         pricing = self._pricing_at_purchase(purchase)
         plan_definition = next(
             (
@@ -267,6 +268,7 @@ class CommercialCustomerActivationService:
                 entitlement_ids=edition.entitlement_ids,
             ),
             price.cadence,
+            plan_definition.trial_days,
         )
 
     def _pricing_at_purchase(
@@ -297,10 +299,18 @@ class CommercialCustomerActivationService:
         purchase: CommercialPurchaseRecord,
         plan: CommercialPlan,
         cadence: BillingCadence,
+        trial_days: int,
     ) -> DurableCommercialSubscription:
         assert purchase.tenant_id is not None
         start = purchase.last_event_at
-        end = self._period_end(start, cadence)
+        if purchase.billing_status is SubscriptionStatus.TRIAL:
+            if trial_days < 1:
+                raise CommercialFulfillmentError(
+                    "commercial plan is not eligible for trial"
+                )
+            end = start + timedelta(days=trial_days)
+        else:
+            end = self._period_end(start, cadence)
         subscription = CommercialSubscription(
             tenant_id=purchase.tenant_id,
             plan=plan,
