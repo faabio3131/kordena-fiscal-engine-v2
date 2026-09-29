@@ -629,7 +629,7 @@ class CaktoCommercialDatabase:
             rows = connection.execute(
                 "SELECT version FROM fm_cakto_schema_migrations ORDER BY version"
             ).fetchall()
-            applied = {int(row[0]) for row in rows}
+            applied = {int(cast(int | str, row[0])) for row in rows}
             changed = False
             migrations = (
                 (1, CAKTO_SCHEMA_V1_NAME, CAKTO_SCHEMA_V1_STATEMENTS),
