@@ -10,9 +10,9 @@ import hashlib
 import secrets
 from dataclasses import dataclass, replace
 from datetime import datetime
+from typing import Protocol
 
 from kordena_fiscal.application.commercial_activation import (
-    CommercialActivationProvisioningResult,
     CommercialCustomerActivationService,
 )
 from kordena_fiscal.product.billing import CommercialSubscription, SubscriptionStatus
@@ -29,7 +29,7 @@ from kordena_fiscal.security.human_identity import HumanAccountRepository
 from kordena_fiscal.security.human_recovery import IssuedPasswordReset
 
 
-class TrialPricingReader:
+class TrialPricingReader(Protocol):
     @property
     def current(self) -> CommercialPricingConfiguration | None:
         raise NotImplementedError
