@@ -13,7 +13,7 @@ from time import monotonic
 from typing import Any, Protocol
 
 _SENSITIVE_KEY = re.compile(
-    r"(authorization|password|passwd|secret|token|cookie|private[_-]?key|certificate|pfx|p12|pem|csc)",
+    r"(authorization|password|passwd|secret|token|cookie|private[_-]?key|certificate|pfx|p12|pem|csc|email|legal[_-]?name|buyer|customer[_-]?id)",
     re.IGNORECASE,
 )
 _PRIVATE_MARKER = "-----BEGIN " + "PRIVATE KEY-----"
