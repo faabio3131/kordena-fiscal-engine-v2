@@ -26,6 +26,7 @@ from kordena_fiscal.product.commercial_fulfillment import (
 )
 from kordena_fiscal.product.pricing import CommercialPricingConfiguration
 from kordena_fiscal.security.human_identity import HumanAccountRepository
+from kordena_fiscal.security.human_recovery import IssuedPasswordReset
 
 
 class TrialPricingReader:
@@ -38,7 +39,7 @@ class TrialPricingReader:
 class GovernedTrialStart:
     purchase: CommercialPurchaseRecord
     subscription: DurableCommercialSubscription
-    activation: CommercialActivationProvisioningResult
+    activation_reset: IssuedPasswordReset | None
     replay: bool
 
     @property
@@ -152,15 +153,7 @@ class GovernedTrialService:
             return GovernedTrialStart(
                 purchase=purchase,
                 subscription=subscription,
-                activation=CommercialActivationProvisioningResult(
-                    purchase=purchase,
-                    subscription=subscription,
-                    activation_reset=self._activation._password_recovery.request_reset(  # noqa: SLF001
-                        email=buyer_email,
-                        now=now,
-                    )
-                    or self._raise_reset_unavailable(),
-                ),
+                activation_reset=None,
                 replay=True,
             )
 
@@ -171,7 +164,7 @@ class GovernedTrialService:
         return GovernedTrialStart(
             purchase=activation.purchase,
             subscription=activation.subscription,
-            activation=activation,
+            activation_reset=activation.activation_reset,
             replay=replay,
         )
 
@@ -338,10 +331,6 @@ class GovernedTrialService:
                 "idempotency key must contain between 16 and 256 characters"
             )
         return hashlib.sha256(normalized.encode()).hexdigest()
-
-    @staticmethod
-    def _raise_reset_unavailable():
-        raise CommercialFulfillmentError("trial activation reset is unavailable")
 
 
 __all__ = ["GovernedTrialService", "GovernedTrialStart", "TrialPricingReader"]
