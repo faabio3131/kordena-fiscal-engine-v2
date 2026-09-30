@@ -1,6 +1,6 @@
 # CL-15A — Railway Staging Provider Readiness
 
-**Status:** IMPLEMENTATION CANDIDATE — PUBLIC-CI SAFE / NO REAL SECRETS  
+**Status:** CERTIFICATION CANDIDATE — PUBLIC-CI SAFE / NO REAL SECRETS  
 **Date:** 2026-09-29  
 **Repository:** `faabio3131/kordena-fiscal-engine-v2`  
 **Base:** `0939e668e029ae6ad4f08fe0c28cdc5fb7ee15f9`
@@ -83,3 +83,40 @@ to:
 `RAILWAY_SELECTED / REAL_STAGING_BLOCKED_EXTERNAL`
 
 It does **not** close CL-15.
+
+
+## Certification evidence
+
+Implementation HEAD `1582470023bfc671ab93d727b4bc87b897d9eaa3` passed the complete
+`FM NFCORE V1 CI` matrix in run `36652385276` with conclusion `SUCCESS`.
+
+The green matrix included repository secret scan, migration policy, Ruff, Mypy, full
+Pytest, Python/Node dependency audits, frontend lint/typecheck/tests/build, Playwright
+critical E2E, Compose and operational-script validation, API/worker/portal image builds,
+non-root validation, insecure-production rejection, container smokes, image secret
+inspection, CRITICAL vulnerability policy, SBOM generation, PostgreSQL backup/restore
+rehearsal and application readiness against the restored database.
+
+## Railway provisioning attempt
+
+A real dedicated Railway project named `FM NFCORE Staging` was requested through the
+authenticated Railway control plane without supplying any application secret.
+
+Railway rejected resource creation with:
+
+`Free plan resource provision limit exceeded. Please upgrade to provision more resources!`
+
+Therefore the external staging blocker is now concrete and provider-confirmed:
+
+`RAILWAY_RESOURCE_LIMIT_BLOCKED`
+
+No existing Kordena or IRON resource was repurposed, mutated or deleted to bypass this
+limit. No real secret was introduced.
+
+## Final CL-15A state
+
+`RAILWAY_SELECTED / PROVIDER_CONTRACT_CERTIFIED / REAL_STAGING_BLOCKED_EXTERNAL`
+
+CL-15 remains open. The next executable boundary is provision of Railway capacity (or an
+explicitly approved alternative resource arrangement), followed by the real API/worker/
+portal/PostgreSQL/HTTPS/secret-backend staging path.
