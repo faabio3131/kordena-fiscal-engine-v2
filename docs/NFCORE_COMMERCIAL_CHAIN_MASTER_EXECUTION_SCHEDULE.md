@@ -8,6 +8,44 @@
 
 ---
 
+## CURRENT EXECUTION CHECKPOINT — 2026-09-30 — SURGICAL RECONCILIATION
+
+Reconciliation base main: `62150240bef42918e9f04a6d5ab955ac7f9cdecb`.
+
+This checkpoint corrects schedule semantics after a context-continuity incident. It preserves
+technically useful merged work but does not promote preparatory code into completed later phases.
+
+Canonical state:
+
+- CL-12 — `DONE`: implemented, tested, merged and post-merge certified;
+- CL-13 — `DONE`: implemented, tested, merged and post-merge certified;
+- CL-14 — `DONE`: implemented, tested, merged and post-merge certified;
+- CL-15 — `IN_PROGRESS / BLOCKED_EXTERNAL`:
+  - Railway provider contract is prepared;
+  - activation-delivery adapter is implemented/unit-tested but not wired into RuntimeComposition;
+  - no real NFCore staging exists;
+  - no real activation provider/credential/delivery evidence exists;
+  - no real staging E2E or rollback rehearsal exists;
+  - gate `STAGING_DEPLOYED_AND_E2E_VALIDATED` is **NOT MET**;
+- CL-16 — `NOT_STARTED_OPERATIONALLY`:
+  - internal validation harness exists as `PREPARED_NOT_ACTIVE`;
+  - it cannot start real channel validation until CL-15's real staging gate is met;
+  - `COMMERCIAL_CHANNEL_READY` is **NOT MET**;
+- CL-17 — `NOT_STARTED_OPERATIONALLY`:
+  - historical fiscal/homologation/pilot authorities may be reused later;
+  - no official homologation or real controlled pilot is claimed;
+- CL-18 — `NOT_STARTED`;
+- `PRODUCTION_APPROVED` — **NO**;
+- NFCore -> Kordena cutover — **FORBIDDEN IN THIS PHASE**.
+
+PRs #75-#80 remain preserved as repository history. Their canonical classification is recorded in
+`docs/NFCORE_CONTEXT_INCIDENT_RECONCILIATION_2026-09-30.md`.
+
+No later phase may be treated as operationally started merely because an internal harness,
+adapter or reusable authority exists. Sequential dependency gates remain mandatory.
+
+---
+
 ## VISÃO EXECUTIVA
 
 ```text

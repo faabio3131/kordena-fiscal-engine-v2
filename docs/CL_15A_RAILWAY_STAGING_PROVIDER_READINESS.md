@@ -1,9 +1,15 @@
 # CL-15A — Railway Staging Provider Readiness
 
-**Status:** CERTIFICATION CANDIDATE — PUBLIC-CI SAFE / NO REAL SECRETS  
+**Status:** RECONCILED — PREPARATORY PROVIDER CONTRACT / REAL STAGING BLOCKED  
 **Date:** 2026-09-29  
 **Repository:** `faabio3131/kordena-fiscal-engine-v2`  
 **Base:** `0939e668e029ae6ad4f08fe0c28cdc5fb7ee15f9`
+
+## Reconciliation note — 2026-09-30
+
+Canonical schedule classification: this document certifies only a CL-15 preparatory provider
+contract. CL-15 remains `IN_PROGRESS / BLOCKED_EXTERNAL`; the gate
+`STAGING_DEPLOYED_AND_E2E_VALIDATED` is not met.
 
 ## Decision
 

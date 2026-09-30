@@ -1,9 +1,18 @@
 # CL-16A — Real Commercial Channel Validation Harness
 
-**Status:** CERTIFICATION CANDIDATE — NO REAL PROVIDER CREDENTIALS  
+**Status:** RECONCILED — INTERNAL HARNESS PREPARED / CL-16 NOT STARTED OPERATIONALLY  
 **Date:** 2026-09-29  
 **Repository:** `faabio3131/kordena-fiscal-engine-v2`  
 **Base:** `6c6f37145656c238f6dacba3d2a7361d58a0f075`
+
+## Reconciliation note — 2026-09-30
+
+The harness is preserved as safe preparatory code. It does not constitute operational start of
+CL-16 because the predecessor CL-15 gate `STAGING_DEPLOYED_AND_E2E_VALIDATED` is not met.
+
+Canonical classification:
+
+`INTERNAL_HARNESS_AVAILABLE / PREPARED_NOT_ACTIVE / CL16_NOT_STARTED_OPERATIONALLY`
 
 ## Objective
 
@@ -89,7 +98,7 @@ This harness cannot:
 
 Successful internal certification of this block yields:
 
-`CL16_VALIDATION_HARNESS_READY / REAL_CHANNEL_BLOCKED_EXTERNAL`
+`INTERNAL_HARNESS_AVAILABLE / PREPARED_NOT_ACTIVE / CL16_NOT_STARTED_OPERATIONALLY`
 
 CL-16 remains open until real external evidence exists.
 
@@ -106,7 +115,7 @@ PostgreSQL backup/restore and readiness against the restored database.
 
 ## Certified internal state
 
-`CL16_VALIDATION_HARNESS_READY / REAL_CHANNEL_BLOCKED_EXTERNAL`
+`INTERNAL_HARNESS_AVAILABLE / PREPARED_NOT_ACTIVE / CL16_NOT_STARTED_OPERATIONALLY`
 
 No real Cakto account, secret, transaction or reconciliation evidence was fabricated by
 this certification.

@@ -1,9 +1,20 @@
 # CL-15B — Activation Delivery Core
 
-**Status:** CERTIFICATION CANDIDATE — NO REAL PROVIDER CREDENTIALS  
+**Status:** RECONCILED — ADAPTER IMPLEMENTED/UNIT-TESTED / NOT RUNTIME-INTEGRATED  
 **Date:** 2026-09-29  
 **Repository:** `faabio3131/kordena-fiscal-engine-v2`  
 **Base:** `28f722744a1fd23bb09db829996026fecbb7d978`
+
+## Reconciliation note — 2026-09-30
+
+The secure adapter and its unit tests are preserved. However, the canonical
+`RuntimeComposition` does not import, instantiate or expose
+`SecureActivationEmailDelivery`. Therefore the canonical readiness state is:
+
+`ACTIVATION_DELIVERY_ADAPTER_IMPLEMENTED_AND_TESTED / NOT_OPERATIONALLY_INTEGRATED`
+
+This document must not be used as evidence that real activation delivery is integrated or that
+CL-15 is complete.
 
 ## Objective
 
@@ -80,7 +91,7 @@ rehearsal and readiness against the restored database.
 
 ## Certified internal state
 
-`ACTIVATION_DELIVERY_CORE_READY / REAL_PROVIDER_DELIVERY_BLOCKED_EXTERNAL`
+`ACTIVATION_DELIVERY_ADAPTER_IMPLEMENTED_AND_TESTED / NOT_OPERATIONALLY_INTEGRATED / REAL_PROVIDER_DELIVERY_BLOCKED_EXTERNAL`
 
 This state means the canonical activation grant can now be safely adapted to an outbound
 message transport without duplicating credential authority. A real launch still requires
