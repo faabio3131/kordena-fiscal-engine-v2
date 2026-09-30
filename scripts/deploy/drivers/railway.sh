@@ -26,7 +26,7 @@ require_revision() {
     *[!0-9a-fA-F]*) fail "immutable 40-hex revision is required" ;;
     *) ;;
   esac
-
+}
 
 preflight_checks() {
   require_value NFCORE_RAILWAY_PROJECT_ID
