@@ -1,6 +1,6 @@
 # CL-17 — Fiscal Homologation + Controlled Pilot — CURRENT Reconciliation
 
-**Status:** INTERNAL GOVERNANCE RECONCILED / REAL HOMOLOGATION AND PILOT BLOCKED EXTERNAL  
+**Status:** CERTIFICATION CANDIDATE — INTERNAL GOVERNANCE RECONCILED / REAL HOMOLOGATION AND PILOT BLOCKED EXTERNAL  
 **Date:** 2026-09-29  
 **Repository:** `faabio3131/kordena-fiscal-engine-v2`  
 **Reconciled main:** `62150240bef42918e9f04a6d5ab955ac7f9cdecb`
@@ -118,3 +118,19 @@ issuing `PRODUCTION_APPROVED`.
 
 Real CL-17 execution resumes only after its external prerequisites and predecessor external
 gates are available.
+
+
+## Certification evidence
+
+Reconciliation HEAD `6db47c1783037d3e458a7f183c96a3d49558a57c` passed the complete
+`FM NFCORE V1 CI` matrix in run `36659247465` with conclusion `SUCCESS`.
+
+The matrix remained green across repository secret scanning, migration governance, Ruff,
+Mypy, full Pytest, Python/Node dependency audits, frontend lint/typecheck/tests/build,
+Playwright E2E, Compose/operational validation, API/worker/portal image builds and smokes,
+non-root enforcement, insecure-production rejection, forbidden-secret inspection,
+CRITICAL vulnerability policy, SBOM generation, PostgreSQL backup/restore and readiness
+against the restored database.
+
+This CI evidence certifies only the reconciliation and existing internal governance. It is
+not official fiscal homologation and is not evidence of a real controlled pilot.
