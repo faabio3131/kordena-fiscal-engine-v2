@@ -39,7 +39,7 @@ Production migrations must remain backward-compatible with the currently deploye
 
 ## Provider-neutral deploy-driver contract
 
-Real deployment is delegated to a provider-specific script under `scripts/deploy/drivers/`. The repository deliberately does not choose AWS, GCP, Azure or another hosting provider in WP-WEB-09.
+Real deployment is delegated to a provider-specific script under `scripts/deploy/drivers/`. WP-WEB-09 originally remained provider-neutral. CL-15A now selects Railway for staging while preserving the same deploy-driver boundary; provider-specific details remain isolated behind the driver contract.
 
 A provisioned driver must support:
 
@@ -95,4 +95,18 @@ Only non-secret evidence may be uploaded as CI artifacts. Current artifacts incl
 
 ## Current external blockers
 
-Until a hosting/provider decision and real staging resources are supplied, no provider driver, public staging URL, staging database secret or provider IAM is expected to exist. Therefore the repository can be internally certified while real staging remains `BLOCKED_EXTERNAL`.
+CL-15A selects **Railway** as the staging provider and adds a public-CI-safe provider contract at `scripts/deploy/drivers/railway.sh`.
+
+The repository remains public temporarily because the private GitHub Actions monthly quota is exhausted and the full certification matrix must continue to run. Therefore no real Railway token, staging database DSN, secret-backend credential or fiscal secret is permitted in GitHub during CL-15A.
+
+Real staging remains `BLOCKED_EXTERNAL` until all of the following are true:
+
+- a dedicated NFCore Railway project/environment exists;
+- API, worker and portal services are provisioned;
+- PostgreSQL staging and external secret backend are provisioned;
+- a durable backup mechanism exists;
+- exact application rollback is proven;
+- the secret-execution boundary is safe (private repository with working CI or another approved runner path);
+- real staging URLs use HTTPS.
+
+This is a controlled staging blocker, not an internal delivery failure.
