@@ -1,6 +1,6 @@
 # CL-16A — Real Commercial Channel Validation Harness
 
-**Status:** IMPLEMENTATION CANDIDATE — NO REAL PROVIDER CREDENTIALS  
+**Status:** CERTIFICATION CANDIDATE — NO REAL PROVIDER CREDENTIALS  
 **Date:** 2026-09-29  
 **Repository:** `faabio3131/kordena-fiscal-engine-v2`  
 **Base:** `6c6f37145656c238f6dacba3d2a7361d58a0f075`
@@ -92,3 +92,21 @@ Successful internal certification of this block yields:
 `CL16_VALIDATION_HARNESS_READY / REAL_CHANNEL_BLOCKED_EXTERNAL`
 
 CL-16 remains open until real external evidence exists.
+
+
+## Certification evidence
+
+Implementation HEAD `e5d633a0c8e8d0b2fc11209dd4c939e335bc6445` passed the complete
+`FM NFCORE V1 CI` matrix in run `36658024910` with conclusion `SUCCESS`.
+
+The matrix remained green across secret scanning, migration policy, Ruff, Mypy, full
+Pytest, dependency audits, frontend validation, Playwright E2E, runtime image builds and
+smokes, non-root enforcement, secret inspection, CRITICAL vulnerability policy, SBOM,
+PostgreSQL backup/restore and readiness against the restored database.
+
+## Certified internal state
+
+`CL16_VALIDATION_HARNESS_READY / REAL_CHANNEL_BLOCKED_EXTERNAL`
+
+No real Cakto account, secret, transaction or reconciliation evidence was fabricated by
+this certification.
