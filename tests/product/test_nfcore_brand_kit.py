@@ -43,3 +43,25 @@ def test_brand_kit_preserves_fiscal_safety_language() -> None:
     for guard in ("PROD BLOQUEADA", "BLOCKED_EXTERNAL", "HUMAN_APPROVAL_REQUIRED"):
         assert guard in guide
         assert guard in app
+
+
+def test_portal_uses_provider_neutral_commercial_channel_language() -> None:
+    app = (PORTAL / "app.js").read_text(encoding="utf-8")
+
+    assert "Canais de Venda / Checkout" in app
+    assert "Canais de venda governados por adapters" in app
+    assert "Adapter ativo: Cakto." in app
+    assert '["checkout-admin", "Checkout Cakto"]' not in app
+
+
+def test_portal_brand_shell_preserves_accessibility_and_responsive_contract() -> None:
+    index = (PORTAL / "index.html").read_text(encoding="utf-8")
+    styles = (PORTAL / "styles.css").read_text(encoding="utf-8")
+
+    assert 'class="skip-link"' in index
+    assert 'lang="pt-BR"' in index
+    assert "assets/favicon.svg" in index
+    assert "assets/fm-nfcore-mark.svg" in index
+    for breakpoint in ("1050px", "760px", "480px"):
+        assert breakpoint in styles
+    assert "prefers-reduced-motion: reduce" in styles

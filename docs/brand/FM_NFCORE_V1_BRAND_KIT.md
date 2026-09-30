@@ -20,10 +20,16 @@ O sistema oficial é formado por:
 - tagline opcional `Infraestrutura fiscal. Sob controle.`;
 - versão compacta do monograma para favicon, app e espaços reduzidos.
 
-Assets canônicos do produto:
+Assets canônicos do runtime:
 
-- `portal/assets/fm-nfcore-mark.svg` — monograma;
+- `portal/assets/fm-nfcore-mark.svg` — monograma vetorial do portal, login e sidebar;
 - `portal/assets/favicon.svg` — ícone compacto.
+
+O Site FM pode usar o lockup comercial aprovado em raster para peças de marketing
+e hero, desde que preserve o mesmo nome **NFCORE**, posicionamento, paleta azul/ciano
+e proporções aprovadas. O lockup comercial não substitui o monograma vetorial do
+runtime; são variantes oficiais para contextos diferentes. Não existe autorização
+para criar uma terceira identidade visual.
 
 ### Regras
 
