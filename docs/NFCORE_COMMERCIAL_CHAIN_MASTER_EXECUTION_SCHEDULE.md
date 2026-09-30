@@ -8,6 +8,32 @@
 
 ---
 
+## CURRENT EXECUTION CHECKPOINT — 2026-09-29
+
+Reconciled NFCore main: `62150240bef42918e9f04a6d5ab955ac7f9cdecb`.
+
+Completed and merged after the original schedule publication:
+
+- CL-12 — governed canonical trial;
+- CL-13 — security/privacy/observability hardening;
+- CL-14 — portal/brand/admin UX + Site CI governance;
+- CL-15A — Railway staging provider contract, internally certified;
+- CL-15B — provider-neutral activation delivery core, internally certified;
+- CL-16A — real-channel validation/evidence harness, internally certified.
+
+External states remain fail-closed:
+
+- CL-15 real staging: `RAILWAY_RESOURCE_LIMIT_BLOCKED` until staging capacity and secret-safe execution boundary are available;
+- CL-15 real activation delivery: real provider/credentials/delivery evidence pending;
+- CL-16 real channel: real staging/account/KYC/checkout/webhook/purchase/refund-reconciliation evidence pending;
+- CL-17: internal homologation/pilot governance already exists in CURRENT; official homologation and real pilot remain `BLOCKED_EXTERNAL`.
+
+CL-17 MUST reuse the integrated V2-15 / POST-WEB-12 authorities. It must not build a second homologation, pilot or Go/No-Go engine. See `docs/CL_17_FISCAL_HOMOLOGATION_PILOT_RECONCILIATION.md`.
+
+The sequential dependency gates remain intact: preparing/certifying internal harnesses does not authorize skipping predecessor external evidence.
+
+---
+
 ## VISÃO EXECUTIVA
 
 ```text
