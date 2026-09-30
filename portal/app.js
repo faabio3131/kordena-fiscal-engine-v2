@@ -6,7 +6,7 @@
 const navigation = [
   { label: "Operação", items: [["overview", "Visão geral"], ["documents", "Documentos"], ["issuances", "Emissões"], ["errors", "Erros"], ["reconciliation", "Reconciliação"]] },
   { label: "Configuração", items: [["onboarding", "Onboarding"], ["companies", "Empresas"], ["units", "Unidades"], ["environments", "Ambientes"], ["capabilities", "Capabilities"], ["certificates", "Certificados"], ["providers", "Providers"], ["users", "Usuários"]] },
-  { label: "Plataforma", items: [["webhooks", "Webhooks"], ["integrations", "Integrações"], ["usage", "Uso"], ["billing", "Billing"], ["plans", "Planos"], ["pricing-admin", "Catálogo comercial"], ["commercial-release", "Liberação comercial"], ["checkout-admin", "Checkout Cakto"], ["audit", "Auditoria"], ["support", "Suporte"], ["settings", "Configurações"]] },
+  { label: "Plataforma", items: [["webhooks", "Webhooks"], ["integrations", "Integrações"], ["usage", "Uso"], ["billing", "Billing"], ["plans", "Planos"], ["pricing-admin", "Catálogo comercial"], ["commercial-release", "Liberação comercial"], ["checkout-admin", "Canais de Venda / Checkout"], ["audit", "Auditoria"], ["support", "Suporte"], ["settings", "Configurações"]] },
 ];
 
 const supportedDocumentLabels = ["NF-e", "NFC-e", "NFS-e"];
@@ -38,7 +38,7 @@ const descriptions = {
   plans: "Plano e entitlements comerciais configurados.",
   "pricing-admin": "Catálogo comercial versionado, durável e restrito à administração da plataforma.",
   "commercial-release": "Decisão humana versionada que governa a disponibilidade comercial pública do NFCore.",
-  "checkout-admin": "Bindings Cakto governados que conectam preços publicados a checkout e entitlements sem armazenar credenciais.",
+  "checkout-admin": "Canais de venda governados por adapters. O provider configurado traduz checkout e eventos sem virar autoridade comercial do NFCore.",
   audit: "Auditoria administrativa e operacional.",
   support: "Saúde operacional, incidentes e suporte.",
   settings: "Políticas e configurações autorizadas.",
@@ -513,7 +513,7 @@ async function renderCommercialRelease() {
 
 async function renderCheckoutAdmin() {
   workspace.replaceChildren();
-  const article = panel("Checkout Cakto", "Platform administration");
+  const article = panel("Canais de Venda / Checkout", "Platform administration");
   const statusLine = document.createElement("p");
   statusLine.className = "form-error";
   statusLine.setAttribute("role", "status");
@@ -521,7 +521,7 @@ async function renderCheckoutAdmin() {
   workspace.append(article);
 
   if (!bootstrapState?.platform_admin) {
-    statusLine.textContent = "A configuração de checkout exige autoridade explícita de plataforma.";
+    statusLine.textContent = "A configuração de canais de venda exige autoridade explícita de plataforma.";
     return;
   }
 
@@ -534,7 +534,7 @@ async function renderCheckoutAdmin() {
     if (!bindings.length) {
       const empty = document.createElement("div");
       empty.className = "empty-state";
-      empty.textContent = "Nenhum binding Cakto configurado. Compra permanece fail-closed.";
+      empty.textContent = "Nenhum adapter de checkout configurado. Compra permanece fail-closed.";
       summary.append(empty);
     } else {
       for (const binding of bindings) {
@@ -587,7 +587,7 @@ async function renderCheckoutAdmin() {
 
     const warning = document.createElement("p");
     warning.className = "empty-state";
-    warning.textContent = "O preço deve referenciar esta oferta como cakto://PRODUCT_ID/OFFER_ID. IDs não são credenciais. Client secret, token e webhook secret nunca pertencem a este formulário.";
+    warning.textContent = "Adapter ativo: Cakto. O preço deve referenciar esta oferta como cakto://PRODUCT_ID/OFFER_ID. IDs não são credenciais. Client secret, token e webhook secret nunca pertencem a este formulário.";
 
     const submit = document.createElement("button");
     submit.className = "primary";
@@ -634,7 +634,7 @@ async function renderCheckoutAdmin() {
 
     article.replaceChildren(summary, form, statusLine);
   } catch (error) {
-    statusLine.textContent = error instanceof Error ? error.message : "Falha ao carregar checkout Cakto";
+    statusLine.textContent = error instanceof Error ? error.message : "Falha ao carregar o canal de venda configurado";
   }
 }
 
