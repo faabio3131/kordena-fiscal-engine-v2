@@ -21,11 +21,12 @@ require_value() {
 
 require_revision() {
   revision="${1:-}"
+  [ "${#revision}" -eq 40 ] || fail "immutable 40-hex revision is required"
   case "$revision" in
-    [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]) ;;
-    *) fail "immutable 40-hex revision is required" ;;
+    *[!0-9a-fA-F]*) fail "immutable 40-hex revision is required" ;;
+    *) ;;
   esac
-}
+
 
 preflight_checks() {
   require_value NFCORE_RAILWAY_PROJECT_ID
