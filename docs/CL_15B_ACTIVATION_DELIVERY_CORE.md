@@ -1,6 +1,6 @@
 # CL-15B — Activation Delivery Core
 
-**Status:** IMPLEMENTATION CANDIDATE — NO REAL PROVIDER CREDENTIALS  
+**Status:** CERTIFICATION CANDIDATE — NO REAL PROVIDER CREDENTIALS  
 **Date:** 2026-09-29  
 **Repository:** `faabio3131/kordena-fiscal-engine-v2`  
 **Base:** `28f722744a1fd23bb09db829996026fecbb7d978`
@@ -64,3 +64,24 @@ CL-15 remains open until all of the following have real evidence:
 - rollback rehearsal.
 
 No `STAGING_DEPLOYED_AND_E2E_VALIDATED` claim is made by CL-15B.
+
+
+## Certification evidence
+
+Implementation HEAD `42f9dac8c0437a9bfd12c6965b697c3ced5eb5a1` passed the complete
+`FM NFCORE V1 CI` matrix in run `36656955383` with conclusion `SUCCESS`.
+
+The green matrix included repository secret scan, migration governance, Ruff, Mypy,
+full Pytest, Python/Node dependency audits, frontend lint/typecheck/tests/build,
+Playwright critical E2E, Compose/operational validation, API/worker/portal container
+builds and smokes, non-root enforcement, insecure-production rejection, forbidden-secret
+inspection, CRITICAL vulnerability policy, SBOM generation, PostgreSQL backup/restore
+rehearsal and readiness against the restored database.
+
+## Certified internal state
+
+`ACTIVATION_DELIVERY_CORE_READY / REAL_PROVIDER_DELIVERY_BLOCKED_EXTERNAL`
+
+This state means the canonical activation grant can now be safely adapted to an outbound
+message transport without duplicating credential authority. A real launch still requires
+a selected delivery provider, externally resolved credentials and real delivery evidence.
