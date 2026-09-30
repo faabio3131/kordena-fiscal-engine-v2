@@ -8,29 +8,41 @@
 
 ---
 
-## CURRENT EXECUTION CHECKPOINT — 2026-09-29
+## CURRENT EXECUTION CHECKPOINT — 2026-09-30 — SURGICAL RECONCILIATION
 
-Reconciled NFCore main: `62150240bef42918e9f04a6d5ab955ac7f9cdecb`.
+Reconciliation base main: `62150240bef42918e9f04a6d5ab955ac7f9cdecb`.
 
-Completed and merged after the original schedule publication:
+This checkpoint corrects schedule semantics after a context-continuity incident. It preserves
+technically useful merged work but does not promote preparatory code into completed later phases.
 
-- CL-12 — governed canonical trial;
-- CL-13 — security/privacy/observability hardening;
-- CL-14 — portal/brand/admin UX + Site CI governance;
-- CL-15A — Railway staging provider contract, internally certified;
-- CL-15B — provider-neutral activation delivery core, internally certified;
-- CL-16A — real-channel validation/evidence harness, internally certified.
+Canonical state:
 
-External states remain fail-closed:
+- CL-12 — `DONE`: implemented, tested, merged and post-merge certified;
+- CL-13 — `DONE`: implemented, tested, merged and post-merge certified;
+- CL-14 — `DONE`: implemented, tested, merged and post-merge certified;
+- CL-15 — `IN_PROGRESS / BLOCKED_EXTERNAL`:
+  - Railway provider contract is prepared;
+  - activation-delivery adapter is implemented/unit-tested but not wired into RuntimeComposition;
+  - no real NFCore staging exists;
+  - no real activation provider/credential/delivery evidence exists;
+  - no real staging E2E or rollback rehearsal exists;
+  - gate `STAGING_DEPLOYED_AND_E2E_VALIDATED` is **NOT MET**;
+- CL-16 — `NOT_STARTED_OPERATIONALLY`:
+  - internal validation harness exists as `PREPARED_NOT_ACTIVE`;
+  - it cannot start real channel validation until CL-15's real staging gate is met;
+  - `COMMERCIAL_CHANNEL_READY` is **NOT MET**;
+- CL-17 — `NOT_STARTED_OPERATIONALLY`:
+  - historical fiscal/homologation/pilot authorities may be reused later;
+  - no official homologation or real controlled pilot is claimed;
+- CL-18 — `NOT_STARTED`;
+- `PRODUCTION_APPROVED` — **NO**;
+- NFCore -> Kordena cutover — **FORBIDDEN IN THIS PHASE**.
 
-- CL-15 real staging: `RAILWAY_RESOURCE_LIMIT_BLOCKED` until staging capacity and secret-safe execution boundary are available;
-- CL-15 real activation delivery: real provider/credentials/delivery evidence pending;
-- CL-16 real channel: real staging/account/KYC/checkout/webhook/purchase/refund-reconciliation evidence pending;
-- CL-17: internal homologation/pilot governance already exists in CURRENT; official homologation and real pilot remain `BLOCKED_EXTERNAL`.
+PRs #75-#80 remain preserved as repository history. Their canonical classification is recorded in
+`docs/NFCORE_CONTEXT_INCIDENT_RECONCILIATION_2026-09-30.md`.
 
-CL-17 MUST reuse the integrated V2-15 / POST-WEB-12 authorities. It must not build a second homologation, pilot or Go/No-Go engine. See `docs/CL_17_FISCAL_HOMOLOGATION_PILOT_RECONCILIATION.md`.
-
-The sequential dependency gates remain intact: preparing/certifying internal harnesses does not authorize skipping predecessor external evidence.
+No later phase may be treated as operationally started merely because an internal harness,
+adapter or reusable authority exists. Sequential dependency gates remain mandatory.
 
 ---
 
