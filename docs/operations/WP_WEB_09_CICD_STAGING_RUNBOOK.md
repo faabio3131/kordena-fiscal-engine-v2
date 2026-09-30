@@ -41,10 +41,20 @@ Production migrations must remain backward-compatible with the currently deploye
 
 Real deployment is delegated to a provider-specific script under `scripts/deploy/drivers/`. WP-WEB-09 originally remained provider-neutral. CL-15A now selects Railway for staging while preserving the same deploy-driver boundary; provider-specific details remain isolated behind the driver contract.
 
-A provisioned driver must support:
+A provisioned driver contract covers:
 
-- `deploy <immutable-revision>` — deploy the requested revision;
+- `backup <immutable-revision>` — create provider-native pre-migration backup evidence;
+- `deploy <immutable-revision>` — deploy API + worker + portal from the exact checked-out revision;
+- `verify-worker <immutable-revision>` — require terminal worker deployment success;
 - `rollback <failed-revision>` — restore the last known-good application release after a failed post-deploy smoke.
+
+The Railway driver now prepares the first three operations behind the real-execution guard.
+Its backup path targets Railway's native PostgreSQL volume-backup command. Deploy uploads the
+exact CI checkout to all three Railway services and waits for terminal `SUCCESS`.
+
+The rollback command remains deliberately fail-closed until a real baseline deployment exists
+and Railway rollback is exercised/certified against that baseline. This preserves the CL-15
+requirement instead of treating an untested rollback path as ready.
 
 The driver must not print credentials, tokens, connection strings, certificates or secret payloads.
 
@@ -99,14 +109,20 @@ CL-15A selects **Railway** as the staging provider and adds a public-CI-safe pro
 
 The repository remains public temporarily because the private GitHub Actions monthly quota is exhausted and the full certification matrix must continue to run. Therefore no real Railway token, staging database DSN, secret-backend credential or fiscal secret is permitted in GitHub during CL-15A.
 
-Real staging remains `BLOCKED_EXTERNAL` until all of the following are true:
+Railway Hobby capacity is now available. A dedicated `FM NFCORE Staging` project exists and
+secretless API, worker and portal services are provisioned. Those items are no longer blockers.
 
-- a dedicated NFCore Railway project/environment exists;
-- API, worker and portal services are provisioned;
+Real staging remains open until all of the following are true:
+
 - PostgreSQL staging and external secret backend are provisioned;
-- a durable backup mechanism exists;
-- exact application rollback is proven;
-- the secret-execution boundary is safe (private repository with working CI or another approved runner path);
-- real staging URLs use HTTPS.
+- real database/provider/runtime secrets are supplied outside Git;
+- the repository is PRIVATE again or another approved secret-safe execution boundary exists;
+- Railway native backup creation is exercised against the real staging PostgreSQL service;
+- one known-good staging baseline exists;
+- exact application rollback is exercised and certified against that baseline;
+- real staging URLs use HTTPS;
+- the complete migration/deploy/readiness/E2E/rollback rehearsal passes.
+
+Until then, `STAGING_DEPLOYED_AND_E2E_VALIDATED` remains false.
 
 This is a controlled staging blocker, not an internal delivery failure.
