@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-command="\${1:-}"
+command="${1:-}"
 
 blocked() {
   echo "railway staging driver: BLOCKED_EXTERNAL $1"
@@ -15,12 +15,12 @@ fail() {
 
 require_value() {
   name="$1"
-  eval "value=\\\${$name:-}"
+  eval "value=\${$name:-}"
   [ -n "$value" ] || blocked "missing=$name"
 }
 
 require_revision() {
-  revision="\${1:-}"
+  revision="${1:-}"
   case "$revision" in
     [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]) ;;
     *) fail "immutable 40-hex revision is required" ;;
@@ -35,7 +35,7 @@ preflight_checks() {
   require_value NFCORE_RAILWAY_PORTAL_SERVICE
   require_value NFCORE_RAILWAY_POSTGRES_SERVICE
 
-  if [ "\${NFCORE_RAILWAY_REAL_EXECUTION_ENABLED:-false}" != "true" ]; then
+  if [ "${NFCORE_RAILWAY_REAL_EXECUTION_ENABLED:-false}" != "true" ]; then
     blocked "real execution is disabled while the repository remains public"
   fi
 
@@ -62,8 +62,8 @@ print(str(row.get("status","")))' 2>/dev/null || true
 
 wait_for_success() {
   service="$1"
-  attempts="\${NFCORE_RAILWAY_WAIT_ATTEMPTS:-60}"
-  delay="\${NFCORE_RAILWAY_WAIT_SECONDS:-5}"
+  attempts="${NFCORE_RAILWAY_WAIT_ATTEMPTS:-60}"
+  delay="${NFCORE_RAILWAY_WAIT_SECONDS:-5}"
   count=0
 
   while [ "$count" -lt "$attempts" ]; do
@@ -116,7 +116,7 @@ case "$command" in
     echo "railway staging driver: PREFLIGHT_READY"
     ;;
   backup)
-    revision="\${2:-}"
+    revision="${2:-}"
     require_revision "$revision"
     preflight_checks
     short_revision="$(printf '%s' "$revision" | cut -c1-12)"
@@ -129,7 +129,7 @@ case "$command" in
     echo "railway staging driver: BACKUP_REQUESTED revision=$revision"
     ;;
   deploy)
-    revision="\${2:-}"
+    revision="${2:-}"
     require_revision "$revision"
     preflight_checks
     assert_local_revision "$revision"
@@ -139,14 +139,14 @@ case "$command" in
     echo "railway staging driver: DEPLOY_READY revision=$revision"
     ;;
   verify-worker)
-    revision="\${2:-}"
+    revision="${2:-}"
     require_revision "$revision"
     preflight_checks
     wait_for_success "$NFCORE_RAILWAY_WORKER_SERVICE"
     echo "railway staging driver: WORKER_READY revision=$revision"
     ;;
   rollback)
-    revision="\${2:-}"
+    revision="${2:-}"
     require_revision "$revision"
     blocked "exact Railway rollback remains pending external baseline certification"
     ;;
