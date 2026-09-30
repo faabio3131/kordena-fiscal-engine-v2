@@ -65,10 +65,11 @@ class CommercialTelemetry:
         }
         if reason_code is not None:
             normalized = reason_code.strip().lower()
+            allowed = "abcdefghijklmnopqrstuvwxyz0123456789._-"
             if (
                 not normalized
                 or len(normalized) > 96
-                or any(character not in "abcdefghijklmnopqrstuvwxyz0123456789._-" for character in normalized)
+                or any(character not in allowed for character in normalized)
             ):
                 raise ValueError("reason_code must be a bounded safe token")
             fields["reason_code"] = normalized
