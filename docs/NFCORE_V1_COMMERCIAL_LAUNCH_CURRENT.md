@@ -1,59 +1,72 @@
 # FM NFCORE V1 — Commercial Launch CURRENT
 
-**Canonical status date:** 2026-09-29  
+**Canonical status date:** 2026-09-30  
 **Canonical NFCore repository:** `faabio3131/kordena-fiscal-engine-v2`  
-**Canonical NFCore main:** `62150240bef42918e9f04a6d5ab955ac7f9cdecb`  
+**Reconciliation base NFCore main:** `62150240bef42918e9f04a6d5ab955ac7f9cdecb`  
 **Canonical FM commercial-site repository:** `faabio3131/fm-tecnologia-web-platform`  
-**Canonical Site main:** `8e25261a74b8dd4d7b5f335de76366bd24920d45`
+**Canonical Site main:** `26bfe05c2891bfc68f680587d0ae47ee36f105b1`
 
 This file is the persistent CURRENT checkpoint for FM NFCORE V1 Commercial Launch. GitHub remains the first technical source of truth and must be revalidated on every resume.
 
-## 0. CURRENT reconciliation — 2026-09-29
+## 0. CURRENT reconciliation — 2026-09-30
 
-The sections below preserve earlier audit context. This reconciliation supersedes stale
-status statements without rewriting historical evidence.
+This section is authoritative over stale status language below while preserving historical audit
+records. GitHub CURRENT must be revalidated on every resume.
 
-### Integrated commercial-launch progression
+### Canonical phase state
 
-- CL-12 governed trial — merged/certified;
-- CL-13 security/privacy/observability hardening — merged/certified;
-- CL-14 portal/brand/admin UX + Site CI governance — merged/certified;
-- CL-15A Railway staging provider readiness — merged/certified;
-- CL-15B secure provider-neutral activation delivery core — merged/certified;
-- CL-16A real-channel validation harness — merged/certified.
+- CL-12: `IMPLEMENTED / TESTED / MERGED / CERTIFIED`;
+- CL-13: `IMPLEMENTED / TESTED / MERGED / CERTIFIED`;
+- CL-14: `IMPLEMENTED / TESTED / MERGED / CERTIFIED`;
+- CL-15: `IN_PROGRESS / BLOCKED_EXTERNAL`;
+- CL-16: `NOT_STARTED_OPERATIONALLY`; internal harness only: `PREPARED_NOT_ACTIVE`;
+- CL-17: `NOT_STARTED_OPERATIONALLY`; reusable historical authorities do not count as execution;
+- CL-18: `NOT_STARTED`;
+- `PRODUCTION_APPROVED`: **NO**;
+- NFCore -> Kordena cutover: **NOT AUTHORIZED**.
 
-Latest integrated main for this checkpoint:
+### CL-15 exact truth
 
-`62150240bef42918e9f04a6d5ab955ac7f9cdecb`
+Railway staging-provider contract preparation exists, but the dedicated NFCore staging project was
+not provisioned because Railway rejected the creation attempt with a free-plan resource-limit
+blocker. No real NFCore staging deploy, staging database, real provider secret, real activation
+provider delivery, real staging E2E or rollback rehearsal is evidenced.
 
-The exact merge commit passed the complete post-merge `FM NFCORE V1 CI` matrix in run
-`36658622689` with conclusion `SUCCESS`.
+The activation-delivery adapter from PR #79 is implemented and unit-tested. It is not currently
+imported, instantiated or exposed by the canonical `RuntimeComposition`. Therefore its correct
+state is `IMPLEMENTED_AND_UNIT_TESTED`, not `INTEGRATED`.
 
-### External blockers remain factual
+The CL-15 gate `STAGING_DEPLOYED_AND_E2E_VALIDATED` remains **NOT MET**.
 
-Real staging has not been claimed. Railway rejected creation of a dedicated NFCore staging
-project with `Free plan resource provision limit exceeded`. The repository remains public
-temporarily so the full public GitHub Actions matrix can run; therefore real staging/provider
-secrets remain outside Git and real staging execution is blocked.
+### CL-16 exact truth
 
-Real activation-provider delivery, real commercial-channel validation, official fiscal
-homologation and a real controlled fiscal pilot also remain pending external evidence.
+PR #80 added a fail-closed internal validation/evidence harness. The harness requires the exact
+CL-15 staging state before it can become ready for a real provider exercise. Its canonical state is
+`INTERNAL_HARNESS_AVAILABLE / PREPARED_NOT_ACTIVE`.
 
-### CL-17 authority reconciliation
+This does not mean CL-16 started operationally and does not provide
+`COMMERCIAL_CHANNEL_READY`.
 
-The homologation/pilot capabilities required by CL-17 are already integrated authorities,
-not missing greenfield engineering. Historical V2-15 matrices and controlled-pilot work are
-composed by the later POST-WEB-12 governance package, merged into main via PR #44
-(`da3c927c2cd2fac6559f4c178f715fad9db0a14d`).
+### CL-17 / CL-18 boundary
 
-Canonical current interpretation:
+Existing V2-15/POST-WEB-12 fiscal governance may be reused in the future to avoid duplicate
+engineering. Reuse readiness is not phase execution. CL-17 remains
+`NOT_STARTED_OPERATIONALLY` until predecessor gates and real official external prerequisites are
+available. CL-18 remains `NOT_STARTED`.
 
-`CL17_INTERNAL_GOVERNANCE_READY / REAL_HOMOLOGATION_AND_PILOT_BLOCKED_EXTERNAL`
+No CI result, synthetic matrix, internal harness or documentation update is official
+SEFAZ/prefeitura/provider homologation, a real controlled pilot or `PRODUCTION_APPROVED`.
 
-See `docs/CL_17_FISCAL_HOMOLOGATION_PILOT_RECONCILIATION.md`.
+### Cross-repository reconciliation
 
-No internal CI result, synthetic matrix or documentation update may be used as evidence of
-official SEFAZ/prefeitura/provider homologation or as `PRODUCTION_APPROVED`.
+Site FM PR #24 is retained. It adds post-merge validation on `main` and updates the patched
+`undici` dependency; its merge commit `26bfe05c2891bfc68f680587d0ae47ee36f105b1`
+passed both Site Validation and Cloudflare Worker Validation.
+
+Kordena is explicitly out of scope for writes in this reconciliation. Protected checkpoint:
+`faabio3131/fm-ai-platform` / `staging/kordena-premium@57bbf18cacdc443d329308e6d9328c57aa55ed0a`.
+
+See `docs/NFCORE_CONTEXT_INCIDENT_RECONCILIATION_2026-09-30.md`.
 
 ## 1. Confirmed integration state
 
