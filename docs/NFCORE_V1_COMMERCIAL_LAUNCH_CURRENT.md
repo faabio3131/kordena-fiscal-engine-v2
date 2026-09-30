@@ -25,6 +25,20 @@ records. GitHub CURRENT must be revalidated on every resume.
 - `PRODUCTION_APPROVED`: **NO**;
 - NFCore -> Kordena cutover: **NOT AUTHORIZED**.
 
+### Railway capacity update — 2026-09-30
+
+Railway Hobby capacity is now sufficient to create the dedicated NFCore project and the
+secretless API/worker/portal service scaffold. The previous free-plan resource-limit blocker
+is resolved.
+
+The repository remains public by deliberate CI-continuity decision. No real database or
+runtime/provider/fiscal secret is introduced while that public-repository guard remains in
+force. The new truthful state is:
+
+`RAILWAY_CAPACITY_RESOLVED / SECRETLESS_SCAFFOLD_PREPARED / REAL_STAGING_SECRET_BOUNDARY_DEFERRED`
+
+This does not satisfy `STAGING_DEPLOYED_AND_E2E_VALIDATED`.
+
 ### CL-15 exact truth
 
 Railway staging-provider contract preparation exists, but the dedicated NFCore staging project was
