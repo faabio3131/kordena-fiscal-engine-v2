@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import argparse
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
 from kordena_fiscal.runtime.activation_email import build_activation_delivery_from_environ
@@ -43,13 +43,15 @@ def run(*, email: str, tenant_id: str, legal_name: str) -> str:
 
     dsn = os.getenv("DATABASE_URL", "").strip()
     if not dsn:
-        raise RuntimeError("staging test account provisioning blocked: DATABASE_URL is required")
+        raise RuntimeError(
+            "staging test account provisioning blocked: DATABASE_URL is required"
+        )
 
     database = PostgresFiscalDatabase(dsn)
     try:
         composition = build_postgres_runtime_composition(database)
         existing = database.human_accounts().by_email(normalized_email)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         action = "recovery"
         if existing is None:
