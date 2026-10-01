@@ -103,3 +103,9 @@ test("Cakto checkout administration reuses governed bindings without secret mate
   assert.match(script, /Client secret, token e webhook secret nunca pertencem/);
   assert.doesNotMatch(script, /client_secret\s*[:=]/i);
 });
+
+test("activation delivery consumes the reset token from the URL fragment", () => {
+  assert.match(script, /window\.location\.hash/);
+  assert.match(script, /fragment\.get\("token"\)/);
+  assert.match(script, /fragment\.delete\("token"\)/);
+});
