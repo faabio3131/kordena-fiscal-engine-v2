@@ -170,3 +170,131 @@ PostgreSQL dependency/readiness probe. It must not be represented as continuous 
 processing. Real continuous handler composition remains dependent on the later governed
 fiscal/provider activation path.
 
+## Real staging execution evidence — 2026-10-01
+
+### FATO CONFIRMADO — canonical revision and CI
+
+- repository visibility: **PRIVATE**;
+- canonical main revision deployed to staging:
+  `1c34ba001935952f83ec0b065144e0b8311a5650`;
+- post-merge GitHub Actions workflow:
+  `FM NFCORE V1 CI #524` — **SUCCESS**;
+- portal, API and worker probe were deployed from the same canonical revision.
+
+### FATO CONFIRMADO — Railway staging runtime
+
+Project: `FM NFCORE Staging`.
+
+Railway's environment label is `production`, but the NFCore runtime profile and project
+purpose remain **staging**. This label does not promote the environment to NFCore production.
+
+Current certified runtime evidence:
+
+- PostgreSQL service: online, persistent, private network only;
+- portal deployment: **SUCCESS** on canonical revision;
+- API deployment: **SUCCESS** on canonical revision;
+- API governed pre-deploy migration: **PASS**;
+- schema migration state: before `()`, applied `1..12`, after `1..12`;
+- worker staging probe: **SUCCESS** with `NFCORE_WORKER_ONESHOT=true`;
+- Railway HTTPS service domains active for API and portal;
+- external HTTPS `/health/live`: `live`;
+- external HTTPS `/health/ready`: `ready`;
+- runtime profile confirms:
+  - `environment=staging`;
+  - `persistence_backend=postgres`;
+  - `secret_backend_profile=external`;
+  - HTTPS required;
+  - exactly one trusted proxy network configured;
+- Railway edge proxy trust is restricted to `100.64.0.0/10`, not `0.0.0.0/0`.
+
+Migration approval was returned to fail-closed state after the successful migration:
+`NFCORE_SCHEMA_MIGRATION_APPROVED=false`.
+
+### FATO CONFIRMADO — logical backup/restore rehearsal
+
+Railway native volume backup/PITR is unavailable on the current plan and the dashboard
+states that creation of new backups/PITR requires the **Pro** plan.
+
+To avoid a new recurring subscription before commercial-launch readiness, CL-15 executed a
+provider-portable logical recovery rehearsal using a temporary private one-shot utility
+inside the same Railway project:
+
+- `pg_dump` custom-format backup created from the canonical staging database;
+- SHA-256 checksum created and verified;
+- isolated temporary database `nfcore_restore_rehearsal` created;
+- `pg_restore --exit-on-error` completed;
+- source/restored migration counts matched;
+- source/restored public table counts matched;
+- temporary restore database cleaned up after the rehearsal.
+
+Final safe evidence from deployment
+`6a7fbadf-225d-4bb9-8097-43eb2f12ff71`:
+
+```text
+logical_backup=PASS
+checksum=PASS
+restore_rehearsal=PASS
+source_migrations=12
+restored_migrations=12
+source_tables=34
+restored_tables=34
+```
+
+This certifies **portable logical backup/restore rehearsal for staging**. It does **not**
+certify provider-native PITR, production disaster recovery, production RPO/RTO, or durable
+off-provider backup retention.
+
+### DECISÃO APROVADA — cost control before commercial launch
+
+During pre-launch construction and certification, avoid new recurring subscriptions where a
+technically sound no-new-subscription path exists. Paid capabilities, server upgrades and
+other commercial subscriptions are deferred until they are required to make the product
+commercially ready.
+
+This decision must never be used to waive production requirements. Before production Go/No-Go,
+the project must explicitly re-evaluate and fund, where required:
+
+- durable scheduled backups;
+- provider-native PITR or an approved equivalent;
+- off-provider retention;
+- restore automation and RPO/RTO;
+- observability/alerting capacity;
+- production compute/database sizing;
+- external providers needed for activation, billing, fiscal homologation and delivery.
+
+### CURRENT commercial-readiness truth
+
+The API runtime profile still reports commercial dependencies that are not ready:
+
+- commercial activation delivery: not configured;
+- password-reset delivery: not configured;
+- pricing catalog: not published;
+- commercial release: unavailable;
+- checkout provider: unconfigured;
+- commercial delivery path: not ready;
+- first-party acquisition: not configured;
+- trial: not configured;
+- Cakto webhook/checkout: unconfigured;
+- fiscal production activation: false.
+
+Therefore **CL-15 is not commercially complete** and no production claim is authorized.
+
+### Cleanup pending human 2FA
+
+Two temporary DR-rehearsal utility services are staged for deletion:
+
+- `nfcore-dr-rehearsal-temp-MiP6`
+  (`80abd7c8-a664-4d0e-8923-fd690382e840`);
+- `nfcore-dr-rehearsal-temp`
+  (`6109ffe5-ea47-40f9-9374-0a775d465b27`).
+
+Railway requires interactive 2FA to apply service deletion, so final cleanup remains a human
+dashboard action. These services must not remain as permanent infrastructure.
+
+### Próxima ação
+
+1. Human applies the two staged service deletions with Railway 2FA.
+2. Re-audit Railway and confirm only API, worker, portal and PostgreSQL remain.
+3. Persist cleanup evidence.
+4. Continue CL-15/CL-16 only from the remaining real blockers; do not treat the logical
+   recovery rehearsal as production DR certification.
