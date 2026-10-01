@@ -37,7 +37,7 @@ preflight_checks() {
   require_value NFCORE_RAILWAY_POSTGRES_SERVICE
 
   if [ "${NFCORE_RAILWAY_REAL_EXECUTION_ENABLED:-false}" != "true" ]; then
-    blocked "real execution is disabled while the repository remains public"
+    blocked "real execution is disabled by the governance flag"
   fi
 
   require_value RAILWAY_API_TOKEN
@@ -59,6 +59,58 @@ latest_status() {
 rows=json.load(sys.stdin)
 row=rows[0] if isinstance(rows,list) and rows else {}
 print(str(row.get("status","")))' 2>/dev/null || true
+}
+
+latest_successful_deployment_id() {
+  service="$1"
+  railway deployment list \
+    --service "$service" \
+    --environment "$NFCORE_RAILWAY_ENVIRONMENT_ID" \
+    --limit 20 --json 2>/dev/null |
+    python -c 'import json,sys
+rows=json.load(sys.stdin)
+for row in rows if isinstance(rows,list) else []:
+    if str(row.get("status","")) == "SUCCESS" and row.get("id"):
+        print(str(row["id"]))
+        break' 2>/dev/null || true
+}
+
+rollback_baseline_file() {
+  printf '%s' "${NFCORE_RAILWAY_ROLLBACK_BASELINE_FILE:-.artifacts/railway-rollback-baseline.tsv}"
+}
+
+capture_rollback_baseline() {
+  file="$(rollback_baseline_file)"
+  directory="$(dirname "$file")"
+  mkdir -p "$directory"
+  : > "$file"
+
+  for service in \
+    "$NFCORE_RAILWAY_API_SERVICE" \
+    "$NFCORE_RAILWAY_WORKER_SERVICE" \
+    "$NFCORE_RAILWAY_PORTAL_SERVICE"
+  do
+    deployment_id="$(latest_successful_deployment_id "$service")"
+    [ -n "$deployment_id" ] || fail "service=$service has no successful rollback baseline"
+    printf '%s\t%s\n' "$service" "$deployment_id" >> "$file"
+  done
+
+  echo "railway staging driver: ROLLBACK_BASELINE_CAPTURED"
+}
+
+baseline_deployment_for_service() {
+  service="$1"
+  file="$(rollback_baseline_file)"
+  [ -f "$file" ] || fail "rollback baseline file is missing"
+  awk -F '\t' -v service="$service" '$1 == service { print $2; exit }' "$file"
+}
+
+request_rollback() {
+  deployment_id="$1"
+  helper="${NFCORE_RAILWAY_GRAPHQL_HELPER:-scripts/deploy/railway_graphql.py}"
+  [ -f "$helper" ] || fail "Railway GraphQL rollback helper is missing"
+  python "$helper" rollback "$deployment_id" ||
+    fail "Railway rollback request failed"
 }
 
 wait_for_success() {
@@ -134,6 +186,7 @@ case "$command" in
     require_revision "$revision"
     preflight_checks
     assert_local_revision "$revision"
+    capture_rollback_baseline
     deploy_service "$NFCORE_RAILWAY_API_SERVICE"
     deploy_service "$NFCORE_RAILWAY_WORKER_SERVICE"
     deploy_service "$NFCORE_RAILWAY_PORTAL_SERVICE"
@@ -149,7 +202,18 @@ case "$command" in
   rollback)
     revision="${2:-}"
     require_revision "$revision"
-    blocked "exact Railway rollback remains pending external baseline certification"
+    preflight_checks
+    for service in \
+      "$NFCORE_RAILWAY_API_SERVICE" \
+      "$NFCORE_RAILWAY_WORKER_SERVICE" \
+      "$NFCORE_RAILWAY_PORTAL_SERVICE"
+    do
+      deployment_id="$(baseline_deployment_for_service "$service")"
+      [ -n "$deployment_id" ] || fail "service=$service rollback baseline is missing"
+      request_rollback "$deployment_id"
+      wait_for_success "$service"
+    done
+    echo "railway staging driver: ROLLBACK_READY failed_revision=$revision"
     ;;
   *)
     echo "railway staging driver: FAIL unsupported command"
