@@ -13,7 +13,12 @@ from typing import Annotated, Any, Protocol, runtime_checkable
 
 from fastapi import APIRouter, Body, HTTPException, status
 
-from kordena_fiscal.security.human_identity import HumanAuthenticationError
+from kordena_fiscal.security.human_identity import (
+    HumanAuthenticationError,
+    PASSWORD_MAX_LENGTH,
+    PASSWORD_MIN_LENGTH,
+    PasswordPolicyError,
+)
 from kordena_fiscal.security.human_recovery import (
     IssuedPasswordReset,
     PasswordRecoveryService,
@@ -95,12 +100,26 @@ def create_password_recovery_router(
                 new_password=new_password,
                 now=instant,
             )
-        except (HumanAuthenticationError, ValueError) as exc:
+        except PasswordPolicyError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "code": "PASSWORD_POLICY_INVALID",
+                    "message": (
+                        "A senha deve ter entre "
+                        f"{PASSWORD_MIN_LENGTH} e {PASSWORD_MAX_LENGTH} caracteres."
+                    ),
+                },
+            ) from exc
+        except HumanAuthenticationError as exc:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
                     "code": "PASSWORD_RESET_NOT_USABLE",
-                    "message": "Password reset is not usable",
+                    "message": (
+                        "Este link de recuperação não é mais válido. "
+                        "Solicite um novo link e use somente o e-mail mais recente."
+                    ),
                 },
             ) from exc
         if on_completed is not None:
