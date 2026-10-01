@@ -162,11 +162,14 @@ function showPasswordResetCompletion() {
 
 /** @param {unknown} error */
 function passwordResetErrorMessage(error) {
-  const detail = error && typeof error === "object" && "body" in error
-    && error.body && typeof error.body === "object"
-    ? error.body.detail
+  const body = error && typeof error === "object" && "body" in error
+    ? error.body
     : null;
-  const code = detail && typeof detail === "object" && typeof detail.code === "string"
+  const detail = body && typeof body === "object" && "detail" in body
+    ? body.detail
+    : null;
+  const code = detail && typeof detail === "object" && "code" in detail
+    && typeof detail.code === "string"
     ? detail.code
     : "";
   if (code === "PASSWORD_POLICY_INVALID") {
