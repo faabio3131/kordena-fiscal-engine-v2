@@ -31,6 +31,7 @@ from kordena_fiscal.web.commercial_trial import create_commercial_trial_router
 from kordena_fiscal.web.human_recovery import PasswordResetDelivery
 from kordena_fiscal.web.portal_runtime import PortalOperationExecutor
 
+from .activation_email import build_activation_delivery_from_environ
 from .cakto import build_cakto_webhook_router
 from .composition import RuntimeComposition, build_postgres_runtime_composition
 from .config import RuntimeSettings
@@ -454,4 +455,4 @@ def create_runtime_app(
     return app
 
 
-app = create_runtime_app()
+app = create_runtime_app(\n    password_reset_delivery=build_activation_delivery_from_environ(),\n)\n
