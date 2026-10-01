@@ -455,4 +455,6 @@ def create_runtime_app(
     return app
 
 
-app = create_runtime_app(\n    password_reset_delivery=build_activation_delivery_from_environ(),\n)\n
+app = create_runtime_app(
+    password_reset_delivery=build_activation_delivery_from_environ(),
+)
