@@ -23,7 +23,7 @@ def _load_approval_guard() -> Callable[[], None]:
         raise RuntimeError("could not load staging test account command")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return cast(Callable[[], None], getattr(module, "_require_staging_approval"))
+    return cast(Callable[[], None], module._require_staging_approval)
 
 
 def test_staging_test_account_command_rejects_non_staging(
