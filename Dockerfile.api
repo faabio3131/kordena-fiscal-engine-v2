@@ -10,6 +10,7 @@ RUN groupadd --gid 10001 nfcore && useradd --uid 10001 --gid 10001 --no-create-h
 COPY pyproject.toml README.md ./
 COPY src ./src
 COPY scripts/ci/migration_guard.py ./scripts/ci/migration_guard.py
+COPY scripts/admin/provision_staging_test_account.py ./scripts/admin/provision_staging_test_account.py
 RUN python -m pip install --upgrade pip && python -m pip install ".[web,postgres]"
 
 USER 10001:10001
