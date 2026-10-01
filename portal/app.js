@@ -160,6 +160,27 @@ function showPasswordResetCompletion() {
   passwordResetCompleteStatus.textContent = "";
 }
 
+/** @param {unknown} error */
+function passwordResetErrorMessage(error) {
+  const body = error && typeof error === "object" && "body" in error
+    ? error.body
+    : null;
+  const detail = body && typeof body === "object" && "detail" in body
+    ? body.detail
+    : null;
+  const code = detail && typeof detail === "object" && "code" in detail
+    && typeof detail.code === "string"
+    ? detail.code
+    : "";
+  if (code === "PASSWORD_POLICY_INVALID") {
+    return "A senha deve ter entre 12 e 1024 caracteres. Letras, números, espaços e símbolos são permitidos.";
+  }
+  if (code === "PASSWORD_RESET_NOT_USABLE") {
+    return "Este link de recuperação não é mais válido. Solicite um novo link e use somente o e-mail mais recente.";
+  }
+  return error instanceof Error ? error.message : "Não foi possível alterar a senha.";
+}
+
 /** @param {unknown} value */
 function text(value) {
   if (value === null || value === undefined) return "—";
@@ -819,7 +840,7 @@ passwordResetCompleteForm.addEventListener("submit", async (event) => {
     showRegularLogin();
     showLogin("Senha alterada. Entre novamente com a nova senha.");
   } catch (error) {
-    passwordResetCompleteStatus.textContent = error instanceof Error ? error.message : "Não foi possível alterar a senha";
+    passwordResetCompleteStatus.textContent = passwordResetErrorMessage(error);
   }
 });
 

@@ -69,6 +69,16 @@ button:disabled, input:disabled, select:disabled, textarea:disabled {
 }
 button:disabled { transform: none !important; box-shadow: none !important; }
 
+.form-hint {
+  margin: -4px 0 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(0, 229, 255, .14);
+  border-radius: 10px;
+  background: rgba(0, 229, 255, .04);
+  color: #9fb9ce;
+  font-size: 11px;
+  line-height: 1.55;
+}
 .form-error { min-height: 20px; margin: 0; color: #ff9cac; font-size: 12px; }
 .form-error:empty { visibility: hidden; }
 

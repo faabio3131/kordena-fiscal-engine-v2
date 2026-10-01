@@ -21,6 +21,7 @@ from kordena_fiscal.security.human_recovery import (
 NOW = datetime(2026, 9, 14, 16, 50, tzinfo=UTC)
 OLD_PASSWORD = "old-password-nfcore-2026"
 NEW_PASSWORD = "new-password-nfcore-2026"
+PASSWORD_MANAGER_PASSWORD = "G7!mQ2#vR9$kT4-xP8@cL6"
 
 
 def foundation() -> tuple[
@@ -175,3 +176,34 @@ def test_new_reset_invalidates_all_previous_pending_resets_for_account() -> None
         now=NOW + timedelta(minutes=2),
     )
     assert account_id == "account-reset"
+
+
+def test_password_manager_generated_password_is_accepted() -> None:
+    hasher, accounts, sessions = foundation()
+    identity = HumanIdentityService(
+        accounts=accounts,
+        sessions=sessions,
+        password_hasher=hasher,
+    )
+    recovery = PasswordRecoveryService(
+        accounts=accounts,
+        sessions=sessions,
+        resets=InMemoryPasswordResetRepository(),
+        password_hasher=hasher,
+    )
+
+    reset = recovery.request_reset(email="reset@example.com", now=NOW)
+    assert reset is not None
+
+    recovery.complete_reset(
+        reset_token=reset.reset_token,
+        new_password=PASSWORD_MANAGER_PASSWORD,
+        now=NOW + timedelta(minutes=1),
+    )
+
+    issued = identity.login(
+        email="reset@example.com",
+        password=PASSWORD_MANAGER_PASSWORD,
+        now=NOW + timedelta(minutes=2),
+    )
+    assert issued.account.account_id == "account-reset"

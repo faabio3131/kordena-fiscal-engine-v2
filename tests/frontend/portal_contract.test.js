@@ -47,6 +47,12 @@ test("commercial recovery is browser-usable without exposing reset token on requ
   assert.match(html, /id="forgot-password-action"/);
   assert.match(html, /id="password-reset-request-form"/);
   assert.match(html, /autocomplete="new-password"/);
+  assert.match(html, /minlength="12"/);
+  assert.match(html, /maxlength="1024"/);
+  assert.match(html, /aria-describedby="password-policy"/);
+  assert.match(html, /gerenciadores de senha são aceitas/);
+  assert.match(script, /PASSWORD_POLICY_INVALID/);
+  assert.match(script, /PASSWORD_RESET_NOT_USABLE/);
   assert.match(script, /\/v1\/auth\/password-reset\/request/);
   assert.match(script, /\/v1\/auth\/password-reset\/complete/);
   assert.match(script, /reset_token/);

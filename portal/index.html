@@ -37,7 +37,11 @@
 
       <form id="password-reset-complete-form" hidden>
         <p>Defina uma nova senha para concluir a recuperação.</p>
-        <label>Nova senha<input id="password-reset-new-password" name="new_password" type="password" autocomplete="new-password" minlength="12" required></label>
+        <p id="password-policy" class="form-hint">
+          Use de 12 a 1024 caracteres. Letras, números, espaços e símbolos são permitidos.
+          Senhas fortes sugeridas pelo navegador ou por gerenciadores de senha são aceitas.
+        </p>
+        <label>Nova senha<input id="password-reset-new-password" name="new_password" type="password" autocomplete="new-password" minlength="12" maxlength="1024" aria-describedby="password-policy" required></label>
         <button class="primary" type="submit">Alterar senha</button>
         <p id="password-reset-complete-status" class="form-error" role="alert" aria-live="polite"></p>
       </form>

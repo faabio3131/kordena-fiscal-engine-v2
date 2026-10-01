@@ -113,3 +113,37 @@ test("activation fragment completes password setup without keeping token in URL"
   await expect(page).not.toHaveURL(/token=/);
   await expect(page.getByText("Senha alterada. Entre novamente com a nova senha.")).toBeVisible();
 });
+
+
+test("activation shows actionable pt-BR message for an unusable reset token", async ({ page }) => {
+  await page.route("**/v1/portal/bootstrap", async (route) => {
+    await route.fulfill({
+      status: 401,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: { message: "Authentication required" } }),
+    });
+  });
+  await page.route("**/v1/auth/password-reset/complete", async (route) => {
+    await route.fulfill({
+      status: 400,
+      contentType: "application/json",
+      body: JSON.stringify({
+        detail: {
+          code: "PASSWORD_RESET_NOT_USABLE",
+          message: "Password reset is not usable",
+        },
+      }),
+    });
+  });
+
+  await page.goto("/#token=obsolete-reset-token");
+  await expect(page.getByText(/12 a 1024 caracteres/)).toBeVisible();
+  await page.locator("#password-reset-new-password").fill("G7!mQ2#vR9$kT4-xP8@cL6");
+  await page.getByRole("button", { name: "Alterar senha" }).click();
+
+  await expect(
+    page.getByText(
+      "Este link de recuperação não é mais válido. Solicite um novo link e use somente o e-mail mais recente.",
+    ),
+  ).toBeVisible();
+});
