@@ -323,3 +323,50 @@ GitHub CI for this evidence PR before the cleanup addendum:
 `f9ad22f724ed99880924a8f9b769b8f6311052b4`.
 
 The remaining CL-15 infrastructure gate is the application deployment rollback rehearsal.
+
+## Provider rollback rehearsal result — 2026-10-01
+
+A controlled same-revision rollback rehearsal was attempted without introducing an older
+NFCore revision.
+
+Observed sequence:
+
+- active API baseline before rehearsal:
+  `90e15272-eeed-4720-98e4-7028cbb54f0d` — **SUCCESS**;
+- a same-SHA redeploy with migration approval disabled failed closed as expected:
+  `95018620-285b-4758-84c8-7cedc6bf977d` — **FAILED** because
+  `NFCORE_SCHEMA_MIGRATION_APPROVED=true` was required;
+- migration approval was temporarily enabled and a fresh same-SHA deployment succeeded:
+  `58967760-37d7-42a4-94a5-82ef6d936b79` — **SUCCESS**;
+- migration was idempotent:
+  before `1..12`, applied `()`, after `1..12`;
+- migration approval was immediately returned to
+  `NFCORE_SCHEMA_MIGRATION_APPROVED=false`.
+
+Immediately after the new deployment became active, Railway changed the previous successful
+baseline `90e15272-eeed-4720-98e4-7023-0b761cb96b0d` to **REMOVED** and it was no longer
+present as a selectable rollback target in the dashboard. Earlier successful deployments were
+already in the same `REMOVED` state.
+
+Railway documentation requires a deployment to expose `canRollback: true` for provider-native
+rollback. The currently connected Railway tool does not expose this GraphQL field directly,
+and the dashboard did not present a rollback target after the successful replacement.
+
+Therefore:
+
+- provider-native application rollback is **NOT CERTIFIED** in the current low-cost staging
+  configuration;
+- the result is classified as **BLOCKED_BY_PROVIDER_RETENTION/CAPABILITY**, not as a test pass;
+- no production rollback readiness claim is authorized from this rehearsal;
+- the blocker is deferred to pre-production readiness, when the chosen Railway plan/retention
+  capability or another approved rollback mechanism is funded and exercised.
+
+This does not invalidate the already proven low-cost staging controls:
+
+- immutable canonical SHA deployment;
+- reproducible source deployment from private GitHub;
+- fail-closed migration approval;
+- idempotent migration;
+- external HTTPS health/readiness;
+- portable logical backup + checksum + real restore rehearsal.
+
