@@ -86,3 +86,30 @@ test("governed mutation sends csrf and idempotency proof", async ({ page, contex
   expect(seenCsrf).toBe("csrf-e2e");
   expect(seenIdempotency.length).toBeGreaterThan(10);
 });
+
+test("activation fragment completes password setup without keeping token in URL", async ({ page }) => {
+  let submittedToken = "";
+
+  await page.route("**/v1/portal/bootstrap", async (route) => {
+    await route.fulfill({
+      status: 401,
+      contentType: "application/json",
+      body: JSON.stringify({ detail: { message: "Authentication required" } }),
+    });
+  });
+  await page.route("**/v1/auth/password-reset/complete", async (route) => {
+    const payload = route.request().postDataJSON();
+    submittedToken = payload.reset_token || "";
+    await route.fulfill({ status: 204, body: "" });
+  });
+
+  await page.goto("/#token=synthetic-fragment-reset-token");
+  await expect(page.locator("#password-reset-complete-form")).toBeVisible();
+
+  await page.locator("#password-reset-new-password").fill("Strong-password-2026");
+  await page.getByRole("button", { name: "Alterar senha" }).click();
+
+  expect(submittedToken).toBe("synthetic-fragment-reset-token");
+  await expect(page).not.toHaveURL(/token=/);
+  await expect(page.getByText("Senha alterada. Entre novamente com a nova senha.")).toBeVisible();
+});

@@ -90,12 +90,21 @@ function csrfToken() {
 
 /** @returns {string|null} */
 function resetTokenFromLocation() {
+  const fragment = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const fragmentToken = fragment.get("token");
+  if (fragmentToken) return fragmentToken;
+  // Temporary compatibility for previously issued links. New activation delivery uses
+  // the fragment so raw reset tokens are not sent in the initial HTTP request.
   return new URLSearchParams(window.location.search).get("reset_token");
 }
 
 function clearResetTokenFromLocation() {
   const url = new URL(window.location.href);
   url.searchParams.delete("reset_token");
+  const fragment = new URLSearchParams(url.hash.replace(/^#/, ""));
+  fragment.delete("token");
+  const remainingFragment = fragment.toString();
+  url.hash = remainingFragment ? `#${remainingFragment}` : "";
   window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
 }
 
