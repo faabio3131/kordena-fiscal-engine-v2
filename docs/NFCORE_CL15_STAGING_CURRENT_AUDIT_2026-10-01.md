@@ -298,3 +298,28 @@ dashboard action. These services must not remain as permanent infrastructure.
 3. Persist cleanup evidence.
 4. Continue CL-15/CL-16 only from the remaining real blockers; do not treat the logical
    recovery rehearsal as production DR certification.
+
+## Cleanup reconciliation — 2026-10-01
+
+Human destructive-change confirmation was completed in the Railway dashboard.
+
+Post-cleanup read-back confirms exactly four canonical services remain in
+`FM NFCORE Staging`:
+
+- `Postgres` — **SUCCESS**;
+- `nfcore-api` — **SUCCESS**;
+- `nfcore-worker` — **SUCCESS** / governed one-shot completion;
+- `nfcore-portal` — **SUCCESS**.
+
+The two temporary DR rehearsal services are no longer present:
+
+- `nfcore-dr-rehearsal-temp-MiP6` — removed;
+- `nfcore-dr-rehearsal-temp` — removed.
+
+Railway reports no unmerged/staged environment changes after cleanup.
+
+GitHub CI for this evidence PR before the cleanup addendum:
+`FM NFCORE V1 CI #525` — **SUCCESS** on
+`f9ad22f724ed99880924a8f9b769b8f6311052b4`.
+
+The remaining CL-15 infrastructure gate is the application deployment rollback rehearsal.
