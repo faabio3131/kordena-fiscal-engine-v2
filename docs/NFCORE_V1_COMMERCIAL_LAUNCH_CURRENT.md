@@ -8,6 +8,61 @@
 
 This file is the persistent CURRENT checkpoint for FM NFCORE V1 Commercial Launch. GitHub remains the first technical source of truth and must be revalidated on every resume.
 
+## 0A. CURRENT override — 2026-10-01
+
+This subsection is authoritative over older Railway/status wording below. GitHub and Railway were re-audited read-only.
+
+### GitHub
+
+- NFCore main: `f2fd8a875bdf8ae5327d7f716209603f60d34570`;
+- latest main CI: **FM NFCORE V1 CI #519 — SUCCESS**;
+- repository remains **PUBLIC**;
+- Site FM main: `26bfe05c2891bfc68f680587d0ae47ee36f105b1`;
+- Site Validation #553 and Cloudflare Worker Validation #127: **SUCCESS**.
+
+### Railway real state
+
+The dedicated project `FM NFCORE Staging` now exists. Its Railway default environment is labeled
+`production`; this label is inside the staging project and does **not** mean NFCore production is
+approved.
+
+Services:
+
+- `nfcore-api`: **SUCCESS** on older SHA `11cec7991c5345e03ef54e58b1fa6b5fbcd51801`;
+- `nfcore-worker`: **CRASHED** on the same older SHA;
+- `nfcore-portal`: **SUCCESS** on older SHA `5201eaa663b029d304a89131c28d501e444f730d`.
+
+The worker fails closed with `durable worker runtime requires PostgreSQL persistence`.
+
+There is currently:
+
+- no PostgreSQL service;
+- no configured runtime variables/secrets on API/worker/portal;
+- no public Railway domain attached to API or portal;
+- no deployment of current main `f2fd8a875bdf8ae5327d7f716209603f60d34570`;
+- no certified rollback rehearsal;
+- no real staging commercial E2E.
+
+Therefore:
+
+- CL-15 = **IN_PROGRESS / BLOCKED_EXTERNAL**;
+- `STAGING_DEPLOYED_AND_E2E_VALIDATED=false`;
+- CL-16 = **NOT_STARTED_OPERATIONALLY**;
+- CL-17 = **NOT_STARTED_OPERATIONALLY**;
+- CL-18 = **NOT_STARTED**;
+- `PRODUCTION_APPROVED=NO`.
+
+### Activation delivery boundary
+
+The existing API already exposes the injected provider-neutral `PasswordResetDelivery` port.
+`SecureActivationEmailDelivery` is compatible with this contract. No new Core authority or
+provider-specific domain code is required before choosing/configuring a real outbound delivery
+provider.
+
+See `docs/NFCORE_CL15_STAGING_CURRENT_AUDIT_2026-10-01.md`.
+
+---
+
 ## 0. CURRENT reconciliation — 2026-09-30
 
 This section is authoritative over stale status language below while preserving historical audit
