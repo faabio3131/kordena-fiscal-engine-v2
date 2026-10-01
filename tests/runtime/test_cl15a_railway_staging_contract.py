@@ -44,16 +44,21 @@ def _git_head() -> str:
     ).stdout.strip()
 
 
-def _fake_railway(tmp_path: Path, env: dict[str, str]) -> Path:
+def _fake_railway(
+    tmp_path: Path,
+    env: dict[str, str],
+    *,
+    deployment_status: str = "SUCCESS",
+) -> Path:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     railway = bin_dir / "railway"
     railway.write_text(
-        """#!/bin/sh
+        f"""#!/bin/sh
 set -eu
 printf '%s\\n' "$*" >> "$RAILWAY_FAKE_LOG"
 if [ "$1" = "deployment" ] && [ "$2" = "list" ]; then
-  printf '%s\\n' '[{"id":"deployment-1","status":"SUCCESS"}]'
+  printf '%s\\n' '[{{"id":"deployment-1","status":"{deployment_status}"}}]'
 fi
 exit 0
 """,
@@ -63,6 +68,25 @@ exit 0
     env["PATH"] = f"{bin_dir}:{env.get('PATH', '')}"
     env["RAILWAY_FAKE_LOG"] = str(tmp_path / "railway.log")
     return Path(env["RAILWAY_FAKE_LOG"])
+
+
+def _fake_rollback_helper(tmp_path: Path, env: dict[str, str]) -> Path:
+    helper = tmp_path / "railway_graphql_fake.py"
+    helper.write_text(
+        """from __future__ import annotations
+
+import os
+import sys
+
+with open(os.environ["RAILWAY_GRAPHQL_FAKE_LOG"], "a", encoding="utf-8") as handle:
+    handle.write(" ".join(sys.argv[1:]) + "\\n")
+print("railway graphql: ROLLBACK_REQUESTED deployment=fake status=QUEUED")
+""",
+        encoding="utf-8",
+    )
+    env["NFCORE_RAILWAY_GRAPHQL_HELPER"] = str(helper)
+    env["RAILWAY_GRAPHQL_FAKE_LOG"] = str(tmp_path / "graphql.log")
+    return Path(env["RAILWAY_GRAPHQL_FAKE_LOG"])
 
 
 def test_railway_driver_advertises_canonical_contract_and_provider() -> None:
@@ -82,13 +106,13 @@ def test_railway_driver_fails_closed_without_external_identifiers() -> None:
     assert "BLOCKED_EXTERNAL missing=NFCORE_RAILWAY_PROJECT_ID" in result.stdout
 
 
-def test_railway_driver_refuses_real_execution_while_public_repo_guard_is_off() -> None:
+def test_railway_driver_refuses_real_execution_without_governance_enablement() -> None:
     env = _base_env()
 
     result = _run("preflight", env=env)
 
     assert result.returncode == 42
-    assert "real execution is disabled while the repository remains public" in result.stdout
+    assert "real execution is disabled by the governance flag" in result.stdout
 
 
 def test_railway_driver_preflight_can_be_prepared_without_exposing_secrets(
@@ -145,6 +169,7 @@ def test_railway_driver_prepares_immutable_three_service_deploy(
             "RAILWAY_API_TOKEN": "synthetic-token",
             "NFCORE_RAILWAY_WAIT_ATTEMPTS": "1",
             "NFCORE_RAILWAY_WAIT_SECONDS": "0",
+            "NFCORE_RAILWAY_ROLLBACK_BASELINE_FILE": str(tmp_path / "baseline.tsv"),
         }
     )
     log = _fake_railway(tmp_path, env)
@@ -153,9 +178,17 @@ def test_railway_driver_prepares_immutable_three_service_deploy(
     result = _run("deploy", revision, env=env)
 
     assert result.returncode == 0
+    assert "ROLLBACK_BASELINE_CAPTURED" in result.stdout
     assert f"DEPLOY_READY revision={revision}" in result.stdout
+    baseline = Path(env["NFCORE_RAILWAY_ROLLBACK_BASELINE_FILE"]).read_text()
+    for service in ("api", "worker", "portal"):
+        assert f"{service}\tdeployment-1" in baseline
     command_log = log.read_text()
     for service in ("api", "worker", "portal"):
+        assert (
+            f"deployment list --service {service} --environment environment-id "
+            "--limit 20 --json"
+        ) in command_log
         assert (
             f"up --ci --project project-id --environment environment-id "
             f"--service {service}"
@@ -164,6 +197,26 @@ def test_railway_driver_prepares_immutable_three_service_deploy(
             f"deployment list --service {service} --environment environment-id "
             "--limit 1 --json"
         ) in command_log
+
+
+def test_railway_driver_refuses_deploy_without_successful_rollback_baseline(
+    tmp_path: Path,
+) -> None:
+    env = _base_env()
+    env.update(
+        {
+            "NFCORE_RAILWAY_REAL_EXECUTION_ENABLED": "true",
+            "RAILWAY_API_TOKEN": "synthetic-token",
+            "NFCORE_RAILWAY_ROLLBACK_BASELINE_FILE": str(tmp_path / "baseline.tsv"),
+        }
+    )
+    log = _fake_railway(tmp_path, env, deployment_status="CRASHED")
+
+    result = _run("deploy", _git_head(), env=env)
+
+    assert result.returncode == 1
+    assert "has no successful rollback baseline" in result.stdout
+    assert "up --ci" not in log.read_text()
 
 
 def test_railway_driver_verify_worker_uses_terminal_success(
@@ -187,8 +240,36 @@ def test_railway_driver_verify_worker_uses_terminal_success(
     assert f"WORKER_READY revision={revision}" in result.stdout
 
 
-def test_railway_driver_rollback_remains_fail_closed_until_externally_certified() -> None:
-    result = _run("rollback", "0" * 40)
+def test_railway_driver_rolls_back_to_captured_deployments(
+    tmp_path: Path,
+) -> None:
+    env = _base_env()
+    env.update(
+        {
+            "NFCORE_RAILWAY_REAL_EXECUTION_ENABLED": "true",
+            "RAILWAY_API_TOKEN": "synthetic-token",
+            "NFCORE_RAILWAY_WAIT_ATTEMPTS": "1",
+            "NFCORE_RAILWAY_WAIT_SECONDS": "0",
+            "NFCORE_RAILWAY_ROLLBACK_BASELINE_FILE": str(tmp_path / "baseline.tsv"),
+        }
+    )
+    _fake_railway(tmp_path, env)
+    graphql_log = _fake_rollback_helper(tmp_path, env)
+    Path(env["NFCORE_RAILWAY_ROLLBACK_BASELINE_FILE"]).write_text(
+        "api\tapi-deployment\n"
+        "worker\tworker-deployment\n"
+        "portal\tportal-deployment\n",
+        encoding="utf-8",
+    )
+    revision = "0" * 40
 
-    assert result.returncode == 42
-    assert "rollback remains pending external baseline certification" in result.stdout
+    result = _run("rollback", revision, env=env)
+
+    assert result.returncode == 0
+    assert f"ROLLBACK_READY failed_revision={revision}" in result.stdout
+    requests = graphql_log.read_text().splitlines()
+    assert requests == [
+        "rollback api-deployment",
+        "rollback worker-deployment",
+        "rollback portal-deployment",
+    ]

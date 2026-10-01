@@ -52,9 +52,13 @@ The Railway driver now prepares the first three operations behind the real-execu
 Its backup path targets Railway's native PostgreSQL volume-backup command. Deploy uploads the
 exact CI checkout to all three Railway services and waits for terminal `SUCCESS`.
 
-The rollback command remains deliberately fail-closed until a real baseline deployment exists
-and Railway rollback is exercised/certified against that baseline. This preserves the CL-15
-requirement instead of treating an untested rollback path as ready.
+This CL-15 candidate change replaces the placeholder rollback blocker with a fail-closed
+Railway recovery path. Immediately before a three-service rollout, the driver captures the last
+successful deployment ID for API, worker and portal. Rollback delegates to
+`scripts/deploy/railway_graphql.py`, which uses Railway's official `deploymentRollback`
+mutation without printing authentication material. Missing successful baselines still block
+the deploy. The implementation remains **INTERNALLY PREPARED / EXTERNAL CERTIFICATION
+PENDING** until it is exercised against real staging deployments.
 
 The driver must not print credentials, tokens, connection strings, certificates or secret payloads.
 
@@ -70,7 +74,7 @@ A real staging deployment requires externally provisioned values:
 - provider authentication/IAM required by the selected driver;
 - external secret backend and real staging infrastructure.
 
-When `execute_deploy=true`, the flow is: fail-closed preflight -> governed migration -> deploy immutable revision -> liveness/readiness smoke -> safe deployment evidence. If post-deploy smoke fails, the provider rollback command is invoked and the workflow fails.
+When `execute_deploy=true`, the flow is: fail-closed preflight -> governed migration -> deploy immutable revision -> liveness/readiness smoke -> safe deployment evidence. The API runtime image includes the governed migration runner so Railway can execute `NFCORE_SCHEMA_MIGRATION_APPROVED=true python scripts/ci/migration_guard.py --apply` inside the private staging network before runtime startup. If post-deploy smoke fails, the provider rollback command is invoked and the workflow fails.
 
 The status may become `STAGING_READY` only after a real deployed environment passes this flow. Before that, the correct external state is `BLOCKED_EXTERNAL`.
 
@@ -107,16 +111,16 @@ Only non-secret evidence may be uploaded as CI artifacts. Current artifacts incl
 
 CL-15A selects **Railway** as the staging provider and adds a public-CI-safe provider contract at `scripts/deploy/drivers/railway.sh`.
 
-The repository remains public temporarily because the private GitHub Actions monthly quota is exhausted and the full certification matrix must continue to run. Therefore no real Railway token, staging database DSN, secret-backend credential or fiscal secret is permitted in GitHub during CL-15A.
+The repository is now **PRIVATE**, resolving the previous public-repository secret boundary.
 
-Railway Hobby capacity is now available. A dedicated `FM NFCORE Staging` project exists and
-secretless API, worker and portal services are provisioned. Those items are no longer blockers.
+Railway Hobby capacity is available. A dedicated `FM NFCORE Staging` project exists with
+API, worker, portal and a managed PostgreSQL service using persistent storage and private
+networking. Repository privacy and PostgreSQL provisioning are therefore no longer blockers.
 
 Real staging remains open until all of the following are true:
 
-- PostgreSQL staging and external secret backend are provisioned;
-- real database/provider/runtime secrets are supplied outside Git;
-- the repository is PRIVATE again or another approved secret-safe execution boundary exists;
+- the external secret-backend execution boundary required by active integrations is provisioned;
+- required provider/runtime secrets are supplied outside Git;
 - Railway native backup creation is exercised against the real staging PostgreSQL service;
 - one known-good staging baseline exists;
 - exact application rollback is exercised and certified against that baseline;
