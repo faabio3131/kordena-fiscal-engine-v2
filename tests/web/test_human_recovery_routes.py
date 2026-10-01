@@ -129,3 +129,95 @@ def test_password_reset_remains_successful_when_commercial_callback_is_temporari
         },
     )
     assert response.status_code == 204
+
+
+def test_password_reset_reports_password_policy_without_consuming_valid_token() -> None:
+    hasher = ScryptPasswordHasher()
+    accounts = InMemoryHumanAccountRepository(
+        (
+            HumanAccount(
+                account_id="commercial-owner",
+                email="owner@example.com",
+                password_hash=hasher.hash("temporary-commercial-password-2026"),
+                tenant_id="tenant-commercial",
+                role=PortalRole.OWNER,
+            ),
+        )
+    )
+    recovery = PasswordRecoveryService(
+        accounts=accounts,
+        sessions=InMemoryWebSessionRepository(),
+        resets=InMemoryPasswordResetRepository(),
+        password_hasher=hasher,
+    )
+    delivery = CaptureDelivery()
+    web = TestClient(
+        create_app(
+            password_recovery=recovery,
+            password_reset_delivery=delivery,
+        ),
+        base_url="https://nfcore.test",
+    )
+
+    assert web.post(
+        "/v1/auth/password-reset/request",
+        json={"email": "owner@example.com"},
+    ).status_code == 202
+    assert delivery.reset is not None
+
+    rejected = web.post(
+        "/v1/auth/password-reset/complete",
+        json={"reset_token": delivery.reset.reset_token, "new_password": "short"},
+    )
+    assert rejected.status_code == 400
+    assert rejected.json()["detail"]["code"] == "PASSWORD_POLICY_INVALID"
+    assert "12" in rejected.json()["detail"]["message"]
+    assert "1024" in rejected.json()["detail"]["message"]
+
+    accepted = web.post(
+        "/v1/auth/password-reset/complete",
+        json={
+            "reset_token": delivery.reset.reset_token,
+            "new_password": "G7!mQ2#vR9$kT4-xP8@cL6",
+        },
+    )
+    assert accepted.status_code == 204
+
+
+def test_password_reset_reports_unusable_token_separately_from_password_policy() -> None:
+    hasher = ScryptPasswordHasher()
+    accounts = InMemoryHumanAccountRepository(
+        (
+            HumanAccount(
+                account_id="commercial-owner",
+                email="owner@example.com",
+                password_hash=hasher.hash("temporary-commercial-password-2026"),
+                tenant_id="tenant-commercial",
+                role=PortalRole.OWNER,
+            ),
+        )
+    )
+    recovery = PasswordRecoveryService(
+        accounts=accounts,
+        sessions=InMemoryWebSessionRepository(),
+        resets=InMemoryPasswordResetRepository(),
+        password_hasher=hasher,
+    )
+    web = TestClient(
+        create_app(
+            password_recovery=recovery,
+            password_reset_delivery=CaptureDelivery(),
+        ),
+        base_url="https://nfcore.test",
+    )
+
+    rejected = web.post(
+        "/v1/auth/password-reset/complete",
+        json={
+            "reset_token": "not-a-valid-reset-token",
+            "new_password": "G7!mQ2#vR9$kT4-xP8@cL6",
+        },
+    )
+    assert rejected.status_code == 400
+    assert rejected.json()["detail"]["code"] == "PASSWORD_RESET_NOT_USABLE"
+    assert "e-mail mais recente" in rejected.json()["detail"]["message"]
