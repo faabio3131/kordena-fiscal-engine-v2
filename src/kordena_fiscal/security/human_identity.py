@@ -28,6 +28,14 @@ class HumanAuthenticationError(HumanIdentityError):
     """Raised when credentials or a web session cannot be authenticated."""
 
 
+class PasswordPolicyError(ValueError):
+    """Raised when a human password violates the explicit password policy."""
+
+
+PASSWORD_MIN_LENGTH = 12
+PASSWORD_MAX_LENGTH = 1024
+
+
 class HumanRateLimitError(HumanAuthenticationError):
     """Raised when login attempts exceed the configured defensive policy."""
 
@@ -194,11 +202,15 @@ class ScryptPasswordHasher:
     @staticmethod
     def _validate_password(password: str) -> str:
         if not isinstance(password, str):
-            raise ValueError("password must be a string")
-        if len(password) < 12:
-            raise ValueError("password must contain at least 12 characters")
-        if len(password) > 1024:
-            raise ValueError("password exceeds max length 1024")
+            raise PasswordPolicyError("password must be a string")
+        if len(password) < PASSWORD_MIN_LENGTH:
+            raise PasswordPolicyError(
+                f"password must contain at least {PASSWORD_MIN_LENGTH} characters"
+            )
+        if len(password) > PASSWORD_MAX_LENGTH:
+            raise PasswordPolicyError(
+                f"password exceeds max length {PASSWORD_MAX_LENGTH}"
+            )
         return password
 
 
