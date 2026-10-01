@@ -14,9 +14,9 @@ from typing import Annotated, Any, Protocol, runtime_checkable
 from fastapi import APIRouter, Body, HTTPException, status
 
 from kordena_fiscal.security.human_identity import (
-    HumanAuthenticationError,
     PASSWORD_MAX_LENGTH,
     PASSWORD_MIN_LENGTH,
+    HumanAuthenticationError,
     PasswordPolicyError,
 )
 from kordena_fiscal.security.human_recovery import (
