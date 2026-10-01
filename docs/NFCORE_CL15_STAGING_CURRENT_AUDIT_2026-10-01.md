@@ -80,6 +80,24 @@ A pending staged Railway change exists on `nfcore-portal`. It was not applied du
 13. execute commercial staging E2E;
 14. persist evidence and only then set `STAGING_DEPLOYED_AND_E2E_VALIDATED=true`.
 
+## Activation-delivery integration audit
+
+The internal activation boundary does **not** require a new Core authority.
+
+Confirmed in CURRENT code:
+
+- `PasswordRecoveryService` remains the canonical reset/activation authority;
+- `web.human_recovery.PasswordResetDelivery` is the existing injected external delivery port;
+- `SecureActivationEmailDelivery` exposes the same `deliver(email, reset)` contract;
+- `create_runtime_app(..., password_reset_delivery=...)` already uses that injected port for recovery/trial delivery and commercial delivery-path readiness;
+- therefore no provider-specific delivery implementation should be added to the Core before a real outbound provider is selected.
+
+The truthful state is:
+
+`DELIVERY_PORT_READY / SECURE_ADAPTER_READY / CONCRETE_PROVIDER_NOT_SELECTED_OR_CONFIGURED`
+
+This remains `BLOCKED_EXTERNAL`, not an internally missing domain redesign.
+
 ## Human / external approvals still required
 
 The following are **not** authorized by this checkpoint:
