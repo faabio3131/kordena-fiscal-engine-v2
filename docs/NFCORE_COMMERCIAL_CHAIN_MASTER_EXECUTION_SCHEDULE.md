@@ -8,6 +8,34 @@
 
 ---
 
+## CURRENT EXECUTION CHECKPOINT — 2026-10-01 — REAL RAILWAY STATE AUDIT
+
+GitHub main: `f2fd8a875bdf8ae5327d7f716209603f60d34570` with **FM NFCORE V1 CI #519 — SUCCESS**.
+
+Read-only Railway inspection confirms that the external staging scaffold now exists but the CL-15 completion gate remains open:
+
+- project `FM NFCORE Staging` exists with API, worker and portal services;
+- no PostgreSQL service exists;
+- no runtime variables/secrets are configured on the three services;
+- API is SUCCESS on older SHA `11cec7991c5345e03ef54e58b1fa6b5fbcd51801`;
+- worker is CRASHED on the same older SHA because durable runtime requires PostgreSQL persistence;
+- portal is SUCCESS on older SHA `5201eaa663b029d304a89131c28d501e444f730d`;
+- current main `f2fd8a875bdf8ae5327d7f716209603f60d34570` is not deployed;
+- no public Railway domain is attached to API or portal;
+- a Railway portal change remains staged and was not applied by this audit;
+- repository remains PUBLIC, therefore real secret injection remains prohibited;
+- `STAGING_DEPLOYED_AND_E2E_VALIDATED=false`;
+- CL-15 remains **IN_PROGRESS / BLOCKED_EXTERNAL**;
+- CL-16 remains **NOT_STARTED_OPERATIONALLY**.
+
+Detailed evidence and Current → Target are recorded in
+`docs/NFCORE_CL15_STAGING_CURRENT_AUDIT_2026-10-01.md`.
+
+The next gate requires explicit human authorization before repository privacy changes,
+paid/external Railway/PostgreSQL provisioning, real secret injection or real staging deploy.
+
+---
+
 ## CURRENT EXECUTION CHECKPOINT — 2026-09-30 — SURGICAL RECONCILIATION
 
 Reconciliation base main: `62150240bef42918e9f04a6d5ab955ac7f9cdecb`.
