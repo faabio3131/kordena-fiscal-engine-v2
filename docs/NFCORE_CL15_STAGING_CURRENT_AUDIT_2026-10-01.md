@@ -120,3 +120,53 @@ Internal preparation is complete enough to identify the real boundary. The next 
 3. staging-only secret injection and immutable deploy.
 
 Until that authorization exists, CL-16 remains `NOT_STARTED_OPERATIONALLY` even though its validation harness is already prepared.
+
+## Authorized execution update — 2026-10-01
+
+The previous read-only checkpoint above is preserved as historical evidence. After explicit
+human authorization, the external boundary changed as follows:
+
+- GitHub repository visibility is now **PRIVATE**;
+- post-merge canonical main remains
+  `ccc8def88b77c70aaff7c729e9d17c35a37ad937` with CI #522 `SUCCESS`;
+- Railway managed PostgreSQL is now provisioned as service
+  `Postgres` / `71691da6-8d32-4c95-9475-d63d9da1cb0c`;
+- PostgreSQL has persistent volume
+  `c36ea345-b082-4379-9407-c94e9918a01c` at
+  `/var/lib/postgresql/data`;
+- no public PostgreSQL domain/TCP proxy is attached;
+- API and worker runtime variables are not yet activated;
+- public API/portal staging domains are not yet attached;
+- commercial activation delivery still has no selected/configured concrete outbound provider;
+- `STAGING_DEPLOYED_AND_E2E_VALIDATED=false` remains unchanged.
+
+### Railway reconciliation finding
+
+Provisioning PostgreSQL caused Railway to commit the pre-existing staged environment patch.
+The portal configuration is consequently pinned to the historical commit
+`5201eaa663b029d304a89131c28d501e444f730d`. The portal is still online, but this pin is
+configuration drift and must be replaced by the same immutable certified revision used by the
+API and worker before CL-15 can be certified.
+
+### New internal CL-15 candidate work
+
+Branch `feat/nfcore-cl15-railway-runtime-gates` prepares:
+
+- the governed `migration_guard.py` inside the API runtime image for private-network
+  pre-deploy migration;
+- capture of successful API/worker/portal deployment baselines before a rollout;
+- Railway rollback through the official GraphQL `deploymentRollback` mutation;
+- fail-closed refusal to deploy when a successful rollback baseline is missing;
+- secret-safe tests for the rollback helper.
+
+This branch is a **candidate**, not CURRENT main, until its CI passes and merge is separately
+authorized.
+
+### Worker staging classification
+
+The current worker deliberately fails closed without an explicit external handler factory.
+For CL-15, `NFCORE_WORKER_ONESHOT=true` may be used only as the already-certified durable
+PostgreSQL dependency/readiness probe. It must not be represented as continuous fiscal
+processing. Real continuous handler composition remains dependent on the later governed
+fiscal/provider activation path.
+
