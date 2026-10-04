@@ -199,3 +199,65 @@ test("authenticated session cannot bypass an unusable reset link", async ({ page
   await expect(page.locator("#app-shell")).toBeHidden();
   expect(bootstrapCalls).toBe(0);
 });
+
+
+test("mobile overview does not overflow the viewport", async ({ page, context }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  await page.route("**/v1/portal/bootstrap", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        product: "FM NFCORE",
+        version: "1.0",
+        tenant_id: "nfcore-staging-e2e",
+        unit_ids: [],
+        role: "owner",
+        permissions: ["portal.read"],
+        supported_documents: ["nfe", "nfce", "nfse"],
+        projection: {
+          organization_onboarded: true,
+          legal_name: "NFCore Staging E2E Test",
+          unit_count: 0,
+          unit_scope: "all",
+          enabled_environments: [],
+          production_state: "HUMAN_APPROVAL_REQUIRED",
+        },
+      }),
+    });
+  });
+
+  await context.addCookies([
+    { name: "nfcore_session", value: "opaque-session", domain: "127.0.0.1", path: "/" },
+    { name: "nfcore_csrf", value: "csrf-e2e", domain: "127.0.0.1", path: "/" },
+  ]);
+
+  await page.goto("/");
+  await expect(page.getByText("nfcore-staging-e2e · owner")).toBeVisible();
+
+  const geometry = await page.evaluate(() => {
+    const doc = document.documentElement;
+    const banner = document.querySelector(".product-banner");
+    const main = document.querySelector("main");
+    const nav = document.querySelector("nav");
+    if (!(banner instanceof HTMLElement) || !(main instanceof HTMLElement) || !(nav instanceof HTMLElement)) {
+      throw new Error("Expected portal layout elements");
+    }
+    const bannerRect = banner.getBoundingClientRect();
+    const mainRect = main.getBoundingClientRect();
+    const navRect = nav.getBoundingClientRect();
+    return {
+      clientWidth: doc.clientWidth,
+      scrollWidth: doc.scrollWidth,
+      bannerRight: bannerRect.right,
+      mainRight: mainRect.right,
+      navRight: navRect.right,
+    };
+  });
+
+  expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth);
+  expect(geometry.bannerRight).toBeLessThanOrEqual(geometry.clientWidth + 1);
+  expect(geometry.mainRight).toBeLessThanOrEqual(geometry.clientWidth + 1);
+  expect(geometry.navRight).toBeLessThanOrEqual(geometry.clientWidth + 1);
+});
