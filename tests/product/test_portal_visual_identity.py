@@ -88,3 +88,11 @@ def test_mobile_navigation_is_compact_and_horizontally_scrollable() -> None:
     assert "overflow-x: auto" in css
     assert ".nav-group-label { display: none; }" in css
     assert ".product-banner-mark { width: 62px; height: 62px; }" in css
+
+
+def test_portal_build_fingerprints_css_and_js_assets() -> None:
+    build_script = (ROOT / "scripts" / "build-portal.mjs").read_text(encoding="utf-8")
+
+    assert 'createHash("sha256")' in build_script
+    assert '["styles.css", "runtime.css", "app.js"]' in build_script
+    assert '?v=${digest}' in build_script
