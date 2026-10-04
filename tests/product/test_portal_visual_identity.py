@@ -98,3 +98,13 @@ def test_portal_build_fingerprints_css_and_js_assets() -> None:
     assert 'createHash("sha256")' in build_script
     assert '["styles.css", "runtime.css", "app.js"]' in build_script
     assert '?v=${digest}' in build_script
+
+
+def test_approved_nfcore_brand_assets_are_real_binaries() -> None:
+    emblem = PORTAL / "assets" / "nfcore-emblem-approved.png"
+    logo = PORTAL / "assets" / "nfcore-logo-approved.png"
+
+    assert emblem.is_file()
+    assert logo.is_file()
+    assert emblem.stat().st_size > 1_000_000
+    assert logo.stat().st_size > 1_000_000
