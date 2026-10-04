@@ -69,7 +69,11 @@ def test_brevo_transport_posts_transactional_email_without_logging_secret(
         to_email="owner@example.com",
         from_email="acesso@nfcore.example",
         subject="Ative seu acesso ao FM NFCORE",
-        text_body="https://portal.nfcore.example/#token=synthetic",
+        text_body="Use o botão para redefinir sua senha.",
+        html_body=(
+            '<a href="https://portal.nfcore.example/#token=synthetic">'
+            "Redefinir minha senha</a>"
+        ),
     )
 
     transport.send(message)
@@ -87,7 +91,9 @@ def test_brevo_transport_posts_transactional_email_without_logging_secret(
         }
     ]
     assert payload["subject"] == "Ative seu acesso ao FM NFCORE"
-    assert "#token=synthetic" in payload["textContent"]
+    assert "#token=synthetic" not in payload["textContent"]
+    assert "Redefinir minha senha" in payload["htmlContent"]
+    assert "#token=synthetic" in payload["htmlContent"]
 
 
 def test_brevo_transport_redacts_provider_network_failures(
@@ -159,3 +165,20 @@ def test_runtime_profile_reports_injected_activation_delivery() -> None:
     profile = client.get("/runtime/profile").json()
     assert profile["password_reset_delivery_configured"] is True
     assert profile["commercial_activation_delivery_configured"] is False
+
+
+def test_activation_delivery_runtime_uses_governed_reset_ttl() -> None:
+    values = _mapping()
+    values["NFCORE_PASSWORD_RESET_TTL_MINUTES"] = "10"
+
+    delivery = build_activation_delivery_from_mapping(values)
+
+    assert delivery is not None
+
+
+def test_activation_delivery_runtime_rejects_invalid_reset_ttl() -> None:
+    values = _mapping()
+    values["NFCORE_PASSWORD_RESET_TTL_MINUTES"] = "31"
+
+    with pytest.raises(ValueError, match="between 5 and 30"):
+        build_activation_delivery_from_mapping(values)

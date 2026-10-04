@@ -65,6 +65,7 @@ class BrevoActivationMessageTransport:
                 ],
                 "subject": message.subject,
                 "textContent": message.text_body,
+                **({"htmlContent": message.html_body} if message.html_body is not None else {}),
             },
             separators=(",", ":"),
         ).encode("utf-8")
@@ -129,6 +130,13 @@ def build_activation_delivery_from_mapping(
         raise RuntimeConfigurationError(
             "NFCORE_ACTIVATION_EMAIL_TIMEOUT_SECONDS must be numeric"
         ) from None
+    reset_ttl_raw = values.get("NFCORE_PASSWORD_RESET_TTL_MINUTES", "10").strip()
+    try:
+        reset_ttl_minutes = int(reset_ttl_raw)
+    except ValueError:
+        raise RuntimeConfigurationError(
+            "NFCORE_PASSWORD_RESET_TTL_MINUTES must be an integer"
+        ) from None
 
     transport = BrevoActivationMessageTransport(
         api_key=api_key,
@@ -138,6 +146,7 @@ def build_activation_delivery_from_mapping(
         transport=transport,
         activation_base_url=activation_base_url,
         sender_email=sender,
+        reset_ttl_minutes=reset_ttl_minutes,
     )
 
 
