@@ -52,8 +52,14 @@ def test_activation_delivery_builds_https_fragment_link_and_redacts_repr() -> No
     message = transport.messages[0]
     assert message.to_email == "owner@example.com"
     assert message.from_email == "acesso@fmtecnologia.example"
-    assert "https://nfcore.example.com/ativar#token=" in message.text_body
-    assert TOKEN in message.text_body
+    assert TOKEN not in message.text_body
+    assert "Redefinir minha senha" in message.text_body
+    assert "10 minutos" in message.text_body
+    assert message.html_body is not None
+    assert "Redefinir minha senha" in message.html_body
+    assert "https://nfcore.example.com/ativar#token=" in message.html_body
+    assert TOKEN in message.html_body
+    assert ">https://nfcore.example.com/ativar#token=" not in message.html_body
     assert TOKEN not in repr(message)
     assert "owner@example.com" not in repr(message)
 
@@ -105,3 +111,14 @@ def test_activation_delivery_redacts_transport_failure_and_token() -> None:
     assert TOKEN not in str(caught.value)
     assert "api-key" not in str(caught.value)
     assert caught.value.__cause__ is None
+
+
+@pytest.mark.parametrize("minutes", [4, 31])
+def test_activation_delivery_rejects_unsafe_reset_ttl(minutes: int) -> None:
+    with pytest.raises(ValueError, match="between 5 and 30"):
+        SecureActivationEmailDelivery(
+            transport=RecordingTransport(),
+            activation_base_url="https://nfcore.example.com/ativar",
+            sender_email="acesso@fmtecnologia.example",
+            reset_ttl_minutes=minutes,
+        )
