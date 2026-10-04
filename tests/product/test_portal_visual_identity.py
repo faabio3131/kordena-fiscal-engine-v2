@@ -117,7 +117,7 @@ def test_mobile_layout_is_constrained_to_viewport() -> None:
     assert "max-width: 100vw" in css
     assert "overflow-x: hidden" in css
     assert "min-width: max-content" in css
-    assert "width: min(100%, 300px)" in css
+    assert "width: min(100%, 240px)" in css
     assert "white-space: normal" in css
 
 
