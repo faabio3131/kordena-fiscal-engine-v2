@@ -108,3 +108,14 @@ def test_approved_nfcore_brand_assets_are_real_binaries() -> None:
     assert logo.is_file()
     assert emblem.stat().st_size > 1_000_000
     assert logo.stat().st_size > 1_000_000
+
+
+def test_mobile_layout_is_constrained_to_viewport() -> None:
+    css = read("styles.css")
+
+    assert "grid-template-columns: minmax(0, 1fr)" in css
+    assert "max-width: 100vw" in css
+    assert "overflow-x: hidden" in css
+    assert "min-width: max-content" in css
+    assert "width: min(100%, 300px)" in css
+    assert "white-space: normal" in css
