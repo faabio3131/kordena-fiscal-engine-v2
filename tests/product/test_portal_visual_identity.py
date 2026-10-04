@@ -89,7 +89,7 @@ def test_mobile_navigation_is_compact_and_horizontally_scrollable() -> None:
     assert "@media (max-width: 760px)" in css
     assert "overflow-x: auto" in css
     assert ".nav-group-label { display: none; }" in css
-    assert "width: min(100%, 300px)" in css
+    assert "width: min(100%, 240px)" in css
 
 
 def test_portal_build_fingerprints_css_and_js_assets() -> None:
@@ -119,3 +119,15 @@ def test_mobile_layout_is_constrained_to_viewport() -> None:
     assert "min-width: max-content" in css
     assert "width: min(100%, 300px)" in css
     assert "white-space: normal" in css
+
+
+def test_mobile_premium_density_contract() -> None:
+    css = read("styles.css")
+
+    assert "scroll-snap-type: x proximity" in css
+    assert "mask-image: linear-gradient" in css
+    assert "grid-template-columns: minmax(0, 1fr) auto" in css
+    assert "min-height: 38px" in css
+    assert "width: min(100%, 220px)" in css
+    assert "font-size: 30px" in css
+    assert ".mission-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }" in css
