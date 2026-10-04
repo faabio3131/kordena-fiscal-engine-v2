@@ -64,6 +64,7 @@ class RuntimeSettings:
     trusted_hosts: tuple[str, ...] = _INTERNAL_TRUSTED_HOSTS
     trusted_proxy_cidrs: tuple[str, ...] = ()
     commercial_checkout_provider: str | None = None
+    password_reset_ttl_minutes: int = 10
 
     @classmethod
     def from_mapping(cls, values: Mapping[str, str]) -> RuntimeSettings:
@@ -113,6 +114,13 @@ class RuntimeSettings:
         commercial_checkout_provider = (
             values.get("NFCORE_COMMERCIAL_CHECKOUT_PROVIDER", "").strip().lower() or None
         )
+        password_reset_ttl_raw = values.get("NFCORE_PASSWORD_RESET_TTL_MINUTES", "10").strip()
+        try:
+            password_reset_ttl_minutes = int(password_reset_ttl_raw)
+        except ValueError as exc:
+            raise RuntimeConfigurationError(
+                "NFCORE_PASSWORD_RESET_TTL_MINUTES must be an integer"
+            ) from exc
 
         settings = cls(
             environment=environment,
@@ -126,6 +134,7 @@ class RuntimeSettings:
             trusted_hosts=trusted_hosts,
             trusted_proxy_cidrs=trusted_proxy_cidrs,
             commercial_checkout_provider=commercial_checkout_provider,
+            password_reset_ttl_minutes=password_reset_ttl_minutes,
         )
         settings.validate()
         return settings
@@ -172,6 +181,10 @@ class RuntimeSettings:
                 raise RuntimeConfigurationError("NFCORE_TRUSTED_HOSTS contains an invalid hostname")
         for origin in self.allowed_origins:
             _validate_origin(origin, production_like=production_like)
+        if self.password_reset_ttl_minutes < 5 or self.password_reset_ttl_minutes > 30:
+            raise RuntimeConfigurationError(
+                "NFCORE_PASSWORD_RESET_TTL_MINUTES must be between 5 and 30"
+            )
         if (
             self.commercial_checkout_provider is not None
             and not _PROVIDER_ID.fullmatch(self.commercial_checkout_provider)
