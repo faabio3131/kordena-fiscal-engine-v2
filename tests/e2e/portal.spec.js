@@ -105,6 +105,7 @@ test("activation fragment completes password setup without keeping token in URL"
 
   await page.goto("/#token=synthetic-fragment-reset-token");
   await expect(page.locator("#password-reset-complete-form")).toBeVisible();
+  await expect(page).not.toHaveURL(/token=/);
 
   await page.locator("#password-reset-new-password").fill("Strong-password-2026");
   await page.getByRole("button", { name: "Alterar senha" }).click();
@@ -146,4 +147,55 @@ test("activation shows actionable pt-BR message for an unusable reset token", as
       "Este link de recuperação não é mais válido. Solicite um novo link e use somente o e-mail mais recente.",
     ),
   ).toBeVisible();
+});
+
+
+test("authenticated session cannot bypass an unusable reset link", async ({ page }) => {
+  let bootstrapCalls = 0;
+
+  await page.route("**/v1/portal/bootstrap", async (route) => {
+    bootstrapCalls += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        tenant_id: "tenant-a",
+        role: "OWNER",
+        unit_ids: ["unit-a"],
+        platform_admin: false,
+        permissions: [],
+        supported_documents: ["NF-e"],
+        projection: {},
+      }),
+    });
+  });
+  await page.route("**/v1/auth/password-reset/complete", async (route) => {
+    await route.fulfill({
+      status: 400,
+      contentType: "application/json",
+      body: JSON.stringify({
+        detail: {
+          code: "PASSWORD_RESET_NOT_USABLE",
+          message: "Password reset is not usable",
+        },
+      }),
+    });
+  });
+
+  await page.goto("/#token=consumed-reset-token");
+  await expect(page.locator("#password-reset-complete-form")).toBeVisible();
+  await expect(page.locator("#app-shell")).toBeHidden();
+  await expect(page).not.toHaveURL(/token=/);
+  expect(bootstrapCalls).toBe(0);
+
+  await page.locator("#password-reset-new-password").fill("G7!mQ2#vR9$kT4-xP8@cL6");
+  await page.getByRole("button", { name: "Alterar senha" }).click();
+
+  await expect(
+    page.getByText(
+      "Este link de recuperação não é mais válido. Solicite um novo link e use somente o e-mail mais recente.",
+    ),
+  ).toBeVisible();
+  await expect(page.locator("#app-shell")).toBeHidden();
+  expect(bootstrapCalls).toBe(0);
 });

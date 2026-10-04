@@ -16,6 +16,7 @@ def test_development_defaults_are_explicitly_non_production() -> None:
     assert settings.secret_backend == "memory"
     assert settings.require_https is False
     assert settings.commercial_checkout_provider is None
+    assert settings.password_reset_ttl_minutes == 10
     assert settings.is_production_like is False
 
 
@@ -98,3 +99,17 @@ def test_commercial_checkout_provider_rejects_invalid_identifier() -> None:
         RuntimeSettings.from_mapping(
             {"NFCORE_COMMERCIAL_CHECKOUT_PROVIDER": "https://provider.example"}
         )
+
+
+@pytest.mark.parametrize("minutes", [5, 10, 30])
+def test_password_reset_ttl_is_governed_configuration(minutes: int) -> None:
+    settings = RuntimeSettings.from_mapping(
+        {"NFCORE_PASSWORD_RESET_TTL_MINUTES": str(minutes)}
+    )
+    assert settings.password_reset_ttl_minutes == minutes
+
+
+@pytest.mark.parametrize("value", ["4", "31", "not-a-number"])
+def test_password_reset_ttl_rejects_unsafe_or_invalid_values(value: str) -> None:
+    with pytest.raises(RuntimeConfigurationError, match="PASSWORD_RESET_TTL_MINUTES"):
+        RuntimeSettings.from_mapping({"NFCORE_PASSWORD_RESET_TTL_MINUTES": value})

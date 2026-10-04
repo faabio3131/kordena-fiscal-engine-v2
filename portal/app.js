@@ -108,6 +108,10 @@ function clearResetTokenFromLocation() {
   window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
 }
 
+/** @type {string|null} */
+let pendingPasswordResetToken = resetTokenFromLocation();
+if (pendingPasswordResetToken) clearResetTokenFromLocation();
+
 /** @param {string} path @param {ApiOptions} [options] @returns {Promise<any>} */
 async function api(path, options = {}) {
   const response = await fetch(path, {
@@ -154,6 +158,8 @@ function showRegularLogin() {
 }
 
 function showPasswordResetCompletion() {
+  loginView.hidden = false;
+  appShell.hidden = true;
   loginForm.hidden = true;
   passwordResetRequestForm.hidden = true;
   passwordResetCompleteForm.hidden = false;
@@ -161,17 +167,22 @@ function showPasswordResetCompletion() {
 }
 
 /** @param {unknown} error */
-function passwordResetErrorMessage(error) {
+function passwordResetErrorCode(error) {
   const body = error && typeof error === "object" && "body" in error
     ? error.body
     : null;
   const detail = body && typeof body === "object" && "detail" in body
     ? body.detail
     : null;
-  const code = detail && typeof detail === "object" && "code" in detail
+  return detail && typeof detail === "object" && "code" in detail
     && typeof detail.code === "string"
     ? detail.code
     : "";
+}
+
+/** @param {unknown} error */
+function passwordResetErrorMessage(error) {
+  const code = passwordResetErrorCode(error);
   if (code === "PASSWORD_POLICY_INVALID") {
     return "A senha deve ter entre 12 e 1024 caracteres. Letras, números, espaços e símbolos são permitidos.";
   }
@@ -822,7 +833,7 @@ passwordResetRequestForm.addEventListener("submit", async (event) => {
 passwordResetCompleteForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   passwordResetCompleteStatus.textContent = "";
-  const resetToken = resetTokenFromLocation();
+  const resetToken = pendingPasswordResetToken;
   if (!resetToken) {
     passwordResetCompleteStatus.textContent = "Link de recuperação inválido.";
     return;
@@ -836,10 +847,13 @@ passwordResetCompleteForm.addEventListener("submit", async (event) => {
       }),
     });
     passwordResetNewPassword.value = "";
-    clearResetTokenFromLocation();
+    pendingPasswordResetToken = null;
     showRegularLogin();
     showLogin("Senha alterada. Entre novamente com a nova senha.");
   } catch (error) {
+    if (passwordResetErrorCode(error) === "PASSWORD_RESET_NOT_USABLE") {
+      pendingPasswordResetToken = null;
+    }
     passwordResetCompleteStatus.textContent = passwordResetErrorMessage(error);
   }
 });
@@ -878,5 +892,8 @@ operationForm.addEventListener("submit", async (event) => {
   }
 });
 
-if (resetTokenFromLocation()) showPasswordResetCompletion();
-void bootstrap();
+if (pendingPasswordResetToken) {
+  showPasswordResetCompletion();
+} else {
+  void bootstrap();
+}

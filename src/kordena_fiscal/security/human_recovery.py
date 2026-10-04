@@ -122,7 +122,7 @@ class PasswordRecoveryService:
         sessions: WebSessionRepository,
         resets: PasswordResetRepository,
         password_hasher: ScryptPasswordHasher,
-        reset_ttl: timedelta = timedelta(minutes=30),
+        reset_ttl: timedelta = timedelta(minutes=10),
     ) -> None:
         if not isinstance(accounts, HumanAccountRepository):
             raise ValueError("accounts must implement HumanAccountRepository")
@@ -130,8 +130,8 @@ class PasswordRecoveryService:
             raise ValueError("sessions must implement WebSessionRepository")
         if not isinstance(resets, PasswordResetRepository):
             raise ValueError("resets must implement PasswordResetRepository")
-        if reset_ttl <= timedelta(minutes=5) or reset_ttl > timedelta(hours=24):
-            raise ValueError("reset_ttl must be > 5 minutes and <= 24 hours")
+        if reset_ttl < timedelta(minutes=5) or reset_ttl > timedelta(minutes=30):
+            raise ValueError("reset_ttl must be between 5 and 30 minutes")
         self._accounts = accounts
         self._sessions = sessions
         self._resets = resets

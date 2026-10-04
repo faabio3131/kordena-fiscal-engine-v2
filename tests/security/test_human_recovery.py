@@ -133,6 +133,51 @@ def test_expired_reset_token_is_rejected() -> None:
         )
 
 
+def test_password_reset_default_ttl_is_ten_minutes() -> None:
+    hasher, accounts, sessions = foundation()
+    recovery = PasswordRecoveryService(
+        accounts=accounts,
+        sessions=sessions,
+        resets=InMemoryPasswordResetRepository(),
+        password_hasher=hasher,
+    )
+
+    reset = recovery.request_reset(email="reset@example.com", now=NOW)
+
+    assert reset is not None
+    assert reset.expires_at == NOW + timedelta(minutes=10)
+
+
+def test_password_reset_accepts_five_minute_minimum_ttl() -> None:
+    hasher, accounts, sessions = foundation()
+    recovery = PasswordRecoveryService(
+        accounts=accounts,
+        sessions=sessions,
+        resets=InMemoryPasswordResetRepository(),
+        password_hasher=hasher,
+        reset_ttl=timedelta(minutes=5),
+    )
+
+    reset = recovery.request_reset(email="reset@example.com", now=NOW)
+
+    assert reset is not None
+    assert reset.expires_at == NOW + timedelta(minutes=5)
+
+
+@pytest.mark.parametrize("minutes", [4, 31])
+def test_password_reset_rejects_ttl_outside_governed_window(minutes: int) -> None:
+    hasher, accounts, sessions = foundation()
+
+    with pytest.raises(ValueError, match="between 5 and 30 minutes"):
+        PasswordRecoveryService(
+            accounts=accounts,
+            sessions=sessions,
+            resets=InMemoryPasswordResetRepository(),
+            password_hasher=hasher,
+            reset_ttl=timedelta(minutes=minutes),
+        )
+
+
 def test_reset_request_for_unknown_account_returns_no_delivery_grant() -> None:
     hasher, accounts, sessions = foundation()
     recovery = PasswordRecoveryService(
