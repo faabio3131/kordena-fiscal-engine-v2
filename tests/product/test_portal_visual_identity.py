@@ -17,9 +17,11 @@ def test_v1_commercial_identity_is_applied() -> None:
     assert "FM NFCORE · Commercial Launch Edition · V1.0" in html
     assert "--brand-primary: #2563ff" in css
     assert "--brand-cyan: #00e5ff" in css
-    assert html.count('src="assets/fm-nfcore-mark.svg"') >= 3
-    assert 'class="product-banner-mark"' in html
-    assert 'alt="FM NFCORE"' in html
+    assert html.count('src="assets/nfcore-emblem-approved.png"') >= 2
+    assert 'src="assets/nfcore-logo-approved.png"' in html
+    assert 'class="product-banner-logo-approved"' in html
+    assert 'alt="FM NFCORE — Infrastructure Mission Control"' in html
+    assert 'src="assets/fm-nfcore-mark.svg"' not in html
     assert 'href="assets/favicon.svg"' in html
 
 
@@ -87,7 +89,7 @@ def test_mobile_navigation_is_compact_and_horizontally_scrollable() -> None:
     assert "@media (max-width: 760px)" in css
     assert "overflow-x: auto" in css
     assert ".nav-group-label { display: none; }" in css
-    assert ".product-banner-mark { width: 62px; height: 62px; }" in css
+    assert ".product-banner-logo-approved { width: min(300px, 78vw); }" in css
 
 
 def test_portal_build_fingerprints_css_and_js_assets() -> None:
@@ -96,3 +98,13 @@ def test_portal_build_fingerprints_css_and_js_assets() -> None:
     assert 'createHash("sha256")' in build_script
     assert '["styles.css", "runtime.css", "app.js"]' in build_script
     assert '?v=${digest}' in build_script
+
+
+def test_approved_nfcore_brand_assets_are_real_binaries() -> None:
+    emblem = PORTAL / "assets" / "nfcore-emblem-approved.png"
+    logo = PORTAL / "assets" / "nfcore-logo-approved.png"
+
+    assert emblem.is_file()
+    assert logo.is_file()
+    assert emblem.stat().st_size > 1_000_000
+    assert logo.stat().st_size > 1_000_000

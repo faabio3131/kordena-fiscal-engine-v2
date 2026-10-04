@@ -61,7 +61,9 @@ def test_portal_brand_shell_preserves_accessibility_and_responsive_contract() ->
     assert 'class="skip-link"' in index
     assert 'lang="pt-BR"' in index
     assert "assets/favicon.svg" in index
-    assert "assets/fm-nfcore-mark.svg" in index
+    assert "assets/nfcore-emblem-approved.png" in index
+    assert "assets/nfcore-logo-approved.png" in index
+    assert "assets/fm-nfcore-mark.svg" not in index
     for breakpoint in ("1050px", "760px", "480px"):
         assert breakpoint in styles
     assert "prefers-reduced-motion: reduce" in styles

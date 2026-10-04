@@ -13,23 +13,24 @@ A marca deve comunicar infraestrutura crítica, precisão, confiança, escala, t
 
 ## 2. Sistema de logo
 
-O sistema oficial é formado por:
+O sistema oficial é formado pela identidade **cubo/cérebro NFCore aprovada**,
+sem reinterpretação do símbolo:
 
-- monograma geométrico FM/NFCORE em azul elétrico e ciano;
-- wordmark `FM NFCORE`, com `FM` claro e `NFCORE` em território azul/ciano;
+- emblema quadrado aprovado para superfícies compactas;
+- lockup completo aprovado `FM NFCORE` / Infrastructure Mission Control;
 - tagline opcional `Infraestrutura fiscal. Sob controle.`;
-- versão compacta do monograma para favicon, app e espaços reduzidos.
+- favicon compacto preservado para contextos de poucos pixels.
 
 Assets canônicos do runtime:
 
-- `portal/assets/fm-nfcore-mark.svg` — monograma vetorial do portal, login e sidebar;
-- `portal/assets/favicon.svg` — ícone compacto.
+- `portal/assets/nfcore-emblem-approved.png` — emblema cubo/cérebro aprovado para login e sidebar;
+- `portal/assets/nfcore-logo-approved.png` — lockup completo aprovado para a Visão geral e superfícies de destaque;
+- `portal/assets/favicon.svg` — ícone compacto;
+- `portal/assets/fm-nfcore-mark.svg` — asset vetorial auxiliar/legado, preservado por compatibilidade, mas não é a identidade visual principal do Portal.
 
-O Site FM pode usar o lockup comercial aprovado em raster para peças de marketing
-e hero, desde que preserve o mesmo nome **NFCORE**, posicionamento, paleta azul/ciano
-e proporções aprovadas. O lockup comercial não substitui o monograma vetorial do
-runtime; são variantes oficiais para contextos diferentes. Não existe autorização
-para criar uma terceira identidade visual.
+Os dois PNGs aprovados são cópias byte-a-byte dos assets canônicos mantidos no
+repositório da plataforma FM. Não existe autorização para redesenhar, reinterpretar
+ou criar uma terceira identidade visual.
 
 ### Regras
 

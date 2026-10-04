@@ -272,20 +272,23 @@ button.danger { background: rgba(128, 34, 55, .38); color: #ffdbe1; border-color
   pointer-events: none;
 }
 .banner-copy { position: relative; z-index: 1; }
-.banner-brand-row {
+.banner-brand-approved {
   display: flex;
-  gap: 18px;
   align-items: center;
-  margin-bottom: 12px;
+  gap: 16px;
+  margin-bottom: 14px;
 }
-.product-banner-mark {
-  flex: 0 0 auto;
-  width: 72px;
-  height: 72px;
-  filter: drop-shadow(0 16px 28px rgba(37, 99, 255, .28));
+.product-banner-logo-approved {
+  display: block;
+  width: min(380px, 58vw);
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 18px 32px rgba(37, 99, 255, .26));
 }
-.banner-brand-row .banner-kicker { margin-bottom: 7px; }
-.banner-brand-row h2 { margin-bottom: 0; }
+.banner-brand-approved .banner-kicker {
+  max-width: 180px;
+  margin-bottom: 0;
+}
 .banner-kicker {
   display: inline-flex;
   margin-bottom: 10px;
@@ -521,8 +524,13 @@ dialog::backdrop { background: rgba(2,7,13,.75); backdrop-filter: blur(7px); }
   .top-actions { width: 100%; flex-wrap: wrap; }
   .top-actions button { flex: 1; }
   .product-banner { padding: 20px 18px; }
-  .banner-brand-row { gap: 14px; margin-bottom: 10px; }
-  .product-banner-mark { width: 62px; height: 62px; }
+  .banner-brand-approved {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .product-banner-logo-approved { width: min(300px, 78vw); }
   .banner-assurance { grid-template-columns: 1fr; }
 }
 
@@ -544,8 +552,8 @@ dialog::backdrop { background: rgba(2,7,13,.75); backdrop-filter: blur(7px); }
   .top-actions button { width: 100%; }
   .topbar h1 { font-size: 32px; }
   .product-banner { padding: 18px 16px; }
-  .banner-brand-row { align-items: flex-start; gap: 12px; }
-  .product-banner-mark { width: 56px; height: 56px; }
+  .banner-brand-approved { gap: 7px; }
+  .product-banner-logo-approved { width: min(270px, 82vw); }
   .product-banner h2 { font-size: 27px; }
   .product-banner p { font-size: 14px; line-height: 1.55; }
   .banner-kicker { font-size: 9px; letter-spacing: .1em; }
