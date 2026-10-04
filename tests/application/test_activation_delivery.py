@@ -122,3 +122,21 @@ def test_activation_delivery_rejects_unsafe_reset_ttl(minutes: int) -> None:
             sender_email="acesso@fmtecnologia.example",
             reset_ttl_minutes=minutes,
         )
+
+
+def test_activation_email_html_is_mobile_compact() -> None:
+    transport = RecordingTransport()
+    delivery = SecureActivationEmailDelivery(
+        transport=transport,
+        activation_base_url="https://nfcore.example.com/ativar",
+        sender_email="acesso@fmtecnologia.example",
+    )
+
+    delivery.deliver(email="owner@example.com", reset=_reset())
+
+    message = transport.messages[0]
+    assert message.html_body is not None
+    assert "max-width:520px" in message.html_body
+    assert "font-size:24px" in message.html_body
+    assert "padding:13px 22px" in message.html_body
+    assert "Redefinir minha senha" in message.html_body
