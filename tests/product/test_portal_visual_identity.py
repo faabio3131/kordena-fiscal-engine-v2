@@ -89,7 +89,7 @@ def test_mobile_navigation_is_compact_and_horizontally_scrollable() -> None:
     assert "@media (max-width: 760px)" in css
     assert "overflow-x: auto" in css
     assert ".nav-group-label { display: none; }" in css
-    assert ".product-banner-logo-approved { width: min(300px, 78vw); }" in css
+    assert "width: min(100%, 300px)" in css
 
 
 def test_portal_build_fingerprints_css_and_js_assets() -> None:
