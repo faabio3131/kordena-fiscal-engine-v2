@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
@@ -66,6 +66,9 @@ class RuntimeApi:
                         portal_operation_executor=portal_operation_executor,
                         enable_cakto_checkout=(
                             settings.commercial_checkout_provider == "cakto"
+                        ),
+                        password_reset_ttl=timedelta(
+                            minutes=settings.password_reset_ttl_minutes
                         ),
                     )
                 except Exception:
