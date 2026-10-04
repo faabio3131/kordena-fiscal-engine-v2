@@ -8,6 +8,7 @@ this composition root and fiscal production authority is injected independently.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import timedelta
 
 from kordena_fiscal.application.commercial_activation import (
     CommercialCustomerActivationService,
@@ -63,6 +64,7 @@ def build_postgres_runtime_composition(
     *,
     portal_operation_executor: PortalOperationExecutor | None = None,
     enable_cakto_checkout: bool = False,
+    password_reset_ttl: timedelta = timedelta(minutes=10),
 ) -> RuntimeComposition:
     """Compose human web services over the canonical PostgreSQL repositories."""
 
@@ -82,6 +84,7 @@ def build_postgres_runtime_composition(
         sessions=sessions,
         resets=password_resets,
         password_hasher=password_hasher,
+        reset_ttl=password_reset_ttl,
     )
     provisioning = CommercialCustomerProvisioningService(
         unit_of_work_factory=database,
