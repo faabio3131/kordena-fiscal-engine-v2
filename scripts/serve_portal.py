@@ -80,6 +80,12 @@ class SecurePortalHandler(SimpleHTTPRequestHandler):
     """Static portal + narrow same-origin reverse proxy for canonical NFCore APIs."""
 
     def end_headers(self) -> None:
+        if not self._is_api_request():
+            static_path = urlsplit(self.path).path
+            if static_path in {"", "/", "/index.html"} or static_path.endswith(".html"):
+                self.send_header("Cache-Control", "no-store")
+            elif static_path.endswith((".css", ".js", ".svg")):
+                self.send_header("Cache-Control", "no-cache, max-age=0, must-revalidate")
         self.send_header("Content-Security-Policy", _PORTAL_CSP)
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
