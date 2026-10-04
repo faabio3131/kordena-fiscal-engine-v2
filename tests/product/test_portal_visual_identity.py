@@ -89,7 +89,7 @@ def test_mobile_navigation_is_compact_and_horizontally_scrollable() -> None:
     assert "@media (max-width: 760px)" in css
     assert "overflow-x: auto" in css
     assert ".nav-group-label { display: none; }" in css
-    assert ".product-banner-logo-approved { width: min(300px, 78vw); }" in css
+    assert "width: min(100%, 300px)" in css
 
 
 def test_portal_build_fingerprints_css_and_js_assets() -> None:
@@ -108,3 +108,14 @@ def test_approved_nfcore_brand_assets_are_real_binaries() -> None:
     assert logo.is_file()
     assert emblem.stat().st_size > 1_000_000
     assert logo.stat().st_size > 1_000_000
+
+
+def test_mobile_layout_is_constrained_to_viewport() -> None:
+    css = read("styles.css")
+
+    assert "grid-template-columns: minmax(0, 1fr)" in css
+    assert "max-width: 100vw" in css
+    assert "overflow-x: hidden" in css
+    assert "min-width: max-content" in css
+    assert "width: min(100%, 300px)" in css
+    assert "white-space: normal" in css
