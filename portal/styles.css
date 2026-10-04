@@ -527,10 +527,9 @@ dialog::backdrop { background: rgba(2,7,13,.75); backdrop-filter: blur(7px); }
 }
 
 @media (max-width: 620px) {
-  nav { grid-template-columns: 1fr; }
   .metrics, .pillar-grid, .mission-strip { grid-template-columns: 1fr; }
   .row { grid-template-columns: 1fr; gap: 7px; }
-  .product-banner { padding: 22px 20px; }
+  .product-banner { padding: 18px 16px; }
   .status-item { align-items: start; flex-direction: column; gap: 5px; }
   .status-item strong { text-align: left; }
   .product-footer { flex-direction: column; }
