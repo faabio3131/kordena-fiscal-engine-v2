@@ -790,3 +790,310 @@ Cakto   Hotmart   Site FM   Kax   B2B   Future
 ```
 
 Com segurança, isolamento, auditabilidade e autoridade canônica preservados.
+
+
+---
+
+## 22. CONCLUSÃO INTEGRAL DO NFCORE V1 — EXIT GATE DO COMMERCIAL LAUNCH
+
+Este Prompt Mestre **não termina** quando a cadeia comercial estiver apenas implementada internamente.
+
+O NFCore V1 somente pode ser considerado concluído no escopo **Commercial Launch** quando toda a linha real de cliente, operação, staging, canais comerciais, homologação fiscal, prontidão de produção e governança tiver sido comprovada por evidência reproduzível.
+
+A sequência terminal obrigatória permanece:
+
+```text
+CL-15 — REAL STAGING + ACTIVATION DELIVERY
+  ↓
+CL-16 — REAL COMMERCIAL CHANNEL VALIDATION
+  ↓
+CL-17 — FISCAL HOMOLOGATION + CONTROLLED PILOT
+  ↓
+CL-18 — PRODUCTION READINESS + HUMAN GO/NO-GO
+```
+
+Não pular, renomear ou considerar uma fase posterior como substituta de pendência anterior.
+
+### 22.1 Gate CL-15 — staging real
+
+CL-15 somente encerra quando houver evidência real e reconciliada de:
+
+- mesma revisão certificada de API e Portal;
+- PostgreSQL real e migrations governadas;
+- HTTPS;
+- health/readiness;
+- activation/password recovery delivery real;
+- link one-time válido;
+- definição de senha;
+- login;
+- sessão;
+- tenant/unidade corretos;
+- portal funcional;
+- logs sem token, segredo ou PII indevida;
+- backup/restore exercitado;
+- rollback de aplicação exercitado e comprovado no mecanismo realmente disponível;
+- commercial staging E2E completo;
+- checkpoint persistido.
+
+Gate:
+
+`STAGING_DEPLOYED_AND_E2E_VALIDATED`
+
+CI verde ou deploy isolado não substituem esse gate.
+
+### 22.2 Gate CL-16 — canais comerciais reais
+
+Para cada canal escolhido para venda real, exigir:
+
+- conta/KYC quando aplicável;
+- produto/plano/oferta reais;
+- checkout real;
+- webhook/callback HTTPS;
+- autenticação/assinatura verificável;
+- idempotência;
+- retries e reconciliação;
+- compra controlada;
+- cancelamento/refund quando permitido;
+- propagação correta para purchase/subscription/entitlement canônicos;
+- evidência armazenada.
+
+Nenhum canal é autoridade de tenant, usuário, RBAC, fiscal ou regra de negócio.
+
+Gate por canal:
+
+`COMMERCIAL_CHANNEL_READY`
+
+Um adapter implementado, fixture, sandbox local ou harness sintético não equivalem a canal comercial real validado.
+
+### 22.3 Gate CL-17 — homologação fiscal real + piloto controlado
+
+A homologação deve ser provada por célula exata:
+
+```text
+DOCUMENTO × OPERAÇÃO × UF/MUNICÍPIO × PROVIDER × AMBIENTE
+```
+
+Exigir, quando aplicável:
+
+- certificado real;
+- CSC/token;
+- credenciais oficiais;
+- provider homologado;
+- endpoint oficial;
+- request/response oficial sanitizado;
+- correlation/causation IDs;
+- evidência persistida;
+- resultado por célula.
+
+Depois das células necessárias:
+
+- executar piloto real limitado;
+- tenant/unidade explicitamente autorizados;
+- monitoramento reforçado;
+- limites;
+- kill switch;
+- stop conditions;
+- reconciliação;
+- rollback;
+- responsável humano.
+
+Mock, fixture, CI, staging interno ou transporte sintético nunca contam como homologação fiscal oficial.
+
+### 22.4 Gate CL-18 — production readiness + Go/No-Go
+
+Antes de qualquer promoção produtiva, comprovar separadamente:
+
+**A. Prontidão funcional**
+- jornadas completas;
+- API;
+- Portal Web;
+- worker/runtime;
+- persistência;
+- onboarding;
+- activation/recovery;
+- billing/subscription/entitlement.
+
+**B. Segurança**
+- autenticação;
+- RBAC;
+- tenant/unidade;
+- anti-spoofing;
+- CSRF/session/cookies;
+- secrets;
+- rate limits;
+- scans e vulnerability policy;
+- isolamento cross-tenant/cross-unit/cross-provider.
+
+**C. Produção técnica**
+- infraestrutura real;
+- PostgreSQL real;
+- migrations;
+- domínio/DNS/TLS;
+- health/readiness;
+- observabilidade;
+- backup;
+- restore;
+- rollback;
+- RPO/RTO aprovados;
+- secret manager/vault real.
+
+**D. Fiscal**
+- células oficiais exigidas;
+- homologação externa;
+- credenciais;
+- provider;
+- piloto controlado;
+- autoridade explícita de produção.
+
+**E. Comercial**
+- oferta verdadeira;
+- pricing aprovado;
+- checkout;
+- billing;
+- canal(is) comercial(is) real(is);
+- provisionamento;
+- comunicação;
+- suporte.
+
+**F. Visual e experiência**
+- Portal NFCore premium;
+- Site FM coerente com o produto;
+- responsividade;
+- acessibilidade;
+- estados loading/empty/disabled/error/success;
+- nenhum CTA falso ou estado operacional mascarado.
+
+**G. Operação**
+- structured logs;
+- métricas;
+- alertas;
+- incident response;
+- runbooks;
+- secrets rotation;
+- DB restore;
+- provider outage;
+- onboarding failure;
+- fiscal kill switch;
+- suporte operacional.
+
+**H. Governança**
+- CI integral verde na revisão candidata;
+- documentação canônica reconciliada;
+- zero blocker crítico;
+- riscos residuais explicitados;
+- dependências externas encerradas ou formalmente aceitas;
+- revisão jurídica/LGPD quando aplicável;
+- Go/No-Go humano final.
+
+### 22.5 Jornada final obrigatória de cliente
+
+A missão só pode ser considerada comercialmente concluída quando existir evidência de que um cliente autorizado consegue percorrer, sem SQL manual, edição de código ou bypass operacional:
+
+```text
+ENCONTRAR O NFCORE NO SITE FM
+  ↓
+VER OFERTA VERDADEIRA
+  ↓
+COMPRAR/ASSINAR OU INICIAR TRIAL AUTORIZADO
+  ↓
+TER O EVENTO COMERCIAL AUTENTICADO E RECONCILIADO
+  ↓
+RECEBER PURCHASE/SUBSCRIPTION/ENTITLEMENT CANÔNICOS
+  ↓
+SER PROVISIONADO
+  ↓
+RECEBER ATIVAÇÃO
+  ↓
+DEFINIR/RECUPERAR SENHA
+  ↓
+AUTENTICAR-SE
+  ↓
+ENTRAR NO TENANT/UNIDADE CORRETOS
+  ↓
+USAR O PORTAL PREMIUM
+  ↓
+CONFIGURAR A OPERAÇÃO
+  ↓
+UTILIZAR SOMENTE CAPACIDADES FISCAIS REALMENTE AUTORIZADAS
+  ↓
+TER AUDITORIA, OBSERVABILIDADE, BACKUP, RECOVERY E SUPORTE
+```
+
+### 22.6 Equivalências proibidas
+
+Nunca tratar como equivalentes:
+
+- código implementado = produto disponível;
+- PR mergeada = fase homologada;
+- CI verde = staging real;
+- staging real = produção;
+- pricing publicado = venda autorizada;
+- checkout configurado = fulfillment pronto;
+- pagamento aprovado = autoridade fiscal;
+- harness interno = canal comercial real;
+- sandbox/mock = homologação oficial;
+- adapter implementado = provider homologado;
+- backup criado = restore certificado;
+- readiness técnico = `PRODUCTION_APPROVED`;
+- `PRODUCTION_APPROVED` = `COMMERCIAL_LIVE` antes do cutover/smoke final.
+
+### 22.7 Estados finais
+
+A aplicação nunca promove automaticamente:
+
+`PRODUCTION_APPROVED`
+
+Somente decisão humana explícita e auditável pode emitir esse estado.
+
+Após `PRODUCTION_APPROVED`, o cutover ainda deve usar a revisão exata certificada, executar migration/deploy autorizados, smoke real, monitoramento e validação de rollback.
+
+Somente após evidência desse cutover o estado comercial final pode ser:
+
+`COMMERCIAL_LIVE`
+
+Se qualquer requisito obrigatório faltar, manter a classificação correta de pendência, risco, `BLOCKED_EXTERNAL` ou `HUMAN_APPROVAL_REQUIRED`.
+
+---
+
+## 23. ACTIVE WORK CONTEXT — CONTINUIDADE OBRIGATÓRIA
+
+Toda retomada do NFCore deve começar, depois de consultar o GitHub e a documentação canônica, por um bloco explícito contendo:
+
+```text
+PROJECT:
+REPOSITORY:
+BRANCH:
+HEAD:
+OPEN PR:
+MASTER SCHEDULE:
+CURRENT PHASE:
+LAST CERTIFIED GATE:
+CURRENT BLOCKER:
+NEXT ALLOWED ACTION:
+FORBIDDEN CROSS-PROJECT ACTIONS:
+```
+
+Se houver divergência entre memória, chat, handoff ou checkpoint histórico e o estado técnico atual:
+
+```text
+GITHUB CURRENT
++
+DOCUMENTAÇÃO CANÔNICA ATUAL
++
+CI/EVIDÊNCIA REPRODUZÍVEL
+```
+
+têm precedência.
+
+Não herdar autorização de merge, deploy, produção, migration real, DNS, credencial, homologação ou operação irreversível de outro projeto, fase ou conversa.
+
+A regra final de continuidade é:
+
+```text
+NÃO RECOMEÇAR.
+NÃO REPETIR BLOCO JÁ CERTIFICADO SEM EVIDÊNCIA DE REGRESSÃO.
+NÃO PULAR BLOQUEIO PARA PARECER MAIS ADIANTADO.
+RETOMAR EXATAMENTE DO PRIMEIRO GATE AINDA NÃO COMPROVADO.
+```
+
+---
