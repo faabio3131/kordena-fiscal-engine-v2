@@ -272,6 +272,20 @@ button.danger { background: rgba(128, 34, 55, .38); color: #ffdbe1; border-color
   pointer-events: none;
 }
 .banner-copy { position: relative; z-index: 1; }
+.banner-brand-row {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.product-banner-mark {
+  flex: 0 0 auto;
+  width: 72px;
+  height: 72px;
+  filter: drop-shadow(0 16px 28px rgba(37, 99, 255, .28));
+}
+.banner-brand-row .banner-kicker { margin-bottom: 7px; }
+.banner-brand-row h2 { margin-bottom: 0; }
 .banner-kicker {
   display: inline-flex;
   margin-bottom: 10px;
@@ -453,32 +467,88 @@ dialog::backdrop { background: rgba(2,7,13,.75); backdrop-filter: blur(7px); }
 
 @media (max-width: 760px) {
   .shell { grid-template-columns: 1fr; }
-  .sidebar { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--line-soft); }
-  nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; overflow: visible; }
-  .nav-group { margin: 0; }
-  .sidebar-foot { margin-top: 14px; }
-  main { padding: 24px 18px 38px; }
-  .topbar { align-items: start; flex-direction: column; }
+  .sidebar {
+    position: static;
+    height: auto;
+    padding: 12px 14px 9px;
+    border-right: 0;
+    border-bottom: 1px solid var(--line-soft);
+    background: rgba(8, 18, 31, .96);
+  }
+  .brand-lockup {
+    grid-template-columns: 42px 1fr auto;
+    gap: 10px;
+    padding: 0 2px 10px;
+  }
+  .brand-mark { width: 42px; height: 42px; }
+  nav {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 2px 0 8px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(75, 131, 185, .42) transparent;
+  }
+  .nav-group {
+    display: flex;
+    flex: 0 0 auto;
+    gap: 6px;
+    margin: 0;
+  }
+  .nav-group-label { display: none; }
+  .nav-button {
+    width: auto;
+    min-height: 38px;
+    padding: 8px 11px 8px 13px;
+    white-space: nowrap;
+  }
+  .sidebar-foot {
+    margin-top: 0;
+    padding: 7px 2px 0;
+    border-top: 0;
+  }
+  .sidebar-foot > p { display: none; }
+  .platform-health strong { font-size: 11px; }
+  .platform-health small { font-size: 9px; }
+  main { padding: 18px 14px 34px; }
+  .topbar {
+    align-items: start;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
   .top-actions { width: 100%; flex-wrap: wrap; }
   .top-actions button { flex: 1; }
+  .product-banner { padding: 20px 18px; }
+  .banner-brand-row { gap: 14px; margin-bottom: 10px; }
+  .product-banner-mark { width: 62px; height: 62px; }
   .banner-assurance { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 620px) {
-  nav { grid-template-columns: 1fr; }
   .metrics, .pillar-grid, .mission-strip { grid-template-columns: 1fr; }
   .row { grid-template-columns: 1fr; gap: 7px; }
-  .product-banner { padding: 22px 20px; }
+  .product-banner { padding: 18px 16px; }
   .status-item { align-items: start; flex-direction: column; gap: 5px; }
   .status-item strong { text-align: left; }
   .product-footer { flex-direction: column; }
 }
 
 @media (max-width: 480px) {
-  .brand-lockup { grid-template-columns: 48px 1fr; }
+  .brand-lockup { grid-template-columns: 42px 1fr; }
   .version-pill { display: none; }
+  .brand-copy strong { font-size: 14px; }
+  .brand-copy small { font-size: 9px; }
   .top-actions { display: grid; grid-template-columns: 1fr; }
   .top-actions button { width: 100%; }
+  .topbar h1 { font-size: 32px; }
+  .product-banner { padding: 18px 16px; }
+  .banner-brand-row { align-items: flex-start; gap: 12px; }
+  .product-banner-mark { width: 56px; height: 56px; }
+  .product-banner h2 { font-size: 27px; }
+  .product-banner p { font-size: 14px; line-height: 1.55; }
+  .banner-kicker { font-size: 9px; letter-spacing: .1em; }
 }
 
 @media (prefers-reduced-motion: reduce) {

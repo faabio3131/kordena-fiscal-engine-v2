@@ -17,7 +17,9 @@ def test_v1_commercial_identity_is_applied() -> None:
     assert "FM NFCORE · Commercial Launch Edition · V1.0" in html
     assert "--brand-primary: #2563ff" in css
     assert "--brand-cyan: #00e5ff" in css
-    assert 'src="assets/fm-nfcore-mark.svg"' in html
+    assert html.count('src="assets/fm-nfcore-mark.svg"') >= 3
+    assert 'class="product-banner-mark"' in html
+    assert 'alt="FM NFCORE"' in html
     assert 'href="assets/favicon.svg"' in html
 
 
@@ -77,3 +79,12 @@ def test_accessibility_guards_remain_present() -> None:
     assert 'aria-live="polite"' in html
     assert "prefers-reduced-motion" in css
     assert ":focus-visible" in css
+
+
+def test_mobile_navigation_is_compact_and_horizontally_scrollable() -> None:
+    css = read("styles.css")
+
+    assert "@media (max-width: 760px)" in css
+    assert "overflow-x: auto" in css
+    assert ".nav-group-label { display: none; }" in css
+    assert ".product-banner-mark { width: 62px; height: 62px; }" in css
