@@ -43,6 +43,7 @@ def test_portal_server_emits_browser_security_headers(tmp_path) -> None:
             assert response.headers["X-Frame-Options"] == "DENY"
             assert response.headers["Referrer-Policy"] == "strict-origin-when-cross-origin"
             assert "connect-src 'self'" in response.headers["Content-Security-Policy"]
+            assert response.headers["Cache-Control"] == "no-store"
     finally:
         server.shutdown()
         server.server_close()
@@ -163,3 +164,21 @@ def test_portal_api_proxy_rejects_credentialed_upstream(
 
     with pytest.raises(RuntimeError, match="absolute HTTP"):
         api_upstream()
+
+
+def test_portal_static_assets_require_revalidation(tmp_path: Path) -> None:
+    (tmp_path / "styles.css").write_text("body { color: white; }", encoding="utf-8")
+    handler = partial(_secure_portal_handler(), directory=str(tmp_path))
+    server, thread = _start_server(handler)
+
+    try:
+        host, port = server.server_address
+        with urlopen(f"http://{host}:{port}/styles.css?v=test", timeout=2) as response:  # noqa: S310
+            assert response.status == 200
+            assert response.headers["Cache-Control"] == (
+                "no-cache, max-age=0, must-revalidate"
+            )
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
