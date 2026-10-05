@@ -41,16 +41,16 @@
 
 ### 3. NFV1-P00-T03 — Registrar staging drift
 
-- [ ] **Estado:** em execução
+- [x] **Estado:** concluído
 - **Objetivo:** executar exatamente a tarefa NFV1-P00-T03 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P00-T02 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** tudo que o cronograma exige para NFV1-P00-T03, mais os testes/evidências diretamente necessários.
 - **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
 - **Critério de aceite:** critérios específicos de NFV1-P00-T03 no cronograma satisfeitos e nenhum gate transversal violado.
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
-- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** PENDENTE
+- **Riscos / não confirmado:** staging permanece em drift; isso foi registrado como blocker com ownership formal e não foi mascarado como resolvido.
+- **Decisões do dono pendentes:** nenhuma para o fechamento do P0.
+- **Prova:** PR #105; CI #597; merge SHA 3837d1e6b5a3c38e3aa2ceb032fb952fab700a4c; Plan Governance #26; staging drift register STG-B01..STG-B08.
 
 ### 4. NFV1-P01-T01 — Identificar composição canônica
 
