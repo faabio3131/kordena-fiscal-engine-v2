@@ -5,7 +5,7 @@ Produto: FM NFCORE V1
 Repository: `faabio3131/kordena-fiscal-engine-v2`  
 Main de origem: `eccb40058992023514eeaac5ecfecb7e551df763`  
 Branch: `docs/nfv1-p00-t03-staging-drift`  
-PR: registrar após abertura  
+PR: #105 — OPEN / DRAFT  
 CI main de origem: FM NFCORE V1 CI #588 — SUCCESS  
 Plan Governance main de origem: #17 — SUCCESS
 
@@ -87,8 +87,8 @@ Nenhum deploy, redeploy, restart, variable change, domain change, staged change 
 - T01/T02 concluídas;
 - P01 ainda pendente;
 - diff somente documental;
-- Plan Governance da PR;
-- CI completo da PR.
+- Plan Governance da PR — pendente;
+- CI completo da PR — pendente.
 
 ## Gate de saída
 
