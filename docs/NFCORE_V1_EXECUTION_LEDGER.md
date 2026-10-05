@@ -28,7 +28,7 @@
 
 ### 2. NFV1-P00-T02 — Congelar matriz de capacidades
 
-- [ ] **Estado:** pendente
+- [ ] **Estado:** em execução
 - **Objetivo:** executar exatamente a tarefa NFV1-P00-T02 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P00-T01 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** tudo que o cronograma exige para NFV1-P00-T02, mais os testes/evidências diretamente necessários.
