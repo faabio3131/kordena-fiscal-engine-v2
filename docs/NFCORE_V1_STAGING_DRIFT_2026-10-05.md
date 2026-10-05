@@ -146,7 +146,28 @@ Um snapshot anterior da mesma sessão havia mostrado um `EnvironmentPatch` vazio
 
 Nenhum desses blockers é considerado resolvido por esta tarefa. T03 apenas os registra e entrega ownership formal.
 
-## 8. O que esta auditoria NÃO prova
+## 8. Gate blocker descoberto durante a certificação
+
+**CI-B01 — CRITICAL container base-image vulnerabilities**
+
+Durante o CI #590 do exact HEAD documental, o gate `Container vulnerability policy` detectou 3 CVEs CRITICAL corrigíveis em `perl-base` na imagem `nfcore-api:test` baseada em Debian 12:
+
+- CVE-2026-13221;
+- CVE-2026-42496;
+- CVE-2026-8376.
+
+Versão observada: `5.36.0-7+deb12u3`.  
+Versão corrigida indicada pelo scanner: `5.36.0-7+deb12u4`.
+
+Como API e Worker compartilham `python:3.11-slim-bookworm`, ambos os Dockerfiles foram endurecidos para executar atualização dos pacotes Debian durante o build. A política Trivy permaneceu inalterada e fail-closed.
+
+Classificação: blocker de CI/security descoberto por gate, não causado pela documentação de staging drift.
+
+Status: **REMEDIATION_IN_VALIDATION**. A resolução só poderá ser declarada após novo CI completo verde.
+
+---
+
+## 9. O que esta auditoria NÃO prova
 
 Esta auditoria não prova:
 
@@ -163,7 +184,7 @@ Esta auditoria não prova:
 - `PRODUCTION_APPROVED`;
 - `COMMERCIAL_LIVE`.
 
-## 9. Gate P0 / T03
+## 10. Gate P0 / T03
 
 Critérios do cronograma:
 
@@ -173,7 +194,7 @@ Critérios do cronograma:
 
 A certificação formal da T03 ainda depende de PR, CI, merge autorizado e CI pós-merge.
 
-## 10. Próximo target após fechamento da T03
+## 11. Próximo target após fechamento da T03
 
 Com T01, T02 e T03 certificados, o gate P0 pode ser encerrado como:
 
