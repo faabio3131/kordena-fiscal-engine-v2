@@ -6,7 +6,7 @@
 
 - **Objetivo:** executar integralmente o cronograma mestre de conclusão do FM NFCORE V1 sem pular tarefas e sem marcar conclusão sem prova.
 - **Dono / aprovador:** dono do projeto — padrão aprovado por instrução explícita em 2026-10-05.
-- **Estado:** APROVADO
+- **Estado:** EM EXECUCAO
 - **Fora de escopo:** alterar o conteúdo técnico das tarefas sem atualização prévia do cronograma; merge/deploy/produção não autorizados; criação de segunda autoridade.
 - **Pode fazer sem perguntar:** auditoria read-only, implementação e testes estritamente dentro da tarefa ativa, criação de branch/PR Draft e atualização de evidência documental.
 - **Deve parar e perguntar:** preço/produto, segurança nova, dado pessoal, gasto, conta real, secret/certificado real, outro repositório, mudança de visibilidade, merge quando não autorizado, deploy, migration produtiva, DNS, fiscal real/produção, operação irreversível.
@@ -15,7 +15,7 @@
 
 ### 1. NFV1-P00-T01 — Reconciliar documentação CURRENT
 
-- [ ] **Estado:** pendente
+- [ ] **Estado:** em execução
 - **Objetivo:** executar exatamente a tarefa NFV1-P00-T01 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** nada
 - **Entregar:** tudo que o cronograma exige para NFV1-P00-T01, mais os testes/evidências diretamente necessários.

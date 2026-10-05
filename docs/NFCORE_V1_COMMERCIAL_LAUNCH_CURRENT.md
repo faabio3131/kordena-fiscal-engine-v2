@@ -1,57 +1,92 @@
 # FM NFCORE V1 — Commercial Launch CURRENT
 
-**Canonical status date:** 2026-09-30  
+**Canonical status date:** 2026-10-05  
 **Canonical NFCore repository:** `faabio3131/kordena-fiscal-engine-v2`  
-**Reconciliation base NFCore main:** `62150240bef42918e9f04a6d5ab955ac7f9cdecb`  
+**Audited base NFCore main:** `9a42045c9690c32dcaf2cf11ead1a0b38843c779`  
 **Canonical FM commercial-site repository:** `faabio3131/fm-tecnologia-web-platform`  
 **Canonical Site main:** `26bfe05c2891bfc68f680587d0ae47ee36f105b1`
 
 This file is the persistent CURRENT checkpoint for FM NFCORE V1 Commercial Launch. GitHub remains the first technical source of truth and must be revalidated on every resume.
 
 
-## 0AA. CURRENT override — 2026-10-05 — COMPLETE REPOSITORY/RUNTIME AUDIT
+## 0AA. CURRENT authoritative checkpoint — 2026-10-05 — POST-GOVERNANCE BOOTSTRAP
 
-This subsection supersedes older CURRENT status wording whenever facts diverge. GitHub and Railway were re-audited read-only before the completion schedule was created.
+This subsection is the authoritative persisted checkpoint for the 2026-10-05 execution baseline. GitHub and Railway were re-audited read-only immediately before task `NFV1-P00-T01` started. Older sections below remain historical evidence only when they conflict with this checkpoint.
 
 ### GitHub CURRENT
 
-- NFCore main: `0644901ac0816b9bf8f12c648d010418486a6483`;
-- latest main CI: **FM NFCORE V1 CI #566 — SUCCESS**;
-- open PRs at audit time: **0**;
+- canonical repository: `faabio3131/kordena-fiscal-engine-v2`;
+- audited main: `9a42045c9690c32dcaf2cf11ead1a0b38843c779`;
+- PR #100: **MERGED** into main;
+- latest main technical CI: **FM NFCORE V1 CI #578 — SUCCESS** on the exact audited main;
+- latest main plan-governance CI: **NFCore Plan Governance #7 — SUCCESS** on the exact audited main;
+- open PRs at the start of `NFV1-P00-T01`: **0**;
 - repository visibility: **PUBLIC**.
 
-### Railway staging CURRENT
+The governance bootstrap is therefore integrated into main. It contains the canonical completion schedule, the execution ledger, AGENTS rules, PR template and machine validator.
 
-Project `FM NFCORE Staging` has real PostgreSQL, API, Portal and Worker services. The project environment label `production` is Railway-local and does not represent NFCore production approval.
+### Canonical execution control
 
-Version drift is present:
+The active execution authorities are:
 
-- main: `0644901ac0816b9bf8f12c648d010418486a6483`;
-- API: `f9b5b2c5b436045947159f1e76be9303f5a95d90`;
-- Portal: `f9b5b2c5b436045947159f1e76be9303f5a95d90`;
-- Worker: `1c34ba001935952f83ec0b065144e0b8311a5650`.
+- `docs/NFCORE_V1_COMPLETION_MASTER_EXECUTION_SCHEDULE_2026-10-05.md`;
+- `docs/NFCORE_V1_EXECUTION_LEDGER.md`;
+- `docs/standards/FM_AI_MASTER_PLAN_EXECUTION_STANDARD.md`;
+- `AGENTS.md`.
 
-API and Portal are online. PostgreSQL is online. Worker infrastructure exists, but continuous execution is not certified and the runtime audit found zero running Worker processes.
+The schedule contains phases P0-P12 and 59 task IDs `NFV1-Pxx-Tyy`. The ledger is the state/proof record. Git/GitHub, CI and runtime remain superior to documentation for determining technical CURRENT.
 
-### Confirmed internal completion gaps
+Execution state at the start of this checkpoint:
 
-The audit confirmed that significant fiscal and commercial domain/application capabilities already exist, but the commercial application line is not yet end-to-end complete:
+- P0: **IN_PROGRESS**;
+- active task: `NFV1-P00-T01 — Reconciliar documentação CURRENT`;
+- all later tasks remain not started unless separately evidenced by historical implementation; historical implementation does not mark a task complete in the new ledger.
+
+### Railway staging CURRENT — read-only verification
+
+Project: `FM NFCORE Staging`.
+
+The Railway environment is named `production`, but this is only the environment label inside the staging project and does **not** mean NFCore production is approved.
+
+Verified live services:
+
+- PostgreSQL: online, 1/1 replica, persistent volume present;
+- `nfcore-api`: online, 1/1 replica, latest deployed commit `f9b5b2c5b436045947159f1e76be9303f5a95d90`;
+- `nfcore-portal`: online, 1/1 replica, latest deployed commit `f9b5b2c5b436045947159f1e76be9303f5a95d90`;
+- `nfcore-worker`: Railway service state online, latest deployed commit `1c34ba001935952f83ec0b065144e0b8311a5650`, but replica status is **0 running / 1 total**.
+
+Version drift therefore remains between audited main and staging.
+
+Additional verified runtime facts:
+
+- Railway tracing is disabled for PostgreSQL, API, Portal and Worker;
+- API and Portal use Railway service domains only; no custom domain is present;
+- one Railway environment patch is reported as staged with an empty `changes` list;
+- no active Railway warning or critical notification was reported in the 24-hour environment health read.
+
+Detailed drift registration and closure belong to `NFV1-P00-T03` / P5 as defined by the schedule. This task records the observed CURRENT but does not claim those later tasks complete.
+
+### Confirmed completion gaps carried into the schedule
+
+The 2026-10-05 audit remains authoritative for the following gaps:
 
 1. fiscal Bridge security/execution and Portal operation executors are not composed in the canonical runtime app;
 2. Portal durable surfaces expose only a subset of the functionality represented in the frontend;
-3. acquisition, trial and real provider webhook ingress are implemented but not wired into the canonical runtime app;
+3. acquisition, trial and provider webhook ingress are implemented but not wired into the canonical runtime app;
 4. continuous Worker execution lacks the explicit real handler composition required by the entrypoint;
-5. real fiscal transport provider and concrete external Secret Manager adapters are not yet certified;
-6. tracing/operational exporters are not active in Railway;
+5. a real fiscal transport provider and a concrete external Secret Manager adapter are not certified;
+6. operational tracing/exporters are not active in Railway;
 7. official fiscal homologation, controlled pilot, production infrastructure and commercial Go-Live remain unproven.
 
-### Canonical completion control
+### Classification
 
-The post-audit execution authority is:
+- functional/domain foundation: strong but not end-to-end integrated;
+- staging: **REAL / VERSION_DRIFT_PRESENT / NOT_CERTIFIED_AGAINST_CURRENT**;
+- production: **NOT PROVEN / NOT APPROVED**;
+- commercial status: **NO-GO**;
+- `PRODUCTION_APPROVED`: **NO**;
+- `COMMERCIAL_LIVE`: **NO**.
 
-`docs/NFCORE_V1_COMPLETION_MASTER_EXECUTION_SCHEDULE_2026-10-05.md`
-
-It defines phases P0-P12, task IDs, predecessor rules, mandatory gates, test matrix, checkpoint template and final Definition of Done. Historical CL schedules remain evidence/history and must not override this CURRENT classification.
 
 
 ## 0A. CURRENT override — 2026-10-01
