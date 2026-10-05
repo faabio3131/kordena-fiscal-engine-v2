@@ -5,7 +5,7 @@ Produto: FM NFCORE V1
 Repository: `faabio3131/kordena-fiscal-engine-v2`  
 Main de origem: `7e98877c2187920755c1e9db990220e58d4a8cae`  
 Branch: `docs/nfv1-p01-t01-canonical-composition`  
-PR: registrar após abertura  
+PR: #107 — OPEN / DRAFT  
 CI main de origem: FM NFCORE V1 CI #600 — SUCCESS  
 Plan Governance main de origem: #29 — SUCCESS
 
