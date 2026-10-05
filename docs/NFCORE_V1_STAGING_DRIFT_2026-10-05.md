@@ -163,7 +163,7 @@ Como API e Worker compartilham `python:3.11-slim-bookworm`, ambos os Dockerfiles
 
 Classificação: blocker de CI/security descoberto por gate, não causado pela documentação de staging drift.
 
-Status: **REMEDIATION_IN_VALIDATION**. A resolução só poderá ser declarada após novo CI completo verde.
+Status: **RESOLVED_PRE_MERGE** — CI #594 confirmou `Container vulnerability policy` verde após a remediação, sem waiver ou redução de severidade. A certificação final da tarefa ainda depende dos gates do exact HEAD final e do merge autorizado.
 
 ---
 
