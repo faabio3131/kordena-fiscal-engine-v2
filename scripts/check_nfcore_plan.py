@@ -157,7 +157,14 @@ def main(ledger_path: str = DEFAULT_LEDGER, schedule_path: str = DEFAULT_SCHEDUL
         print("ERRO:", error)
 
     if not errors:
-        next_item = next((task_id for _, task_id, _, body in items if not re.search(r"^- \[x\] \*\*Estado:\*\*", body, re.M)), None)
+        next_item = next(
+            (
+                task_id
+                for _, task_id, _, body in items
+                if not re.search(r"^- \[x\] \*\*Estado:\*\*", body, re.M)
+            ),
+            None,
+        )
         suffix = f"; próximo item: {next_item}" if next_item else "; todas as tarefas concluídas"
         print(f"OK: {len(items)} tarefa(s), plano em '{plan_state}'{suffix}")
     return 1 if errors else 0
