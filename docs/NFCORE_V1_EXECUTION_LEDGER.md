@@ -15,7 +15,7 @@
 
 ### 1. NFV1-P00-T01 — Reconciliar documentação CURRENT
 
-- [ ] **Estado:** em execução
+- [x] **Estado:** concluído
 - **Objetivo:** executar exatamente a tarefa NFV1-P00-T01 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** nada
 - **Entregar:** tudo que o cronograma exige para NFV1-P00-T01, mais os testes/evidências diretamente necessários.
@@ -24,7 +24,7 @@
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
 - **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
 - **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** PENDENTE
+- **Prova:** PR #101; CI #581; merge SHA 824842f2ed5586351a75cd57fc765c716899bb9e; Plan Governance #10.
 
 ### 2. NFV1-P00-T02 — Congelar matriz de capacidades
 

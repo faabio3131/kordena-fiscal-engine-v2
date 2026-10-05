@@ -3,12 +3,13 @@
 Data: 2026-10-05  
 Produto: FM NFCORE V1  
 Repository: `faabio3131/kordena-fiscal-engine-v2`  
-Main auditada: `9a42045c9690c32dcaf2cf11ead1a0b38843c779`  
+Main de origem auditada: `9a42045c9690c32dcaf2cf11ead1a0b38843c779`
+Main pós-merge: `824842f2ed5586351a75cd57fc765c716899bb9e`  
 Branch: `docs/nfv1-p00-t01-current-reconciliation`  
-Branch HEAD no momento da abertura da PR: `94e35fd94452f11cc3c6009f9e8d2d25399f0cd4`  
+Branch HEAD validado da PR #101: `834abc2484a38d6e111a5e99349dd6962ed34c6d`  
 PR: #101  
-PR status: OPEN / DRAFT  
-CI PR: pendente  
+PR status: MERGED  
+CI PR: FM NFCORE V1 CI #580 — SUCCESS; NFCore Plan Governance #9 — SUCCESS  
 CI main de origem: FM NFCORE V1 CI #578 — SUCCESS  
 Plan Governance main de origem: #7 — SUCCESS
 
@@ -105,8 +106,15 @@ Merge não autorizado automaticamente pelo início desta tarefa.
 
 ## Gate de saída
 
-IN_PROGRESS.
+PASS — NFV1-P00-T01 concluída e certificada.
+
+Evidência final:
+
+- PR #101 — MERGED;
+- merge SHA `824842f2ed5586351a75cd57fc765c716899bb9e`;
+- NFCore Plan Governance #10 — SUCCESS no exact main;
+- FM NFCORE V1 CI #581 — SUCCESS no exact main.
 
 ## Próxima ação
 
-Validar cronograma/ledger, revisar diff, abrir PR exclusiva de `NFV1-P00-T01` e aguardar gates.
+Após merge deste closeout documental, liberar `NFV1-P00-T02 — Congelar matriz de capacidades`.
