@@ -88,7 +88,25 @@ Nenhum deploy, redeploy, restart, variable change, domain change, staged change 
 - P01 ainda pendente;
 - diff somente documental;
 - Plan Governance da PR — pendente;
-- CI completo da PR — pendente.
+- CI #590 — FAIL em Container vulnerability policy; causa CI-B01 identificada e remediada; novo CI do HEAD corrigido pendente.
+
+## CI blocker descoberto
+
+**CI-B01:** o CI #590 falhou no `Container vulnerability policy` por 3 CVEs CRITICAL corrigíveis em `perl-base` na imagem API Debian 12.
+
+Causa confirmada pelo Trivy:
+
+- installed: `5.36.0-7+deb12u3`;
+- fixed: `5.36.0-7+deb12u4`.
+
+Remediação aplicada sem reduzir o gate:
+
+- `Dockerfile.api`: atualização de pacotes Debian no build;
+- `Dockerfile.worker`: mesma remediação, pois compartilha a base `python:3.11-slim-bookworm`.
+
+Nenhum ignore, waiver ou redução de severidade foi adicionado.
+
+Status de CI-B01: **REMEDIATION_IN_VALIDATION**.
 
 ## Gate de saída
 
