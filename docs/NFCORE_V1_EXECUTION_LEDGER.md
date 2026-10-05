@@ -54,7 +54,7 @@
 
 ### 4. NFV1-P01-T01 — Identificar composição canônica
 
-- [ ] **Estado:** pendente
+- [ ] **Estado:** em execução
 - **Objetivo:** executar exatamente a tarefa NFV1-P01-T01 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P00-T03 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** tudo que o cronograma exige para NFV1-P01-T01, mais os testes/evidências diretamente necessários.
