@@ -28,7 +28,7 @@
 
 ### 2. NFV1-P00-T02 — Congelar matriz de capacidades
 
-- [ ] **Estado:** em execução
+- [x] **Estado:** concluído
 - **Objetivo:** executar exatamente a tarefa NFV1-P00-T02 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P00-T01 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** tudo que o cronograma exige para NFV1-P00-T02, mais os testes/evidências diretamente necessários.
@@ -37,7 +37,7 @@
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
 - **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
 - **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** PENDENTE
+- **Prova:** PR #103; CI #586; merge SHA 09dd77798122202ba1b7e548818b879556bec0ae; Plan Governance #15.
 
 ### 3. NFV1-P00-T03 — Registrar staging drift
 

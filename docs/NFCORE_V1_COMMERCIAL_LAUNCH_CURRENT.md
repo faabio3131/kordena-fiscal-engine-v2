@@ -18,6 +18,7 @@ This subsection is the authoritative persisted checkpoint for the 2026-10-05 exe
 - canonical repository: `faabio3131/kordena-fiscal-engine-v2`;
 - audited pre-task main: `9a42045c9690c32dcaf2cf11ead1a0b38843c779`;
 - certified post-merge main for `NFV1-P00-T01`: `824842f2ed5586351a75cd57fc765c716899bb9e`;
+- certified post-merge main for `NFV1-P00-T02`: `09dd77798122202ba1b7e548818b879556bec0ae`;
 - PR #100: **MERGED** into main;
 - latest main technical CI: **FM NFCORE V1 CI #578 — SUCCESS** on the exact audited main;
 - latest main plan-governance CI: **NFCore Plan Governance #7 — SUCCESS** on the exact audited main;
@@ -41,7 +42,8 @@ Execution state at the start of this checkpoint:
 
 - P0: **IN_PROGRESS**;
 - `NFV1-P00-T01 — Reconciliar documentação CURRENT`: **DONE_CERTIFIED**;
-- next task after closeout merge: `NFV1-P00-T02 — Congelar matriz de capacidades`;
+- `NFV1-P00-T02 — Congelar matriz de capacidades`: **DONE_CERTIFIED**;
+- next task after closeout merge: `NFV1-P00-T03 — Registrar staging drift`;
 - all later tasks remain not started unless separately evidenced by historical implementation; historical implementation does not mark a task complete in the new ledger.
 
 ### Railway staging CURRENT — read-only verification
