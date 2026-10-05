@@ -43,8 +43,29 @@ Execution state at the start of this checkpoint:
 - P0: **IN_PROGRESS**;
 - `NFV1-P00-T01 — Reconciliar documentação CURRENT`: **DONE_CERTIFIED**;
 - `NFV1-P00-T02 — Congelar matriz de capacidades`: **DONE_CERTIFIED**;
-- next task after closeout merge: `NFV1-P00-T03 — Registrar staging drift`;
+- `NFV1-P00-T03 — Registrar staging drift`: **IN_PROGRESS**;
+- next task remains blocked until T03 closeout: `NFV1-P01-T01 — Identificar composição canônica`;
 - all later tasks remain not started unless separately evidenced by historical implementation; historical implementation does not mark a task complete in the new ledger.
+
+### Railway staging drift register — T03 snapshot
+
+Authoritative drift evidence for this task is persisted in:
+
+- `docs/NFCORE_V1_STAGING_DRIFT_2026-10-05.md`;
+- `docs/checkpoints/NFV1_P00_T03_STAGING_DRIFT_2026-10-05.md`.
+
+Current exact comparison:
+
+- main: `eccb40058992023514eeaac5ecfecb7e551df763`;
+- API: `f9b5b2c5b436045947159f1e76be9303f5a95d90` — 36 commits behind;
+- Portal: `f9b5b2c5b436045947159f1e76be9303f5a95d90` — 36 commits behind;
+- Worker: `1c34ba001935952f83ec0b065144e0b8311a5650` — 118 commits behind and 0/1 running;
+- Postgres: PostgreSQL 18, 5000 MB persistent volume, migrations 1–12 with `cakto_schema=2`;
+- no Railway staged changes are active in the latest dedicated staged-state query;
+- tracing Railway remains disabled;
+- no custom domains exist for API/Portal.
+
+This records drift only. It does not authorize reconciliation deploy.
 
 ### Railway staging CURRENT — read-only verification
 
