@@ -41,7 +41,7 @@
 
 ### 3. NFV1-P00-T03 — Registrar staging drift
 
-- [ ] **Estado:** pendente
+- [ ] **Estado:** em execução
 - **Objetivo:** executar exatamente a tarefa NFV1-P00-T03 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P00-T02 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** tudo que o cronograma exige para NFV1-P00-T03, mais os testes/evidências diretamente necessários.
