@@ -5,7 +5,7 @@ Produto: FM NFCORE V1
 Repository: `faabio3131/kordena-fiscal-engine-v2`  
 Main de origem: `eccb40058992023514eeaac5ecfecb7e551df763`  
 Branch: `docs/nfv1-p00-t03-staging-drift`  
-PR: #105 — OPEN / DRAFT  
+PR: #105 — MERGED  
 CI main de origem: FM NFCORE V1 CI #588 — SUCCESS  
 Plan Governance main de origem: #17 — SUCCESS
 
@@ -112,8 +112,18 @@ Status de CI-B01: **RESOLVED_PRE_MERGE** — CI #594 SUCCESS, incluindo Containe
 
 ## Gate de saída
 
-IN_PROGRESS.
+PASS — `NFV1-P00-T03` concluída e certificada.
+
+Evidência final:
+
+- PR #105 — MERGED;
+- merge SHA `3837d1e6b5a3c38e3aa2ceb032fb952fab700a4c`;
+- NFCore Plan Governance #26 — SUCCESS no exact main;
+- FM NFCORE V1 CI #597 — SUCCESS no exact main;
+- Container vulnerability policy — SUCCESS pós-merge;
+- SBOM — SUCCESS;
+- PostgreSQL backup/restore rehearsal — SUCCESS.
 
 ## Próxima ação
 
-Abrir PR exclusiva da T03, executar os gates e aguardar merge autorizado. Não iniciar P01-T01.
+Fechar formalmente o P0 com `CURRENT_RECONCILED_2026_10_05`. Após o merge do closeout do P0, liberar `NFV1-P01-T01 — Identificar composição canônica`.
