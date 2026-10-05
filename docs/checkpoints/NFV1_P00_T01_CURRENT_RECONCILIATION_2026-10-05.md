@@ -5,10 +5,10 @@ Produto: FM NFCORE V1
 Repository: `faabio3131/kordena-fiscal-engine-v2`  
 Main auditada: `9a42045c9690c32dcaf2cf11ead1a0b38843c779`  
 Branch: `docs/nfv1-p00-t01-current-reconciliation`  
-Branch HEAD: registrar após fechamento do diff  
-PR: registrar após abertura  
-PR status: registrar após abertura  
-CI PR: registrar após execução  
+Branch HEAD no momento da abertura da PR: `94e35fd94452f11cc3c6009f9e8d2d25399f0cd4`  
+PR: #101  
+PR status: OPEN / DRAFT  
+CI PR: pendente  
 CI main de origem: FM NFCORE V1 CI #578 — SUCCESS  
 Plan Governance main de origem: #7 — SUCCESS
 
@@ -100,7 +100,7 @@ Merge não autorizado automaticamente pelo início desta tarefa.
 ## Pendências
 
 - concluir validações da PR;
-- registrar PR/CI/HEAD no checkpoint;
+- registrar CI final no checkpoint;
 - somente após merge autorizado, marcar `NFV1-P00-T01` como concluído/certificado.
 
 ## Gate de saída
