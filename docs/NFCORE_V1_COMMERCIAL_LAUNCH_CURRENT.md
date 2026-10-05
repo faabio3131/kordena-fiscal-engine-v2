@@ -8,6 +8,52 @@
 
 This file is the persistent CURRENT checkpoint for FM NFCORE V1 Commercial Launch. GitHub remains the first technical source of truth and must be revalidated on every resume.
 
+
+## 0AA. CURRENT override — 2026-10-05 — COMPLETE REPOSITORY/RUNTIME AUDIT
+
+This subsection supersedes older CURRENT status wording whenever facts diverge. GitHub and Railway were re-audited read-only before the completion schedule was created.
+
+### GitHub CURRENT
+
+- NFCore main: `0644901ac0816b9bf8f12c648d010418486a6483`;
+- latest main CI: **FM NFCORE V1 CI #566 — SUCCESS**;
+- open PRs at audit time: **0**;
+- repository visibility: **PUBLIC**.
+
+### Railway staging CURRENT
+
+Project `FM NFCORE Staging` has real PostgreSQL, API, Portal and Worker services. The project environment label `production` is Railway-local and does not represent NFCore production approval.
+
+Version drift is present:
+
+- main: `0644901ac0816b9bf8f12c648d010418486a6483`;
+- API: `f9b5b2c5b436045947159f1e76be9303f5a95d90`;
+- Portal: `f9b5b2c5b436045947159f1e76be9303f5a95d90`;
+- Worker: `1c34ba001935952f83ec0b065144e0b8311a5650`.
+
+API and Portal are online. PostgreSQL is online. Worker infrastructure exists, but continuous execution is not certified and the runtime audit found zero running Worker processes.
+
+### Confirmed internal completion gaps
+
+The audit confirmed that significant fiscal and commercial domain/application capabilities already exist, but the commercial application line is not yet end-to-end complete:
+
+1. fiscal Bridge security/execution and Portal operation executors are not composed in the canonical runtime app;
+2. Portal durable surfaces expose only a subset of the functionality represented in the frontend;
+3. acquisition, trial and real provider webhook ingress are implemented but not wired into the canonical runtime app;
+4. continuous Worker execution lacks the explicit real handler composition required by the entrypoint;
+5. real fiscal transport provider and concrete external Secret Manager adapters are not yet certified;
+6. tracing/operational exporters are not active in Railway;
+7. official fiscal homologation, controlled pilot, production infrastructure and commercial Go-Live remain unproven.
+
+### Canonical completion control
+
+The post-audit execution authority is:
+
+`docs/NFCORE_V1_COMPLETION_MASTER_EXECUTION_SCHEDULE_2026-10-05.md`
+
+It defines phases P0-P12, task IDs, predecessor rules, mandatory gates, test matrix, checkpoint template and final Definition of Done. Historical CL schedules remain evidence/history and must not override this CURRENT classification.
+
+
 ## 0A. CURRENT override — 2026-10-01
 
 This subsection is authoritative over older Railway/status wording below. GitHub and Railway were re-audited read-only.
