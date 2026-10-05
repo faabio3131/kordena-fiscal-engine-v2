@@ -5,7 +5,7 @@ Produto: FM NFCORE V1
 Repository: `faabio3131/kordena-fiscal-engine-v2`  
 Main de origem: `faf529a0f1852c9107858da730c6103234a30b2f`  
 Branch: `docs/nfv1-p00-t02-capability-matrix`  
-PR: registrar após abertura  
+PR: #103 — OPEN / DRAFT  
 CI da main de origem: FM NFCORE V1 CI #583 — SUCCESS  
 Plan Governance da main de origem: #12 — SUCCESS
 
@@ -78,15 +78,15 @@ Nenhuma mutação em Railway.
 
 Nenhum segredo ou credencial lido/persistido.
 
-## Verificações estruturais pendentes antes da PR
+## Verificações estruturais e gates
 
-- cronograma x ledger: validar 59 IDs e ordem;
-- apenas T02 deve estar em execução;
-- T01 deve permanecer concluída;
-- T03 deve permanecer pendente;
-- revisar diff contra exact main;
-- executar `python3 scripts/check_nfcore_plan.py` pelo gate oficial;
-- executar CI completo da PR.
+- cronograma x ledger: 59/59 IDs e mesma ordem — PASS;
+- somente T02 em execução — PASS;
+- T01 concluída — PASS;
+- T03 pendente — PASS;
+- diff contra exact main: 3 arquivos documentais, 3 commits ahead, 0 behind — PASS;
+- `python3 scripts/check_nfcore_plan.py`: pendente do gate oficial da PR;
+- CI completo da PR: pendente.
 
 ## Riscos / não confirmado
 
