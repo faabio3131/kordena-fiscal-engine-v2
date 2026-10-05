@@ -107,7 +107,7 @@ def main(ledger_path: str = DEFAULT_LEDGER, schedule_path: str = DEFAULT_SCHEDUL
     seen_not_done = False
     in_progress = 0
 
-    for number, task_id, title, body in items:
+    for number, task_id, _title, body in items:
         body = body.split("\n## ")[0]
         for field in FIELDS:
             if not re.search(rf"\*\*{re.escape(field)}:\*\*", body):
