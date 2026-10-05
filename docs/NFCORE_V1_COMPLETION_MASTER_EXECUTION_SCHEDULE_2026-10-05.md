@@ -10,7 +10,8 @@
 **CI do CURRENT:** FM NFCORE V1 CI #566 — SUCCESS  
 **PRs abertas no momento da auditoria:** 0
 
-**Objetivo:** concluir o FM NFCORE V1 de forma comprovável, sem reconstruções paralelas, fases esquecidas ou promoção indevida de código preparado para estado operacional.
+**Objetivo:** concluir o FM NFCORE V1 de forma comprovável, sem reconstruções paralelas, fases esquecidas ou promoção indevida de código preparado para estado operacional.  
+**Padrão automatizado de execução:** `docs/standards/FM_AI_MASTER_PLAN_EXECUTION_STANDARD.md` + `docs/NFCORE_V1_EXECUTION_LEDGER.md` + `scripts/check_nfcore_plan.py`.
 
 > Este documento governa as pendências identificadas na auditoria completa de 2026-10-05. Para a execução pós-auditoria, ele prevalece sobre cronogramas históricos quando houver divergência de estado. Documentos históricos permanecem como evidência, mas não substituem o CURRENT técnico.
 
@@ -753,6 +754,10 @@ Somente revisão imutável já certificada.
 **Status inicial:** NOT_STARTED  
 **Dependências:** P1-P11
 
+### NFV1-P12-T01 — Certificar prontidão funcional
+
+Executar e provar integralmente a matriz A antes de avançar.
+
 ## A. Prontidão funcional
 
 - [ ] emissão;
@@ -766,6 +771,10 @@ Somente revisão imutável já certificada.
 - [ ] worker;
 - [ ] billing/subscription.
 
+### NFV1-P12-T02 — Certificar paridade comercial
+
+Executar e provar integralmente a matriz B antes de avançar.
+
 ## B. Paridade comercial
 
 - [ ] pricing;
@@ -776,6 +785,10 @@ Somente revisão imutável já certificada.
 - [ ] activation;
 - [ ] cancel/refund;
 - [ ] customer portal.
+
+### NFV1-P12-T03 — Certificar prontidão técnica de produção
+
+Executar e provar integralmente a matriz C antes de avançar.
 
 ## C. Prontidão técnica de produção
 
@@ -791,6 +804,10 @@ Somente revisão imutável já certificada.
 - [ ] staging certified;
 - [ ] exact revision.
 
+### NFV1-P12-T04 — Certificar prontidão operacional
+
+Executar e provar integralmente a matriz D antes de avançar.
+
 ## D. Prontidão operacional
 
 - [ ] observability;
@@ -802,6 +819,10 @@ Somente revisão imutável já certificada.
 - [ ] incident response;
 - [ ] rollback.
 
+### NFV1-P12-T05 — Certificar prontidão comercial
+
+Executar e provar integralmente a matriz E antes de avançar.
+
 ## E. Prontidão comercial
 
 - [ ] canal real;
@@ -811,6 +832,8 @@ Somente revisão imutável já certificada.
 - [ ] suporte;
 - [ ] pendências legais/LGPD resolvidas ou aprovadas;
 - [ ] zero blocker crítico.
+
+### NFV1-P12-T06 — Go/No-Go humano e promoção controlada
 
 Somente após todas as matrizes um humano pode emitir:
 
@@ -1060,6 +1083,30 @@ Nenhuma fase posterior deve ser usada para escapar de pendências de P0-P5.
 
 ---
 
-# 14. PRINCÍPIO FINAL
+# 14. PADRÃO AUTOMATIZADO DE EXECUÇÃO
+
+Este cronograma é executado sob o padrão persistente:
+
+- `docs/standards/FM_AI_MASTER_PLAN_EXECUTION_STANDARD.md`;
+- `docs/NFCORE_V1_EXECUTION_LEDGER.md`;
+- `scripts/check_nfcore_plan.py`;
+- `.github/workflows/nfcore-plan-governance.yml`;
+- `.github/PULL_REQUEST_TEMPLATE.md`;
+- `AGENTS.md`.
+
+Regras adicionais:
+
+1. o cronograma define escopo, dependências, critérios e gates;
+2. o ledger registra estado e prova de cada tarefa `NFV1-Pxx-Tyy`;
+3. o validador exige que cronograma e ledger tenham exatamente os mesmos IDs e ordem;
+4. tarefa concluída exige PR, CI e commit/SHA como prova;
+5. uma tarefa posterior não pode ser concluída enquanto houver tarefa anterior não concluída;
+6. alteração de escopo exige atualizar cronograma e ledger antes da execução;
+7. Git/GitHub, CI e runtime continuam superiores à documentação para determinar CURRENT técnico;
+8. conversa pode autorizar decisões, mas não substitui atualização persistente do plano.
+
+---
+
+# 15. PRINCÍPIO FINAL
 
 > O NFCore não será considerado concluído por possuir muito código, documentação, testes ou infraestrutura preparada. Será concluído somente quando a mesma aplicação, na mesma linha arquitetural, estiver integrada, testada, implantada, observável, homologada, operável e comercialmente comprovada.
