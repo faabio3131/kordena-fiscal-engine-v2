@@ -88,7 +88,9 @@ Nenhum deploy, redeploy, restart, variable change, domain change, staged change 
 - P01 ainda pendente;
 - diff somente documental;
 - Plan Governance da PR — pendente;
-- CI #590 — FAIL em Container vulnerability policy; causa CI-B01 identificada e remediada; novo CI do HEAD corrigido pendente.
+- CI #590 — FAIL em Container vulnerability policy; causa CI-B01 identificada;
+- CI #594 — SUCCESS após a remediação, incluindo Container vulnerability policy, SBOM e backup/restore;
+- gates do exact HEAD documental final — pendentes após esta atualização.
 
 ## CI blocker descoberto
 
@@ -106,7 +108,7 @@ Remediação aplicada sem reduzir o gate:
 
 Nenhum ignore, waiver ou redução de severidade foi adicionado.
 
-Status de CI-B01: **REMEDIATION_IN_VALIDATION**.
+Status de CI-B01: **RESOLVED_PRE_MERGE** — CI #594 SUCCESS, incluindo Container vulnerability policy, SBOM e PostgreSQL backup/restore.
 
 ## Gate de saída
 
