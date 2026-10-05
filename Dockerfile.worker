@@ -5,6 +5,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1
 
 WORKDIR /app
+# Refresh base OS packages so fixable Debian security advisories do not ship in runtime images.
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/*
 RUN groupadd --gid 10001 nfcore && useradd --uid 10001 --gid 10001 --no-create-home nfcore
 
 COPY pyproject.toml README.md ./
