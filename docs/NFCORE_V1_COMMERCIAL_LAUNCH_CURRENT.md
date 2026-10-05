@@ -19,9 +19,10 @@ This subsection is the authoritative persisted checkpoint for the 2026-10-05 exe
 - audited pre-task main: `9a42045c9690c32dcaf2cf11ead1a0b38843c779`;
 - certified post-merge main for `NFV1-P00-T01`: `824842f2ed5586351a75cd57fc765c716899bb9e`;
 - certified post-merge main for `NFV1-P00-T02`: `09dd77798122202ba1b7e548818b879556bec0ae`;
+- certified post-merge main for `NFV1-P00-T03`: `3837d1e6b5a3c38e3aa2ceb032fb952fab700a4c`;
 - PR #100: **MERGED** into main;
-- latest main technical CI: **FM NFCORE V1 CI #578 — SUCCESS** on the exact audited main;
-- latest main plan-governance CI: **NFCore Plan Governance #7 — SUCCESS** on the exact audited main;
+- latest main technical CI for the P0 closeout baseline: **FM NFCORE V1 CI #597 — SUCCESS** on `3837d1e6b5a3c38e3aa2ceb032fb952fab700a4c`;
+- latest main plan-governance CI for the P0 closeout baseline: **NFCore Plan Governance #26 — SUCCESS** on the same exact SHA;
 - open PRs at the start of `NFV1-P00-T01`: **0**;
 - repository visibility: **PUBLIC**.
 
@@ -40,11 +41,12 @@ The schedule contains phases P0-P12 and 59 task IDs `NFV1-Pxx-Tyy`. The ledger i
 
 Execution state at the start of this checkpoint:
 
-- P0: **IN_PROGRESS**;
+- P0: **DONE_CERTIFIED**;
+- gate de saída: **CURRENT_RECONCILED_2026_10_05**;
 - `NFV1-P00-T01 — Reconciliar documentação CURRENT`: **DONE_CERTIFIED**;
 - `NFV1-P00-T02 — Congelar matriz de capacidades`: **DONE_CERTIFIED**;
-- `NFV1-P00-T03 — Registrar staging drift`: **IN_PROGRESS**;
-- next task remains blocked until T03 closeout: `NFV1-P01-T01 — Identificar composição canônica`;
+- `NFV1-P00-T03 — Registrar staging drift`: **DONE_CERTIFIED**;
+- next canonical task after this closeout is merged: `NFV1-P01-T01 — Identificar composição canônica`;
 - all later tasks remain not started unless separately evidenced by historical implementation; historical implementation does not mark a task complete in the new ledger.
 
 ### Railway staging drift register — T03 snapshot
@@ -61,7 +63,7 @@ Current exact comparison:
 - Portal: `f9b5b2c5b436045947159f1e76be9303f5a95d90` — 36 commits behind;
 - Worker: `1c34ba001935952f83ec0b065144e0b8311a5650` — 118 commits behind and 0/1 running;
 - Postgres: PostgreSQL 18, 5000 MB persistent volume, migrations 1–12 with `cakto_schema=2`;
-- no Railway staged changes are active in the latest dedicated staged-state query;
+- all service `stagedChangeCount` values are 0; Railway `pendingWork` still exposes one empty `EnvironmentPatch` record with `changes=[]`, so there is no substantive staged configuration change to apply;
 - tracing Railway remains disabled;
 - no custom domains exist for API/Portal.
 
