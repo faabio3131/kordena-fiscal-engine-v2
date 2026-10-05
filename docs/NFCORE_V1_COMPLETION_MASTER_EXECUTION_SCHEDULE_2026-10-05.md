@@ -201,6 +201,8 @@ Uma caixa [x] só pode ser marcada com evidência correspondente.
 
 **Status inicial:** READY_TO_START
 
+**Status certificado em 2026-10-05:** DONE_CERTIFIED
+
 ## Objetivo
 
 Eliminar divergência documental e fixar um ponto de partida único.
@@ -226,9 +228,9 @@ Persistir main SHA, API SHA, Portal SHA, Worker SHA, banco/migrations, domínios
 
 ## Gate
 
-- [ ] documentação coincide com Git/Railway;
-- [ ] matriz de capacidades existe;
-- [ ] blockers conhecidos possuem IDs.
+- [x] documentação coincide com Git/Railway;
+- [x] matriz de capacidades existe;
+- [x] blockers conhecidos possuem IDs.
 
 **Gate de saída:** CURRENT_RECONCILED_2026_10_05
 
