@@ -1,0 +1,14 @@
+name: NFCore Plan Governance
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  execution-plan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate canonical schedule and execution ledger
+        run: python3 scripts/check_nfcore_plan.py
