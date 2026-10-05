@@ -13,7 +13,8 @@ Gate de saída: `CURRENT_RECONCILED_2026_10_05`
 - PR #105: MERGED;
 - NFCore Plan Governance #26: SUCCESS;
 - FM NFCORE V1 CI #597: SUCCESS;
-- PRs abertas antes deste closeout: 0.
+- PRs abertas antes deste closeout: 0;
+- closeout PR: #106 — OPEN / DRAFT no momento deste registro.
 
 ## Tarefas do P0
 
