@@ -46,8 +46,29 @@ Execution state at the start of this checkpoint:
 - `NFV1-P00-T01 — Reconciliar documentação CURRENT`: **DONE_CERTIFIED**;
 - `NFV1-P00-T02 — Congelar matriz de capacidades`: **DONE_CERTIFIED**;
 - `NFV1-P00-T03 — Registrar staging drift`: **DONE_CERTIFIED**;
-- next canonical task after this closeout is merged: `NFV1-P01-T01 — Identificar composição canônica`;
+- P1: **IN_PROGRESS**;
+- `NFV1-P01-T01 — Identificar composição canônica`: **IN_PROGRESS**;
+- next task remains blocked until T01 closeout: `NFV1-P01-T02 — Implementar composition root`;
 - all later tasks remain not started unless separately evidenced by historical implementation; historical implementation does not mark a task complete in the new ledger.
+
+### P1 canonical fiscal composition — T01 snapshot
+
+The canonical composition decision for P1 is persisted in:
+
+- `docs/NFCORE_V1_P01_CANONICAL_FISCAL_COMPOSITION_2026-10-05.md`;
+- `docs/checkpoints/NFV1_P01_T01_CANONICAL_COMPOSITION_2026-10-05.md`.
+
+Binding decisions:
+
+- canonical runtime entrypoint remains `runtime.api:create_runtime_app`;
+- canonical durable composition remains `build_postgres_runtime_composition` / `RuntimeComposition`;
+- Bridge and Portal are ingress adapters only and must delegate to one fiscal application execution path;
+- S2S reuses `WorkloadAuthenticator + S2SAuthorizer`;
+- Portal reuses existing session/RBAC/CSRF authority;
+- provider/readiness/signing/vault/production authority reuse their existing certified boundaries;
+- no concrete production `BridgeRequestExecutor` / `PortalOperationExecutor` is present yet;
+- no real `FiscalProviderTransport` or concrete `ExternalSecretClient` is certified in CURRENT;
+- P01-T02 must implement composition without enabling fiscal production automatically.
 
 ### Railway staging drift register — T03 snapshot
 
