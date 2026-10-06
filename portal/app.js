@@ -141,7 +141,9 @@ function appendFiscalFilters(article, viewId) {
   });
   envLabel.append(envSelect); article.append(envLabel);
   const notice = document.createElement("p");
-  notice.textContent = "Estado registrado no backend. Readiness declarado não autoriza operação. Registros legados sem escopo comprovado não são exibidos. Até 100 registros por tipo nesta página.";
+  notice.textContent = configurationViews.has(viewId)
+    ? "Configuração persistida por unidade e ambiente. Até 100 registros por tipo nesta página. Bindings de integração seguem o escopo do modelo existente."
+    : "Estado registrado no backend. Readiness declarado não autoriza operação. Registros legados sem escopo comprovado não são exibidos. Até 100 registros por tipo nesta página.";
   article.append(notice);
 }
 
@@ -324,7 +326,7 @@ function rowElement(row) {
 
 /** @param {Record<string, unknown>} row */
 function fiscalRowElement(row) {
-  const primary = row.document_id || row.document_reference || row.source_id || row.document_kind || row.entry_id || row.reference_id || row.binding_id || row.destination_id || row.module_id || row.policy_id || "Registro";
+  const primary = row.document_id || row.document_reference || row.source_id || row.entry_id || row.reference_id || row.binding_id || row.destination_id || row.module_id || row.policy_id || row.document_kind || "Registro";
   const state = row.readiness || row.state || row.status || row.kind || "registrado";
   const display = {registro: primary, escopo: `${text(row.unit_id)} · ${text(row.environment)} · ${text(row.record_type || row.code || "capability")}`, state};
   const wrapper = rowElement(display);

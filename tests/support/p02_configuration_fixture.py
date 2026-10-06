@@ -55,7 +55,8 @@ def seed(database):
                     destination_id="events-" + label, tenant_id=tenant, unit_id=unit,
                     environment=env,
                     url=(
-                        "https://callback.example.invalid/path/" + label + "?token=" + PROTECTED_QUERY
+                        "https://callback.example.invalid/path/" + label
+                        + "?token=" + PROTECTED_QUERY
                     ),
                 )
             )
