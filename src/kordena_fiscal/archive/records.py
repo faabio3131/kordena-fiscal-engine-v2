@@ -221,6 +221,10 @@ class FiscalArchiveManifest:
 
 
 class FiscalArchiveStore(Protocol):
+    def list_for_scope(
+        self, scope: ExecutionScope, *, limit: int = 100, offset: int = 0
+    ) -> tuple[FiscalArchiveEntry, ...]: ...
+
     def append(self, entry: FiscalArchiveEntry) -> FiscalArchiveEntry: ...
 
     def get(self, entry_id: str) -> FiscalArchiveEntry | None: ...
@@ -239,6 +243,27 @@ class InMemoryFiscalArchiveStore:
         self._lock = Lock()
         self._entries: dict[str, FiscalArchiveEntry] = {}
         self._by_document: dict[tuple[str, ...], list[str]] = {}
+
+    def list_for_scope(
+        self, scope: ExecutionScope, *, limit: int = 100, offset: int = 0
+    ) -> tuple[FiscalArchiveEntry, ...]:
+        if not isinstance(scope, ExecutionScope):
+            raise FiscalValidationError("scope must be ExecutionScope")
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
+            raise FiscalValidationError("limit must be an integer between 1 and 100")
+        if isinstance(offset, bool) or not isinstance(offset, int) or not 0 <= offset <= 10000:
+            raise FiscalValidationError("offset must be an integer between 0 and 10000")
+        with self._lock:
+            rows = sorted(
+                (
+                    item
+                    for item in self._entries.values()
+                    if item.scope.identity_material == scope.identity_material
+                ),
+                key=lambda item: (item.archived_at, item.entry_id),
+                reverse=True,
+            )
+            return tuple(rows[offset : offset + limit])
 
     def append(self, entry: FiscalArchiveEntry) -> FiscalArchiveEntry:
         if not isinstance(entry, FiscalArchiveEntry):

@@ -75,7 +75,7 @@ def _tenant_admin(tenant_id: str = "tenant-a") -> AdminPrincipal:
 
 def _database(tmp_path, name: str = "control-plane.sqlite3") -> SqliteFiscalDatabase:
     database = SqliteFiscalDatabase(tmp_path / name)
-    assert database.initialize() == (1, 2, 3, 4, 5)
+    assert database.initialize() == (1, 2, 3, 4, 5, 13)
     return database
 
 
@@ -160,6 +160,14 @@ def _profile(
 
 
 def _remove_v5(connection: sqlite3.Connection) -> None:
+    connection.execute("DROP INDEX fm_idempotency_document_idx")
+    connection.execute("DROP INDEX fm_fiscal_lifecycle_scope_idx")
+    connection.execute("DROP INDEX fm_fiscal_outbox_scope_idx")
+    connection.execute("DROP INDEX fm_fiscal_archive_scope_idx")
+    for column in ("host_namespace", "tenant_id", "unit_id", "environment"):
+        connection.execute(f"ALTER TABLE fm_fiscal_lifecycle DROP COLUMN {column}")
+    connection.execute("DELETE FROM fm_schema_migrations WHERE version = 13")
+
     for table in (
         "fm_commercial_homologation_evidence",
         "fm_commercial_workload_credentials",
@@ -186,7 +194,7 @@ def _remove_v4(connection: sqlite3.Connection) -> None:
 
 def test_v2_11_migration_v4_is_explicit_and_upgrades_v2_08_checkpoint(tmp_path) -> None:
     database = _database(tmp_path, "migration-v4.sqlite3")
-    assert database.applied_migrations() == (1, 2, 3, 4, 5)
+    assert database.applied_migrations() == (1, 2, 3, 4, 5, 13)
 
     with sqlite3.connect(database.path) as connection:
         _remove_v5(connection)
@@ -194,8 +202,8 @@ def test_v2_11_migration_v4_is_explicit_and_upgrades_v2_08_checkpoint(tmp_path) 
         connection.commit()
 
     assert database.applied_migrations() == (1, 2, 3)
-    assert database.initialize() == (4, 5)
-    assert database.applied_migrations() == (1, 2, 3, 4, 5)
+    assert database.initialize() == (4, 5, 13)
+    assert database.applied_migrations() == (1, 2, 3, 4, 5, 13)
 
     with sqlite3.connect(database.path) as connection:
         tables = {

@@ -31,6 +31,7 @@ from ._sqlite_common import (
     one_row,
     optional_text,
     scope_from_values,
+    scoped_page,
     text,
     validate_sha256,
 )
@@ -39,6 +40,34 @@ from ._sqlite_common import (
 class SqliteFiscalOutboxStore:
     def __init__(self, connection: sqlite3.Connection) -> None:
         self._connection = connection
+
+    def list_for_scope(
+        self,
+        scope: ExecutionScope,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+        statuses: frozenset[FiscalOutboxStatus] | None = None,
+    ) -> tuple[FiscalOutboxEntry, ...]:
+        page = scoped_page(scope, limit, offset)
+        if statuses is not None and not statuses:
+            return ()
+        filtering = (
+            "" if statuses is None else " AND status IN (" + ",".join("?" for _ in statuses) + ")"
+        )
+        values = () if statuses is None else tuple(sorted(item.value for item in statuses))
+        rows = self._connection.execute(
+            f"""SELECT entry_id, host_namespace, tenant_id, unit_id, environment,
+                      correlation_id, operation, deduplication_key, payload, payload_sha256,
+                      created_at, available_at, status, attempt_count, lease_until,
+                      last_error, completion_reference
+               FROM fm_fiscal_outbox
+               WHERE host_namespace = ? AND tenant_id = ? AND unit_id = ?
+                 AND environment = ? {filtering}
+               ORDER BY created_at DESC, entry_id DESC LIMIT ? OFFSET ?""",
+            (*page[:4], *values, *page[4:]),
+        ).fetchall()
+        return tuple(self._entry(cast(tuple[object, ...], row)) for row in rows)
 
     @staticmethod
     def _entry(row: tuple[object, ...]) -> FiscalOutboxEntry:
@@ -300,6 +329,22 @@ class SqliteFiscalOutboxStore:
 class SqliteFiscalArchiveStore:
     def __init__(self, connection: sqlite3.Connection) -> None:
         self._connection = connection
+
+    def list_for_scope(
+        self, scope: ExecutionScope, *, limit: int = 100, offset: int = 0
+    ) -> tuple[FiscalArchiveEntry, ...]:
+        rows = self._connection.execute(
+            """SELECT entry_id, host_namespace, tenant_id, unit_id, environment,
+                      correlation_id, document_reference, kind, content, content_sha256,
+                      media_type, archived_at, retention_policy_id, retention_policy_version,
+                      retain_until, legal_basis_reference, previous_manifest_sha256
+               FROM fm_fiscal_archive
+               WHERE host_namespace = ? AND tenant_id = ? AND unit_id = ?
+                 AND environment = ?
+               ORDER BY archived_at DESC, entry_id DESC LIMIT ? OFFSET ?""",
+            scoped_page(scope, limit, offset),
+        ).fetchall()
+        return tuple(self._entry(cast(tuple[object, ...], row)) for row in rows)
 
     @staticmethod
     def _entry(row: tuple[object, ...]) -> FiscalArchiveEntry:

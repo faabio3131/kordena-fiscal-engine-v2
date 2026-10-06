@@ -165,6 +165,21 @@ class SqliteIdempotencyStore:
         )
         return updated
 
+    def latest_for_document(self, document_id: str) -> IssuanceAttempt | None:
+        normalized = document_id.strip()
+        if not normalized:
+            raise FiscalValidationError("document_id must not be blank")
+        row = one_row(
+            self._connection.execute(
+                """SELECT key, generation, request_fingerprint, document_id, status,
+                      result_reference, rejection_reason
+               FROM fm_idempotency_attempts WHERE document_id = ?
+               ORDER BY generation DESC, key DESC LIMIT 1""",
+                (normalized,),
+            )
+        )
+        return None if row is None else self._attempt(row)
+
     def attempts(self, key: IdempotencyKey) -> tuple[IssuanceAttempt, ...]:
         rows = self._connection.execute(
             """

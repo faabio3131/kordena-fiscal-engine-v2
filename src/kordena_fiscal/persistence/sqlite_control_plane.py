@@ -237,7 +237,7 @@ class SqliteControlPlaneStore:
                 FROM fm_control_plane_fiscal_profiles
                 WHERE host_namespace = ? AND tenant_id = ? AND unit_id = ?
                   AND environment = ?
-                  AND (? IS NULL OR effective_from < ?)
+                  AND (CAST(? AS TEXT) IS NULL OR effective_from < ?)
                   AND (effective_to IS NULL OR effective_to > ?)
                 LIMIT 1
                 """,

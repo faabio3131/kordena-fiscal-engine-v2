@@ -72,14 +72,10 @@ class IssuanceAttempt:
                 )
         if self.status is IssuanceAttemptStatus.AUTHORIZED:
             if not self.result_reference or self.rejection_reason is not None:
-                raise FiscalValidationError(
-                    "authorized attempt requires result_reference only"
-                )
+                raise FiscalValidationError("authorized attempt requires result_reference only")
         if self.status is IssuanceAttemptStatus.REJECTED:
             if not self.rejection_reason or self.result_reference is not None:
-                raise FiscalValidationError(
-                    "rejected attempt requires rejection_reason only"
-                )
+                raise FiscalValidationError("rejected attempt requires rejection_reason only")
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +107,8 @@ class IdempotencyStore(Protocol):
         generation: int,
         rejection_reason: str,
     ) -> IssuanceAttempt: ...
+
+    def latest_for_document(self, document_id: str) -> IssuanceAttempt | None: ...
 
     def attempts(self, key: IdempotencyKey) -> tuple[IssuanceAttempt, ...]: ...
 
@@ -207,9 +205,7 @@ class InMemoryIdempotencyStore:
             latest = self._latest_for_update(key, generation)
             if latest.status is IssuanceAttemptStatus.AUTHORIZED:
                 if latest.result_reference != reference:
-                    raise IdempotencyStateError(
-                        "authorized attempt cannot change result_reference"
-                    )
+                    raise IdempotencyStateError("authorized attempt cannot change result_reference")
                 return latest
             if latest.status is not IssuanceAttemptStatus.RESERVED:
                 raise IdempotencyStateError("only reserved attempt can become authorized")
@@ -234,9 +230,7 @@ class InMemoryIdempotencyStore:
             latest = self._latest_for_update(key, generation)
             if latest.status is IssuanceAttemptStatus.REJECTED:
                 if latest.rejection_reason != reason:
-                    raise IdempotencyStateError(
-                        "rejected attempt cannot change rejection_reason"
-                    )
+                    raise IdempotencyStateError("rejected attempt cannot change rejection_reason")
                 return latest
             if latest.status is not IssuanceAttemptStatus.RESERVED:
                 raise IdempotencyStateError("only reserved attempt can become rejected")
@@ -247,6 +241,21 @@ class InMemoryIdempotencyStore:
             )
             self._records[key.value][-1] = updated
             return updated
+
+    def latest_for_document(self, document_id: str) -> IssuanceAttempt | None:
+        normalized = document_id.strip()
+        if not normalized:
+            raise FiscalValidationError("document_id must not be blank")
+        with self._lock:
+            attempts = [
+                attempt
+                for history in self._records.values()
+                for attempt in history
+                if attempt.document_id == normalized
+            ]
+            return max(
+                attempts, key=lambda attempt: (attempt.generation, attempt.key.value), default=None
+            )
 
     def attempts(self, key: IdempotencyKey) -> tuple[IssuanceAttempt, ...]:
         with self._lock:

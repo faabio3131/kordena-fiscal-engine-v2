@@ -5,8 +5,10 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+from typing import cast
 
 from kordena_fiscal.domain import (
+    ExecutionScope,
     FiscalAccountBinding,
     FiscalAccountId,
     FiscalUnitId,
@@ -27,7 +29,7 @@ from kordena_fiscal.numbering import (
     SequenceStateError,
 )
 
-from ._sqlite_common import dt, host_key, integer, iso, one_row, text
+from ._sqlite_common import dt, host_key, integer, iso, one_row, scoped_page, text
 from .ports import PersistenceConflictError, PersistenceStateError
 
 
@@ -156,14 +158,10 @@ class SqliteLifecycleRepository:
                     from_state=FiscalDocumentState(
                         text(item.get("from_state"), "transition.from_state")
                     ),
-                    to_state=FiscalDocumentState(
-                        text(item.get("to_state"), "transition.to_state")
-                    ),
+                    to_state=FiscalDocumentState(text(item.get("to_state"), "transition.to_state")),
                     occurred_at=dt(text(item.get("occurred_at"), "transition.occurred_at")),
                     reason=text(item.get("reason"), "transition.reason"),
-                    correlation_id=text(
-                        item.get("correlation_id"), "transition.correlation_id"
-                    ),
+                    correlation_id=text(item.get("correlation_id"), "transition.correlation_id"),
                 )
             )
         return FiscalStateSnapshot(
@@ -174,29 +172,75 @@ class SqliteLifecycleRepository:
             history=tuple(history),
         )
 
-    def add(self, snapshot: FiscalStateSnapshot) -> FiscalStateSnapshot:
+    def add(
+        self, snapshot: FiscalStateSnapshot, *, scope: ExecutionScope | None = None
+    ) -> FiscalStateSnapshot:
         if not isinstance(snapshot, FiscalStateSnapshot):
             raise FiscalValidationError("snapshot must be FiscalStateSnapshot")
         existing = self.get(snapshot.document_id)
         if existing is not None:
+            if scope is not None:
+                self.assert_scope(snapshot.document_id, scope)
             if existing == snapshot:
                 return existing
             raise PersistenceConflictError("lifecycle document_id already exists")
-        self._connection.execute(
-            """
-            INSERT INTO fm_fiscal_lifecycle (
-                document_id, state, version, updated_at, history_json
-            ) VALUES (?, ?, ?, ?, ?)
-            """,
-            (
-                snapshot.document_id,
-                snapshot.state.value,
-                snapshot.version,
-                iso(snapshot.updated_at),
-                self._history_json(snapshot),
-            ),
-        )
+        try:
+            self._connection.execute(
+                """
+                INSERT INTO fm_fiscal_lifecycle (
+                    document_id, state, version, updated_at, history_json,
+                    host_namespace, tenant_id, unit_id, environment
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    snapshot.document_id,
+                    snapshot.state.value,
+                    snapshot.version,
+                    iso(snapshot.updated_at),
+                    self._history_json(snapshot),
+                    *(scoped_page(scope, 1, 0)[:4] if scope is not None else (None,) * 4),
+                ),
+            )
+        except sqlite3.IntegrityError as exc:
+            raise PersistenceConflictError("lifecycle document_id already exists") from exc
         return snapshot
+
+    def assert_scope(self, document_id: str, scope: ExecutionScope) -> None:
+        partition = scoped_page(scope, 1, 0)[:4]
+        row = one_row(
+            self._connection.execute(
+                """SELECT host_namespace, tenant_id, unit_id, environment
+               FROM fm_fiscal_lifecycle WHERE document_id = ?""",
+                (document_id,),
+            )
+        )
+        if row is None or row != partition:
+            raise PersistenceConflictError("lifecycle scope is missing or conflicts")
+
+    def list_for_scope(
+        self,
+        scope: ExecutionScope,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+        states: frozenset[FiscalDocumentState] | None = None,
+    ) -> tuple[FiscalStateSnapshot, ...]:
+        page = scoped_page(scope, limit, offset)
+        if states is not None and not states:
+            return ()
+        filtering = (
+            "" if states is None else " AND state IN (" + ",".join("?" for _ in states) + ")"
+        )
+        values = () if states is None else tuple(sorted(item.value for item in states))
+        rows = self._connection.execute(
+            f"""SELECT document_id, state, version, updated_at, history_json
+               FROM fm_fiscal_lifecycle
+               WHERE host_namespace = ? AND tenant_id = ? AND unit_id = ?
+                 AND environment = ? {filtering}
+               ORDER BY updated_at DESC, document_id LIMIT ? OFFSET ?""",
+            (*page[:4], *values, *page[4:]),
+        ).fetchall()
+        return tuple(self._snapshot(cast(tuple[object, ...], row)) for row in rows)
 
     def get(self, document_id: str) -> FiscalStateSnapshot | None:
         normalized = document_id.strip()

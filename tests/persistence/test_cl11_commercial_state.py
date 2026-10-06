@@ -10,7 +10,14 @@ import pytest
 from kordena_fiscal.persistence.commercial_fulfillment import (
     postgres_canonical_commercial_database,
 )
-from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
+from kordena_fiscal.persistence.postgres import (
+    _COMMERCIAL_RELEASE_SCHEMA,
+    _HUMAN_SCHEMA,
+    _PRICING_SCHEMA,
+    PostgresFiscalDatabase,
+    _translate_ddl,
+)
+from kordena_fiscal.persistence.sqlite import _MIGRATIONS
 from kordena_fiscal.product.billing import (
     CommercialPlan,
     CommercialSubscription,
@@ -46,7 +53,7 @@ def database() -> PostgresFiscalDatabase:
         connection.execute("DROP SCHEMA public CASCADE")
         connection.execute("CREATE SCHEMA public")
     database = PostgresFiscalDatabase(dsn)
-    assert database.initialize() == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
+    assert database.initialize() == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13)
     try:
         yield database
     finally:
@@ -257,19 +264,25 @@ def test_migration_9_upgrades_an_existing_version_8_database() -> None:
                 """,
                 (version, f"existing-{version}", NOW.isoformat()),
             )
+        for migration in _MIGRATIONS:
+            for statement in migration.statements:
+                connection.execute(_translate_ddl(statement))
+        for schema in (_HUMAN_SCHEMA, _PRICING_SCHEMA, _COMMERCIAL_RELEASE_SCHEMA):
+            for statement in schema:
+                connection.execute(statement)
         connection.execute(
-            """
-            CREATE TABLE fm_control_plane_organizations (
-                tenant_id TEXT PRIMARY KEY,
-                legal_name TEXT NOT NULL
-            )
-            """
+            "INSERT INTO fm_fiscal_lifecycle VALUES (%s, %s, %s, %s, %s)",
+            ("legacy-v8", "draft", 0, NOW.isoformat(), "[]"),
         )
 
     database = PostgresFiscalDatabase(dsn)
     try:
-        assert database.initialize() == (9, 10, 11, 12)
-        assert database.applied_migrations() == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
+        assert database.initialize() == (9, 10, 11, 12, 13)
+        assert database.applied_migrations() == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13)
+        with database.connection() as connection:
+            assert connection.execute(
+                "SELECT document_id, tenant_id, unit_id FROM fm_fiscal_lifecycle"
+            ).fetchone() == ("legacy-v8", None, None)
         with database.connection() as connection:
             assert connection.execute(
                 "SELECT COUNT(*) FROM fm_commercial_purchases"
@@ -371,7 +384,7 @@ def test_migration_10_upgrades_existing_version_9_state() -> None:
     database = PostgresFiscalDatabase(dsn)
     try:
         assert database.initialize() == (10,)
-        assert database.applied_migrations() == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
+        assert database.applied_migrations() == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13)
         with database.connection() as connection:
             columns = connection.execute(
                 """
@@ -456,6 +469,7 @@ def test_migration_11_upgrades_existing_version_10_state() -> None:
             10,
             11,
             12,
+            13,
         )
         with database.connection() as connection:
             assert connection.execute(
@@ -486,7 +500,7 @@ def test_migration_12_upgrades_existing_version_11_state() -> None:
     try:
         assert database.initialize() == (12,)
         assert database.applied_migrations() == (
-            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13
         )
         with database.connection() as connection:
             columns = connection.execute(

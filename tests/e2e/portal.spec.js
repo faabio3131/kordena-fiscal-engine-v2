@@ -18,7 +18,7 @@ test("authenticated portal loads governed tenant context and real surface", asyn
     });
   });
 
-  await page.route("**/v1/portal/surfaces/documents", async (route) => {
+  await page.route("**/v1/portal/surfaces/documents*", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -38,8 +38,8 @@ test("authenticated portal loads governed tenant context and real surface", asyn
   await expect(page.getByText("tenant-e2e · owner")).toBeVisible();
   await expect(page.locator("#critical-state-title")).toHaveText("BLOCKED_EXTERNAL");
   await page.getByRole("button", { name: "Documentos" }).click();
-  await expect(page.getByText("DOC-E2E-1")).toBeVisible();
-  await expect(page.getByText("AUTHORIZED")).toBeVisible();
+  await expect(page.locator(".grid-list .row strong").filter({hasText: "DOC-E2E-1"})).toBeVisible();
+  await expect(page.locator(".grid-list .row .badge").filter({hasText: "AUTHORIZED"})).toBeVisible();
 });
 
 test("governed mutation sends csrf and idempotency proof", async ({ page, context }) => {
@@ -55,11 +55,12 @@ test("governed mutation sends csrf and idempotency proof", async ({ page, contex
         role: "owner",
         permissions: ["portal.read", "document.query", "document.issue"],
         supported_documents: ["nfe", "nfce", "nfse"],
-        projection: { production_state: "BLOCKED_EXTERNAL" },
+        projection: { production_state: "BLOCKED_EXTERNAL", configured_fiscal_operations: ["issueFiscalDocument"],
+          authorized_units: [{unit_id: "unit-a", display_name: "Synthetic unit A", environments: ["homologation"]}] },
       }),
     });
   });
-  await page.route("**/v1/portal/surfaces/issuances", async (route) => {
+  await page.route("**/v1/portal/surfaces/issuances*", async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ surface: "issuances", rows: [] }) });
   });
 

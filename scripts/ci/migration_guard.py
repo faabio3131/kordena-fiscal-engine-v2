@@ -12,6 +12,11 @@ from kordena_fiscal.persistence.cakto import (
     CAKTO_SCHEMA_STATEMENTS,
     CAKTO_SCHEMA_VERSION,
 )
+from kordena_fiscal.persistence.fiscal_scope_schema import (
+    FISCAL_SCOPE_NAME,
+    FISCAL_SCOPE_SCHEMA,
+    FISCAL_SCOPE_VERSION,
+)
 from kordena_fiscal.persistence.postgres import (
     _COMMERCIAL_ACQUISITION_SCHEMA,
     _COMMERCIAL_CLAIM_SCHEMA,
@@ -53,9 +58,7 @@ def _reject_unapproved_destructive(
             continue
         fingerprint = _statement_fingerprint(statement)
         if (version, fingerprint) not in _APPROVED_LEGACY_DESTRUCTIVE:
-            raise RuntimeError(
-                f"destructive migration blocked: version={version} name={name}"
-            )
+            raise RuntimeError(f"destructive migration blocked: version={version} name={name}")
 
 
 def validate_policy() -> tuple[int, ...]:
@@ -67,6 +70,7 @@ def validate_policy() -> tuple[int, ...]:
         PostgresFiscalDatabase.COMMERCIAL_CLAIM_MIGRATION_VERSION,
         PostgresFiscalDatabase.COMMERCIAL_ACQUISITION_MIGRATION_VERSION,
         PostgresFiscalDatabase.COMMERCIAL_LIFECYCLE_MIGRATION_VERSION,
+        FISCAL_SCOPE_VERSION,
     )
     if versions != tuple(range(1, max(versions) + 1)):
         raise RuntimeError(f"migration versions must be contiguous from 1: {versions!r}")
@@ -108,6 +112,11 @@ def validate_policy() -> tuple[int, ...]:
         statements=_COMMERCIAL_LIFECYCLE_SCHEMA,
     )
     _reject_unapproved_destructive(
+        version=FISCAL_SCOPE_VERSION,
+        name=FISCAL_SCOPE_NAME,
+        statements=FISCAL_SCOPE_SCHEMA,
+    )
+    _reject_unapproved_destructive(
         version=CAKTO_SCHEMA_VERSION,
         name=CAKTO_SCHEMA_NAME,
         statements=CAKTO_SCHEMA_STATEMENTS,
@@ -128,8 +137,7 @@ def _require_apply_approval(environment: str) -> None:
     production_approval = os.getenv("NFCORE_PRODUCTION_APPROVAL")
     if environment == "production" and production_approval != "PRODUCTION_APPROVED":
         raise RuntimeError(
-            "production migration blocked: "
-            "NFCORE_PRODUCTION_APPROVAL=PRODUCTION_APPROVED required"
+            "production migration blocked: NFCORE_PRODUCTION_APPROVAL=PRODUCTION_APPROVED required"
         )
 
 

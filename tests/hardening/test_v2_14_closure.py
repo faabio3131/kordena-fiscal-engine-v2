@@ -34,12 +34,12 @@ def _scope(*, tenant: str = "tenant-hardening", unit: str = "unit-hardening") ->
 def test_v2_14_migrations_and_restart_are_idempotent(tmp_path) -> None:
     database = SqliteFiscalDatabase(tmp_path / "v2-14-closure.sqlite3")
 
-    assert database.initialize() == (1, 2, 3, 4, 5)
-    assert database.applied_migrations() == (1, 2, 3, 4, 5)
+    assert database.initialize() == (1, 2, 3, 4, 5, 13)
+    assert database.applied_migrations() == (1, 2, 3, 4, 5, 13)
 
     restarted = SqliteFiscalDatabase(database.path)
     assert restarted.initialize() == ()
-    assert restarted.applied_migrations() == (1, 2, 3, 4, 5)
+    assert restarted.applied_migrations() == (1, 2, 3, 4, 5, 13)
 
 
 def test_v2_14_archive_tampering_fails_closed() -> None:

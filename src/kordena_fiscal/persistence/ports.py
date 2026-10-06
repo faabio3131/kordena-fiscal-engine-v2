@@ -33,7 +33,7 @@ from kordena_fiscal.domain import (
     SourceReference,
 )
 from kordena_fiscal.events import FiscalDeliveryAuditStore, FiscalInboxStore
-from kordena_fiscal.lifecycle import FiscalStateSnapshot, IdempotencyStore
+from kordena_fiscal.lifecycle import FiscalDocumentState, FiscalStateSnapshot, IdempotencyStore
 from kordena_fiscal.numbering import FiscalSequenceStore
 from kordena_fiscal.reconciliation import FiscalReconciliationResult
 
@@ -77,7 +77,20 @@ class FiscalBindingRepository(Protocol):
 class FiscalLifecycleRepository(Protocol):
     """Optimistically-versioned persistence for complete lifecycle snapshots."""
 
-    def add(self, snapshot: FiscalStateSnapshot) -> FiscalStateSnapshot: ...
+    def add(
+        self, snapshot: FiscalStateSnapshot, *, scope: ExecutionScope | None = None
+    ) -> FiscalStateSnapshot: ...
+
+    def assert_scope(self, document_id: str, scope: ExecutionScope) -> None: ...
+
+    def list_for_scope(
+        self,
+        scope: ExecutionScope,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+        states: frozenset[FiscalDocumentState] | None = None,
+    ) -> tuple[FiscalStateSnapshot, ...]: ...
 
     def get(self, document_id: str) -> FiscalStateSnapshot | None: ...
 
@@ -93,6 +106,10 @@ class FiscalReconciliationRepository(Protocol):
     """Durable latest reconciliation state for one operation identity."""
 
     def save(self, result: FiscalReconciliationResult) -> FiscalReconciliationResult: ...
+
+    def list_for_scope(
+        self, scope: ExecutionScope, *, limit: int = 100, offset: int = 0
+    ) -> tuple[FiscalReconciliationResult, ...]: ...
 
     def get(
         self,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from typing import cast
 
 from kordena_fiscal.domain import ExecutionScope, FiscalValidationError, SourceReference
 from kordena_fiscal.reconciliation import (
@@ -13,13 +14,28 @@ from kordena_fiscal.reconciliation import (
     ReconciliationStatus,
 )
 
-from ._sqlite_common import host_key, one_row, optional_text, scope_from_values, text
+from ._sqlite_common import host_key, one_row, optional_text, scope_from_values, scoped_page, text
 from .ports import PersistenceStateError
 
 
 class SqliteReconciliationRepository:
     def __init__(self, connection: sqlite3.Connection) -> None:
         self._connection = connection
+
+    def list_for_scope(
+        self, scope: ExecutionScope, *, limit: int = 100, offset: int = 0
+    ) -> tuple[FiscalReconciliationResult, ...]:
+        rows = self._connection.execute(
+            """SELECT host_namespace, tenant_id, unit_id, environment, source_type,
+                      source_id, correlation_id, status, fingerprint,
+                      selected_document_id, issues_json
+               FROM fm_fiscal_reconciliation
+               WHERE host_namespace = ? AND tenant_id = ? AND unit_id = ?
+                 AND environment = ?
+               ORDER BY source_type, source_id LIMIT ? OFFSET ?""",
+            scoped_page(scope, limit, offset),
+        ).fetchall()
+        return tuple(self._result(cast(tuple[object, ...], row)) for row in rows)
 
     @staticmethod
     def _key(scope: ExecutionScope, source: SourceReference) -> tuple[str, ...]:

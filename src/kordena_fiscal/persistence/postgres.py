@@ -42,6 +42,7 @@ from kordena_fiscal.security.human_identity import (
 from kordena_fiscal.security.human_recovery import PasswordResetRecord
 
 from .commercial_release import PostgresCommercialReleaseRepository
+from .fiscal_scope_schema import FISCAL_SCOPE_NAME, FISCAL_SCOPE_SCHEMA, FISCAL_SCOPE_VERSION
 from .ports import PersistenceStateError
 from .pricing_catalog import PostgresPricingCatalogRepository
 from .sqlite import _MIGRATIONS
@@ -319,10 +320,7 @@ _HUMAN_SCHEMA = (
         FOREIGN KEY (account_id) REFERENCES fm_human_accounts(account_id)
     )
     """,
-    (
-        "CREATE INDEX IF NOT EXISTS fm_web_sessions_account_idx "
-        "ON fm_web_sessions (account_id)"
-    ),
+    ("CREATE INDEX IF NOT EXISTS fm_web_sessions_account_idx ON fm_web_sessions (account_id)"),
     (
         "CREATE INDEX IF NOT EXISTS fm_web_sessions_expiry_idx "
         "ON fm_web_sessions (expires_at, revoked)"
@@ -519,8 +517,6 @@ _COMMERCIAL_LIFECYCLE_SCHEMA = (
         "WHERE external_subscription_id IS NOT NULL"
     ),
 )
-
-
 
 
 def _translate_ddl(statement: str) -> str:
@@ -720,6 +716,19 @@ class PostgresFiscalDatabase:
                         ),
                     )
                     new_versions.append(self.COMMERCIAL_LIFECYCLE_MIGRATION_VERSION)
+                if FISCAL_SCOPE_VERSION not in applied:
+                    for statement in FISCAL_SCOPE_SCHEMA:
+                        raw.execute(statement)
+                    raw.execute(
+                        "INSERT INTO fm_schema_migrations (version, name, applied_at) "
+                        "VALUES (%s, %s, %s)",
+                        (
+                            FISCAL_SCOPE_VERSION,
+                            FISCAL_SCOPE_NAME,
+                            datetime.now().astimezone().isoformat(),
+                        ),
+                    )
+                    new_versions.append(FISCAL_SCOPE_VERSION)
                 raw.commit()
                 return tuple(new_versions)
             except Exception:

@@ -54,7 +54,7 @@ def _binding() -> FiscalAccountBinding:
 
 def _database(tmp_path) -> SqliteFiscalDatabase:
     database = SqliteFiscalDatabase(tmp_path / "fm-fiscal-v2.sqlite3")
-    assert database.initialize() == (1, 2, 3, 4, 5)
+    assert database.initialize() == (1, 2, 3, 4, 5, 13)
     return database
 
 
@@ -62,7 +62,7 @@ def test_controlled_migration_is_idempotent_and_requires_durable_path(tmp_path) 
     database = _database(tmp_path)
 
     assert database.initialize() == ()
-    assert database.applied_migrations() == (1, 2, 3, 4, 5)
+    assert database.applied_migrations() == (1, 2, 3, 4, 5, 13)
 
     with pytest.raises(FiscalValidationError, match="filesystem"):
         SqliteFiscalDatabase(":memory:")
@@ -153,6 +153,7 @@ def test_crash_retry_never_silently_duplicates_reserved_issuance(tmp_path) -> No
     fingerprint = "2" * 64
 
     fresh = service.reserve_issuance(
+        scope=_scope(),
         key=key,
         request_fingerprint=fingerprint,
         document_id="doc-crash-safe",
@@ -177,6 +178,7 @@ def test_crash_retry_never_silently_duplicates_reserved_issuance(tmp_path) -> No
 
     restarted_service = FiscalApplicationService(SqliteFiscalDatabase(database.path))
     after_crash = restarted_service.reserve_issuance(
+        scope=_scope(),
         key=key,
         request_fingerprint=fingerprint,
         document_id="doc-retry-metadata",
@@ -199,6 +201,7 @@ def test_crash_retry_never_silently_duplicates_reserved_issuance(tmp_path) -> No
     )
 
     confirmed = FiscalApplicationService(SqliteFiscalDatabase(database.path)).reserve_issuance(
+        scope=_scope(),
         key=key,
         request_fingerprint=fingerprint,
         document_id="another-retry-document-id",

@@ -18,6 +18,7 @@ from kordena_fiscal.application.commercial_claim import CommercialClaimService
 from kordena_fiscal.application.commercial_fulfillment import CommercialFulfillmentService
 from kordena_fiscal.application.commercial_trial import GovernedTrialService
 from kordena_fiscal.application.service import FiscalApplicationService
+from kordena_fiscal.compliance import CapabilityReadinessService
 from kordena_fiscal.control_plane.cakto_checkout import (
     CaktoCheckoutAdministrationService,
 )
@@ -84,6 +85,7 @@ def build_postgres_runtime_composition(
     workload_credentials: tuple[WorkloadCredentialRecord, ...] = (),
     security_audit_sink: SecurityAuditSink | None = None,
     fiscal_operation_handlers: Mapping[str, FiscalOperationHandler] | None = None,
+    capability_readiness: CapabilityReadinessService | None = None,
     enable_cakto_checkout: bool = False,
     password_reset_ttl: timedelta = timedelta(minutes=10),
 ) -> RuntimeComposition:
@@ -171,6 +173,7 @@ def build_postgres_runtime_composition(
     portal = DurableHumanPortalExecutor(
         database,
         operation_executor=portal_fiscal_operation_executor,
+        capability_readiness=capability_readiness,
     )
     return RuntimeComposition(
         human_identity=identity,

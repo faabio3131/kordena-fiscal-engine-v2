@@ -81,6 +81,96 @@ if (!loginView || !appShell || !loginForm || !nav || !workspace || !title || !op
 /** @type {BootstrapState|null} */
 let bootstrapState = null;
 let currentView = "overview";
+const fiscalViews = new Set(["documents", "issuances", "errors", "reconciliation", "capabilities"]);
+let selectedFiscalUnit = "";
+let selectedFiscalEnvironment = "homologation";
+let fiscalPageOffset = 0;
+/** @type {{fingerprint:string, key:string}|null} */
+let pendingFiscalRequest = null;
+const fiscalOperationPermissions = {
+  issueFiscalDocument: "document.issue",
+  queryFiscalDocument: "document.query",
+  cancelFiscalDocument: "document.cancel",
+  inutilizeFiscalRange: "document.inutilize",
+  reconcileFiscalOperation: "reconciliation.execute",
+};
+
+/** @returns {{unit_id:string, display_name:string, environments:string[]}[]} */
+function authorizedFiscalUnits() {
+  const units = bootstrapState?.projection.authorized_units;
+  if (!Array.isArray(units)) return [];
+  return units.filter((unit) => unit && typeof unit.unit_id === "string"
+    && typeof unit.display_name === "string" && Array.isArray(unit.environments));
+}
+
+/** @param {HTMLElement} article @param {string} viewId */
+function appendFiscalFilters(article, viewId) {
+  const units = authorizedFiscalUnits();
+  if (!units.some((unit) => unit.unit_id === selectedFiscalUnit)) selectedFiscalUnit = units[0]?.unit_id || "";
+  const unitLabel = document.createElement("label");
+  unitLabel.textContent = "Unidade fiscal";
+  const select = document.createElement("select");
+  select.id = "fiscal-unit-filter";
+  for (const unit of units) {
+    const option = document.createElement("option");
+    option.value = unit.unit_id; option.textContent = unit.display_name;
+    select.append(option);
+  }
+  select.value = selectedFiscalUnit;
+  select.addEventListener("change", () => {
+    selectedFiscalUnit = select.value; fiscalPageOffset = 0; void renderSurface(viewId);
+  });
+  unitLabel.append(select); article.append(unitLabel);
+  const environments = units.find((unit) => unit.unit_id === selectedFiscalUnit)?.environments || [];
+  if (!environments.includes(selectedFiscalEnvironment)) selectedFiscalEnvironment = environments[0] || "homologation";
+  const envLabel = document.createElement("label");
+  envLabel.textContent = "Ambiente fiscal";
+  const envSelect = document.createElement("select");
+  envSelect.id = "fiscal-environment-filter";
+  for (const environment of environments) {
+    const option = document.createElement("option");
+    option.value = environment;
+    option.textContent = environment === "production" ? "Produção — consulta de estado" : "Homologação";
+    envSelect.append(option);
+  }
+  envSelect.value = selectedFiscalEnvironment;
+  envSelect.addEventListener("change", () => {
+    selectedFiscalEnvironment = envSelect.value; fiscalPageOffset = 0; void renderSurface(viewId);
+  });
+  envLabel.append(envSelect); article.append(envLabel);
+  const notice = document.createElement("p");
+  notice.textContent = "Estado registrado no backend. Readiness declarado não autoriza operação. Registros legados sem escopo comprovado não são exibidos. Até 100 registros por tipo nesta página.";
+  article.append(notice);
+}
+
+/** @param {HTMLElement} article */
+function appendFiscalActions(article) {
+  const operations = bootstrapState?.projection.configured_fiscal_operations;
+  const configured = Array.isArray(operations) ? operations : [];
+  for (const option of operationId.options) {
+    const permission = fiscalOperationPermissions[/** @type {keyof typeof fiscalOperationPermissions} */ (option.value)];
+    option.disabled = !configured.includes(option.value) || !bootstrapState?.permissions.includes(permission);
+    option.hidden = option.disabled;
+  }
+  const allowed = Array.from(operationId.options).filter((option) => !option.disabled);
+  if (!allowed.length) {
+    const blocked = document.createElement("p");
+    blocked.setAttribute("role", "status");
+    blocked.textContent = "Operação fiscal indisponível neste escopo: executor não configurado ou permissão ausente. Nenhuma emissão foi realizada.";
+    article.append(blocked);
+    return;
+  }
+  operationId.value = allowed[0].value;
+  const action = document.createElement("button");
+  action.className = "primary"; action.type = "button";
+  action.textContent = "Executar operação governada";
+  action.addEventListener("click", () => {
+    operationUnit.value = selectedFiscalUnit;
+    operationDialog.showModal();
+  });
+  article.append(action);
+}
+
 
 function csrfToken() {
   const prefix = "nfcore_csrf=";
@@ -227,6 +317,25 @@ function rowElement(row) {
   badge.className = `badge ${tone(state[1])}`;
   badge.textContent = text(state[1]);
   wrapper.append(strong, context, badge);
+  return wrapper;
+}
+
+/** @param {Record<string, unknown>} row */
+function fiscalRowElement(row) {
+  const primary = row.document_id || row.document_reference || row.source_id || row.document_kind || row.entry_id || "Registro fiscal";
+  const state = row.readiness || row.state || row.status || row.kind || "registrado";
+  const display = {registro: primary, escopo: `${text(row.unit_id)} · ${text(row.environment)} · ${text(row.record_type || row.code || "capability")}`, state};
+  const wrapper = rowElement(display);
+  const details = document.createElement("details");
+  const summary = document.createElement("summary");
+  summary.textContent = "Detalhes do registro";
+  const values = document.createElement("dl");
+  for (const [key, value] of Object.entries(row)) {
+    const term = document.createElement("dt"); term.textContent = key;
+    const description = document.createElement("dd"); description.textContent = text(value);
+    values.append(term, description);
+  }
+  details.append(summary, values); wrapper.append(details);
   return wrapper;
 }
 
@@ -681,6 +790,7 @@ async function renderCheckoutAdmin() {
 
 /** @param {string} viewId */
 async function renderSurface(viewId) {
+  if (currentView !== viewId) fiscalPageOffset = 0;
   currentView = viewId;
   const label = navigation.flatMap((group) => group.items).find(([id]) => id === viewId)?.[1] || viewId;
   title.textContent = label;
@@ -707,33 +817,41 @@ async function renderSurface(viewId) {
   }
   workspace.replaceChildren();
   const article = panel(descriptions[viewId] || label);
+  if (fiscalViews.has(viewId)) appendFiscalFilters(article, viewId);
   const loading = document.createElement("p");
   loading.textContent = "Carregando dados autorizados...";
   article.append(loading);
   workspace.append(article);
   try {
-    const response = await api(`/v1/portal/surfaces/${encodeURIComponent(viewId)}`);
+    const filters = fiscalViews.has(viewId) ? `?${new URLSearchParams({
+      ...(selectedFiscalUnit ? {unit_id: selectedFiscalUnit} : {}),
+      environment: selectedFiscalEnvironment, limit: "100", offset: String(fiscalPageOffset),
+    })}` : "";
+    const response = await api(`/v1/portal/surfaces/${encodeURIComponent(viewId)}${filters}`);
     const grid = document.createElement("div");
     grid.className = "grid-list";
     const rows = Array.isArray(response.rows) ? response.rows : [];
     if (!rows.length) {
       const empty = document.createElement("div");
       empty.className = "empty-state";
-      empty.textContent = "Nenhum registro disponível neste escopo autorizado.";
+      empty.textContent = fiscalViews.has(viewId) ? "Nenhum registro nesta página do escopo autorizado." : "Nenhum registro disponível neste escopo autorizado.";
       grid.append(empty);
     } else {
-      for (const row of rows) grid.append(rowElement(row));
+      for (const row of rows) grid.append(fiscalViews.has(viewId) ? fiscalRowElement(row) : rowElement(row));
     }
-    const existingHeader = article.firstElementChild;
-    article.replaceChildren(...(existingHeader ? [existingHeader, grid] : [grid]));
+    loading.remove();
+    article.append(grid);
     if (viewId === "onboarding") appendOnboardingControls(article);
-    if (["documents", "issuances", "reconciliation"].includes(viewId)) {
-      const action = document.createElement("button");
-      action.className = "primary";
-      action.type = "button";
-      action.textContent = "Executar operação governada";
-      action.addEventListener("click", () => operationDialog.showModal());
-      article.append(action);
+    if (["documents", "issuances", "reconciliation"].includes(viewId)) appendFiscalActions(article);
+    if (fiscalViews.has(viewId) && viewId !== "capabilities") {
+      const previous = document.createElement("button");
+      previous.type = "button"; previous.textContent = "Página anterior"; previous.disabled = fiscalPageOffset === 0;
+      previous.addEventListener("click", () => { fiscalPageOffset = Math.max(0, fiscalPageOffset - 100); void renderSurface(viewId); });
+      const next = document.createElement("button");
+      next.type = "button"; next.textContent = "Próxima página";
+      next.addEventListener("click", () => { fiscalPageOffset += 100; void renderSurface(viewId); });
+      next.disabled = fiscalPageOffset >= 10000;
+      article.append(previous, next);
     }
   } catch (error) {
     loading.textContent = error instanceof Error ? error.message : "Falha ao carregar superfície";
@@ -863,6 +981,7 @@ logoutAction.addEventListener("click", async () => {
     await api("/v1/auth/logout", { method: "POST", headers: { "X-CSRF-Token": csrfToken() } });
   } finally {
     bootstrapState = null;
+    pendingFiscalRequest = null;
     showLogin();
   }
 });
@@ -875,16 +994,24 @@ operationForm.addEventListener("submit", async (event) => {
     const selected = operationId.value;
     const unitId = operationUnit.value.trim();
     const parsed = JSON.parse(operationPayload.value);
-    const payload = { ...parsed, unit_id: unitId };
+    const payload = { ...parsed, unit_id: unitId, environment: selectedFiscalEnvironment };
+    const fingerprint = `${selected}:${JSON.stringify(payload)}`;
     const mutation = selected !== "queryFiscalDocument";
     /** @type {Record<string,string>} */
     const headers = { "X-CSRF-Token": csrfToken() };
-    if (mutation) headers["Idempotency-Key"] = crypto.randomUUID();
+    if (mutation) {
+      if (pendingFiscalRequest && pendingFiscalRequest.fingerprint !== fingerprint) {
+        throw new Error("Há uma tentativa pendente com outro conteúdo. Preserve o pedido original até confirmar seu resultado.");
+      }
+      pendingFiscalRequest ||= {fingerprint, key: crypto.randomUUID()};
+      headers["Idempotency-Key"] = pendingFiscalRequest.key;
+    }
     await api(`/v1/portal/operations/${encodeURIComponent(selected)}`, {
       method: "POST",
       headers,
       body: JSON.stringify(payload),
     });
+    pendingFiscalRequest = null;
     operationDialog.close();
     await renderSurface(currentView);
   } catch (error) {
