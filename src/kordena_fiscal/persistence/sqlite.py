@@ -11,6 +11,11 @@ from typing import TypeVar
 
 from kordena_fiscal.domain import FiscalValidationError
 
+from .customer_configuration_schema import (
+    CUSTOMER_CONFIGURATION_NAME,
+    CUSTOMER_CONFIGURATION_SCHEMA,
+    CUSTOMER_CONFIGURATION_VERSION,
+)
 from .fiscal_scope_schema import FISCAL_SCOPE_NAME, FISCAL_SCOPE_SCHEMA, FISCAL_SCOPE_VERSION
 from .ports import PersistenceStateError
 from .sqlite_commercial import SqliteCommercialConfigurationStore
@@ -720,6 +725,18 @@ class SqliteFiscalDatabase:
                     ),
                 )
                 new_versions.append(FISCAL_SCOPE_VERSION)
+            if CUSTOMER_CONFIGURATION_VERSION not in applied:
+                for statement in CUSTOMER_CONFIGURATION_SCHEMA:
+                    connection.execute(statement)
+                connection.execute(
+                    "INSERT INTO fm_schema_migrations (version, name, applied_at) VALUES (?, ?, ?)",
+                    (
+                        CUSTOMER_CONFIGURATION_VERSION,
+                        CUSTOMER_CONFIGURATION_NAME,
+                        datetime.now().astimezone().isoformat(),
+                    ),
+                )
+                new_versions.append(CUSTOMER_CONFIGURATION_VERSION)
             connection.commit()
             return tuple(new_versions)
         except Exception:

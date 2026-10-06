@@ -320,3 +320,63 @@ test("mobile overview keeps premium header compact", async ({ page, context }) =
   expect(geometry.topbarHeight).toBeLessThanOrEqual(125);
   expect(geometry.bannerTop).toBeLessThanOrEqual(305);
 });
+
+for (const [view, label, operation, fields] of [
+  ["certificates", "Certificados", "configureCertificates", {reference_id: "ref:synthetic-browser", kind: "certificate"}],
+  ["providers", "Providers", "configureProviders", {binding_id: "synthetic-binding", document_kind: "nfe", state_code: "SP", operation: "authorize", provider_id: "synthetic"}],
+  ["webhooks", "Webhooks", "configureWebhooks", {destination_id: "synthetic-events", url: "https://consumer.example.test/fiscal/webhooks"}],
+  ["integrations", "Integrações", "configureIntegrations", {module_id: "synthetic-module"}],
+  ["settings", "Configurações", "configureSettings", {policy_id: "synthetic-policy", provider_id: "synthetic", connect_timeout_seconds: "2", read_timeout_seconds: "3", max_attempts: "2", base_delay_seconds: "1", max_delay_seconds: "5", jitter_ratio: "0.1", circuit_failure_threshold: "3", circuit_recovery_seconds: "10", circuit_success_threshold: "1"}],
+]) {
+  test(`synthetic ${view} form submits scoped version csrf and idempotency contract`, async ({page, context}) => {
+    await context.addCookies([{name: "nfcore_csrf", value: "synthetic-csrf", domain: "127.0.0.1", path: "/"}]);
+    await page.route("**/v1/portal/bootstrap", (route) => route.fulfill({json: {
+      tenant_id: "synthetic-tenant", role: "owner", platform_admin: false,
+      unit_ids: ["unit-a"], permissions: ["portal.read", "certificate.manage", "integration.manage", "configuration.write"],
+      supported_documents: ["nfe"], projection: {available_surfaces: ["overview", view],
+        customer_configuration_operations: [operation],
+        authorized_units: [{unit_id: "unit-a", display_name: "Synthetic unit", environments: ["homologation"]}]},
+    }}));
+    await page.route(`**/v1/portal/surfaces/${view}*`, (route) => route.fulfill({json: {rows: []}}));
+    let submitted = null;
+    await page.route(`**/v1/portal/operations/${operation}`, (route) => {
+      submitted = route.request().postDataJSON();
+      expect(route.request().headers()["x-csrf-token"]).toBe("synthetic-csrf");
+      expect(route.request().headers()["idempotency-key"].length).toBeGreaterThan(10);
+      return route.fulfill({json: {status: "configuration_recorded", version: 1, approval_status: view === "webhooks" ? "pending" : undefined}});
+    });
+    await page.goto("/"); await page.getByRole("button", {name: label, exact: true}).click();
+    for (const [field, value] of Object.entries(fields)) await page.locator(`#configuration-${field}`).fill(value);
+    await page.locator("#customer-configuration-form button[type=submit]").click();
+    await expect(page.locator("#customer-configuration-form [role=status]")).toContainText("versão 1");
+    expect(submitted.unit_id).toBe("unit-a"); expect(submitted.environment).toBe("homologation");
+    expect(submitted.expected_version).toBe(0); expect(submitted.tenant_id).toBeUndefined();
+    expect(submitted.platform_admin).toBeUndefined();
+    if (view === "webhooks") await expect(page.locator("#customer-configuration-form [role=status]")).toContainText("aprovação pending");
+  });
+}
+
+test("platform egress review uses existing session and approved target version", async ({page, context}) => {
+  await context.addCookies([{name: "nfcore_csrf", value: "synthetic-csrf", domain: "127.0.0.1", path: "/"}]);
+  await page.route("**/v1/portal/bootstrap", (route) => route.fulfill({json: {
+    tenant_id: "synthetic-platform", role: "owner", platform_admin: true, unit_ids: null,
+    permissions: ["portal.read"], supported_documents: ["nfe"],
+    projection: {available_surfaces: ["overview", "webhook-egress"]},
+  }}));
+  await page.route("**/v1/portal/egress/tenant-a/unit-a/homologation/synthetic-events", (route) => route.fulfill({json: {
+    url: "https://consumer.example.test/fiscal/webhooks", version: 1, approval_status: "pending", enabled: true,
+  }}));
+  await page.route("**/v1/portal/egress/tenant-a/unit-a/homologation/synthetic-events/approved", (route) => {
+    expect(route.request().postDataJSON().expected_version).toBe(1);
+    expect(route.request().headers()["x-csrf-token"]).toBe("synthetic-csrf");
+    expect(route.request().headers()["idempotency-key"].length).toBeGreaterThan(10);
+    return route.fulfill({json: {version: 2, approval_status: "approved"}});
+  });
+  await page.goto("/"); await page.getByRole("button", {name: "Aprovação de egress"}).click();
+  for (const [field, value] of Object.entries({tenant: "tenant-a", unit: "unit-a", environment: "homologation", destination: "synthetic-events"})) await page.locator(`#configuration-egress-${field}`).fill(value);
+  await page.getByRole("button", {name: "Consultar solicitação"}).click();
+  await expect(page.locator("#egress-decision-form")).toBeVisible();
+  await page.locator("#configuration-egress-expiry").fill("2026-10-07T12:00:00Z");
+  await page.getByRole("button", {name: "Aprovar egress"}).click();
+  await expect(page.locator("#egress-review-form [role=status]")).toContainText("Decisão approved registrada · versão 2");
+});

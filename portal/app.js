@@ -6,7 +6,7 @@
 const navigation = [
   { label: "Operação", items: [["overview", "Visão geral"], ["documents", "Documentos"], ["issuances", "Emissões"], ["errors", "Erros"], ["reconciliation", "Reconciliação"]] },
   { label: "Configuração", items: [["onboarding", "Onboarding"], ["companies", "Empresas"], ["units", "Unidades"], ["environments", "Ambientes"], ["capabilities", "Capabilities"], ["certificates", "Certificados"], ["providers", "Providers"], ["users", "Usuários"]] },
-  { label: "Plataforma", items: [["webhooks", "Webhooks"], ["integrations", "Integrações"], ["usage", "Uso"], ["billing", "Billing"], ["plans", "Planos"], ["pricing-admin", "Catálogo comercial"], ["commercial-release", "Liberação comercial"], ["checkout-admin", "Canais de Venda / Checkout"], ["audit", "Auditoria"], ["support", "Suporte"], ["settings", "Configurações"]] },
+  { label: "Plataforma", items: [["webhooks", "Webhooks"], ["webhook-egress", "Aprovação de egress"], ["integrations", "Integrações"], ["usage", "Uso"], ["billing", "Billing"], ["plans", "Planos"], ["pricing-admin", "Catálogo comercial"], ["commercial-release", "Liberação comercial"], ["checkout-admin", "Canais de Venda / Checkout"], ["audit", "Auditoria"], ["support", "Suporte"], ["settings", "Configurações"]] },
 ];
 
 const supportedDocumentLabels = ["NF-e", "NFC-e", "NFS-e"];
@@ -32,6 +32,7 @@ const descriptions = {
   providers: "Bindings de providers por documento, operação e jurisdição.",
   users: "Usuários, papéis e permissões do tenant.",
   webhooks: "Destinos e estado de entrega governada.",
+  "webhook-egress": "Aprovação e revogação de destinos pela autoridade da plataforma.",
   integrations: "Integrações do tenant via contratos versionados.",
   usage: "Uso medido sem interferir na autoridade fiscal.",
   billing: "Cobrança separada da autoridade fiscal.",
@@ -132,7 +133,7 @@ function appendFiscalFilters(article, viewId) {
   for (const environment of environments) {
     const option = document.createElement("option");
     option.value = environment;
-    option.textContent = environment === "production" ? "Produção — consulta de estado" : "Homologação";
+    option.textContent = environment === "production" ? configurationViews.has(viewId) ? "Produção — configuração não autoriza operação" : "Produção — consulta de estado" : "Homologação";
     envSelect.append(option);
   }
   envSelect.value = selectedFiscalEnvironment;
@@ -793,6 +794,135 @@ async function renderCheckoutAdmin() {
 }
 
 /** @param {string} viewId */
+/** @type {Record<string, {operation:string, permission:string, fields:[string,string,string][]}>} */
+const customerForms = {
+  certificates: {operation: "configureCertificates", permission: "certificate.manage", fields: [["reference_id", "Referência governada (sem material secreto)", "text"], ["kind", "Tipo: certificate, csc ou credentials", "text"], ["provider_id", "Provider (opcional para certificado)", "optional"]]},
+  providers: {operation: "configureProviders", permission: "integration.manage", fields: [["binding_id", "ID do binding", "text"], ["document_kind", "Documento: nfe, nfce ou nfse", "text"], ["state_code", "UF", "text"], ["municipality_ibge_code", "Município IBGE (NFS-e)", "optional"], ["operation", "Operação: authorize, query, cancel, inutilize ou status", "text"], ["provider_id", "Provider", "text"], ["enabled", "Binding habilitado", "checkbox"]]},
+  webhooks: {operation: "configureWebhooks", permission: "integration.manage", fields: [["destination_id", "ID do destino", "text"], ["url", "HTTPS público com path explícito, sem query ou credenciais", "url"], ["enabled", "Solicitar entrega após aprovação da plataforma", "checkbox"]]},
+  integrations: {operation: "configureIntegrations", permission: "integration.manage", fields: [["module_id", "ID do módulo", "text"], ["enabled", "Módulo habilitado", "checkbox"]]},
+  settings: {operation: "configureSettings", permission: "configuration.write", fields: [["policy_id", "ID da política", "text"], ["provider_id", "Provider", "text"], ["connect_timeout_seconds", "Timeout de conexão (segundos)", "number"], ["read_timeout_seconds", "Timeout de leitura (segundos)", "number"], ["max_attempts", "Máximo de tentativas", "number"], ["base_delay_seconds", "Espera inicial (segundos)", "number"], ["max_delay_seconds", "Espera máxima (segundos)", "number"], ["jitter_ratio", "Jitter (0 a 1)", "number"], ["circuit_failure_threshold", "Falhas para abrir circuito", "number"], ["circuit_recovery_seconds", "Recuperação do circuito (segundos)", "number"], ["circuit_success_threshold", "Sucessos para fechar circuito", "number"]]},
+};
+
+/** @param {HTMLFormElement} form @param {string} key @param {string} label @param {string} kind @returns {HTMLInputElement} */
+function configurationInput(form, key, label, kind) {
+  const wrapper = document.createElement("label"); wrapper.textContent = label;
+  const input = document.createElement("input"); input.name = key;
+  input.id = `configuration-${key}`; input.type = kind === "optional" ? "text" : kind;
+  input.required = kind !== "optional" && kind !== "checkbox";
+  if (kind === "number") input.step = "any";
+  input.autocomplete = "off"; wrapper.append(input); form.append(wrapper);
+  return input;
+}
+
+/** @param {HTMLElement} article @param {string} viewId @param {Record<string, unknown>[]} rows */
+function appendCustomerConfiguration(article, viewId, rows) {
+  const spec = customerForms[viewId];
+  const configured = bootstrapState?.projection.customer_configuration_operations;
+  if (!spec || !bootstrapState?.permissions.includes(spec.permission) || !Array.isArray(configured)
+      || !configured.includes(spec.operation) || !selectedFiscalUnit) return;
+  const form = document.createElement("form"); form.id = "customer-configuration-form";
+  const intro = document.createElement("p");
+  intro.textContent = "Alteração governada neste escopo. Informe a versão atual (0 para cadastro novo). Cadastro não comprova material secreto resolvido, entrega ou homologação. Webhook alterado aguarda nova aprovação da plataforma.";
+  form.append(intro);
+  const revision = configurationInput(form, "expected_version", "Versão atual", "number");
+  revision.min = "0"; revision.step = "1"; revision.value = "0";
+  /** @type {Map<string,HTMLInputElement>} */
+  const inputs = new Map(spec.fields.map(([key, label, kind]) => [key, configurationInput(form, key, label, kind)]));
+  const existing = document.createElement("select"); existing.id = "configuration-existing";
+  const empty = document.createElement("option"); empty.textContent = "Novo cadastro"; empty.value = ""; existing.append(empty);
+  rows.filter((row) => viewId === "certificates" || row.record_type === viewId).forEach((row, index) => {
+    const option = document.createElement("option"); option.value = String(index);
+    option.textContent = `${row.target_key || row.destination_id || row.binding_id || row.module_id || row.reference_kind || row.provider_id} · versão ${row.version || 0}`;
+    existing.append(option);
+  });
+  const selectionLabel = document.createElement("label"); selectionLabel.textContent = "Editar cadastro existente";
+  selectionLabel.append(existing); form.prepend(selectionLabel);
+  existing.addEventListener("change", () => {
+    const row = existing.value === "" ? null : rows.filter((item) => viewId === "certificates" || item.record_type === viewId)[Number(existing.value)];
+    revision.value = String(row?.version || 0);
+    for (const [key, input] of inputs) {
+      const value = row?.[key === "kind" ? "reference_kind" : key];
+      if (input.type === "checkbox") input.checked = value === true;
+      else input.value = value == null ? "" : String(value);
+    }
+  });
+  const submit = document.createElement("button"); submit.type = "submit"; submit.className = "primary";
+  submit.textContent = viewId === "webhooks" ? "Solicitar destino" : "Salvar configuração";
+  const result = document.createElement("p"); result.setAttribute("role", "status");
+  form.append(submit, result);
+  /** @type {{fingerprint:string,key:string}|null} */
+  let attempt = null;
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault(); if (!form.reportValidity()) return;
+    /** @type {Record<string,unknown>} */
+    const values = {};
+    for (const [key, input] of inputs) {
+      if (input.type === "checkbox") values[key] = input.checked;
+      else if (input.type === "number") values[key] = Number(input.value);
+      else if (input.value || spec.fields.find(([field]) => field === key)?.[2] !== "optional") values[key] = input.value;
+    }
+    const payload = {unit_id: selectedFiscalUnit, environment: selectedFiscalEnvironment, expected_version: Number(revision.value), values};
+    const fingerprint = JSON.stringify(payload);
+    if (!attempt || attempt.fingerprint !== fingerprint) attempt = {fingerprint, key: crypto.randomUUID()};
+    submit.disabled = true; result.textContent = "Registrando configuração…";
+    try {
+      const saved = await api(`/v1/portal/operations/${spec.operation}`, {method: "POST", headers: {"X-CSRF-Token": csrfToken(), "Idempotency-Key": attempt.key}, body: fingerprint});
+      result.textContent = `Configuração registrada · versão ${saved.version}${saved.approval_status ? ` · aprovação ${saved.approval_status}` : ""}. Verificação operacional não confirmada.`;
+      revision.value = String(saved.version); attempt = null;
+    } catch (error) { result.textContent = error instanceof Error ? error.message : "Falha ao registrar configuração"; }
+    finally { submit.disabled = false; }
+  });
+  article.append(form);
+}
+
+/** @param {HTMLElement} article */
+function appendEgressReview(article) {
+  if (!bootstrapState?.platform_admin) return;
+  const form = document.createElement("form"); form.id = "egress-review-form";
+  const tenant = configurationInput(form, "egress-tenant", "Tenant solicitado", "text");
+  const unit = configurationInput(form, "egress-unit", "Unidade solicitada", "text");
+  const environment = configurationInput(form, "egress-environment", "Ambiente: homologation ou production", "text");
+  const destination = configurationInput(form, "egress-destination", "ID do destino solicitado", "text");
+  const review = document.createElement("button"); review.type = "submit"; review.textContent = "Consultar solicitação";
+  const status = document.createElement("p"); status.setAttribute("role", "status"); form.append(review, status);
+  const decisionForm = document.createElement("form"); decisionForm.id = "egress-decision-form"; decisionForm.hidden = true;
+  const expiry = configurationInput(decisionForm, "egress-expiry", "Validade da aprovação (ISO 8601 com fuso, até 30 dias)", "text");
+  const notice = document.createElement("p"); notice.textContent = "Somente autoridade canônica da plataforma. Não aprova a própria solicitação. Não realiza tráfego ou deploy.";
+  decisionForm.append(notice);
+  /** @type {{url:string,version:number,path:string}|null} */
+  let reviewed = null;
+  /** @type {{fingerprint:string,key:string}|null} */
+  let attempt = null;
+  for (const [decision, label] of [["approved", "Aprovar egress"], ["revoked", "Revogar egress"]]) {
+    const button = document.createElement("button"); button.type = "button"; button.textContent = label;
+    button.addEventListener("click", async () => {
+      if (!reviewed || (decision === "approved" && !decisionForm.reportValidity())) return;
+      const payload = {url: reviewed.url, expected_version: reviewed.version, expires_at: expiry.value};
+      const fingerprint = JSON.stringify([reviewed.path, decision, payload]);
+      if (!attempt || attempt.fingerprint !== fingerprint) attempt = {fingerprint, key: crypto.randomUUID()};
+      button.disabled = true;
+      try {
+        const result = await api(`${reviewed.path}/${decision}`, {method: "POST", headers: {"X-CSRF-Token": csrfToken(), "Idempotency-Key": attempt.key}, body: JSON.stringify(payload)});
+        status.textContent = `Decisão ${result.approval_status} registrada · versão ${result.version}. Entrega não confirmada.`;
+        reviewed.version = Number(result.version); attempt = null;
+      } catch (error) { status.textContent = error instanceof Error ? error.message : "Decisão negada"; }
+      finally { button.disabled = false; }
+    }); decisionForm.append(button);
+  }
+  for (const input of [tenant, unit, environment, destination]) input.addEventListener("input", () => { reviewed = null; decisionForm.hidden = true; });
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault(); reviewed = null; decisionForm.hidden = true;
+    const path = `/v1/portal/egress/${[tenant.value, unit.value, environment.value, destination.value].map(encodeURIComponent).join("/")}`;
+    try {
+      const result = await api(path);
+      reviewed = {path, url: String(result.url), version: Number(result.version)};
+      status.textContent = `${reviewed.url} · versão ${reviewed.version} · ${result.approval_status}. Habilitado solicitado: ${result.enabled}.`;
+      decisionForm.hidden = false;
+    } catch (error) { status.textContent = error instanceof Error ? error.message : "Consulta negada"; }
+  }); article.append(form, decisionForm);
+}
+
+/** @param {string} viewId */
 async function renderSurface(viewId) {
   if (currentView !== viewId) fiscalPageOffset = 0;
   currentView = viewId;
@@ -806,6 +936,11 @@ async function renderSurface(viewId) {
   if (viewId === "overview") {
     renderOverview();
     return;
+  }
+  if (viewId === "webhook-egress") {
+    workspace.replaceChildren();
+    const egressPanel = panel(descriptions[viewId]);
+    appendEgressReview(egressPanel); workspace.append(egressPanel); return;
   }
   if (viewId === "pricing-admin") {
     await renderPricingAdmin();
@@ -848,7 +983,8 @@ async function renderSurface(viewId) {
     if (configurationViews.has(viewId)) {
       const notice = document.createElement("p");
       notice.className = "form-error";
-      notice.textContent = "Consulta de configuração persistida. Alterações aguardam conclusão da tarefa e decisão de segurança. Referência cadastrada não comprova segredo resolvido, entrega, homologação ou produção.";
+      notice.textContent = "Referência cadastrada não comprova segredo resolvido, entrega, homologação ou produção. Webhooks exigem aprovação vigente da plataforma.";
+      appendCustomerConfiguration(article, viewId, rows);
       article.append(notice);
     }
     if (viewId === "onboarding") appendOnboardingControls(article);

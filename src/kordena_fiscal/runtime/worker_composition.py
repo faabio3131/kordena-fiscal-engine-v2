@@ -11,6 +11,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import timedelta
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from kordena_fiscal.application.webhook_delivery import SignedWebhookOutboxHandler
+    from kordena_fiscal.security import WebhookSecurity
 
 from kordena_fiscal.application import (
     BackgroundWorkerRuntime,
@@ -73,4 +78,25 @@ def build_production_worker_runtime(
         runtime=runtime,
         operations=routed.operations,
         metrics=metrics,
+    )
+
+
+def build_customer_webhook_handler(
+    *,
+    uow_factory: FiscalUnitOfWorkFactory,
+    security: WebhookSecurity,
+    destination_id: str,
+) -> SignedWebhookOutboxHandler:
+    """Compose the approved adapter without activating any worker operation/deploy."""
+    from kordena_fiscal.application.webhook_delivery import SignedWebhookOutboxHandler
+    from kordena_fiscal.control_plane.webhook_policy import DurableWebhookEgressPolicy
+    from kordena_fiscal.gateway.webhook_transport import PinnedWebhookTransport
+    from kordena_fiscal.runtime.webhook_destination import DurableWebhookDestinationResolver
+
+    policy = DurableWebhookEgressPolicy(uow_factory)
+    return SignedWebhookOutboxHandler(
+        security=security,
+        policy=policy,
+        destination_resolver=DurableWebhookDestinationResolver(uow_factory, destination_id),
+        transport=PinnedWebhookTransport(policy),
     )

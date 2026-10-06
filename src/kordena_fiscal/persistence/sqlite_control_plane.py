@@ -133,16 +133,12 @@ class SqliteControlPlaneStore:
         if not isinstance(raw_environments, list) or not all(
             isinstance(item, str) for item in raw_environments
         ):
-            raise PersistenceStateError(
-                "persisted enabled environments must be a string list"
-            )
+            raise PersistenceStateError("persisted enabled environments must be a string list")
         return FiscalUnitRegistration(
             tenant_id=text(row[0], "tenant_id"),
             unit_id=text(row[1], "unit_id"),
             display_name=text(row[2], "display_name"),
-            enabled_environments=frozenset(
-                FiscalEnvironment(item) for item in raw_environments
-            ),
+            enabled_environments=frozenset(FiscalEnvironment(item) for item in raw_environments),
         )
 
     def add_secret_reference(self, reference: SecretReference) -> SecretReference:
@@ -165,6 +161,24 @@ class SqliteControlPlaneStore:
                 reference_id, kind, tenant_id, unit_id, environment, provider_id
             ) VALUES (?, ?, ?, ?, ?, ?)
             """,
+            (
+                reference.reference_id,
+                reference.kind.value,
+                reference.tenant_id,
+                reference.unit_id,
+                reference.environment.value,
+                reference.provider_scope,
+            ),
+        )
+        return reference
+
+    def put_secret_reference(self, reference: SecretReference) -> SecretReference:
+        self._connection.execute(
+            """INSERT INTO fm_control_plane_secret_references
+            (reference_id, kind, tenant_id, unit_id, environment, provider_id)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT (tenant_id, unit_id, environment, kind, provider_id)
+            DO UPDATE SET reference_id = excluded.reference_id""",
             (
                 reference.reference_id,
                 reference.kind.value,
@@ -249,9 +263,7 @@ class SqliteControlPlaneStore:
             raise FiscalValidationError("profile must be FiscalProfile")
         host_namespace = profile.scope.host_namespace
         if host_namespace is None:
-            raise FiscalValidationError(
-                "durable Control Plane profile requires host_namespace"
-            )
+            raise FiscalValidationError("durable Control Plane profile requires host_namespace")
         if self.get_profile(profile.profile_id, profile.version) is not None:
             raise PersistenceConflictError("fiscal profile id/version already exists")
         new_end = None if profile.effective_to is None else iso(profile.effective_to)
@@ -358,17 +370,13 @@ class SqliteControlPlaneStore:
                 municipality_name=text(row[17], "municipality_name"),
                 jurisdiction=BrazilianJurisdiction(
                     state_code=text(row[18], "state_code"),
-                    municipality_ibge_code=optional_text(
-                        row[19], "municipality_ibge_code"
-                    ),
+                    municipality_ibge_code=optional_text(row[19], "municipality_ibge_code"),
                 ),
                 postal_code=text(row[20], "postal_code"),
                 complement=optional_text(row[21], "complement"),
             ),
             effective_from=dt(text(row[22], "effective_from")),
-            effective_to=(
-                None if row[23] is None else dt(text(row[23], "effective_to"))
-            ),
+            effective_to=(None if row[23] is None else dt(text(row[23], "effective_to"))),
             trade_name=optional_text(row[24], "trade_name"),
             municipal_registration=(
                 None if municipal is None else MunicipalRegistration(municipal)
@@ -408,9 +416,7 @@ class SqliteControlPlaneStore:
         tenant = tenant_id.strip().lower()
         unit = unit_id.strip().lower()
         if not host or not tenant or not unit:
-            raise FiscalValidationError(
-                "host_namespace, tenant_id and unit_id must not be blank"
-            )
+            raise FiscalValidationError("host_namespace, tenant_id and unit_id must not be blank")
         instant_iso = iso(instant)
         rows = self._connection.execute(
             f"""

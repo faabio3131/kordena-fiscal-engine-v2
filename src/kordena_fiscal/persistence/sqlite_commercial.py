@@ -78,6 +78,155 @@ class SqliteCommercialConfigurationStore:
     def __init__(self, connection: sqlite3.Connection) -> None:
         self._connection = connection
 
+    def configuration_version(
+        self, scope: ExecutionScope, target_type: str, target_key: str
+    ) -> int:
+        row = one_row(
+            self._connection.execute(
+                """SELECT version FROM fm_configuration_revisions
+            WHERE tenant_id = ? AND unit_id = ?
+            AND environment = ? AND target_type = ? AND target_key = ?""",
+                (scope.tenant_id, scope.unit_id, scope.environment.value, target_type, target_key),
+            )
+        )
+        return 0 if row is None else integer(row[0], "version")
+
+    def advance_configuration_version(
+        self,
+        scope: ExecutionScope,
+        target_type: str,
+        target_key: str,
+        expected: int,
+    ) -> int:
+        key = (scope.tenant_id, scope.unit_id, scope.environment.value, target_type, target_key)
+        self._connection.execute(
+            """INSERT INTO fm_configuration_revisions
+            (tenant_id, unit_id, environment, target_type, target_key, version)
+            VALUES (?, ?, ?, ?, ?, 0) ON CONFLICT DO NOTHING""",
+            key,
+        )
+        row = one_row(
+            self._connection.execute(
+                """UPDATE fm_configuration_revisions SET version = version + 1
+            WHERE tenant_id = ? AND unit_id = ? AND environment = ? AND target_type = ?
+            AND target_key = ? AND version = ? RETURNING version""",
+                (*key, expected),
+            )
+        )
+        if row is None:
+            raise PersistenceConflictError("configuration version conflict")
+        return integer(row[0], "version")
+
+    def reserve_configuration_command(
+        self,
+        scope: ExecutionScope,
+        command_key: str,
+        fingerprint: str,
+    ) -> Mapping[str, object] | None:
+        key = (scope.tenant_id, scope.unit_id, scope.environment.value, command_key)
+        inserted = one_row(
+            self._connection.execute(
+                """INSERT INTO fm_configuration_commands
+            (tenant_id, unit_id, environment, command_key, fingerprint)
+            VALUES (?, ?, ?, ?, ?) ON CONFLICT DO NOTHING RETURNING command_key""",
+                (*key, fingerprint),
+            )
+        )
+        if inserted is not None:
+            return None
+        row = one_row(
+            self._connection.execute(
+                """SELECT fingerprint, result_json FROM fm_configuration_commands
+            WHERE tenant_id = ? AND unit_id = ? AND environment = ? AND command_key = ?""",
+                key,
+            )
+        )
+        if row is None or text(row[0], "fingerprint") != fingerprint or row[1] is None:
+            raise PersistenceConflictError("configuration idempotency conflict")
+        result = json.loads(text(row[1], "result_json"))
+        if not isinstance(result, dict):
+            raise PersistenceStateError("invalid configuration command receipt")
+        return result
+
+    def complete_configuration_command(
+        self,
+        scope: ExecutionScope,
+        command_key: str,
+        result: Mapping[str, object],
+    ) -> None:
+        self._connection.execute(
+            """UPDATE fm_configuration_commands SET result_json = ?
+            WHERE tenant_id = ? AND unit_id = ? AND environment = ? AND command_key = ?""",
+            (
+                json.dumps(dict(result), sort_keys=True),
+                scope.tenant_id,
+                scope.unit_id,
+                scope.environment.value,
+                command_key,
+            ),
+        )
+
+    def webhook_approval(
+        self, scope: ExecutionScope, destination_id: str
+    ) -> Mapping[str, object] | None:
+        row = one_row(
+            self._connection.execute(
+                """SELECT url, enabled, approval_status, approved_version, approved_until,
+            approved_url_sha256, requested_by, approved_by FROM fm_commercial_webhook_destinations
+            WHERE tenant_id = ? AND unit_id = ? AND environment = ? AND destination_id = ?""",
+                (scope.tenant_id, scope.unit_id, scope.environment.value, destination_id),
+            )
+        )
+        if row is None:
+            return None
+        return dict(
+            zip(
+                (
+                    "url",
+                    "enabled",
+                    "approval_status",
+                    "approved_version",
+                    "approved_until",
+                    "approved_url_sha256",
+                    "requested_by",
+                    "approved_by",
+                ),
+                row,
+                strict=True,
+            )
+        )
+
+    def record_webhook_approval(
+        self,
+        scope: ExecutionScope,
+        destination_id: str,
+        *,
+        status: str,
+        version: int | None,
+        expires_at: str | None,
+        url_sha256: str | None,
+        requested_by: str | None = None,
+        approved_by: str | None = None,
+    ) -> None:
+        self._connection.execute(
+            """UPDATE fm_commercial_webhook_destinations SET approval_status = ?,
+            approved_version = ?, approved_until = ?, approved_url_sha256 = ?,
+            requested_by = COALESCE(?, requested_by), approved_by = ?
+            WHERE tenant_id = ? AND unit_id = ? AND environment = ? AND destination_id = ?""",
+            (
+                status,
+                version,
+                expires_at,
+                url_sha256,
+                requested_by,
+                approved_by,
+                scope.tenant_id,
+                scope.unit_id,
+                scope.environment.value,
+                destination_id,
+            ),
+        )
+
     def list_portal_configuration(
         self, surface_id: str, scope: ExecutionScope, *, limit: int = 100, offset: int = 0
     ) -> tuple[Mapping[str, object], ...]:
@@ -91,17 +240,24 @@ class SqliteCommercialConfigurationStore:
                 WHERE tenant_id = ? AND unit_id = ? AND environment = ?
                 ORDER BY binding_id LIMIT ? OFFSET ?
                 """,
-                ("binding_id", "document_kind", "state_code", "municipality_ibge_code",
-                 "operation", "provider_id", "enabled"),
+                (
+                    "binding_id",
+                    "document_kind",
+                    "state_code",
+                    "municipality_ibge_code",
+                    "operation",
+                    "provider_id",
+                    "enabled",
+                ),
             ),
             "webhooks": (
                 """
-                SELECT destination_id, enabled
+                SELECT destination_id, enabled, approval_status, approved_until
                 FROM fm_commercial_webhook_destinations
                 WHERE tenant_id = ? AND unit_id = ? AND environment = ?
                 ORDER BY destination_id LIMIT ? OFFSET ?
                 """,
-                ("destination_id", "enabled"),
+                ("destination_id", "enabled", "approval_status", "approved_until"),
             ),
             "integrations": (
                 """
@@ -122,10 +278,19 @@ class SqliteCommercialConfigurationStore:
                 WHERE tenant_id = ? AND unit_id = ? AND environment = ?
                 ORDER BY provider_id, policy_id LIMIT ? OFFSET ?
                 """,
-                ("policy_id", "provider_id", "connect_timeout_seconds", "read_timeout_seconds",
-                 "max_attempts", "base_delay_seconds", "max_delay_seconds", "jitter_ratio",
-                 "circuit_failure_threshold", "circuit_recovery_seconds",
-                 "circuit_success_threshold"),
+                (
+                    "policy_id",
+                    "provider_id",
+                    "connect_timeout_seconds",
+                    "read_timeout_seconds",
+                    "max_attempts",
+                    "base_delay_seconds",
+                    "max_delay_seconds",
+                    "jitter_ratio",
+                    "circuit_failure_threshold",
+                    "circuit_recovery_seconds",
+                    "circuit_success_threshold",
+                ),
             ),
         }
         if surface_id not in queries:
@@ -137,6 +302,10 @@ class SqliteCommercialConfigurationStore:
             metadata: dict[str, object] = dict(zip(columns, row, strict=True))
             if "enabled" in metadata:
                 metadata["enabled"] = bool(metadata["enabled"])
+            target_key = str(metadata[{"providers": "binding_id", "webhooks": "destination_id",
+                                       "integrations": "module_id", "settings": "provider_id"}
+                                      [surface_id]])
+            metadata["version"] = self.configuration_version(scope, surface_id, target_key)
             result.append(metadata)
         return tuple(result)
 
@@ -340,9 +509,7 @@ class SqliteCommercialConfigurationStore:
             gtin=None if gtin is None else Gtin(gtin),
             hints=TaxClassificationHints(
                 fiscal_benefit_code=optional_text(row[16], "fiscal_benefit_code"),
-                ibs_cbs_classification_code=optional_text(
-                    row[17], "ibs_cbs_classification_code"
-                ),
+                ibs_cbs_classification_code=optional_text(row[17], "ibs_cbs_classification_code"),
             ),
             effective_from=dt(text(row[18], "effective_from")),
             effective_to=None if row[19] is None else dt(text(row[19], "effective_to")),
@@ -443,7 +610,9 @@ class SqliteCommercialConfigurationStore:
                 tenant_id, unit_id, environment, destination_id, url, enabled
             ) VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT (tenant_id, unit_id, environment, destination_id)
-            DO UPDATE SET url = excluded.url, enabled = excluded.enabled
+            DO UPDATE SET url = excluded.url, enabled = excluded.enabled,
+                approval_status = 'pending', approved_version = NULL, approved_until = NULL,
+                approved_url_sha256 = NULL, approved_by = NULL, requested_by = ''
             """,
             (
                 destination.tenant_id,
@@ -576,7 +745,6 @@ class SqliteCommercialConfigurationStore:
             circuit_recovery_seconds=_real(row[12], "circuit_recovery_seconds"),
             circuit_success_threshold=integer(row[13], "circuit_success_threshold"),
         )
-
 
     def put_numbering_configuration(
         self,
@@ -722,15 +890,11 @@ class SqliteCommercialConfigurationStore:
         if not isinstance(raw_capabilities, list) or not all(
             isinstance(item, str) for item in raw_capabilities
         ):
-            raise PersistenceStateError(
-                "persisted workload capabilities must be a string list"
-            )
+            raise PersistenceStateError("persisted workload capabilities must be a string list")
         if not isinstance(raw_grants, list) or not all(
             isinstance(item, dict) for item in raw_grants
         ):
-            raise PersistenceStateError(
-                "persisted workload grants must be an object list"
-            )
+            raise PersistenceStateError("persisted workload grants must be an object list")
         grants: list[HostScopeGrant] = []
         for raw_grant in raw_grants:
             tenant = raw_grant.get("tenant_id")
@@ -740,16 +904,12 @@ class SqliteCommercialConfigurationStore:
                     "persisted workload grant tenant_id must be text or null"
                 )
             if unit is not None and not isinstance(unit, str):
-                raise PersistenceStateError(
-                    "persisted workload grant unit_id must be text or null"
-                )
+                raise PersistenceStateError("persisted workload grant unit_id must be text or null")
             grants.append(HostScopeGrant(tenant_id=tenant, unit_id=unit))
         caller = CallerIdentity(
             caller_id=text(row[1], "caller_id"),
             host_namespace=HostNamespace(text(row[2], "host_namespace")),
-            capabilities=frozenset(
-                FiscalCapability(item) for item in raw_capabilities
-            ),
+            capabilities=frozenset(FiscalCapability(item) for item in raw_capabilities),
             scope_grants=tuple(grants),
         )
         return WorkloadCredentialRecord(
@@ -879,9 +1039,7 @@ class SqliteCommercialConfigurationStore:
             environment=FiscalEnvironment(text(row[2], "environment")),
             provider_id=text(row[3], "provider_id"),
             document_kind=FiscalDocumentKind(text(row[4], "document_kind")),
-            jurisdiction=BrazilianJurisdiction(
-                text(row[5], "state_code"), persisted_municipality
-            ),
+            jurisdiction=BrazilianJurisdiction(text(row[5], "state_code"), persisted_municipality),
             operation=text(row[7], "operation"),
             provider_adapter_available=bool(integer(row[8], "provider_adapter_available")),
             credentials_reference_configured=bool(

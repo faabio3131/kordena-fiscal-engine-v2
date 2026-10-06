@@ -105,7 +105,7 @@ def _no_permissions(
 
 def _database(tmp_path, name: str = "v2-11-e2e.sqlite3") -> SqliteFiscalDatabase:
     database = SqliteFiscalDatabase(tmp_path / name)
-    assert database.initialize() == (1, 2, 3, 4, 5, 13)
+    assert database.initialize() == (1, 2, 3, 4, 5, 13, 14)
     return database
 
 
@@ -638,7 +638,7 @@ def test_secret_reference_schema_and_views_exclude_raw_material(tmp_path) -> Non
 
 def test_migration_v4_is_idempotent_and_preserves_certified_history(tmp_path) -> None:
     database = _database(tmp_path, "migration-certification.sqlite3")
-    assert database.applied_migrations() == (1, 2, 3, 4, 5, 13)
+    assert database.applied_migrations() == (1, 2, 3, 4, 5, 13, 14)
     assert database.initialize() == ()
 
     with sqlite3.connect(database.path) as connection:
@@ -659,6 +659,7 @@ def test_migration_v4_is_idempotent_and_preserves_certified_history(tmp_path) ->
         (4, "v2_11_control_plane_durable_state"),
         (5, "v2_15_zero_code_commercial_configuration"),
         (13, "p02_t02_scoped_fiscal_projections"),
+        (14, "customer_configuration_commands_and_egress"),
     ]
     assert {
         "fm_control_plane_organizations",
