@@ -93,16 +93,16 @@
 
 ### 7. NFV1-P01-T04 — Certificar API fiscal
 
-- [ ] **Estado:** em execução
+- [x] **Estado:** concluído
 - **Objetivo:** certificar emissão, consulta, cancelamento, inutilização, reconciliação, capabilities e archive reference sobre o runtime fiscal canônico, sem ampliar escopo.
 - **Depende de:** NFV1-P01-T03 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** matriz integrada das sete rotas Bridge do launch-scope, status/operation IDs, idempotência, scope interno, fail-closed sem dependência e readiness sem overclaim.
 - **Não fazer:** não antecipar P2/P6/P7; não criar provider/secret/signer paralelo; não usar synthetic/fake como prova de integração externa real; não executar deploy, homologação ou produção.
 - **Critério de aceite:** sete operações canônicas atravessam um único path quando dependências são explicitamente injetadas em teste; ausência de dependência real retorna FISCAL_RUNTIME_NOT_READY; mutações exigem idempotência; perfil declara provider/secret/signer externo como não configurados; nenhum gate transversal violado.
-- **Verificação:** testes T04 + contratos Bridge + suíte existente e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
+- **Verificação:** testes T04 + contratos Bridge + suíte completa + `python3 scripts/check_nfcore_plan.py` certificados na PR e novamente pós-merge.
 - **Riscos / não confirmado:** esta tarefa certifica a API e integração interna; não prova FiscalProviderTransport real, ExternalSecretClient real, signing operacional externo, homologação oficial, staging CURRENT ou produção.
-- **Decisões do dono pendentes:** nenhuma para certificação interna; merge/deploy/produção permanecem sujeitos a autorização específica.
-- **Prova:** branch `test/nfv1-p01-t04-fiscal-api-certification`; checkpoint `docs/checkpoints/NFV1_P01_T04_FISCAL_API_CERTIFICATION_2026-10-06.md`; PR/CI pendentes.
+- **Decisões do dono pendentes:** nenhuma para o fechamento da T04. P02-T01 permanece bloqueada até este closeout entrar em main.
+- **Prova:** PR #113; head certificado `d4062ac5be070519e80ca35286b9f1892f800405`; merge SHA `b589f1170d002ca8d248ceb889385a8c32b989d3`; Plan Governance #44 e pós-merge #45; CI #615 e pós-merge #616; checkpoint `docs/checkpoints/NFV1_P01_T04_CLOSEOUT_2026-10-06.md`.
 
 ### 8. NFV1-P02-T01 — Matriz frontend x backend
 
