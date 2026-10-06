@@ -54,16 +54,16 @@
 
 ### 4. NFV1-P01-T01 — Identificar composição canônica
 
-- [ ] **Estado:** em execução
+- [x] **Estado:** concluído
 - **Objetivo:** executar exatamente a tarefa NFV1-P01-T01 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P00-T03 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** tudo que o cronograma exige para NFV1-P01-T01, mais os testes/evidências diretamente necessários.
 - **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
 - **Critério de aceite:** critérios específicos de NFV1-P01-T01 no cronograma satisfeitos e nenhum gate transversal violado.
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
-- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** PENDENTE
+- **Riscos / não confirmado:** T01 identificou e congelou a composição canônica, mas não implementou o composition root; `BridgeSecurityBoundary`, `BridgeRequestExecutor` e `PortalOperationExecutor` produtivos continuam pendentes para P01-T02. Provider transport real e ExternalSecretClient concreto permanecem fora de P1 e fail-closed.
+- **Decisões do dono pendentes:** nenhuma para o fechamento da T01.
+- **Prova:** PR #107; CI #603; merge SHA 4f896762674508498e3261aaf2d36480f284dfa2; Plan Governance #32; checkpoint `docs/checkpoints/NFV1_P01_T01_CLOSEOUT_2026-10-06.md`.
 
 ### 5. NFV1-P01-T02 — Implementar composition root
 
