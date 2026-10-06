@@ -9,6 +9,43 @@
 This file is the persistent CURRENT checkpoint for FM NFCORE V1 Commercial Launch. GitHub remains the first technical source of truth and must be revalidated on every resume.
 
 
+## CURRENT superior — 2026-10-06 — NFV1-P02-T01 em execução
+
+Este checkpoint prevalece sobre os snapshots históricos abaixo. O GitHub foi
+reconsultado antes de iniciar P02-T01; nenhum SHA histórico foi usado para rollback.
+
+- main de entrada: `0e5be77267a800384d111c03e30705d95bdb0d28`;
+- PR #114 MERGED; PRs abertas na entrada: 0;
+- FM NFCORE V1 CI #618 SUCCESS; NFCore Plan Governance #47 SUCCESS, ambos no exact main;
+- P0/P1: DONE_CERTIFIED; P01-T01..T04 concluídas no ledger;
+- `FISCAL_RUNTIME_COMPOSED_AND_CERTIFIED_INTERNAL = MET`;
+- P02-T01: IN_PROGRESS; demais tarefas P2: PENDING;
+- matriz: `NFCORE_V1_P02_FRONTEND_BACKEND_MATRIX_2026-10-06.md`;
+- checkpoint: `checkpoints/NFV1_P02_T01_FRONTEND_BACKEND_MATRIX_2026-10-06.md`.
+
+P1 compôs o único path fiscal para Portal e Bridge. Isso certifica encaminhamento,
+autoridade e contratos internos; handlers/provider/secret/signer reais permanecem
+não configurados/fail-closed. Não representa execução fiscal externa real.
+
+Portal CURRENT: 7 superfícies genéricas duráveis; 14 sem projeção; plataforma com
+pricing/release e checkout opcional. Gaps P2-G01..G18 foram atribuídos a Task IDs.
+`PORTAL_COMMERCIAL_PARITY_CERTIFIED = NOT MET`.
+
+Railway READ-ONLY: API/Portal em `f9b5b2c5b436045947159f1e76be9303f5a95d90`, 1/1 cada;
+Worker em `1c34ba001935952f83ec0b065144e0b8311a5650`, 0/1 running; Postgres 18,
+volume 5000 MB, 1/1. Sem alterações staged substantivas; pendingWork patch vazio.
+STAGING_REAL / VERSION_DRIFT_PRESENT / NOT_CERTIFIED_AGAINST_CURRENT.
+
+Merge técnico interno está autorizado por instrução explícita de 2026-10-06,
+condicionado aos gates verdes e proteção pelo exact HEAD; deploy/operação externa
+continuam exigindo autorização específica. Nenhum deploy foi realizado.
+`PRODUCTION_APPROVED=NO`; `COMMERCIAL_LIVE=NO`.
+
+Próxima ação: PR/CI/merge/main/closeout T01; depois NFV1-P02-T02. Não avançar antes
+da certificação do predecessor. Snapshots abaixo permanecem históricos.
+
+---
+
 ## 0A0. CURRENT authoritative checkpoint — 2026-10-06 — P01-T01 CLOSEOUT
 
 This subsection is authoritative over older execution-state wording below. GitHub CURRENT was revalidated immediately before the closeout.
