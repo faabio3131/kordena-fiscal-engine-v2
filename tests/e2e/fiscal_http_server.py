@@ -24,6 +24,12 @@ from kordena_fiscal.runtime.fiscal_runtime import (
     CanonicalFiscalOperationPath,
     CanonicalPortalOperationExecutor,
 )
+from kordena_fiscal.security.human_identity import (
+    HumanAccount,
+    InMemoryHumanAccountRepository,
+    PortalRole,
+    ScryptPasswordHasher,
+)
 from kordena_fiscal.web import create_app
 from kordena_fiscal.web.portal_runtime import DurableHumanPortalExecutor
 
@@ -82,7 +88,14 @@ def build_app(database):
             path=path,
         ),
     )
-    app = create_app(human_identity=fixture.identity(), portal_executor=portal)
+    accounts = InMemoryHumanAccountRepository()
+    identity = fixture.identity(accounts)
+    accounts.save(HumanAccount(
+        account_id="synthetic-platform", email="platform@example.com",
+        password_hash=ScryptPasswordHasher().hash(fixture.PASSWORD),
+        tenant_id="tenant-a", role=PortalRole.OWNER, platform_admin=True,
+    ))
+    app = create_app(human_identity=identity, portal_executor=portal)
     app.mount("/", StaticFiles(directory=ROOT / "portal", html=True), name="test-portal")
     return app
 

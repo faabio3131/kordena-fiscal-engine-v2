@@ -9,6 +9,27 @@
 This file is the persistent CURRENT checkpoint for FM NFCORE V1 Commercial Launch. GitHub remains the first technical source of truth and must be revalidated on every resume.
 
 
+## CURRENT superior — 2026-10-06 — P02-T03 política aprovada / implementação interna
+
+- main revalidado: `e203adc111d5e503c68a88bf6104df905b8fe18f`; PR #120 MERGED;
+- FM NFCORE V1 CI #643 / Plan Governance #64 SUCCESS no exact HEAD;
+- zero PRs abertas na revalidação; predecessor P02-T02 DONE_CERTIFIED;
+- dono: `POLICY_APPROVED_FOR_INTERNAL_IMPLEMENTATION`, proposta T03 aprovada como conjunto;
+- T03-B01 RESOLVIDO como decisão; implementação/PR/main/closeout ainda PENDENTES;
+- branch: `feat/nfv1-p02-t03-approved-config`; cinco formulários e comandos governados;
+- schema aditivo 14: versões/recibos de comando e metadados de aprovação na tabela de destinos;
+- auditoria/valor/versão/recibo na mesma UoW; handler/outbox/Worker existentes;
+- policy por delivery/retry + DNS por tentativa + transport HTTPS com IP validado e SNI/TLS;
+- nenhum destino/secret/tráfego externo, deploy, migration externa ou custo executado;
+- staging READ-ONLY: API/Portal f9b5b2c 1/1, Worker 1c34ba0 0/1, drift permanece;
+- T03 não DONE_CERTIFIED; T04 não iniciada; P2 gate NOT MET;
+- checkpoint candidato: `checkpoints/NFV1_P02_T03_APPROVED_IMPLEMENTATION_2026-10-06.md`.
+
+Registros abaixo são históricos. Aprovação de política não certifica código, entrega,
+homologação, produção ou prontidão comercial. PRODUCTION_APPROVED=NO; COMMERCIAL_LIVE=NO.
+
+---
+
 ## CURRENT superior — 2026-10-06 — P02-T03 consulta integrada / T03-B01
 
 - main certificado da parcela de consulta: `db2a8fb71097eb4e1f6e5919e1eb544c8a3167ac`;

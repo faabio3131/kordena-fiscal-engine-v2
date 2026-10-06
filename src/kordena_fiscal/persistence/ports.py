@@ -148,6 +148,8 @@ class ControlPlaneStore(Protocol):
 
     def add_secret_reference(self, reference: SecretReference) -> SecretReference: ...
 
+    def put_secret_reference(self, reference: SecretReference) -> SecretReference: ...
+
     def get_secret_reference(
         self,
         tenant_id: str,
@@ -179,6 +181,49 @@ class ControlPlaneStore(Protocol):
 
 class CommercialConfigurationStore(Protocol):
     """Durable zero-code customer configuration repository."""
+
+    def configuration_version(
+        self, scope: ExecutionScope, target_type: str, target_key: str
+    ) -> int: ...
+
+    def advance_configuration_version(
+        self,
+        scope: ExecutionScope,
+        target_type: str,
+        target_key: str,
+        expected: int,
+    ) -> int: ...
+
+    def reserve_configuration_command(
+        self,
+        scope: ExecutionScope,
+        command_key: str,
+        fingerprint: str,
+    ) -> Mapping[str, object] | None: ...
+
+    def complete_configuration_command(
+        self,
+        scope: ExecutionScope,
+        command_key: str,
+        result: Mapping[str, object],
+    ) -> None: ...
+
+    def webhook_approval(
+        self, scope: ExecutionScope, destination_id: str
+    ) -> Mapping[str, object] | None: ...
+
+    def record_webhook_approval(
+        self,
+        scope: ExecutionScope,
+        destination_id: str,
+        *,
+        status: str,
+        version: int | None,
+        expires_at: str | None,
+        url_sha256: str | None,
+        requested_by: str | None = None,
+        approved_by: str | None = None,
+    ) -> None: ...
 
     def list_portal_configuration(
         self, surface_id: str, scope: ExecutionScope, *, limit: int = 100, offset: int = 0

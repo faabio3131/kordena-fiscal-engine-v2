@@ -22,6 +22,7 @@ from kordena_fiscal.contingency import (
     FiscalRetryPolicy,
 )
 from kordena_fiscal.control_plane import SecretReference, SecretReferenceKind
+from kordena_fiscal.control_plane.webhook_policy import ApprovedWebhookConnection
 from kordena_fiscal.domain import (
     BrazilianJurisdiction,
     ExecutionScope,
@@ -68,6 +69,13 @@ from kordena_fiscal.vault import (
     SecretUnavailableError,
     SecretUsagePurpose,
 )
+
+
+class _SyntheticEgressPolicy:
+    """Unit-test policy only; in-process fake transports never open sockets."""
+    def authorize(self, scope, destination_id, url, now):
+        return ApprovedWebhookConnection(url, "consumer.example.test", "/fiscal/webhooks",
+                                         "93.184.216.34", 1)
 
 NOW = datetime(2026, 9, 13, 16, 0, tzinfo=UTC)
 SP = BrazilianJurisdiction("SP")
@@ -236,7 +244,7 @@ def _resilient(
 
 def _database(tmp_path) -> SqliteFiscalDatabase:
     database = SqliteFiscalDatabase(tmp_path / "hardening.sqlite3")
-    assert database.initialize() == (1, 2, 3, 4, 5, 13)
+    assert database.initialize() == (1, 2, 3, 4, 5, 13, 14)
     return database
 
 
@@ -409,6 +417,7 @@ def test_webhook_transport_timeout_is_retried_then_dead_lettered(tmp_path) -> No
     worker = DurableFiscalOutboxWorker(
         uow_factory=database,
         handler=SignedWebhookOutboxHandler(
+            policy=_SyntheticEgressPolicy(),
             security=_webhook_security(),
             destination_resolver=_WebhookResolver(),
             transport=transport,

@@ -12,7 +12,12 @@ from kordena_fiscal.contingency import (
     FiscalDispatchStatus,
     FiscalOutboxEntry,
 )
-from kordena_fiscal.domain import FiscalValidationError
+from kordena_fiscal.control_plane.webhook_policy import (
+    ApprovedWebhookConnection,
+    WebhookDispatchPolicy,
+    WebhookPolicyDenied,
+)
+from kordena_fiscal.domain import ExecutionScope, FiscalValidationError
 from kordena_fiscal.security import WebhookSecurity
 
 FM_WEBHOOK_SIGNATURE_HEADER = "X-FM-Webhook-Signature"
@@ -70,6 +75,8 @@ class WebhookDeliveryRequest:
     headers: tuple[tuple[str, str], ...]
     outbox_entry_id: str
     attempt_count: int
+    scope: ExecutionScope | None = None
+    approved_connection: ApprovedWebhookConnection | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.destination, WebhookDestination):
@@ -83,6 +90,10 @@ class WebhookDeliveryRequest:
         for name, value in self.headers:
             normalized_name = _required(name, "header name", 128)
             normalized_value = _required(value, "header value", 4096)
+            if any(
+                ord(char) < 32 or ord(char) == 127 for char in normalized_name + normalized_value
+            ):
+                raise FiscalValidationError("invalid webhook header")
             canonical = normalized_name.lower()
             if canonical in seen:
                 raise FiscalValidationError("webhook request contains duplicate headers")
@@ -170,6 +181,7 @@ class SignedWebhookOutboxHandler:
         destination_resolver: WebhookDestinationResolver,
         transport: WebhookTransport,
         clock: WebhookDeliveryClock | None = None,
+        policy: WebhookDispatchPolicy | None = None,
     ) -> None:
         if not isinstance(security, WebhookSecurity):
             raise FiscalValidationError("security must be WebhookSecurity")
@@ -177,6 +189,7 @@ class SignedWebhookOutboxHandler:
         self._destination_resolver = destination_resolver
         self._transport = transport
         self._clock = clock or SystemWebhookDeliveryClock()
+        self._policy = policy
 
     def dispatch(self, entry: FiscalOutboxEntry) -> FiscalDispatchResult:
         if not isinstance(entry, FiscalOutboxEntry):
@@ -193,6 +206,18 @@ class SignedWebhookOutboxHandler:
             )
 
         now = _aware(self._clock.now(), "webhook delivery clock")
+        if self._policy is None:
+            return FiscalDispatchResult(
+                FiscalDispatchStatus.FATAL_FAILURE, error="WEBHOOK_POLICY_REQUIRED"
+            )
+        try:
+            connection = self._policy.authorize(
+                entry.scope, destination.destination_id, destination.url, now
+            )
+        except WebhookPolicyDenied:
+            return FiscalDispatchResult(
+                FiscalDispatchStatus.FATAL_FAILURE, error="WEBHOOK_POLICY_DENIED"
+            )
         signature = self._security.sign(entry.payload, now=now)
         request = WebhookDeliveryRequest(
             destination=destination,
@@ -207,12 +232,17 @@ class SignedWebhookOutboxHandler:
             ),
             outbox_entry_id=entry.entry_id,
             attempt_count=entry.attempt_count,
+            scope=entry.scope,
+            approved_connection=connection,
         )
-        response = self._transport.deliver(request)
-        if not isinstance(response, WebhookDeliveryResponse):
-            raise FiscalValidationError(
-                "webhook transport must return WebhookDeliveryResponse"
+        try:
+            response = self._transport.deliver(request)
+        except WebhookPolicyDenied:
+            return FiscalDispatchResult(
+                FiscalDispatchStatus.FATAL_FAILURE, error="WEBHOOK_POLICY_DENIED"
             )
+        if not isinstance(response, WebhookDeliveryResponse):
+            raise FiscalValidationError("webhook transport must return WebhookDeliveryResponse")
         return self._classify(entry, response)
 
     @staticmethod
@@ -230,8 +260,8 @@ class SignedWebhookOutboxHandler:
                 reference=reference,
             )
 
-        detail = response.error_detail or f"webhook endpoint returned HTTP {status}"
-        error = f"HTTP {status}: {detail}"[:1024]
+        # Endpoint response text is untrusted and may contain secrets or URLs.
+        error = f"WEBHOOK_HTTP_{status}"
         if status in {408, 425, 429} or status >= 500 or status < 200:
             return FiscalDispatchResult(
                 FiscalDispatchStatus.RETRYABLE_FAILURE,

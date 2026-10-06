@@ -115,3 +115,13 @@ test("activation delivery consumes the reset token from the URL fragment", () =>
   assert.match(script, /fragment\.get\("token"\)/);
   assert.match(script, /fragment\.delete\("token"\)/);
 });
+
+test("customer configuration forms use existing portal commands and distinguish approval from delivery", () => {
+  for (const operation of ["configureCertificates", "configureProviders", "configureWebhooks", "configureIntegrations", "configureSettings"]) assert.ok(script.includes(operation));
+  assert.match(script, /customer_configuration_operations/);
+  assert.match(script, /customer-configuration-form/);
+  assert.match(script, /Verificação operacional não confirmada/);
+  assert.match(script, /Solicitar entrega após aprovação da plataforma/);
+  assert.match(script, /egress-decision-form/);
+  assert.match(script, /if \(!bootstrapState\?\.platform_admin\) return/);
+});

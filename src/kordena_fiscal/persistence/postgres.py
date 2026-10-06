@@ -42,6 +42,11 @@ from kordena_fiscal.security.human_identity import (
 from kordena_fiscal.security.human_recovery import PasswordResetRecord
 
 from .commercial_release import PostgresCommercialReleaseRepository
+from .customer_configuration_schema import (
+    CUSTOMER_CONFIGURATION_NAME,
+    CUSTOMER_CONFIGURATION_SCHEMA,
+    CUSTOMER_CONFIGURATION_VERSION,
+)
 from .fiscal_scope_schema import FISCAL_SCOPE_NAME, FISCAL_SCOPE_SCHEMA, FISCAL_SCOPE_VERSION
 from .ports import PersistenceStateError
 from .pricing_catalog import PostgresPricingCatalogRepository
@@ -729,6 +734,21 @@ class PostgresFiscalDatabase:
                         ),
                     )
                     new_versions.append(FISCAL_SCOPE_VERSION)
+                if CUSTOMER_CONFIGURATION_VERSION not in applied:
+                    for statement in CUSTOMER_CONFIGURATION_SCHEMA:
+                        raw.execute(statement)
+                    raw.execute(
+                        (
+                            "INSERT INTO fm_schema_migrations (version, name, applied_at) "
+                            "VALUES (%s, %s, %s)"
+                        ),
+                        (
+                            CUSTOMER_CONFIGURATION_VERSION,
+                            CUSTOMER_CONFIGURATION_NAME,
+                            datetime.now().astimezone().isoformat(),
+                        ),
+                    )
+                    new_versions.append(CUSTOMER_CONFIGURATION_VERSION)
                 raw.commit()
                 return tuple(new_versions)
             except Exception:

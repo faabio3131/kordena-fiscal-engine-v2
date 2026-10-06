@@ -60,6 +60,8 @@ class SecretReferenceKind(StrEnum):
 
 
 class ControlPlaneAuditAction(StrEnum):
+    CUSTOMER_CONFIGURATION_CHANGED = "customer_configuration.changed"
+    WEBHOOK_EGRESS_DECIDED = "webhook_egress.decided"
     ORGANIZATION_ONBOARDED = "organization.onboarded"
     UNIT_ONBOARDED = "unit.onboarded"
     SECRET_REFERENCE_BOUND = "secret_reference.bound"
@@ -140,8 +142,7 @@ class FiscalUnitRegistration:
         if not self.enabled_environments:
             raise FiscalValidationError("enabled_environments must not be empty")
         if not all(
-            isinstance(environment, FiscalEnvironment)
-            for environment in self.enabled_environments
+            isinstance(environment, FiscalEnvironment) for environment in self.enabled_environments
         ):
             raise FiscalValidationError("enabled_environments contain invalid values")
 

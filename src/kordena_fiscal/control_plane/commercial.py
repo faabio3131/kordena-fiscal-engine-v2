@@ -7,10 +7,14 @@ configuration records that survive process restarts.
 
 from __future__ import annotations
 
+import hashlib
+import json
+from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
-from typing import Protocol
-from urllib.parse import urlsplit
+from typing import Any, Protocol
+from uuid import uuid4
 
 from kordena_fiscal.domain import (
     BrazilianJurisdiction,
@@ -24,8 +28,16 @@ from kordena_fiscal.persistence.ports import (
     FiscalUnitOfWorkFactory,
     PersistenceConflictError,
 )
+from kordena_fiscal.security.human_identity import AuthenticatedHuman, PortalPermission
 
-from .models import AdminPrincipal, ControlPlanePermission
+from .models import (
+    AdminPrincipal,
+    ControlPlaneAuditAction,
+    ControlPlaneAuditEvent,
+    ControlPlanePermission,
+    SecretReference,
+    SecretReferenceKind,
+)
 from .service import (
     ControlPlaneAuthorizationError,
     ControlPlaneConflictError,
@@ -104,9 +116,7 @@ class ProviderBinding:
             self.document_kind is FiscalDocumentKind.NFSE
             and self.jurisdiction.municipality_ibge_code is None
         ):
-            raise FiscalValidationError(
-                "NFSe provider binding requires municipality IBGE code"
-            )
+            raise FiscalValidationError("NFSe provider binding requires municipality IBGE code")
         if not isinstance(self.enabled, bool):
             raise FiscalValidationError("enabled must be bool")
 
@@ -164,20 +174,9 @@ class WebhookDestinationConfig:
         object.__setattr__(self, "unit_id", _token(self.unit_id, "unit_id"))
         if not isinstance(self.environment, FiscalEnvironment):
             raise FiscalValidationError("environment must be FiscalEnvironment")
-        url = _required(self.url, "url", 2048)
-        parsed = urlsplit(url)
-        if parsed.scheme.lower() != "https" or not parsed.hostname:
-            raise FiscalValidationError(
-                "webhook destination must use an absolute https URL"
-            )
-        if parsed.username is not None or parsed.password is not None:
-            raise FiscalValidationError(
-                "webhook destination URL cannot contain credentials"
-            )
-        if parsed.fragment:
-            raise FiscalValidationError(
-                "webhook destination URL cannot contain a fragment"
-            )
+        from .webhook_policy import normalize_webhook_url
+
+        url, _hostname, _path = normalize_webhook_url(self.url)
         object.__setattr__(self, "url", url)
         if not isinstance(self.enabled, bool):
             raise FiscalValidationError("enabled must be bool")
@@ -222,21 +221,14 @@ class ProviderRuntimePolicyConfig:
                 raise FiscalValidationError(f"{field_name} must be numeric")
             object.__setattr__(self, field_name, float(value))
         if not 0 < self.connect_timeout_seconds <= 300:
-            raise FiscalValidationError(
-                "connect_timeout_seconds must be > 0 and <= 300"
-            )
+            raise FiscalValidationError("connect_timeout_seconds must be > 0 and <= 300")
         if not 0 < self.read_timeout_seconds <= 300:
             raise FiscalValidationError("read_timeout_seconds must be > 0 and <= 300")
-        if not isinstance(self.max_attempts, int) or isinstance(
-            self.max_attempts, bool
-        ):
+        if not isinstance(self.max_attempts, int) or isinstance(self.max_attempts, bool):
             raise FiscalValidationError("max_attempts must be integer")
         if not 1 <= self.max_attempts <= 20:
             raise FiscalValidationError("max_attempts must be between 1 and 20")
-        if (
-            self.base_delay_seconds < 0
-            or self.max_delay_seconds < self.base_delay_seconds
-        ):
+        if self.base_delay_seconds < 0 or self.max_delay_seconds < self.base_delay_seconds:
             raise FiscalValidationError("retry delay bounds are invalid")
         if not 0 <= self.jitter_ratio <= 1:
             raise FiscalValidationError("jitter_ratio must be between 0 and 1")
@@ -274,15 +266,11 @@ class DurableProviderBindingResolver:
         operation: str,
     ) -> str:
         if scope.host_namespace is None:
-            raise FiscalValidationError(
-                "provider binding resolution requires host_namespace"
-            )
+            raise FiscalValidationError("provider binding resolution requires host_namespace")
         try:
             configured_operation = ConfiguredFiscalOperation(operation)
         except ValueError as exc:
-            raise FiscalValidationError(
-                "unsupported configured provider operation"
-            ) from exc
+            raise FiscalValidationError("unsupported configured provider operation") from exc
         with self._unit_of_work_factory() as uow:
             binding = uow.commercial.resolve_provider_binding(
                 tenant_id=scope.tenant_id,
@@ -398,6 +386,248 @@ class CommercialConfigurationService:
             uow.commit()
             return result
 
+    def configure_customer(
+        self,
+        *,
+        authority: AuthenticatedHuman,
+        scope: ExecutionScope,
+        surface_id: str,
+        values: Mapping[str, Any],
+        expected_version: int,
+        idempotency_key: str,
+        decision: str | None = None,
+    ) -> Mapping[str, object]:
+        from .webhook_policy import normalize_webhook_url
+
+        if not isinstance(authority, AuthenticatedHuman):
+            raise ControlPlaneAuthorizationError("human session is required")
+        if decision is not None:
+            if surface_id != "webhooks" or not authority.account.platform_admin:
+                raise ControlPlaneAuthorizationError("platform admin is required")
+            if decision not in {"approved", "revoked"}:
+                raise FiscalValidationError("invalid egress decision")
+        else:
+            if authority.tenant_id != scope.tenant_id:
+                raise ControlPlaneAuthorizationError("tenant scope mismatch")
+            permission = (
+                PortalPermission.CERTIFICATE_MANAGE
+                if surface_id == "certificates"
+                else PortalPermission.CONFIGURATION_WRITE
+                if surface_id == "settings"
+                else PortalPermission.INTEGRATION_MANAGE
+            )
+            authority.assert_permission(permission, unit_id=scope.unit_id)
+        if surface_id not in {"certificates", "providers", "webhooks", "integrations", "settings"}:
+            raise FiscalValidationError("unknown customer configuration")
+        if (
+            isinstance(expected_version, bool)
+            or not isinstance(expected_version, int)
+            or expected_version < 0
+        ):
+            raise FiscalValidationError("expected_version must be a nonnegative integer")
+        key = _required(idempotency_key, "idempotency key", 256)
+        actor = hashlib.sha256(authority.account.account_id.encode()).hexdigest()
+        fingerprint = hashlib.sha256(
+            json.dumps(
+                {
+                    "surface": surface_id,
+                    "values": dict(values),
+                    "expected": expected_version,
+                    "actor": actor,
+                    "decision": decision,
+                },
+                sort_keys=True,
+                allow_nan=False,
+                separators=(",", ":"),
+            ).encode()
+        ).hexdigest()
+        command_key = hashlib.sha256(key.encode()).hexdigest()
+        allowed: dict[str, set[str]] = {
+            "certificates": {"reference_id", "kind", "provider_id"},
+            "providers": {
+                "binding_id",
+                "document_kind",
+                "state_code",
+                "municipality_ibge_code",
+                "operation",
+                "provider_id",
+                "enabled",
+            },
+            "webhooks": {"destination_id", "url", "enabled"}
+            if decision is None
+            else {"destination_id", "url", "expires_at"},
+            "integrations": {"module_id", "enabled"},
+            "settings": {
+                "policy_id",
+                "provider_id",
+                "connect_timeout_seconds",
+                "read_timeout_seconds",
+                "max_attempts",
+                "base_delay_seconds",
+                "max_delay_seconds",
+                "jitter_ratio",
+                "circuit_failure_threshold",
+                "circuit_recovery_seconds",
+                "circuit_success_threshold",
+            },
+        }
+        if set(values) - allowed[surface_id]:
+            raise FiscalValidationError("unsupported configuration field")
+        target_key = str(
+            values.get(
+                {
+                    "certificates": "kind",
+                    "providers": "binding_id",
+                    "webhooks": "destination_id",
+                    "integrations": "module_id",
+                    "settings": "provider_id",
+                }[surface_id],
+                "",
+            )
+        )
+        target_key = _token(target_key, "configuration key")
+        if surface_id == "certificates":
+            target_key += ":" + (
+                _token(str(values["provider_id"]), "provider_id")
+                if values.get("provider_id")
+                else ""
+            )
+        now = datetime.now(UTC)
+        with self._unit_of_work_factory() as uow:
+            unit = uow.control_plane.get_unit(scope.tenant_id, scope.unit_id)
+            if unit is None or scope.environment not in unit.enabled_environments:
+                raise ControlPlaneAuthorizationError("unit/environment is not configured")
+            replay = uow.commercial.reserve_configuration_command(scope, command_key, fingerprint)
+            if replay is not None:
+                return replay
+            version = uow.commercial.advance_configuration_version(
+                scope, surface_id, target_key, expected_version
+            )
+            partition: dict[str, Any] = dict(
+                tenant_id=scope.tenant_id, unit_id=scope.unit_id, environment=scope.environment
+            )
+            if surface_id == "certificates":
+                reference = SecretReference(
+                    **partition,
+                    reference_id=str(values.get("reference_id", "")),
+                    kind=SecretReferenceKind(str(values.get("kind", ""))),
+                    provider_id=values.get("provider_id"),
+                )
+                uow.control_plane.put_secret_reference(reference)
+            elif surface_id == "providers":
+                binding = ProviderBinding(
+                    **partition,
+                    binding_id=str(values.get("binding_id", "")),
+                    document_kind=FiscalDocumentKind(str(values.get("document_kind", ""))),
+                    jurisdiction=BrazilianJurisdiction(
+                        str(values.get("state_code", "")),
+                        values.get("municipality_ibge_code") or None,
+                    ),
+                    operation=ConfiguredFiscalOperation(str(values.get("operation", ""))),
+                    provider_id=str(values.get("provider_id", "")),
+                    enabled=values.get("enabled", False),
+                )
+                current = uow.commercial.resolve_provider_binding(
+                    tenant_id=scope.tenant_id,
+                    unit_id=scope.unit_id,
+                    environment=scope.environment,
+                    document_kind=binding.document_kind,
+                    jurisdiction=binding.jurisdiction,
+                    operation=binding.operation,
+                )
+                if current is not None and current.binding_id != binding.binding_id:
+                    raise ControlPlaneConflictError("provider binding identity conflict")
+                uow.commercial.put_provider_binding(binding)
+            elif surface_id == "integrations":
+                uow.commercial.put_module_binding(
+                    UnitModuleBinding(
+                        **partition,
+                        module_id=str(values.get("module_id", "")),
+                        enabled=values.get("enabled", False),
+                    )
+                )
+            elif surface_id == "settings":
+                uow.commercial.put_runtime_policy(
+                    ProviderRuntimePolicyConfig(**partition, **dict(values))
+                )
+            elif decision is None:
+                url, _hostname, _path = normalize_webhook_url(str(values.get("url", "")))
+                uow.commercial.put_webhook_destination(
+                    WebhookDestinationConfig(
+                        **partition,
+                        destination_id=target_key,
+                        url=url,
+                        enabled=values.get("enabled", False),
+                    )
+                )
+                uow.commercial.record_webhook_approval(
+                    scope,
+                    target_key,
+                    status="pending",
+                    version=None,
+                    expires_at=None,
+                    url_sha256=None,
+                    requested_by=actor,
+                )
+            else:
+                record = uow.commercial.webhook_approval(scope, target_key)
+                if record is None:
+                    raise ControlPlaneNotFoundError("webhook request is missing")
+                if decision == "approved":
+                    url, _hostname, _path = normalize_webhook_url(str(values.get("url", "")))
+                    if record["url"] != url or record["requested_by"] in (actor, ""):
+                        raise ControlPlaneAuthorizationError(
+                            "exact destination and independent approval required"
+                        )
+                    expires = datetime.fromisoformat(str(values.get("expires_at", "")))
+                    if expires.tzinfo is None or not now < expires <= now + timedelta(days=30):
+                        raise FiscalValidationError("approval expiry must be within 30 days")
+                    url_hash = hashlib.sha256(url.encode()).hexdigest()
+                    expiry = expires.astimezone(UTC).isoformat()
+                else:
+                    url_hash = None
+                    expiry = None
+                uow.commercial.record_webhook_approval(
+                    scope,
+                    target_key,
+                    status=decision,
+                    version=version if decision == "approved" else None,
+                    expires_at=expiry,
+                    url_sha256=url_hash,
+                    approved_by=actor,
+                )
+            action = (
+                ControlPlaneAuditAction.WEBHOOK_EGRESS_DECIDED
+                if decision is not None
+                else ControlPlaneAuditAction.CUSTOMER_CONFIGURATION_CHANGED
+            )
+            uow.control_plane.append_audit(
+                ControlPlaneAuditEvent(
+                    event_id=uuid4().hex,
+                    occurred_at=now,
+                    actor_id="human-" + actor[:24],
+                    action=action,
+                    target_type=surface_id,
+                    target_id=f"{target_key}:v{version}",
+                    correlation_id=scope.correlation_id,
+                    tenant_id=scope.tenant_id,
+                    unit_id=scope.unit_id,
+                )
+            )
+            result: dict[str, object] = {
+                "status": "configuration_recorded",
+                "target_key": target_key,
+                "version": version,
+                "unit_id": scope.unit_id,
+                "environment": scope.environment.value,
+                "operational_verification": "not_confirmed",
+            }
+            if surface_id == "webhooks":
+                result["approval_status"] = decision or "pending"
+            uow.commercial.complete_configuration_command(scope, command_key, result)
+            uow.commit()
+            return result
+
     def _require_unit_environment(
         self,
         tenant_id: str,
@@ -407,13 +637,9 @@ class CommercialConfigurationService:
         with self._unit_of_work_factory() as uow:
             unit = uow.control_plane.get_unit(tenant_id, unit_id)
         if unit is None:
-            raise ControlPlaneNotFoundError(
-                f"unit is not onboarded: {tenant_id}/{unit_id}"
-            )
+            raise ControlPlaneNotFoundError(f"unit is not onboarded: {tenant_id}/{unit_id}")
         if environment not in unit.enabled_environments:
-            raise ControlPlaneAuthorizationError(
-                "environment is not enabled for the target unit"
-            )
+            raise ControlPlaneAuthorizationError("environment is not enabled for the target unit")
 
     @staticmethod
     def _require_scope(actor: AdminPrincipal, tenant_id: str) -> None:
@@ -425,6 +651,4 @@ class CommercialConfigurationService:
                 f"actor lacks required permission: {permission.value}"
             )
         if not actor.can_access_tenant(tenant_id):
-            raise ControlPlaneAuthorizationError(
-                f"actor cannot access tenant: {tenant_id}"
-            )
+            raise ControlPlaneAuthorizationError(f"actor cannot access tenant: {tenant_id}")

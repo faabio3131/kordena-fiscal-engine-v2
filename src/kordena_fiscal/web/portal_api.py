@@ -79,6 +79,11 @@ _SURFACE_PERMISSIONS: dict[str, PortalPermission] = {
 
 _OPERATION_PERMISSIONS: dict[str, PortalPermission] = {
     "onboardUnit": PortalPermission.CONFIGURATION_WRITE,
+    "configureCertificates": PortalPermission.CERTIFICATE_MANAGE,
+    "configureProviders": PortalPermission.INTEGRATION_MANAGE,
+    "configureWebhooks": PortalPermission.INTEGRATION_MANAGE,
+    "configureIntegrations": PortalPermission.INTEGRATION_MANAGE,
+    "configureSettings": PortalPermission.CONFIGURATION_WRITE,
     "issueFiscalDocument": PortalPermission.DOCUMENT_ISSUE,
     "queryFiscalDocument": PortalPermission.DOCUMENT_QUERY,
     "cancelFiscalDocument": PortalPermission.DOCUMENT_CANCEL,
@@ -88,6 +93,11 @@ _OPERATION_PERMISSIONS: dict[str, PortalPermission] = {
 
 _IDEMPOTENT_MUTATIONS = {
     "onboardUnit",
+    "configureCertificates",
+    "configureProviders",
+    "configureWebhooks",
+    "configureIntegrations",
+    "configureSettings",
     "issueFiscalDocument",
     "cancelFiscalDocument",
     "inutilizeFiscalRange",
@@ -114,6 +124,7 @@ _BROWSER_AUTHORITY_FIELDS = {
     "permissions",
     "authority",
     "session_epoch",
+    "platform_admin",
     "host_namespace",
 }
 
@@ -340,6 +351,77 @@ def create_portal_router(
                 authority=auth,
                 payload=payload,
                 idempotency_key=idempotency_key.strip() if idempotency_key else None,
+            )
+        )
+        _safe_payload(result)
+        return result
+
+    @router.get("/egress/{tenant_id}/{unit_id}/{environment}/{destination_id}")
+    async def review_egress(
+        tenant_id: str,
+        unit_id: str,
+        environment: FiscalEnvironment,
+        destination_id: str,
+        request: Request,
+    ) -> dict[str, Any]:
+        auth = authority(request)
+        if not auth.account.platform_admin:
+            raise HTTPException(403, detail={"code": "EGRESS_FORBIDDEN"})
+        method = getattr(require_executor(), "egress_request", None)
+        if not callable(method):
+            raise HTTPException(503, detail={"code": "EGRESS_RUNTIME_NOT_READY"})
+        result = dict(
+            method(
+                authority=auth,
+                tenant_id=tenant_id,
+                unit_id=unit_id,
+                environment=environment,
+                destination_id=destination_id,
+            )
+        )
+        _safe_payload(result)
+        return result
+
+    @router.post("/egress/{tenant_id}/{unit_id}/{environment}/{destination_id}/{decision}")
+    async def decide_egress(
+        tenant_id: str,
+        unit_id: str,
+        environment: FiscalEnvironment,
+        destination_id: str,
+        decision: str,
+        request: Request,
+        payload: Annotated[dict[str, Any], Body()],
+    ) -> dict[str, Any]:
+        auth = authority(request)
+        if not auth.account.platform_admin:
+            raise HTTPException(403, detail={"code": "EGRESS_FORBIDDEN"})
+        _csrf(request, identity, auth)
+        _reject_browser_authority(payload)
+        if set(payload) - {"url", "expires_at", "expected_version"}:
+            raise HTTPException(400, detail={"code": "INVALID_EGRESS_DECISION"})
+        key = request.headers.get("Idempotency-Key", "").strip()
+        if not key:
+            raise HTTPException(400, detail={"code": "MISSING_IDEMPOTENCY_KEY"})
+        method = getattr(require_executor(), "configure", None)
+        if not callable(method):
+            raise HTTPException(503, detail={"code": "EGRESS_RUNTIME_NOT_READY"})
+        result = dict(
+            method(
+                authority=auth,
+                tenant_id=tenant_id,
+                surface_id="webhooks",
+                decision=decision,
+                idempotency_key=key,
+                payload={
+                    "unit_id": unit_id,
+                    "environment": environment.value,
+                    "expected_version": payload.get("expected_version"),
+                    "values": {
+                        "destination_id": destination_id,
+                        "url": payload.get("url", ""),
+                        "expires_at": payload.get("expires_at", ""),
+                    },
+                },
             )
         )
         _safe_payload(result)

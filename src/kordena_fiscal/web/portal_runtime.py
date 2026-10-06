@@ -22,6 +22,7 @@ from kordena_fiscal.control_plane.capability import (
     CapabilityControlContext,
     GovernedCapabilityReadinessService,
 )
+from kordena_fiscal.control_plane.commercial import CommercialConfigurationService
 from kordena_fiscal.control_plane.durable import DurableControlPlaneService
 from kordena_fiscal.control_plane.models import (
     AdminPrincipal,
@@ -43,8 +44,12 @@ from kordena_fiscal.domain import (
     FiscalValidationError,
 )
 from kordena_fiscal.lifecycle import FiscalDocumentState
-from kordena_fiscal.persistence.ports import FiscalUnitOfWorkFactory
-from kordena_fiscal.security.human_identity import AuthenticatedHuman, PortalPermission
+from kordena_fiscal.persistence.ports import FiscalUnitOfWorkFactory, PersistenceConflictError
+from kordena_fiscal.security.human_identity import (
+    AuthenticatedHuman,
+    HumanAuthorizationError,
+    PortalPermission,
+)
 
 
 class PortalOperationExecutor(Protocol):
@@ -151,8 +156,18 @@ class DurableHumanPortalExecutor:
             "configured_fiscal_operations": list(configured_operations),
             "onboarding_stage": onboarding_stage,
             "basic_onboarding_complete": organization is not None and bool(units),
-            "available_surfaces": sorted(self._DURABLE_SURFACES),
-            "customer_configuration_mode": "read_only_pending_security_decision",
+            "available_surfaces": sorted(
+                self._DURABLE_SURFACES
+                | ({"webhook-egress"} if authority.account.platform_admin else set())
+            ),
+            "customer_configuration_mode": "governed_configuration",
+            "customer_configuration_operations": [
+                "configureCertificates",
+                "configureProviders",
+                "configureWebhooks",
+                "configureIntegrations",
+                "configureSettings",
+            ],
         }
 
     def surface(
@@ -176,8 +191,16 @@ class DurableHumanPortalExecutor:
             if not units:
                 raise _portal_error(409, "UNIT_NOT_CONFIGURED", "Selected unit is not configured")
         if surface_id in {
-            "documents", "issuances", "errors", "reconciliation", "capabilities",
-            "certificates", "providers", "webhooks", "integrations", "settings",
+            "documents",
+            "issuances",
+            "errors",
+            "reconciliation",
+            "capabilities",
+            "certificates",
+            "providers",
+            "webhooks",
+            "integrations",
+            "settings",
         }:
             if not units:
                 return ()
@@ -265,8 +288,10 @@ class DurableHumanPortalExecutor:
         offset: int,
     ) -> Sequence[Mapping[str, Any]]:
         permission = (
-            PortalPermission.CERTIFICATE_MANAGE if surface_id == "certificates"
-            else PortalPermission.CONFIGURATION_WRITE if surface_id == "settings"
+            PortalPermission.CERTIFICATE_MANAGE
+            if surface_id == "certificates"
+            else PortalPermission.CONFIGURATION_WRITE
+            if surface_id == "settings"
             else PortalPermission.INTEGRATION_MANAGE
         )
         authority.assert_permission(permission, unit_id=scope.unit_id)
@@ -274,17 +299,23 @@ class DurableHumanPortalExecutor:
             "unit_id": scope.unit_id,
             "environment": scope.environment.value,
             "status": "configuration_recorded",
-            "configuration_mode": "read_only_pending_security_decision",
+            "configuration_mode": "governed_configuration",
             "operational_verification": "not_confirmed",
         }
         with self._unit_of_work_factory() as uow:
             if surface_id == "certificates":
                 return tuple(
                     {
-                        **base, "reference_id": reference.reference_id,
+                        **base,
+                        "reference_id": reference.reference_id,
                         "reference_kind": reference.kind.value,
                         "provider_id": reference.provider_id,
                         "material_resolution": "not_attempted",
+                        "version": uow.commercial.configuration_version(
+                            scope,
+                            "certificates",
+                            reference.kind.value + ":" + (reference.provider_id or ""),
+                        ),
                     }
                     for reference in uow.control_plane.list_secret_references(
                         scope, limit=limit, offset=offset
@@ -299,7 +330,9 @@ class DurableHumanPortalExecutor:
             if surface_id == "integrations":
                 rows.extend(
                     {
-                        **base, "record_type": "fiscal_binding", "binding_id": binding.binding_id,
+                        **base,
+                        "record_type": "fiscal_binding",
+                        "binding_id": binding.binding_id,
                         "integration_host": binding.host_scope.namespace.value,
                         "binding_environment": "not_environment_partitioned",
                     }
@@ -484,6 +517,21 @@ class DurableHumanPortalExecutor:
         payload: Mapping[str, Any],
         idempotency_key: str | None,
     ) -> Mapping[str, Any]:
+        configurations = {
+            "configureCertificates": "certificates",
+            "configureProviders": "providers",
+            "configureWebhooks": "webhooks",
+            "configureIntegrations": "integrations",
+            "configureSettings": "settings",
+        }
+        if operation_id in configurations:
+            return self.configure(
+                authority=authority,
+                tenant_id=authority.tenant_id,
+                surface_id=configurations[operation_id],
+                payload=payload,
+                idempotency_key=idempotency_key,
+            )
         if operation_id == "onboardUnit":
             return self._onboard_unit(
                 authority=authority,
@@ -498,6 +546,88 @@ class DurableHumanPortalExecutor:
             payload=payload,
             idempotency_key=idempotency_key,
         )
+
+    def configure(
+        self,
+        *,
+        authority: AuthenticatedHuman,
+        tenant_id: str,
+        surface_id: str,
+        payload: Mapping[str, Any],
+        idempotency_key: str | None,
+        decision: str | None = None,
+    ) -> Mapping[str, Any]:
+        from uuid import uuid4
+
+        try:
+            if set(payload) - {"unit_id", "environment", "values", "expected_version"}:
+                raise FiscalValidationError("unknown command field")
+            if "expected_version" not in payload or not isinstance(payload.get("values"), Mapping):
+                raise FiscalValidationError("configuration values are required")
+            scope = ExecutionScope(
+                host_namespace="fm-nfcore",
+                tenant_id=tenant_id,
+                unit_id=payload.get("unit_id", ""),
+                environment=FiscalEnvironment(payload.get("environment", "")),
+                correlation_id=uuid4().hex,
+            )
+            return CommercialConfigurationService(self._unit_of_work_factory).configure_customer(
+                authority=authority,
+                scope=scope,
+                surface_id=surface_id,
+                values=payload["values"],
+                expected_version=payload["expected_version"],
+                idempotency_key=idempotency_key or "",
+                decision=decision,
+            )
+        except (ControlPlaneAuthorizationError, HumanAuthorizationError) as exc:
+            raise _portal_error(403, "CONFIGURATION_FORBIDDEN", "Configuration denied") from exc
+        except (ControlPlaneConflictError, PersistenceConflictError) as exc:
+            raise _portal_error(409, "CONFIGURATION_CONFLICT", "Reload current version") from exc
+        except ControlPlaneNotFoundError as exc:
+            raise _portal_error(404, "CONFIGURATION_NOT_FOUND", "Configuration not found") from exc
+        except (FiscalValidationError, ValueError, TypeError, AttributeError) as exc:
+            raise _portal_error(400, "INVALID_CONFIGURATION", "Invalid configuration") from exc
+
+    def egress_request(
+        self,
+        *,
+        authority: AuthenticatedHuman,
+        tenant_id: str,
+        unit_id: str,
+        environment: FiscalEnvironment,
+        destination_id: str,
+    ) -> Mapping[str, Any]:
+        if not authority.account.platform_admin:
+            raise _portal_error(403, "EGRESS_FORBIDDEN", "Platform authority required")
+        scope = ExecutionScope(
+            tenant_id=tenant_id,
+            unit_id=unit_id,
+            environment=environment,
+            correlation_id="egress-review",
+        )
+        with self._unit_of_work_factory() as uow:
+            record = uow.commercial.webhook_approval(scope, destination_id)
+            if record is None:
+                raise _portal_error(404, "EGRESS_NOT_FOUND", "Request not found")
+            from kordena_fiscal.control_plane.webhook_policy import (
+                WebhookPolicyDenied,
+                normalize_webhook_url,
+            )
+            try:
+                url, _hostname, _path = normalize_webhook_url(str(record["url"]))
+            except WebhookPolicyDenied as exc:
+                raise _portal_error(409, "EGRESS_REQUEST_REPLACEMENT_REQUIRED",
+                                    "A new valid destination request is required") from exc
+            return {
+                "destination_id": destination_id,
+                "url": url,
+                "enabled": bool(record["enabled"]),
+                "approval_status": record["approval_status"],
+                "approved_until": record["approved_until"],
+                "version": uow.commercial.configuration_version(scope, "webhooks", destination_id),
+                "operational_verification": "not_confirmed",
+            }
 
     def _onboard_unit(
         self,

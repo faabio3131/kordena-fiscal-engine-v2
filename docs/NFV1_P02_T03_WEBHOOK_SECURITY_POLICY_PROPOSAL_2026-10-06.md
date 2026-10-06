@@ -1,7 +1,7 @@
 # NFV1-P02-T03 — Proposta de política de destinos de webhook
 
 Data: 2026-10-06. Repository: `faabio3131/kordena-fiscal-engine-v2`.
-**Status: DRAFT / DECISÃO HUMANA PENDENTE. NÃO APROVADO. NÃO IMPLEMENTADO.**
+**Status: POLICY_APPROVED_FOR_INTERNAL_IMPLEMENTATION — aprovado pelo dono em 2026-10-06. Implementação/certificação ainda pendentes.**
 Task ID: NFV1-P02-T03. Não cria cronograma ou autoridade concorrente.
 
 ## Problema CURRENT e por que requer decisão
@@ -74,3 +74,36 @@ Aprovar ou ajustar a política da tabela como conjunto. Registro esperado:
 POLICY_APPROVED_FOR_INTERNAL_IMPLEMENTATION, aprovador, data, escopo e versões.
 Não usar PRODUCTION_APPROVED/COMMERCIAL_LIVE. Enquanto pendente, T03 permanece
 bloqueada para cadastro/ativação e seu successor P02-T04 não é executado.
+
+
+## Registro formal da aprovação e escopo congelado
+
+O dono aprovou integralmente a tabela e seus controles nesta data. Autorizou
+implementação interna, testes exclusivamente sintéticos, migrations aditivas
+necessárias, PR e CI da T03. Nenhum deploy/staging/produção/DNS/destino/secret/
+certificado real/tráfego real/fiscal/pagamento/homologação/Go-Live foi autorizado.
+T03-B01 resolvido como decisão, nunca como implementação certificada.
+
+CURRENT revalidado: main db2a8fb71097eb4e1f6e5919e1eb544c8a3167ac; PR #119 MERGED;
+CI main #641 e Governance #62 SUCCESS; zero PRs abertas; staging inalterado.
+TARGET: cinco superfícies com formulários e mutações reais, sessão/RBAC/scope,
+versão/recibo/fingerprint/audit atômicos, decisão de egress por platform_admin,
+revalidação no handler/transport e em cada retry. Não iniciar P02-T04 nesta entrega.
+
+Mapa de impacto: CommercialConfigurationService/stores/UoW existentes; ControlPlane
+secret refs/audit; Portal API/executor/JS; SignedWebhookOutboxHandler/WebhookTransport.
+Schema aditivo 14: metadados de controle de versão/recibos no mesmo store e colunas
+de aprovação na tabela de destinos existente. Não duplica configuração, fila,
+auth, tenants, providers ou Vault. Idempotência fiscal de emissão não será usada
+como recibo de configuração (sem misturar domínios). O recibo só conserva hash/
+resultado sanitizado; os dados canônicos continuam em suas tabelas atuais.
+
+Aceite: controles da tabela íntegros; formulário de cada vista com sucesso/erro/
+conflito/retry; aprovação/revogação sem self-approval; prova de atomicidade,
+concorrência, restart, migration fresh/upgrade, PostgreSQL, isolamento e redaction;
+DNS adversarial/TLS/redirect/expiry/revoke/retry com I/O sintético; gates completos,
+PR/main/closeout verdes antes de DONE_CERTIFIED. Rollback preserva dados aditivos.
+Transporte real só existe como adapter reutilizável, não ativado pelo root sem
+as dependências governadas: nenhuma rede real exercitada ou implantada nesta task.
+
+Revalidação superior após checkpoint #120: main `e203adc111d5e503c68a88bf6104df905b8fe18f`, CI #643 / Governance #64 SUCCESS; zero PRs abertas. O snapshot db2a8fb acima é histórico.

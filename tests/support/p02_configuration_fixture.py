@@ -56,9 +56,17 @@ def seed(database):
                     environment=env,
                     url=(
                         "https://callback.example.invalid/path/" + label
-                        + "?token=" + PROTECTED_QUERY
+
                     ),
                 )
+            )
+            # Legacy fixture from migration <=13 deliberately contains a forbidden
+            # query. Reads must remain sanitized; delivery must fail closed.
+            uow.commercial._connection.execute(
+                "UPDATE fm_commercial_webhook_destinations SET url = ? "
+                "WHERE tenant_id = ? AND unit_id = ? AND environment = ?",
+                ("https://callback.example.invalid/path/" + label + "?token=" + PROTECTED_QUERY,
+                 tenant, unit, env.value),
             )
             uow.commercial.put_module_binding(
                 UnitModuleBinding(

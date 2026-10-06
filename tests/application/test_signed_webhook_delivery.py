@@ -23,9 +23,17 @@ from kordena_fiscal.contingency import (
     FiscalOutboxStatus,
     FiscalRetryPolicy,
 )
+from kordena_fiscal.control_plane.webhook_policy import ApprovedWebhookConnection
 from kordena_fiscal.domain import ExecutionScope, FiscalEnvironment, FiscalValidationError
 from kordena_fiscal.persistence import SqliteFiscalDatabase
 from kordena_fiscal.security import InMemoryWebhookKeyRing, WebhookSecurity, WebhookSignature
+
+
+class _SyntheticEgressPolicy:
+    """Unit-test policy only; in-process fake transports never open sockets."""
+    def authorize(self, scope, destination_id, url, now):
+        return ApprovedWebhookConnection(url, "consumer.example.test", "/fiscal/webhooks",
+                                         "93.184.216.34", 1)
 
 NOW = datetime(2026, 9, 12, 2, 0, tzinfo=UTC)
 OLD_SECRET = b"previous-webhook-secret-32-bytes!!"
@@ -44,7 +52,7 @@ def _scope() -> ExecutionScope:
 
 def _database(tmp_path) -> SqliteFiscalDatabase:
     database = SqliteFiscalDatabase(tmp_path / "fm-fiscal-v2.sqlite3")
-    assert database.initialize() == (1, 2, 3, 4, 5, 13)
+    assert database.initialize() == (1, 2, 3, 4, 5, 13, 14)
     return database
 
 
@@ -146,6 +154,7 @@ def test_durable_worker_delivers_exact_payload_with_certified_hmac_header(tmp_pa
         responses=[WebhookDeliveryResponse(202, delivery_reference="delivery-accepted")],
     )
     handler = SignedWebhookOutboxHandler(
+            policy=_SyntheticEgressPolicy(),
         security=_security(),
         destination_resolver=_Resolver(_destination()),
         transport=transport,
@@ -184,6 +193,7 @@ def test_retryable_http_response_uses_durable_backoff_and_re_signs_next_attempt(
     worker = DurableFiscalOutboxWorker(
         uow_factory=database,
         handler=SignedWebhookOutboxHandler(
+            policy=_SyntheticEgressPolicy(),
             security=_security(),
             destination_resolver=_Resolver(_destination()),
             transport=transport,
@@ -200,7 +210,7 @@ def test_retryable_http_response_uses_durable_backoff_and_re_signs_next_attempt(
     first = worker.run_once(now=NOW)[0]
     assert first.status is FiscalOutboxStatus.RETRY_WAIT
     assert first.available_at == NOW + timedelta(seconds=5)
-    assert first.last_error == "HTTP 429: consumer throttled"
+    assert first.last_error == "WEBHOOK_HTTP_429"
 
     clock.current = NOW + timedelta(seconds=5)
     second = worker.run_once(now=clock.current)[0]
@@ -227,6 +237,7 @@ def test_non_retryable_http_failure_goes_directly_to_dead_letter(tmp_path) -> No
     worker = DurableFiscalOutboxWorker(
         uow_factory=database,
         handler=SignedWebhookOutboxHandler(
+            policy=_SyntheticEgressPolicy(),
             security=_security(),
             destination_resolver=_Resolver(_destination()),
             transport=transport,
@@ -238,7 +249,7 @@ def test_non_retryable_http_failure_goes_directly_to_dead_letter(tmp_path) -> No
 
     assert outcome.status is FiscalOutboxStatus.DEAD_LETTER
     assert outcome.attempt_count == 1
-    assert outcome.last_error == "HTTP 400: invalid consumer contract"
+    assert outcome.last_error == "WEBHOOK_HTTP_400"
     assert len(transport.requests) == 1
 
 
@@ -250,6 +261,7 @@ def test_missing_destination_fails_closed_without_transport_io(tmp_path) -> None
     worker = DurableFiscalOutboxWorker(
         uow_factory=database,
         handler=SignedWebhookOutboxHandler(
+            policy=_SyntheticEgressPolicy(),
             security=_security(),
             destination_resolver=resolver,
             transport=transport,
@@ -279,6 +291,7 @@ def test_rotation_overlap_accepts_delivery_signed_with_previous_key(tmp_path) ->
     worker = DurableFiscalOutboxWorker(
         uow_factory=database,
         handler=SignedWebhookOutboxHandler(
+            policy=_SyntheticEgressPolicy(),
             security=sender,
             destination_resolver=_Resolver(_destination()),
             transport=transport,

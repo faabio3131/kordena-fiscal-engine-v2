@@ -23,6 +23,7 @@ from kordena_fiscal.contingency import (
     FiscalOutboxStatus,
     FiscalRetryPolicy,
 )
+from kordena_fiscal.control_plane.webhook_policy import ApprovedWebhookConnection
 from kordena_fiscal.domain import ExecutionScope, FiscalEnvironment
 from kordena_fiscal.events import (
     DeliveryAttemptStatus,
@@ -35,6 +36,13 @@ from kordena_fiscal.security import (
     WebhookSecurity,
     WebhookSignatureError,
 )
+
+
+class _SyntheticEgressPolicy:
+    """Unit-test policy only; in-process fake transports never open sockets."""
+    def authorize(self, scope, destination_id, url, now):
+        return ApprovedWebhookConnection(url, "consumer.example.test", "/fiscal/webhooks",
+                                         "93.184.216.34", 1)
 
 NOW = datetime(2026, 9, 12, 3, 0, tzinfo=UTC)
 SECRET = b"v2-08-final-webhook-secret-32-bytes!"
@@ -52,7 +60,7 @@ def _scope(correlation_id: str = "corr-v2-08-final") -> ExecutionScope:
 
 def _database(tmp_path, name: str) -> SqliteFiscalDatabase:
     database = SqliteFiscalDatabase(tmp_path / name)
-    assert database.initialize() == (1, 2, 3, 4, 5, 13)
+    assert database.initialize() == (1, 2, 3, 4, 5, 13, 14)
     return database
 
 
@@ -333,6 +341,7 @@ def test_signed_outbox_to_inbox_duplicate_delivery_applies_consumer_effect_once(
     worker = DurableFiscalOutboxWorker(
         uow_factory=sender,
         handler=SignedWebhookOutboxHandler(
+            policy=_SyntheticEgressPolicy(),
             security=_security(),
             destination_resolver=_DestinationResolver(),
             transport=transport,
