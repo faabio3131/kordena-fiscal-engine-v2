@@ -113,3 +113,16 @@ autorizado. Nenhuma migration aplicada a staging/produção.
 
 PR/HEAD/CI final/main/closeout: PENDENTES. Não converter TARGET em CURRENT.
 Próxima Task ID, somente após certificação: NFV1-P02-T03.
+
+Refinamento da revisão T02: Emissões inclui status/generation da autoridade de
+idempotência, após descobrir document_id exclusivamente por lifecycle scoped; não
+expõe key/fingerprint/rejection_reason. Nova key não pode reutilizar document_id
+existente e transformar colisão em reserva FRESH; a transação é revertida. Índice
+aditivo por document_id/generation incluído na migração 13. Teste correspondente.
+Suíte local final antes desse refinamento: 1097 PASS/50 SKIP (DSN ausente).
+
+CI #624 FAIL (HEAD 46fbc245): três causas no gate PostgreSQL; nenhuma certificação.
+Fixture v8 agora reconstrói schema 1..8 completo e preserva lifecycle legado NULL
+no upgrade; expectativa da migration12 inclui13; query de overlap de profile usa
+CAST do parâmetro NULL para TEXT (SQLite/PostgreSQL), sem relaxar conflito/vigência.
+Nenhum teste/gate removido ou skip novo para contornar essa falha. Reexecutar CI.

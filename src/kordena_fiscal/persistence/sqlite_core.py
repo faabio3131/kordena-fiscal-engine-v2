@@ -184,22 +184,25 @@ class SqliteLifecycleRepository:
             if existing == snapshot:
                 return existing
             raise PersistenceConflictError("lifecycle document_id already exists")
-        self._connection.execute(
-            """
-            INSERT INTO fm_fiscal_lifecycle (
-                document_id, state, version, updated_at, history_json,
-                host_namespace, tenant_id, unit_id, environment
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                snapshot.document_id,
-                snapshot.state.value,
-                snapshot.version,
-                iso(snapshot.updated_at),
-                self._history_json(snapshot),
-                *(scoped_page(scope, 1, 0)[:4] if scope is not None else (None,) * 4),
-            ),
-        )
+        try:
+            self._connection.execute(
+                """
+                INSERT INTO fm_fiscal_lifecycle (
+                    document_id, state, version, updated_at, history_json,
+                    host_namespace, tenant_id, unit_id, environment
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    snapshot.document_id,
+                    snapshot.state.value,
+                    snapshot.version,
+                    iso(snapshot.updated_at),
+                    self._history_json(snapshot),
+                    *(scoped_page(scope, 1, 0)[:4] if scope is not None else (None,) * 4),
+                ),
+            )
+        except sqlite3.IntegrityError as exc:
+            raise PersistenceConflictError("lifecycle document_id already exists") from exc
         return snapshot
 
     def assert_scope(self, document_id: str, scope: ExecutionScope) -> None:

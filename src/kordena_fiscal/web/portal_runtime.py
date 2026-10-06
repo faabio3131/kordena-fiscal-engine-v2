@@ -275,9 +275,22 @@ class DurableHumanPortalExecutor:
                         FiscalDocumentState.REJECTED,
                     }:
                         continue
+                    attempt = (
+                        uow.idempotency.latest_for_document(snapshot.document_id)
+                        if surface_id == "issuances"
+                        else None
+                    )
                     rows.append(
                         {
                             **base,
+                            **(
+                                {
+                                    "attempt_status": attempt.status.value,
+                                    "attempt_generation": attempt.generation,
+                                }
+                                if attempt
+                                else {}
+                            ),
                             "record_type": "lifecycle",
                             "document_id": snapshot.document_id,
                             "state": snapshot.state.value,

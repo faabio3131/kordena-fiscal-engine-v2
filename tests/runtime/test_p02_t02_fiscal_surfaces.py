@@ -76,7 +76,14 @@ def test_five_surfaces_are_durable_scoped_and_sanitized(database, surface):
         assert {row["document_kind"] for row in rows} == {"nfe", "nfce", "nfse"}
         assert all(row["status"] == "blocked" and "readiness" not in row for row in rows)
     else:
-        assert "DOC-a" in response.text or surface == "issuances"
+        assert "DOC-a" in response.text
+        if surface == "issuances":
+            attempt = next(row for row in rows if row.get("document_id") == "DOC-a")
+            assert attempt["attempt_status"] == "reserved" and attempt["attempt_generation"] == 1
+            assert (
+                "request_fingerprint" not in response.text
+                and "rejection_reason" not in response.text
+            )
 
 
 def test_selected_scope_reaches_repository_and_cannot_expand_authority(database):
@@ -151,7 +158,12 @@ def test_scoped_reservation_replays_and_rejects_cross_scope_collision_atomically
                 "document_id": "LEGACY-UNSCOPED",
             }
         )
+    with pytest.raises(PersistenceConflictError, match="document_id"):
+        service.reserve_issuance(
+            **{**args, "key": IdempotencyKey(fixture.digest("same-doc-new-key"))}
+        )
     with database() as uow:
+        assert not uow.idempotency.attempts(IdempotencyKey(fixture.digest("same-doc-new-key")))
         assert not uow.idempotency.attempts(IdempotencyKey(fixture.digest("conflict")))
         assert not uow.idempotency.attempts(IdempotencyKey(fixture.digest("legacy")))
         assert {row.document_id for row in uow.lifecycle.list_for_scope(partition)} == {
@@ -307,9 +319,7 @@ def test_governed_capability_authority_is_reused_without_promoting_readiness(dat
         tenant_ids=frozenset({"tenant-a"}),
         permissions=frozenset({ControlPlanePermission.PROFILE_WRITE}),
     )
-    DurableControlPlaneService(database).add_fiscal_profile(
-        actor=actor, profile=profile
-    )
+    DurableControlPlaneService(database).add_fiscal_profile(actor=actor, profile=profile)
     result = http.get("/v1/portal/surfaces/capabilities")
     assert result.status_code == 200
     rows = result.json()["rows"]
@@ -346,3 +356,26 @@ def test_error_filtering_occurs_before_pagination(database):
         )
         assert not uow.lifecycle.list_for_scope(fixture.scope(), states=frozenset())
         assert not uow.outbox.list_for_scope(fixture.scope(), statuses=frozenset())
+
+
+def test_concurrent_scoped_issuance_reservation_has_one_fresh_intent(database):
+    from concurrent.futures import ThreadPoolExecutor
+
+    service = FiscalApplicationService(database)
+
+    def reserve(_index):
+        return service.reserve_issuance(
+            scope=fixture.scope(),
+            key=IdempotencyKey(fixture.digest("concurrent")),
+            request_fingerprint=fixture.digest("concurrent-content"),
+            document_id="CONCURRENT-DOC",
+            created_at=fixture.NOW,
+        )
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        results = tuple(pool.map(reserve, range(6)))
+    assert sum(not result.reservation.replay for result in results) == 1
+    assert {result.lifecycle.document_id for result in results} == {"CONCURRENT-DOC"}
+    with database() as uow:
+        assert len(uow.idempotency.attempts(IdempotencyKey(fixture.digest("concurrent")))) == 1
+        uow.lifecycle.assert_scope("CONCURRENT-DOC", fixture.scope())

@@ -160,6 +160,7 @@ def _profile(
 
 
 def _remove_v5(connection: sqlite3.Connection) -> None:
+    connection.execute("DROP INDEX fm_idempotency_document_idx")
     connection.execute("DROP INDEX fm_fiscal_lifecycle_scope_idx")
     connection.execute("DROP INDEX fm_fiscal_outbox_scope_idx")
     connection.execute("DROP INDEX fm_fiscal_archive_scope_idx")
