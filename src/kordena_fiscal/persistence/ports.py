@@ -7,6 +7,7 @@ ports and the unit-of-work boundary keep application coordination transactional.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime
 from types import TracebackType
 from typing import TYPE_CHECKING, Protocol, Self
@@ -66,6 +67,10 @@ class PersistenceStateError(FiscalPersistenceError):
 
 class FiscalBindingRepository(Protocol):
     """Durable exact resolver for host scope -> fiscal account binding."""
+
+    def list_for_fiscal_unit(
+        self, scope: ExecutionScope, *, limit: int = 100, offset: int = 0
+    ) -> tuple[FiscalAccountBinding, ...]: ...
 
     def add(self, binding: FiscalAccountBinding) -> FiscalAccountBinding: ...
 
@@ -137,6 +142,10 @@ class ControlPlaneStore(Protocol):
 
     def get_unit(self, tenant_id: str, unit_id: str) -> FiscalUnitRegistration | None: ...
 
+    def list_secret_references(
+        self, scope: ExecutionScope, *, limit: int = 100, offset: int = 0
+    ) -> tuple[SecretReference, ...]: ...
+
     def add_secret_reference(self, reference: SecretReference) -> SecretReference: ...
 
     def get_secret_reference(
@@ -170,6 +179,10 @@ class ControlPlaneStore(Protocol):
 
 class CommercialConfigurationStore(Protocol):
     """Durable zero-code customer configuration repository."""
+
+    def list_portal_configuration(
+        self, surface_id: str, scope: ExecutionScope, *, limit: int = 100, offset: int = 0
+    ) -> tuple[Mapping[str, object], ...]: ...
 
     def put_provider_binding(self, binding: ProviderBinding) -> ProviderBinding: ...
 

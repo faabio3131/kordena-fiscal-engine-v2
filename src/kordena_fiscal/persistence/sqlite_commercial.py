@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Mapping
 from datetime import datetime
 
 from kordena_fiscal.control_plane.commercial import (
@@ -40,7 +41,7 @@ from kordena_fiscal.security import (
     WorkloadCredentialRecord,
 )
 
-from ._sqlite_common import dt, integer, iso, one_row, optional_text, text
+from ._sqlite_common import dt, integer, iso, one_row, optional_text, scoped_page, text
 from .ports import PersistenceConflictError, PersistenceStateError
 
 _PRODUCT_SELECT = """
@@ -76,6 +77,68 @@ class SqliteCommercialConfigurationStore:
 
     def __init__(self, connection: sqlite3.Connection) -> None:
         self._connection = connection
+
+    def list_portal_configuration(
+        self, surface_id: str, scope: ExecutionScope, *, limit: int = 100, offset: int = 0
+    ) -> tuple[Mapping[str, object], ...]:
+        """Bounded non-secret metadata from the existing configuration tables."""
+        queries: dict[str, tuple[str, tuple[str, ...]]] = {
+            "providers": (
+                """
+                SELECT binding_id, document_kind, state_code, municipality_ibge_code,
+                       operation, provider_id, enabled
+                FROM fm_commercial_provider_bindings
+                WHERE tenant_id = ? AND unit_id = ? AND environment = ?
+                ORDER BY binding_id LIMIT ? OFFSET ?
+                """,
+                ("binding_id", "document_kind", "state_code", "municipality_ibge_code",
+                 "operation", "provider_id", "enabled"),
+            ),
+            "webhooks": (
+                """
+                SELECT destination_id, enabled
+                FROM fm_commercial_webhook_destinations
+                WHERE tenant_id = ? AND unit_id = ? AND environment = ?
+                ORDER BY destination_id LIMIT ? OFFSET ?
+                """,
+                ("destination_id", "enabled"),
+            ),
+            "integrations": (
+                """
+                SELECT module_id, enabled
+                FROM fm_commercial_unit_modules
+                WHERE tenant_id = ? AND unit_id = ? AND environment = ?
+                ORDER BY module_id LIMIT ? OFFSET ?
+                """,
+                ("module_id", "enabled"),
+            ),
+            "settings": (
+                """
+                SELECT policy_id, provider_id, connect_timeout_seconds, read_timeout_seconds,
+                       max_attempts, base_delay_seconds, max_delay_seconds, jitter_ratio,
+                       circuit_failure_threshold, circuit_recovery_seconds,
+                       circuit_success_threshold
+                FROM fm_commercial_provider_runtime_policies
+                WHERE tenant_id = ? AND unit_id = ? AND environment = ?
+                ORDER BY provider_id, policy_id LIMIT ? OFFSET ?
+                """,
+                ("policy_id", "provider_id", "connect_timeout_seconds", "read_timeout_seconds",
+                 "max_attempts", "base_delay_seconds", "max_delay_seconds", "jitter_ratio",
+                 "circuit_failure_threshold", "circuit_recovery_seconds",
+                 "circuit_success_threshold"),
+            ),
+        }
+        if surface_id not in queries:
+            raise FiscalValidationError("unsupported configuration projection")
+        query, columns = queries[surface_id]
+        rows = self._connection.execute(query, scoped_page(scope, limit, offset)[1:]).fetchall()
+        result: list[Mapping[str, object]] = []
+        for row in rows:
+            metadata: dict[str, object] = dict(zip(columns, row, strict=True))
+            if "enabled" in metadata:
+                metadata["enabled"] = bool(metadata["enabled"])
+            result.append(metadata)
+        return tuple(result)
 
     def put_provider_binding(self, binding: ProviderBinding) -> ProviderBinding:
         if not isinstance(binding, ProviderBinding):

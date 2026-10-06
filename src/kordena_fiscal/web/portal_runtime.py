@@ -44,7 +44,7 @@ from kordena_fiscal.domain import (
 )
 from kordena_fiscal.lifecycle import FiscalDocumentState
 from kordena_fiscal.persistence.ports import FiscalUnitOfWorkFactory
-from kordena_fiscal.security.human_identity import AuthenticatedHuman
+from kordena_fiscal.security.human_identity import AuthenticatedHuman, PortalPermission
 
 
 class PortalOperationExecutor(Protocol):
@@ -91,6 +91,10 @@ class DurableHumanPortalExecutor:
             "environments",
             "audit",
             "settings",
+            "certificates",
+            "providers",
+            "webhooks",
+            "integrations",
         }
     )
 
@@ -148,6 +152,7 @@ class DurableHumanPortalExecutor:
             "onboarding_stage": onboarding_stage,
             "basic_onboarding_complete": organization is not None and bool(units),
             "available_surfaces": sorted(self._DURABLE_SURFACES),
+            "customer_configuration_mode": "read_only_pending_security_decision",
         }
 
     def surface(
@@ -170,7 +175,10 @@ class DurableHumanPortalExecutor:
             units = tuple(unit for unit in units if unit.unit_id == unit_id)
             if not units:
                 raise _portal_error(409, "UNIT_NOT_CONFIGURED", "Selected unit is not configured")
-        if surface_id in {"documents", "issuances", "errors", "reconciliation", "capabilities"}:
+        if surface_id in {
+            "documents", "issuances", "errors", "reconciliation", "capabilities",
+            "certificates", "providers", "webhooks", "integrations", "settings",
+        }:
             if not units:
                 return ()
             if len(units) != 1:
@@ -187,6 +195,8 @@ class DurableHumanPortalExecutor:
                 environment=selected_environment,
                 correlation_id="portal-projection",
             )
+            if surface_id in {"certificates", "providers", "webhooks", "integrations", "settings"}:
+                return self._configuration_surface(surface_id, authority, scope, limit, offset)
             return self._fiscal_surface(surface_id, authority, scope, limit, offset)
 
         if surface_id == "companies":
@@ -245,6 +255,59 @@ class DurableHumanPortalExecutor:
         row["tenant_id"] = authority.tenant_id
         row["surface"] = surface_id
         return (row,)
+
+    def _configuration_surface(
+        self,
+        surface_id: str,
+        authority: AuthenticatedHuman,
+        scope: ExecutionScope,
+        limit: int,
+        offset: int,
+    ) -> Sequence[Mapping[str, Any]]:
+        permission = (
+            PortalPermission.CERTIFICATE_MANAGE if surface_id == "certificates"
+            else PortalPermission.CONFIGURATION_WRITE if surface_id == "settings"
+            else PortalPermission.INTEGRATION_MANAGE
+        )
+        authority.assert_permission(permission, unit_id=scope.unit_id)
+        base: dict[str, Any] = {
+            "unit_id": scope.unit_id,
+            "environment": scope.environment.value,
+            "status": "configuration_recorded",
+            "configuration_mode": "read_only_pending_security_decision",
+            "operational_verification": "not_confirmed",
+        }
+        with self._unit_of_work_factory() as uow:
+            if surface_id == "certificates":
+                return tuple(
+                    {
+                        **base, "reference_id": reference.reference_id,
+                        "reference_kind": reference.kind.value,
+                        "provider_id": reference.provider_id,
+                        "material_resolution": "not_attempted",
+                    }
+                    for reference in uow.control_plane.list_secret_references(
+                        scope, limit=limit, offset=offset
+                    )
+                )
+            rows: list[Mapping[str, Any]] = [
+                {**base, **metadata, "record_type": surface_id}
+                for metadata in uow.commercial.list_portal_configuration(
+                    surface_id, scope, limit=limit, offset=offset
+                )
+            ]
+            if surface_id == "integrations":
+                rows.extend(
+                    {
+                        **base, "record_type": "fiscal_binding", "binding_id": binding.binding_id,
+                        "integration_host": binding.host_scope.namespace.value,
+                        "binding_environment": "not_environment_partitioned",
+                    }
+                    for binding in uow.bindings.list_for_fiscal_unit(
+                        scope, limit=limit, offset=offset
+                    )
+                )
+            return tuple(rows)
 
     def _fiscal_surface(
         self,

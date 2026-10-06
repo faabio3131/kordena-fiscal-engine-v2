@@ -36,8 +36,17 @@ fixture = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(fixture)
 
 
+configuration_spec = importlib.util.spec_from_file_location(
+    "p02_configuration_fixture", ROOT / "tests/support/p02_configuration_fixture.py"
+)
+assert configuration_spec and configuration_spec.loader
+configuration_fixture = importlib.util.module_from_spec(configuration_spec)
+configuration_spec.loader.exec_module(configuration_fixture)
+
+
 def build_app(database):
     fixture.seed(database)
+    configuration_fixture.seed(database)
     service = FiscalApplicationService(database)
 
     def reserve_internal(scope, payload, idempotency_key):

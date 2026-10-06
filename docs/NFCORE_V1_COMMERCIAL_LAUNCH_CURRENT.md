@@ -9,6 +9,30 @@
 This file is the persistent CURRENT checkpoint for FM NFCORE V1 Commercial Launch. GitHub remains the first technical source of truth and must be revalidated on every resume.
 
 
+## CURRENT superior — 2026-10-06 — NFV1-P02-T03 / T03-B01
+
+- último main integralmente certificado na entrada: `4b0d008d39ef3c579fa0d521864a92a58907b0de`;
+- P02-T01 e P02-T02 DONE_CERTIFIED: entregas #115/#117 e closeouts #116/#118;
+- main CI #629 e Plan Governance #58 SUCCESS;
+- P02-T03: BLOQUEADO EXTERNO / HUMAN_SECURITY_DECISION_REQUIRED;
+- parcela de leitura candidata na branch `feat/nfcore-web-nfv1-p02-t03-client-config`;
+- implementação de leitura `616549ded6c73ca0df44b1f686c688d8adbcf3b5`; gates finais PR/main pendentes neste registro;
+- cinco vistas de configuração; 16 surfaces genéricas duráveis quando integradas;
+- nenhuma escrita nova ou política sensível implementada; cadastro/readiness/produção separados;
+- T03-B01: aprovação de política de destinos/egress, proposta DRAFT:
+  `NFV1_P02_T03_WEBHOOK_SECURITY_POLICY_PROPOSAL_2026-10-06.md`;
+- checkpoint: `checkpoints/NFV1_P02_T03_CLIENT_CONFIGURATION_2026-10-06.md`;
+- T03 não concluída; T04 e posteriores não liberadas; P2 gate NOT MET.
+
+Staging READ-ONLY inalterado, API/Portal f9b5b2c 1/1, Worker 1c34ba0 0/1.
+Sem deploy/migration externa/secret real/entrega externa. Shell local T03 sem
+resultado confirmado; prova remota será revalidada no exact HEAD antes de merge.
+PRODUCTION_APPROVED=NO; COMMERCIAL_LIVE=NO. GitHub/CI atual prevalecem sobre o
+snapshot candidato acima. Próxima ação: gates da parcela e decisão humana T03-B01;
+continuar T03 após autorização, sem saltar para T04.
+
+---
+
 ## CURRENT superior — 2026-10-06 — NFV1-P02-T02 CLOSEOUT
 
 - PR #117 MERGED; HEAD certificado `06def0c237dcbc0856441e88c811443e902b7c34`;

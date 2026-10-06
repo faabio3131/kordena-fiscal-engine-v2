@@ -28,7 +28,7 @@ from kordena_fiscal.domain import (
     TaxRegimeCode,
 )
 
-from ._sqlite_common import dt, integer, iso, one_row, optional_text, text
+from ._sqlite_common import dt, integer, iso, one_row, optional_text, scoped_page, text
 from .ports import PersistenceConflictError, PersistenceStateError
 
 _PROFILE_SELECT = """
@@ -217,6 +217,31 @@ class SqliteControlPlaneStore:
             unit_id=text(row[3], "unit_id"),
             environment=FiscalEnvironment(text(row[4], "environment")),
             provider_id=persisted_provider or None,
+        )
+
+    def list_secret_references(
+        self, scope: ExecutionScope, *, limit: int = 100, offset: int = 0
+    ) -> tuple[SecretReference, ...]:
+        rows = self._connection.execute(
+            """
+            SELECT reference_id, kind, tenant_id, unit_id, environment, provider_id
+            FROM fm_control_plane_secret_references
+            WHERE tenant_id = ? AND unit_id = ? AND environment = ?
+            ORDER BY kind, provider_id, reference_id
+            LIMIT ? OFFSET ?
+            """,
+            scoped_page(scope, limit, offset)[1:],
+        ).fetchall()
+        return tuple(
+            SecretReference(
+                reference_id=text(row[0], "reference_id"),
+                kind=SecretReferenceKind(text(row[1], "kind")),
+                tenant_id=text(row[2], "tenant_id"),
+                unit_id=text(row[3], "unit_id"),
+                environment=FiscalEnvironment(text(row[4], "environment")),
+                provider_id=text(row[5], "provider_id") or None,
+            )
+            for row in rows
         )
 
     def add_profile(self, profile: FiscalProfile) -> FiscalProfile:

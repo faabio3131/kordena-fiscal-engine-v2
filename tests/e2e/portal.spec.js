@@ -111,7 +111,7 @@ test("activation fragment completes password setup without keeping token in URL"
   await page.locator("#password-reset-new-password").fill("Strong-password-2026");
   await page.getByRole("button", { name: "Alterar senha" }).click();
 
-  expect(submittedToken).toBe("synthetic-fragment-reset-token");
+  await expect.poll(() => submittedToken).toBe("synthetic-fragment-reset-token");
   await expect(page).not.toHaveURL(/token=/);
   await expect(page.getByText("Senha alterada. Entre novamente com a nova senha.")).toBeVisible();
 });

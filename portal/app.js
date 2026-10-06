@@ -82,6 +82,8 @@ if (!loginView || !appShell || !loginForm || !nav || !workspace || !title || !op
 let bootstrapState = null;
 let currentView = "overview";
 const fiscalViews = new Set(["documents", "issuances", "errors", "reconciliation", "capabilities"]);
+const configurationViews = new Set(["certificates", "providers", "webhooks", "integrations", "settings"]);
+const scopedViews = new Set([...fiscalViews, ...configurationViews]);
 let selectedFiscalUnit = "";
 let selectedFiscalEnvironment = "homologation";
 let fiscalPageOffset = 0;
@@ -139,7 +141,9 @@ function appendFiscalFilters(article, viewId) {
   });
   envLabel.append(envSelect); article.append(envLabel);
   const notice = document.createElement("p");
-  notice.textContent = "Estado registrado no backend. Readiness declarado não autoriza operação. Registros legados sem escopo comprovado não são exibidos. Até 100 registros por tipo nesta página.";
+  notice.textContent = configurationViews.has(viewId)
+    ? "Configuração persistida por unidade e ambiente. Até 100 registros por tipo nesta página. Bindings de integração seguem o escopo do modelo existente."
+    : "Estado registrado no backend. Readiness declarado não autoriza operação. Registros legados sem escopo comprovado não são exibidos. Até 100 registros por tipo nesta página.";
   article.append(notice);
 }
 
@@ -322,7 +326,7 @@ function rowElement(row) {
 
 /** @param {Record<string, unknown>} row */
 function fiscalRowElement(row) {
-  const primary = row.document_id || row.document_reference || row.source_id || row.document_kind || row.entry_id || "Registro fiscal";
+  const primary = row.document_id || row.document_reference || row.source_id || row.entry_id || row.reference_id || row.binding_id || row.destination_id || row.module_id || row.policy_id || row.document_kind || "Registro";
   const state = row.readiness || row.state || row.status || row.kind || "registrado";
   const display = {registro: primary, escopo: `${text(row.unit_id)} · ${text(row.environment)} · ${text(row.record_type || row.code || "capability")}`, state};
   const wrapper = rowElement(display);
@@ -817,13 +821,13 @@ async function renderSurface(viewId) {
   }
   workspace.replaceChildren();
   const article = panel(descriptions[viewId] || label);
-  if (fiscalViews.has(viewId)) appendFiscalFilters(article, viewId);
+  if (scopedViews.has(viewId)) appendFiscalFilters(article, viewId);
   const loading = document.createElement("p");
   loading.textContent = "Carregando dados autorizados...";
   article.append(loading);
   workspace.append(article);
   try {
-    const filters = fiscalViews.has(viewId) ? `?${new URLSearchParams({
+    const filters = scopedViews.has(viewId) ? `?${new URLSearchParams({
       ...(selectedFiscalUnit ? {unit_id: selectedFiscalUnit} : {}),
       environment: selectedFiscalEnvironment, limit: "100", offset: String(fiscalPageOffset),
     })}` : "";
@@ -834,16 +838,22 @@ async function renderSurface(viewId) {
     if (!rows.length) {
       const empty = document.createElement("div");
       empty.className = "empty-state";
-      empty.textContent = fiscalViews.has(viewId) ? "Nenhum registro nesta página do escopo autorizado." : "Nenhum registro disponível neste escopo autorizado.";
+      empty.textContent = scopedViews.has(viewId) ? "Nenhum registro nesta página do escopo autorizado." : "Nenhum registro disponível neste escopo autorizado.";
       grid.append(empty);
     } else {
-      for (const row of rows) grid.append(fiscalViews.has(viewId) ? fiscalRowElement(row) : rowElement(row));
+      for (const row of rows) grid.append(scopedViews.has(viewId) ? fiscalRowElement(row) : rowElement(row));
     }
     loading.remove();
     article.append(grid);
+    if (configurationViews.has(viewId)) {
+      const notice = document.createElement("p");
+      notice.className = "form-error";
+      notice.textContent = "Consulta de configuração persistida. Alterações aguardam conclusão da tarefa e decisão de segurança. Referência cadastrada não comprova segredo resolvido, entrega, homologação ou produção.";
+      article.append(notice);
+    }
     if (viewId === "onboarding") appendOnboardingControls(article);
     if (["documents", "issuances", "reconciliation"].includes(viewId)) appendFiscalActions(article);
-    if (fiscalViews.has(viewId) && viewId !== "capabilities") {
+    if (scopedViews.has(viewId) && viewId !== "capabilities") {
       const previous = document.createElement("button");
       previous.type = "button"; previous.textContent = "Página anterior"; previous.disabled = fiscalPageOffset === 0;
       previous.addEventListener("click", () => { fiscalPageOffset = Math.max(0, fiscalPageOffset - 100); void renderSurface(viewId); });
