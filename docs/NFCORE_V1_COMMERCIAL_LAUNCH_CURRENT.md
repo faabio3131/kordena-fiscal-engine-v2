@@ -9,6 +9,27 @@
 This file is the persistent CURRENT checkpoint for FM NFCORE V1 Commercial Launch. GitHub remains the first technical source of truth and must be revalidated on every resume.
 
 
+## CURRENT superior — 2026-10-06 — NFV1-P02-T02 CLOSEOUT
+
+- PR #117 MERGED; HEAD certificado `06def0c237dcbc0856441e88c811443e902b7c34`;
+- main certificado da entrega `f5bfbbb91ac7766a31a144c3626376f50b15646a`;
+- CI PR #626 / main #627 SUCCESS; Plan Governance PR #55 / main #56 SUCCESS;
+- 1149 Python/PostgreSQL PASS, zero SKIP; 10 Playwright PASS; todos os gates completos;
+- P02-T02 DONE_CERTIFIED após closeout integrar main e seus gates verdes;
+- closeout: `checkpoints/NFV1_P02_T02_CLOSEOUT_2026-10-06.md`;
+- cinco vistas fiscais conectadas; Portal 12 surfaces genéricas duráveis, nove restantes;
+- migração aditiva 13 conserva scope de reservas novas; legado sem ownership excluído;
+- readiness delegado ou blocked; nenhuma homologação/emissão externa certificada;
+- retry na mesma página conserva key; reload/crash permanece P2-G13/P02-T07;
+- próximo item: **NFV1-P02-T03 — Configuração do cliente**, após closeout/gates;
+- P0/P1 certificados; P2 em execução; PORTAL_COMMERCIAL_PARITY_CERTIFIED = NOT MET.
+
+Staging READ-ONLY pós-merge: deployments inalterados; API/Portal em `f9b5b2c5b436045947159f1e76be9303f5a95d90`, 1/1 cada; Worker `1c34ba001935952f83ec0b065144e0b8311a5650`, 0/1; Postgres 18/volume 5000 MB/1/1. STAGING_REAL / VERSION_DRIFT_PRESENT / NOT_CERTIFIED_AGAINST_CURRENT.
+Sem deploy/migration externa/secrets reais/decisão comercial. PRODUCTION_APPROVED=NO; COMMERCIAL_LIVE=NO.
+Snapshots abaixo são históricos; prevalecem GitHub e este closeout.
+
+---
+
 ## CURRENT superior — 2026-10-06 — NFV1-P02-T01 CLOSEOUT
 
 - main certificado da entrega: `d38226b66b4a56bbd507b4b74ed20f9d6b94e0fb`;
