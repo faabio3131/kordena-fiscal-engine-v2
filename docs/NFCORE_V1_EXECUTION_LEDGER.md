@@ -119,7 +119,7 @@
 
 ### 9. NFV1-P02-T02 — Superfícies fiscais
 
-- [ ] **Estado:** em execução
+- [x] **Estado:** concluído
 - **Objetivo:** executar exatamente a tarefa NFV1-P02-T02 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P02-T01 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** cinco projeções fiscais duráveis no Portal existente, filtros de unidade/ambiente, metadados sanitizados, readiness governado/bloqueado, reserva com escopo canônico, migração aditiva 13, UI/paginação/retry e testes dirigidos + E2E HTTP durável.
@@ -127,8 +127,8 @@
 - **Critério de aceite:** critérios específicos de NFV1-P02-T02 no cronograma satisfeitos e nenhum gate transversal violado.
 - **Verificação:** testes tenant/unit/host/environment, auth/RBAC/CSRF, colisão/replay/legado, paginação/erro, readiness; Python/PostgreSQL, frontend/Playwright, migration/secret policy, containers/smokes/audits/SBOM/backup-restore; CI PR/main e `python3 scripts/check_nfcore_plan.py`.
 - **Riscos / não confirmado:** lifecycle legado sem escopo recuperável não pode ser exposto; readiness/handlers externos ausentes; staging em drift. Consultar checkpoint T02 para tratamento e ownership.
-- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** PENDENTE; escopo/aceite/impacto e auditoria em `docs/checkpoints/NFV1_P02_T02_FISCAL_SURFACES_2026-10-06.md`; main de entrada `5454a05619feafb4c179d9b047817d8593a46437`, CI #623 e Plan Governance #52 SUCCESS.
+- **Decisões do dono pendentes:** nenhuma para T02; política de configuração/usuários será revisada nas tarefas donas; deploy/secret/fiscal real seguem gates humanos.
+- **Prova:** PR #117 MERGED; HEAD `06def0c237dcbc0856441e88c811443e902b7c34`; merge/main `f5bfbbb91ac7766a31a144c3626376f50b15646a`; CI #626 (PR) e #627 (main) SUCCESS; Plan Governance #55 (PR) e #56 (main) SUCCESS; 1149 Python/PostgreSQL PASS/zero SKIP, 10 Playwright PASS; closeout `docs/checkpoints/NFV1_P02_T02_CLOSEOUT_2026-10-06.md`, certificação documental condicionada ao merge/gates deste registro.
 
 ### 10. NFV1-P02-T03 — Configuração do cliente
 

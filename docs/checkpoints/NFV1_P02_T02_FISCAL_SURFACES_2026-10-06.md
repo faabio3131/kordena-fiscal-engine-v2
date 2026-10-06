@@ -1,7 +1,8 @@
 # NFV1-P02-T02 — Superfícies fiscais
 
 Data: 2026-10-06. Repository: `faabio3131/kordena-fiscal-engine-v2`.
-Status: EM EXECUÇÃO, não certificado.
+Status histórico de execução; entrega certificada pela PR #117/CI #626 e main #627.
+Closeout superior: `NFV1_P02_T02_CLOSEOUT_2026-10-06.md`; limites e falhas abaixo preservados.
 main de entrada: `5454a05619feafb4c179d9b047817d8593a46437`.
 CI main #623 SUCCESS; Plan Governance #52 SUCCESS; zero PRs abertas.
 Predecessor: P02-T01, PR #115 + closeout #116 mergeados e certificados.
