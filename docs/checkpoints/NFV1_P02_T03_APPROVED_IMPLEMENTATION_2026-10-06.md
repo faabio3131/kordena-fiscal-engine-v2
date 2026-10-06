@@ -1,5 +1,9 @@
 # NFV1-P02-T03 — implementação da política aprovada
 
+Registro histórico do candidato, supersedido pelo closeout
+[NFV1_P02_T03_CLOSEOUT_2026-10-06.md](NFV1_P02_T03_CLOSEOUT_2026-10-06.md).
+Os estados pendentes abaixo descrevem aquele momento e não o CURRENT posterior.
+
 Data: 2026-10-06. Repository: `faabio3131/kordena-fiscal-engine-v2`.
 Task: NFV1-P02-T03. Status: IMPLEMENTAÇÃO INTERNA CANDIDATA / NÃO CERTIFICADA.
 Branch: `feat/nfv1-p02-t03-approved-config`. SHA/PR finais são os da PR deste registro;

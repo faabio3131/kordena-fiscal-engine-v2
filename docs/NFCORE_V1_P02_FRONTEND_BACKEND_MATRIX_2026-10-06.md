@@ -6,18 +6,22 @@ Baseline auditado: `main@0e5be77267a800384d111c03e30705d95bdb0d28`.
 CI de origem: FM NFCORE V1 CI #618 SUCCESS; NFCore Plan Governance #47 SUCCESS.
 PRs abertas na entrada: zero. P0/P1 certificados; closeout P1: PR #114 mergeada.
 
-## Evolução candidata T03 aprovada — 2026-10-06
+## Evolução CURRENT T03 — 2026-10-06
 
 PR #121: cinco formulários/comandos canônicos (configureCertificates/Providers/
 Webhooks/Integrations/Settings), egress exclusivo de platform_admin e metadados
 sanitizados de webhook_event na outbox existente. Tenant/unit/env, sessão, CSRF,
 Idempotency-Key, versão/fingerprint/audit/rollback duráveis; transport com policy
 por delivery/retry, DNS e IP pinning/TLS. Política aprovada pelo dono como conjunto.
-Gate PR/main/closeout pendente; T03 ainda [ ] em execução, T04 não iniciada.
+PR #121 MERGED, HEAD 2e7333f02d3673196d18c25702b1ab39fbfb5eb8, main
+1e9c102ab250b822c89cfbb5c3d185ba3c62d9ea. CI #647/#648 e Governance #68/#69
+SUCCESS; 1277 Python/PostgreSQL, 12 frontend e 18 Playwright PASS/zero SKIP.
+P2-G08 resolvido internamente. T03 DONE_CERTIFIED condicionado ao closeout/gates;
+T04 não iniciada. Registro: checkpoints/NFV1_P02_T03_CLOSEOUT_2026-10-06.md.
 As linhas abaixo conservam o baseline T01 e o checkpoint da parcela de leitura;
 prova de destino/secret/provider/entrega real e operação em produção segue não confirmada.
 
-## Evolução CURRENT — 2026-10-06
+## Evolução histórica da parcela de consulta — 2026-10-06
 
 As tabelas abaixo conservam o baseline T01. T02 (#117/#118) conectou cinco vistas
 fiscais; T03 parcela (#119, main `db2a8fb71097eb4e1f6e5919e1eb544c8a3167ac`,

@@ -132,16 +132,16 @@
 
 ### 10. NFV1-P02-T03 — Configuração do cliente
 
-- [ ] **Estado:** em execução
+- [x] **Estado:** concluído
 - **Objetivo:** executar exatamente a tarefa NFV1-P02-T03 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P02-T02 concluído e certificado; mais as dependências formais do cronograma
-- **Entregar:** cinco vistas de configuração no Portal existente; leituras duráveis sanitizadas e mutações governadas. Parcela de leitura antes da aprovação da política de destinos; task não certificada.
+- **Entregar:** cinco vistas de configuração no Portal existente; leituras duráveis sanitizadas e mutações governadas. Configuração governada interna e política aprovada implementadas; certificação condicionada ao closeout/main verdes.
 - **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
 - **Critério de aceite:** critérios específicos de NFV1-P02-T03 no cronograma satisfeitos e nenhum gate transversal violado.
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** política aprovada; configuração governada candidata, gates/PR/main/closeout pendentes; resolução operacional de Vault/providers e tráfego real não confirmados (P6/P7/P10); staging drift (P4/P5/P9/P11).
-- **Decisões do dono pendentes:** T03-B01 RESOLVIDO: POLICY_APPROVED_FOR_INTERNAL_IMPLEMENTATION pelo dono em 2026-10-06; implementar exatamente a política aprovada, sem operação externa. Registro de aprovação substitui a pendência histórica de aprovar/ajustar a política sensível de destinos/egress em `docs/NFV1_P02_T03_WEBHOOK_SECURITY_POLICY_PROPOSAL_2026-10-06.md` (APROVADA PARA IMPLEMENTAÇÃO INTERNA), antes de cadastrar/ativar webhooks pelo Portal. AGENTS.md e padrão mestre §6 exigem decisão; nenhuma aprovação implícita. T04 não liberada.
-- **Prova:** TASK COMPLETA PENDENTE; parcela de consulta PR #119 MERGED, HEAD `c908848dff0d2ff7f45e33dfa5b2ff51943f54f9`, merge/main `db2a8fb71097eb4e1f6e5919e1eb544c8a3167ac`; CI PR #640/main #641 SUCCESS; Plan Governance #61/#62 SUCCESS; 1173 Python/PostgreSQL PASS/zero SKIP e 11 Playwright PASS; checkpoint `docs/checkpoints/NFV1_P02_T03_READ_ONLY_CHECKPOINT_2026-10-06.md`. T03-B01 aprovado para implementação interna; task em execução; nenhuma certificação integral ou liberação T04.
+- **Riscos / não confirmado:** configuração interna certificada pela PR/main; gates deste closeout pendentes; resolução operacional de Vault/providers e tráfego real não confirmados (P6/P7/P10); staging drift (P4/P5/P9/P11).
+- **Decisões do dono pendentes:** T03-B01 RESOLVIDO: POLICY_APPROVED_FOR_INTERNAL_IMPLEMENTATION pelo dono em 2026-10-06; implementar exatamente a política aprovada, sem operação externa. Registro de aprovação substitui a pendência histórica de aprovar/ajustar a política sensível de destinos/egress em `docs/NFV1_P02_T03_WEBHOOK_SECURITY_POLICY_PROPOSAL_2026-10-06.md` (APROVADA PARA IMPLEMENTAÇÃO INTERNA), antes de cadastrar/ativar webhooks pelo Portal. AGENTS.md e padrão mestre §6 exigem decisão; nenhuma aprovação implícita. T04 somente após este closeout integrar main com gates completos verdes; não iniciada nesta entrega.
+- **Prova:** PR #121 MERGED; HEAD `2e7333f02d3673196d18c25702b1ab39fbfb5eb8`; merge/main `1e9c102ab250b822c89cfbb5c3d185ba3c62d9ea`, árvore idêntica à certificada; CI #647 (PR, run 37514869023) e #648 (main, run 37516153619) SUCCESS; Plan Governance #68 (PR, run 37514868987) e #69 (main, run 37516153800) SUCCESS; 1277 Python/PostgreSQL PASS/zero SKIP, 12 frontend PASS e 18 Playwright PASS nas duas CIs; closeout `docs/checkpoints/NFV1_P02_T03_CLOSEOUT_2026-10-06.md`, certificação documental condicionada ao merge/gates deste registro. Política POLICY_APPROVED_FOR_INTERNAL_IMPLEMENTATION e T03-B01 resolvido; sem operação externa. Parcela histórica de consulta #119/#120 preservada nos checkpoints.
 
 ### 11. NFV1-P02-T04 — Usuários e RBAC
 
