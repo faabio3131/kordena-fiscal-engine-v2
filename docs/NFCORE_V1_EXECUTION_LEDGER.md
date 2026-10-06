@@ -80,16 +80,16 @@
 
 ### 6. NFV1-P01-T03 — Certificar autoridade
 
-- [ ] **Estado:** em execução
+- [x] **Estado:** concluído
 - **Objetivo:** executar exatamente a tarefa NFV1-P01-T03 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P01-T02 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** certificar tenant spoofing, unit spoofing, cross-tenant, cross-unit, RBAC, sessão, S2S e idempotência no caminho fiscal composto.
 - **Não fazer:** não antecipar T04; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar deploy, produção ou ação externa não autorizada.
 - **Critério de aceite:** todas as autoridades permanecem server-side/fail-closed; escopo S2S exige binding durável exato; browser não define tenant/role/permission; mutações exigem e propagam idempotency key; nenhum gate transversal violado.
-- **Verificação:** executar testes dirigidos de autoridade + suíte existente e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
+- **Verificação:** testes dirigidos de autoridade + suíte existente + `python3 scripts/check_nfcore_plan.py` certificados em PR e pós-merge.
 - **Riscos / não confirmado:** provider transport real, secret backend real e produção fiscal permanecem fora do escopo; staging continua em drift conhecido. A T03 certifica autoridade interna, não homologação externa nem API fiscal completa.
-- **Decisões do dono pendentes:** nenhuma para certificação interna; merge/deploy/produção continuam sujeitos a autorização específica.
-- **Prova:** branch `test/nfv1-p01-t03-authority-certification`; checkpoint `docs/checkpoints/NFV1_P01_T03_AUTHORITY_CERTIFICATION_2026-10-06.md`; PR/CI pendentes.
+- **Decisões do dono pendentes:** nenhuma para o fechamento da T03. T04 permanece bloqueada até este closeout entrar em main.
+- **Prova:** PR #111; head certificado `41f8b92afbaae589b36f0a4f96322f8372776640`; merge SHA `400aef6c7ac8914c76bfa914ac4586dc77181daf`; Plan Governance #40 e pós-merge #41; CI #611 e pós-merge #612; checkpoint `docs/checkpoints/NFV1_P01_T03_CLOSEOUT_2026-10-06.md`.
 
 ### 7. NFV1-P01-T04 — Certificar API fiscal
 
