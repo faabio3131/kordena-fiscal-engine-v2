@@ -680,7 +680,8 @@ def test_pinned_transport_revalidates_preserves_host_and_never_follows_redirect(
     assert constructor.call_count == 1
 
 
-def test_socket_connects_numeric_ip_and_tls_verifies_original_hostname(monkeypatch):
+@pytest.mark.parametrize("address", ["93.184.216.34", "2606:4700:4700::1111"])
+def test_socket_connects_numeric_ip_and_tls_verifies_original_hostname(monkeypatch, address):
     import ssl
 
     from kordena_fiscal.control_plane.webhook_policy import ApprovedWebhookConnection
@@ -697,11 +698,11 @@ def test_socket_connects_numeric_ip_and_tls_verifies_original_hostname(monkeypat
         "kordena_fiscal.gateway.webhook_transport.socket.socket", Mock(return_value=raw)
     )
     target = ApprovedWebhookConnection(
-        PUBLIC_URL, "consumer.example.test", "/fiscal/webhooks", "93.184.216.34", 2
+        PUBLIC_URL, "consumer.example.test", "/fiscal/webhooks", address, 2
     )
     connection = _PinnedHttpsConnection(target, 3)
     connection.connect()
-    raw.connect.assert_called_once_with(("93.184.216.34", 443))
+    raw.connect.assert_called_once_with((address, 443))
     tls_mock.wrap_socket.assert_called_once_with(raw, server_hostname="consumer.example.test")
 
 
@@ -798,3 +799,29 @@ def test_webhook_delivery_metadata_uses_existing_outbox_and_exact_scope(database
     assert "synthetic_protected" not in response.text and "secret=" not in response.text
     for forbidden in ("payload", "headers", "signature", "deduplication_key", "last_error"):
         assert forbidden not in delivery[0]
+
+
+def test_expiry_during_dns_resolution_is_denied_before_connect(database, monkeypatch):
+    request_destination(database)
+    assert decide(database).status_code == 200
+    now = datetime.now(UTC)
+
+    class ClockAfterDns(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return now + timedelta(days=2)
+
+    monkeypatch.setattr("kordena_fiscal.control_plane.webhook_policy.datetime", ClockAfterDns)
+    with pytest.raises(WebhookPolicyDenied, match="EXPIRED"):
+        DurableWebhookEgressPolicy(database, SyntheticDns()).authorize(
+            fiscal.scope(), "approved-events", PUBLIC_URL, now
+        )
+
+
+def test_public_native_ipv6_approval_is_validated(database):
+    request_destination(database)
+    assert decide(database).status_code == 200
+    target = DurableWebhookEgressPolicy(
+        database, SyntheticDns(("2606:4700:4700::1111",))
+    ).authorize(fiscal.scope(), "approved-events", PUBLIC_URL, datetime.now(UTC))
+    assert target.address == "2606:4700:4700::1111" and target.hostname == "consumer.example.test"

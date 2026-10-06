@@ -189,6 +189,6 @@ class DurableWebhookEgressPolicy:
         with self._factory() as uow:
             latest = uow.commercial.webhook_approval(scope, destination_id)
             current = uow.commercial.configuration_version(scope, "webhooks", destination_id)
-        if latest != record or current != version:
-            raise WebhookPolicyDenied("WEBHOOK_APPROVAL_CHANGED")
+        if latest != record or current != version or expires <= datetime.now(UTC):
+            raise WebhookPolicyDenied("WEBHOOK_APPROVAL_CHANGED_OR_EXPIRED")
         return ApprovedWebhookConnection(canonical, hostname, path, addresses[0], version)
