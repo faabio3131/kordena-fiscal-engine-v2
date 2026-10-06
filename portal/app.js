@@ -830,7 +830,7 @@ function appendCustomerConfiguration(article, viewId, rows) {
   const inputs = new Map(spec.fields.map(([key, label, kind]) => [key, configurationInput(form, key, label, kind)]));
   const existing = document.createElement("select"); existing.id = "configuration-existing";
   const empty = document.createElement("option"); empty.textContent = "Novo cadastro"; empty.value = ""; existing.append(empty);
-  rows.filter((row) => row.record_type !== "fiscal_binding").forEach((row, index) => {
+  rows.filter((row) => viewId === "certificates" || row.record_type === viewId).forEach((row, index) => {
     const option = document.createElement("option"); option.value = String(index);
     option.textContent = `${row.target_key || row.destination_id || row.binding_id || row.module_id || row.reference_kind || row.provider_id} · versão ${row.version || 0}`;
     existing.append(option);
@@ -838,7 +838,7 @@ function appendCustomerConfiguration(article, viewId, rows) {
   const selectionLabel = document.createElement("label"); selectionLabel.textContent = "Editar cadastro existente";
   selectionLabel.append(existing); form.prepend(selectionLabel);
   existing.addEventListener("change", () => {
-    const row = existing.value === "" ? null : rows.filter((item) => item.record_type !== "fiscal_binding")[Number(existing.value)];
+    const row = existing.value === "" ? null : rows.filter((item) => viewId === "certificates" || item.record_type === viewId)[Number(existing.value)];
     revision.value = String(row?.version || 0);
     for (const [key, input] of inputs) {
       const value = row?.[key === "kind" ? "reference_kind" : key];

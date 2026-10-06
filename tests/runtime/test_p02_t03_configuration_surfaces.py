@@ -769,3 +769,32 @@ def test_legacy_platform_review_and_missing_version_do_not_leak_or_mutate(databa
             uow.commercial.configuration_version(fiscal.scope(), "integrations", "missing-version")
             == 0
         )
+
+
+def test_webhook_delivery_metadata_uses_existing_outbox_and_exact_scope(database):
+    now = datetime.now(UTC)
+    for suffix, scope in (
+        ("a", fiscal.scope()),
+        ("b", fiscal.scope(unit="unit-b")),
+        ("other", fiscal.scope(tenant="tenant-b")),
+        ("prod", fiscal.scope(environment=FiscalEnvironment.PRODUCTION)),
+        ("host", fiscal.scope(host="other-host")),
+    ):
+        with database() as uow:
+            FiscalOutboxService(uow.outbox).enqueue(
+                scope=scope,
+                operation="webhook_event",
+                deduplication_key="telemetry-" + suffix,
+                payload=b'{"synthetic_protected":"https://example.test/?secret=synthetic"}',
+                created_at=now,
+            )
+            uow.commit()
+    response = client(database).get("/v1/portal/surfaces/webhooks?unit_id=unit-a")
+    assert response.status_code == 200
+    delivery = [row for row in response.json()["rows"] if row["record_type"] == "webhook_delivery"]
+    assert len(delivery) == 1
+    assert delivery[0]["status"] == "pending" and delivery[0]["attempt_count"] == 0
+    assert delivery[0]["operational_verification"] == "not_confirmed"
+    assert "synthetic_protected" not in response.text and "secret=" not in response.text
+    for forbidden in ("payload", "headers", "signature", "deduplication_key", "last_error"):
+        assert forbidden not in delivery[0]

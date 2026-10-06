@@ -327,6 +327,21 @@ class DurableHumanPortalExecutor:
                     surface_id, scope, limit=limit, offset=offset
                 )
             ]
+            if surface_id == "webhooks":
+                rows.extend(
+                    {
+                        **base,
+                        "record_type": "webhook_delivery",
+                        "entry_id": entry.entry_id,
+                        "status": entry.status.value,
+                        "attempt_count": entry.attempt_count,
+                        "created_at": entry.created_at.isoformat(),
+                        "available_at": entry.available_at.isoformat(),
+                        "failure_recorded": entry.last_error is not None,
+                    }
+                    for entry in uow.outbox.list_for_scope(scope, limit=limit, offset=offset)
+                    if entry.operation == "webhook_event"
+                )
             if surface_id == "integrations":
                 rows.extend(
                     {
@@ -614,11 +629,15 @@ class DurableHumanPortalExecutor:
                 WebhookPolicyDenied,
                 normalize_webhook_url,
             )
+
             try:
                 url, _hostname, _path = normalize_webhook_url(str(record["url"]))
             except WebhookPolicyDenied as exc:
-                raise _portal_error(409, "EGRESS_REQUEST_REPLACEMENT_REQUIRED",
-                                    "A new valid destination request is required") from exc
+                raise _portal_error(
+                    409,
+                    "EGRESS_REQUEST_REPLACEMENT_REQUIRED",
+                    "A new valid destination request is required",
+                ) from exc
             return {
                 "destination_id": destination_id,
                 "url": url,

@@ -31,6 +31,10 @@ SecretReference existente. Providers: binding exato documento/UF/município/oper
 Integrations: módulos configuráveis; bindings fiscais existentes permanecem visíveis,
 com limitação de ambiente explicitada. Settings: políticas de runtime por provider.
 Webhooks: destino HTTPS normalizado; enabled é intenção, nunca aprovação ou prova.
+A mesma vista acompanha status/attempt/timestamps dos entries webhook_event da
+outbox canônica no escopo exato (host/tenant/unit/env), até 100 por página. Não
+projeta body, dedup key, assinatura, URL, headers, last_error ou referência bruta do
+endpoint. Estado persistido do entry não é certificação de tráfego externo.
 
 UoW/stores/control plane/commercial/HumanIdentity/AuthenticatedHuman/RBAC/sessão/CSRF
 reutilizados; nenhuma segunda API/auth/tenant/unidade/RBAC/persistência/frontend/

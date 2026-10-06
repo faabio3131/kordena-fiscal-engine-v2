@@ -6,6 +6,17 @@ Baseline auditado: `main@0e5be77267a800384d111c03e30705d95bdb0d28`.
 CI de origem: FM NFCORE V1 CI #618 SUCCESS; NFCore Plan Governance #47 SUCCESS.
 PRs abertas na entrada: zero. P0/P1 certificados; closeout P1: PR #114 mergeada.
 
+## Evolução candidata T03 aprovada — 2026-10-06
+
+PR #121: cinco formulários/comandos canônicos (configureCertificates/Providers/
+Webhooks/Integrations/Settings), egress exclusivo de platform_admin e metadados
+sanitizados de webhook_event na outbox existente. Tenant/unit/env, sessão, CSRF,
+Idempotency-Key, versão/fingerprint/audit/rollback duráveis; transport com policy
+por delivery/retry, DNS e IP pinning/TLS. Política aprovada pelo dono como conjunto.
+Gate PR/main/closeout pendente; T03 ainda [ ] em execução, T04 não iniciada.
+As linhas abaixo conservam o baseline T01 e o checkpoint da parcela de leitura;
+prova de destino/secret/provider/entrega real e operação em produção segue não confirmada.
+
 ## Evolução CURRENT — 2026-10-06
 
 As tabelas abaixo conservam o baseline T01. T02 (#117/#118) conectou cinco vistas
