@@ -101,3 +101,9 @@ porque certificates agora é conectada e possui testes positivos/negativos próp
 
 DRAFT concreto: docs/NFV1_P02_T03_WEBHOOK_SECURITY_POLICY_PROPOSAL_2026-10-06.md.
 Sem aprovação implícita. Demais mutações T03 continuam pendentes dentro desta Task.
+
+CI #630 no baseline da branch (4b0d008, antes da implementação T03) falhou no
+E2E antigo de ativação: variável de callback assíncrono era verificada de forma
+síncrona após click. 1149 Python/PostgreSQL PASS; não certificar esse run.
+Asserção passou a aguardar o mesmo valor por expect.poll; nenhum teste removido,
+retry de suite introduzido ou comportamento de reset alterado. Reexecutar CI completa.
