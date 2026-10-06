@@ -80,16 +80,16 @@
 
 ### 6. NFV1-P01-T03 — Certificar autoridade
 
-- [ ] **Estado:** pendente
+- [ ] **Estado:** em execução
 - **Objetivo:** executar exatamente a tarefa NFV1-P01-T03 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P01-T02 concluído e certificado; mais as dependências formais do cronograma
-- **Entregar:** tudo que o cronograma exige para NFV1-P01-T03, mais os testes/evidências diretamente necessários.
-- **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
-- **Critério de aceite:** critérios específicos de NFV1-P01-T03 no cronograma satisfeitos e nenhum gate transversal violado.
-- **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
-- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** PENDENTE
+- **Entregar:** certificar tenant spoofing, unit spoofing, cross-tenant, cross-unit, RBAC, sessão, S2S e idempotência no caminho fiscal composto.
+- **Não fazer:** não antecipar T04; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar deploy, produção ou ação externa não autorizada.
+- **Critério de aceite:** todas as autoridades permanecem server-side/fail-closed; escopo S2S exige binding durável exato; browser não define tenant/role/permission; mutações exigem e propagam idempotency key; nenhum gate transversal violado.
+- **Verificação:** executar testes dirigidos de autoridade + suíte existente e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
+- **Riscos / não confirmado:** provider transport real, secret backend real e produção fiscal permanecem fora do escopo; staging continua em drift conhecido. A T03 certifica autoridade interna, não homologação externa nem API fiscal completa.
+- **Decisões do dono pendentes:** nenhuma para certificação interna; merge/deploy/produção continuam sujeitos a autorização específica.
+- **Prova:** branch `test/nfv1-p01-t03-authority-certification`; checkpoint `docs/checkpoints/NFV1_P01_T03_AUTHORITY_CERTIFICATION_2026-10-06.md`; PR/CI pendentes.
 
 ### 7. NFV1-P01-T04 — Certificar API fiscal
 
