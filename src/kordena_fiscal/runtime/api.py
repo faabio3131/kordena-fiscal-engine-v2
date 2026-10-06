@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from uuid import uuid4
@@ -22,19 +22,24 @@ from kordena_fiscal.product.checkout import (
     CommercialCheckoutStarter,
 )
 from kordena_fiscal.product.commercial_readiness import CommercialDeliveryPathReadiness
-from kordena_fiscal.security.s2s import FixedWindowRateLimiter, WebhookSecurity
+from kordena_fiscal.security.s2s import (
+    FixedWindowRateLimiter,
+    SecurityAuditSink,
+    WebhookSecurity,
+    WorkloadCredentialRecord,
+)
 from kordena_fiscal.web.app import create_app
 from kordena_fiscal.web.commercial_acquisition import (
     create_commercial_acquisition_router,
 )
 from kordena_fiscal.web.commercial_trial import create_commercial_trial_router
 from kordena_fiscal.web.human_recovery import PasswordResetDelivery
-from kordena_fiscal.web.portal_runtime import PortalOperationExecutor
 
 from .activation_email import build_activation_delivery_from_environ
 from .cakto import build_cakto_webhook_router
 from .composition import RuntimeComposition, build_postgres_runtime_composition
 from .config import RuntimeSettings
+from .fiscal_runtime import FiscalOperationHandler
 from .observability import MetricsRegistry, RequestTimer, StructuredLogger
 from .security import configure_edge_security
 
@@ -44,7 +49,9 @@ class RuntimeApi:
         self,
         settings: RuntimeSettings,
         *,
-        portal_operation_executor: PortalOperationExecutor | None = None,
+        workload_credentials: tuple[WorkloadCredentialRecord, ...] = (),
+        security_audit_sink: SecurityAuditSink | None = None,
+        fiscal_operation_handlers: Mapping[str, FiscalOperationHandler] | None = None,
     ) -> None:
         self.settings = settings
         self.database: PostgresFiscalDatabase | None = None
@@ -63,7 +70,9 @@ class RuntimeApi:
                 try:
                     self.composition = build_postgres_runtime_composition(
                         database,
-                        portal_operation_executor=portal_operation_executor,
+                        workload_credentials=workload_credentials,
+                        security_audit_sink=security_audit_sink,
+                        fiscal_operation_handlers=fiscal_operation_handlers,
                         enable_cakto_checkout=(
                             settings.commercial_checkout_provider == "cakto"
                         ),
@@ -109,12 +118,16 @@ def create_runtime_app(
     commercial_trial_rate_limiter: FixedWindowRateLimiter | None = None,
     password_reset_delivery: PasswordResetDelivery | None = None,
     production_authority: ProductionExecutionAuthority | None = None,
-    portal_operation_executor: PortalOperationExecutor | None = None,
+    workload_credentials: tuple[WorkloadCredentialRecord, ...] = (),
+    security_audit_sink: SecurityAuditSink | None = None,
+    fiscal_operation_handlers: Mapping[str, FiscalOperationHandler] | None = None,
 ) -> FastAPI:
     resolved = settings or RuntimeSettings.from_environ()
     runtime = RuntimeApi(
         resolved,
-        portal_operation_executor=portal_operation_executor,
+        workload_credentials=workload_credentials,
+        security_audit_sink=security_audit_sink,
+        fiscal_operation_handlers=fiscal_operation_handlers,
     )
     runtime_metrics = metrics or MetricsRegistry()
     runtime_logger = logger or StructuredLogger(
@@ -296,6 +309,18 @@ def create_runtime_app(
             "trusted_proxy_networks_configured": len(resolved.trusted_proxy_cidrs),
             "human_identity_configured": composition is not None,
             "portal_executor_configured": composition is not None,
+            "bridge_security_configured": composition is not None,
+            "bridge_executor_configured": composition is not None,
+            "bridge_workload_identity_configured": (
+                composition is not None
+                and composition.bridge_workload_identity_configured
+            ),
+            "portal_fiscal_operation_executor_configured": composition is not None,
+            "fiscal_operation_handlers_configured": (
+                []
+                if composition is None
+                else list(composition.fiscal_operation_path.configured_operations)
+            ),
             "password_recovery_configured": composition is not None,
             "password_reset_delivery_configured": password_reset_delivery is not None,
             "commercial_activation_configured": (
@@ -412,6 +437,8 @@ def create_runtime_app(
 
     human_identity = None if composition is None else composition.human_identity
     password_recovery = None if composition is None else composition.password_recovery
+    bridge_security = None if composition is None else composition.bridge_security
+    bridge_executor = None if composition is None else composition.bridge_executor
     portal_executor = None if composition is None else composition.portal_executor
     pricing_administration = (
         None if composition is None else composition.pricing_administration
@@ -439,6 +466,8 @@ def create_runtime_app(
     app.mount(
         "/",
         create_app(
+            security=bridge_security,
+            executor=bridge_executor,
             human_identity=human_identity,
             human_login_completed=commercial_activation_completed,
             password_recovery=password_recovery,
