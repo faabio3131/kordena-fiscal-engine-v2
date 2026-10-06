@@ -134,3 +134,30 @@ não antecipar T04, não emitir PRODUCTION_APPROVED/COMMERCIAL_LIVE.
 PR/CI/main da parcela de leitura: consultar GitHub no exact HEAD; pending até gates.
 Próxima ação permitida depois dos gates desta parcela: obter decisão T03-B01 e
 retomar esta MESMA Task; não existe successor liberado no grafo sequencial.
+
+
+## Verificação reproduzida localmente — 2026-10-06
+
+PR de entrega parcial: #119, OPEN/DRAFT; não mergeada por esta execução.
+Código candidato verificado: `616549ded6c73ca0df44b1f686c688d8adbcf3b5`.
+A branch avançou durante a inspeção; o CURRENT remoto foi adotado e preservado.
+Alterações documentais posteriores não foram tratadas como novo código certificado.
+Nenhuma implementação concorrente foi enviada ao repositório.
+
+Scratch Python recuperado; Ruff PASS; Mypy PASS, 180 source files; Pytest completo
+1110 PASS / 63 SKIP por DSN PostgreSQL local ausente / 0 FAIL. Os 12 pares de casos
+T03 precisam executar também em PostgreSQL remoto; esses skips não são evidência
+positiva nem homologação. Frontend lint/typecheck/11 testes/build PASS; plan
+validator 59 tarefas PASS; repository secret scan PASS; migration policy 1..13 PASS;
+diff --check PASS. Playwright e gates de containers/backup/SBOM continuam exigindo
+resultado remoto completo no HEAD final. Nenhum teste/gate removido/desabilitado.
+
+Staging reconsultado READ-ONLY: API/Portal/Postgres 1/1; Worker 0/1 apesar dos
+rótulos Online/SUCCESS. Deployments históricos inalterados; PendingWork patch staged
+com changes vazio. Sem deploy/restart/migration externa/consulta de valores de secret.
+
+CI PR/main do HEAD final deve ser reconsultada. PR #119 contém apenas a parcela
+de leitura e o blocker T03-B01; não fecha CRUD nem libera T04. Decisão solicitada:
+aprovar ou ajustar a política DRAFT de egress já persistida, mantendo as demais
+operações reais/deploy sob gates humanos separados. PRODUCTION_APPROVED=NO;
+COMMERCIAL_LIVE=NO. Próxima ação canônica continua a própria P02-T03.
