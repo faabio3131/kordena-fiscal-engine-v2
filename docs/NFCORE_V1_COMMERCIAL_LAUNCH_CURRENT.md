@@ -9,6 +9,83 @@
 This file is the persistent CURRENT checkpoint for FM NFCORE V1 Commercial Launch. GitHub remains the first technical source of truth and must be revalidated on every resume.
 
 
+## 0A0. CURRENT authoritative checkpoint — 2026-10-06 — P01-T01 CLOSEOUT
+
+This subsection is authoritative over older execution-state wording below. GitHub CURRENT was revalidated immediately before the closeout.
+
+### GitHub CURRENT
+
+- canonical repository: `faabio3131/kordena-fiscal-engine-v2`;
+- canonical branch: `main`;
+- main HEAD: `4f896762674508498e3261aaf2d36480f284dfa2`;
+- PR #107 — `NFV1-P01-T01 — identificar composição fiscal canônica`: **MERGED**;
+- PR #107 certified HEAD before merge: `f3f0337cc3c8633b788e4ab7337f3cc24f7fd034`;
+- post-merge **FM NFCORE V1 CI #603 — SUCCESS** on exact main HEAD;
+- post-merge **NFCore Plan Governance #32 — SUCCESS** on exact main HEAD;
+- open PRs at the start of this closeout: **0**;
+- repository visibility: **PUBLIC**.
+
+### Execution state
+
+- P0: **DONE_CERTIFIED**;
+- P1: **IN_PROGRESS**;
+- `NFV1-P01-T01 — Identificar composição canônica`: **DONE_CERTIFIED**;
+- `NFV1-P01-T02 — Implementar composition root`: **PENDING / NEXT_CANONICAL_TASK**;
+- `NFV1-P01-T03 — Certificar autoridade`: **PENDING**;
+- `NFV1-P01-T04 — Certificar API fiscal`: **PENDING**;
+- all later tasks remain not started unless separately evidenced by the ledger.
+
+### T01 certified result
+
+T01 identified and froze the canonical fiscal composition without introducing runtime code:
+
+- `runtime.api:create_runtime_app` remains the single runtime entrypoint;
+- `build_postgres_runtime_composition` / `RuntimeComposition` remains the durable composition root to extend;
+- Bridge and Portal remain ingress adapters over one fiscal application execution path;
+- S2S reuses `WorkloadAuthenticator + S2SAuthorizer`;
+- Portal reuses existing human identity/session/RBAC/CSRF authority;
+- capability, provider routing, signing, vault and production authority reuse their existing canonical boundaries;
+- no second API, second runtime, second tenant/unit authority, second provider registry, second vault or second production authority was created.
+
+### What T01 did not implement
+
+The following remain TARGET for later scheduled tasks and must not be represented as CURRENT:
+
+- concrete production `BridgeSecurityBoundary`;
+- concrete production `BridgeRequestExecutor`;
+- concrete production `PortalOperationExecutor`;
+- real `FiscalProviderTransport`;
+- concrete external `ExternalSecretClient`;
+- fiscal production activation;
+- official fiscal homologation.
+
+Therefore the P1 phase gate `FISCAL_RUNTIME_COMPOSED_AND_CERTIFIED_INTERNAL` is **NOT MET** yet.
+
+### External/runtime state
+
+T01 and this closeout do not authorize or claim:
+
+- deploy;
+- Railway reconciliation;
+- migration production;
+- real secret/certificate/CSC;
+- real fiscal provider activation;
+- official homologation;
+- production;
+- commercial Go-Live.
+
+`PRODUCTION_APPROVED=NO` and `COMMERCIAL_LIVE=NO` remain unchanged.
+
+### Next canonical action
+
+After this closeout is merged and its Plan Governance/CI are green, the next allowed task is:
+
+`NFV1-P01-T02 — Implementar composition root`.
+
+Do not start P01-T03, P01-T04 or P2 before the predecessor chain is certified.
+
+---
+
 ## 0AA. CURRENT authoritative checkpoint — 2026-10-05 — POST-GOVERNANCE BOOTSTRAP
 
 This subsection is the authoritative persisted checkpoint for the 2026-10-05 execution baseline. GitHub and Railway were re-audited read-only immediately before task `NFV1-P00-T01` started. Older sections below remain historical evidence only when they conflict with this checkpoint.

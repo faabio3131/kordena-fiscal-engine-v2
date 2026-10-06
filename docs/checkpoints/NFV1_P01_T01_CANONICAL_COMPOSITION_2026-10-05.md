@@ -88,3 +88,20 @@ IN_PROGRESS.
 ## Próxima ação
 
 Abrir PR exclusiva da T01 e executar gates. Não iniciar P01-T02.
+
+
+---
+
+## Post-merge closeout pointer — 2026-10-06
+
+This file preserves the pre-merge T01 execution snapshot. The final task status is recorded separately in:
+
+`docs/checkpoints/NFV1_P01_T01_CLOSEOUT_2026-10-06.md`
+
+Final certified evidence after PR #107 merge:
+
+- main: `4f896762674508498e3261aaf2d36480f284dfa2`;
+- FM NFCORE V1 CI #603: SUCCESS;
+- NFCore Plan Governance #32: SUCCESS;
+- T01 final state: `DONE_CERTIFIED`;
+- P01-T02 remains pending and is the next canonical task after closeout.
