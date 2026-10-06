@@ -825,3 +825,33 @@ def test_public_native_ipv6_approval_is_validated(database):
         database, SyntheticDns(("2606:4700:4700::1111",))
     ).authorize(fiscal.scope(), "approved-events", PUBLIC_URL, datetime.now(UTC))
     assert target.address == "2606:4700:4700::1111" and target.hostname == "consumer.example.test"
+
+
+@pytest.mark.parametrize("during_dns", [False, True])
+def test_canonical_unit_environment_is_revalidated_at_delivery(database, during_dns):
+    request_destination(database)
+    assert decide(database).status_code == 200
+
+    def disable_environment():
+        with database() as uow:
+            uow.control_plane._connection.execute(
+                "UPDATE fm_control_plane_units SET enabled_environments_json = ? "
+                "WHERE tenant_id = ? AND unit_id = ?",
+                ('["production"]', "tenant-a", "unit-a"),
+            )
+            uow.commit()
+
+    class ChangingDns(SyntheticDns):
+        def addresses(self, hostname):
+            if during_dns:
+                disable_environment()
+            return super().addresses(hostname)
+
+    dns = ChangingDns()
+    if not during_dns:
+        disable_environment()
+    with pytest.raises(WebhookPolicyDenied):
+        DurableWebhookEgressPolicy(database, dns).authorize(
+            fiscal.scope(), "approved-events", PUBLIC_URL, datetime.now(UTC)
+        )
+    assert dns.calls == (1 if during_dns else 0)

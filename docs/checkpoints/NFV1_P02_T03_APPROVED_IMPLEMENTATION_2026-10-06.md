@@ -57,6 +57,7 @@ Delivery: SignedWebhookOutboxHandler/WebhookSecurity/outbox/Worker existentes;
 policy obrigatória, inclusive no retry; resolver lê a partição do entry. Adapter do
 port de transport existente revalida antes da conexão, rejeita mudança de versão,
 conecta endereço numérico validado, preserva hostname/SNI e validação TLS padrão.
+Unidade/ambiente são revalidados na autoridade canônica, antes e após DNS.
 Validade é reavaliada após DNS para negar expiração durante resolução. IPv4 e
 IPv6 públicos nativos são exercitados sem sockets reais. DNS misto é negado; redes especiais são negadas explicitamente para estabilidade
 entre versões Python. DNS não faz cadastro virar entrega. Não há proxy/tunnel/

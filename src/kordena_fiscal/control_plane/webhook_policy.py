@@ -134,9 +134,12 @@ class DurableWebhookEgressPolicy:
         if now.tzinfo is None:
             raise WebhookPolicyDenied("WEBHOOK_APPROVAL_DENIED")
         with self._factory() as uow:
+            unit = uow.control_plane.get_unit(scope.tenant_id, scope.unit_id)
             record = uow.commercial.webhook_approval(scope, destination_id)
             version = uow.commercial.configuration_version(scope, "webhooks", destination_id)
         try:
+            if unit is None or scope.environment not in unit.enabled_environments:
+                raise ValueError
             if record is None or not record["enabled"] or record["approval_status"] != "approved":
                 raise ValueError
             expires = datetime.fromisoformat(str(record["approved_until"]))
@@ -187,8 +190,15 @@ class DurableWebhookEgressPolicy:
         # DNS resolution is untrusted work. Detect revocation/reconfiguration that
         # happened while resolving, before publishing a connection target.
         with self._factory() as uow:
+            current_unit = uow.control_plane.get_unit(scope.tenant_id, scope.unit_id)
             latest = uow.commercial.webhook_approval(scope, destination_id)
             current = uow.commercial.configuration_version(scope, "webhooks", destination_id)
-        if latest != record or current != version or expires <= datetime.now(UTC):
+        if (
+            current_unit is None
+            or scope.environment not in current_unit.enabled_environments
+            or latest != record
+            or current != version
+            or expires <= datetime.now(UTC)
+        ):
             raise WebhookPolicyDenied("WEBHOOK_APPROVAL_CHANGED_OR_EXPIRED")
         return ApprovedWebhookConnection(canonical, hostname, path, addresses[0], version)
