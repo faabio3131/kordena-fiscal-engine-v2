@@ -7,7 +7,7 @@ Main: main.
 Main HEAD de entrada: 0e5be77267a800384d111c03e30705d95bdb0d28.
 Branch: docs/nfv1-p02-t01-frontend-backend-matrix.
 Branch HEAD: registrar SHA certificado na PR/closeout; este arquivo integra o próprio commit.
-PR/status: a criar em Draft; sem declaração de conclusão antecipada.
+PR/status: #115 OPEN/DRAFT; sem declaração de conclusão antecipada.
 CI PR: pendente; obrigatório no exact HEAD.
 CI main de entrada: #618 SUCCESS; Plan Governance #47 SUCCESS.
 Predecessor: P01-T04 DONE_CERTIFIED; PR #113 e closeout #114 mergeados.
@@ -48,7 +48,9 @@ Testes locais/evidência:
 - Ruff: PASS; Mypy: PASS, 179 source files;
 - Pytest Python 3.12 local: 1085 PASS, 39 SKIP (PostgreSQL DSN local ausente), 1 warning upstream;
 - os skips locais não certificam PostgreSQL; CI Python 3.11 com PostgreSQL obrigatório precisa executar a suíte completa;
-- frontend/CI remota: pendentes neste snapshot.
+- frontend lint/typecheck/build: PASS; frontend tests: 11 PASS; npm audit: 0 vulnerabilidades;
+- download Chromium local falhou (arquivo recebido truncado/inválido); Playwright local não executado;
+- CI remota: aguardando nova execução no HEAD final; nenhum gate substituído/enfraquecido.
 CI completa remota obrigatória, incluindo PostgreSQL, frontend/E2E, containers/non-root,
 security/dependency/vulnerability scans, SBOM e backup/restore.
 Documento/contrato/mocks não comprovam provider ou staging real.
