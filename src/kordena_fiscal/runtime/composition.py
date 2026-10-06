@@ -7,6 +7,7 @@ this composition root and fiscal production authority is injected independently.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -16,6 +17,7 @@ from kordena_fiscal.application.commercial_activation import (
 from kordena_fiscal.application.commercial_claim import CommercialClaimService
 from kordena_fiscal.application.commercial_fulfillment import CommercialFulfillmentService
 from kordena_fiscal.application.commercial_trial import GovernedTrialService
+from kordena_fiscal.application.service import FiscalApplicationService
 from kordena_fiscal.control_plane.cakto_checkout import (
     CaktoCheckoutAdministrationService,
 )
@@ -34,12 +36,23 @@ from kordena_fiscal.security.human_identity import (
     ScryptPasswordHasher,
 )
 from kordena_fiscal.security.human_recovery import PasswordRecoveryService
-from kordena_fiscal.web.portal_runtime import (
-    DurableHumanPortalExecutor,
-    PortalOperationExecutor,
+from kordena_fiscal.security.s2s import (
+    InMemorySecurityAuditSink,
+    S2SAuthorizer,
+    SecurityAuditSink,
+    WorkloadAuthenticator,
+    WorkloadCredentialRecord,
 )
+from kordena_fiscal.web.portal_runtime import DurableHumanPortalExecutor
 
 from .commercial_provisioning import CommercialCustomerProvisioningService
+from .fiscal_runtime import (
+    CanonicalBridgeRequestExecutor,
+    CanonicalBridgeSecurityBoundary,
+    CanonicalFiscalOperationPath,
+    CanonicalPortalOperationExecutor,
+    FiscalOperationHandler,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,17 +69,25 @@ class RuntimeComposition:
     pricing_administration: CommercialPricingAdministrationService
     commercial_release_administration: CommercialReleaseAdministrationService
     cakto_checkout_administration: CaktoCheckoutAdministrationService | None
+    fiscal_application: FiscalApplicationService
+    fiscal_operation_path: CanonicalFiscalOperationPath
+    bridge_security: CanonicalBridgeSecurityBoundary
+    bridge_executor: CanonicalBridgeRequestExecutor
+    portal_fiscal_operation_executor: CanonicalPortalOperationExecutor
+    bridge_workload_identity_configured: bool
     portal_executor: DurableHumanPortalExecutor
 
 
 def build_postgres_runtime_composition(
     database: PostgresFiscalDatabase,
     *,
-    portal_operation_executor: PortalOperationExecutor | None = None,
+    workload_credentials: tuple[WorkloadCredentialRecord, ...] = (),
+    security_audit_sink: SecurityAuditSink | None = None,
+    fiscal_operation_handlers: Mapping[str, FiscalOperationHandler] | None = None,
     enable_cakto_checkout: bool = False,
     password_reset_ttl: timedelta = timedelta(minutes=10),
 ) -> RuntimeComposition:
-    """Compose human web services over the canonical PostgreSQL repositories."""
+    """Compose commercial, human and fiscal ingress over the same PostgreSQL lifecycle."""
 
     accounts = database.human_accounts()
     sessions = database.web_sessions()
@@ -125,9 +146,31 @@ def build_postgres_runtime_composition(
         cakto_checkout_administration = CaktoCheckoutAdministrationService(
             cakto_commercial_database
         )
+    fiscal_application = FiscalApplicationService(database)
+    fiscal_operation_path = CanonicalFiscalOperationPath(
+        fiscal_application,
+        handlers=fiscal_operation_handlers,
+    )
+    audit_sink = security_audit_sink
+    if audit_sink is None:
+        audit_sink = InMemorySecurityAuditSink()
+    workload_authenticator = WorkloadAuthenticator(workload_credentials)
+    s2s_authorizer = S2SAuthorizer(
+        bindings=fiscal_operation_path,
+        audit_sink=audit_sink,
+    )
+    bridge_security = CanonicalBridgeSecurityBoundary(
+        authenticator=workload_authenticator,
+        authorizer=s2s_authorizer,
+    )
+    bridge_executor = CanonicalBridgeRequestExecutor(fiscal_operation_path)
+    portal_fiscal_operation_executor = CanonicalPortalOperationExecutor(
+        unit_of_work_factory=database,
+        path=fiscal_operation_path,
+    )
     portal = DurableHumanPortalExecutor(
         database,
-        operation_executor=portal_operation_executor,
+        operation_executor=portal_fiscal_operation_executor,
     )
     return RuntimeComposition(
         human_identity=identity,
@@ -140,5 +183,11 @@ def build_postgres_runtime_composition(
         pricing_administration=pricing_administration,
         commercial_release_administration=commercial_release_administration,
         cakto_checkout_administration=cakto_checkout_administration,
+        fiscal_application=fiscal_application,
+        fiscal_operation_path=fiscal_operation_path,
+        bridge_security=bridge_security,
+        bridge_executor=bridge_executor,
+        portal_fiscal_operation_executor=portal_fiscal_operation_executor,
+        bridge_workload_identity_configured=bool(workload_credentials),
         portal_executor=portal,
     )

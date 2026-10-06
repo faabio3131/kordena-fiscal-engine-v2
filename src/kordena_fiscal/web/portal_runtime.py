@@ -85,6 +85,9 @@ class DurableHumanPortalExecutor:
 
     def snapshot(self, *, authority: AuthenticatedHuman) -> Mapping[str, Any]:
         organization, units, _events = self._tenant_state(authority)
+        configured_operations = tuple(
+            getattr(self._operation_executor, "configured_operations", ())
+        )
         environments = sorted(
             {
                 environment.value
@@ -104,7 +107,9 @@ class DurableHumanPortalExecutor:
             "unit_count": len(units),
             "unit_scope": "all" if authority.account.unit_ids is None else "restricted",
             "enabled_environments": environments,
-            "fiscal_operations_configured": self._operation_executor is not None,
+            "fiscal_operation_executor_configured": self._operation_executor is not None,
+            "fiscal_operations_configured": bool(configured_operations),
+            "configured_fiscal_operations": list(configured_operations),
             "onboarding_stage": onboarding_stage,
             "basic_onboarding_complete": organization is not None and bool(units),
             "available_surfaces": sorted(self._DURABLE_SURFACES),

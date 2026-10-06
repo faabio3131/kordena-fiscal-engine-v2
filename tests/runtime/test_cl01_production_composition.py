@@ -29,6 +29,7 @@ from kordena_fiscal.security.human_recovery import (
     InMemoryPasswordResetRepository,
     IssuedPasswordReset,
 )
+from kordena_fiscal.web.human_auth import CSRF_COOKIE, CSRF_HEADER
 
 PASSWORD = "commercial-runtime-password-2026"
 NOW = datetime(2026, 9, 16, 15, 30, tzinfo=UTC)
@@ -203,6 +204,11 @@ def test_postgres_runtime_composes_human_identity_recovery_and_durable_portal(
         profile = client.get("/runtime/profile").json()
         assert profile["human_identity_configured"] is True
         assert profile["portal_executor_configured"] is True
+        assert profile["bridge_security_configured"] is True
+        assert profile["bridge_executor_configured"] is True
+        assert profile["bridge_workload_identity_configured"] is False
+        assert profile["portal_fiscal_operation_executor_configured"] is True
+        assert profile["fiscal_operation_handlers_configured"] == []
         assert profile["password_recovery_configured"] is True
         assert profile["commercial_release_admin_configured"] is True
         assert profile["commercial_release_status"] == "unavailable"
@@ -233,7 +239,9 @@ def test_postgres_runtime_composes_human_identity_recovery_and_durable_portal(
         assert projection["organization_onboarded"] is True
         assert projection["legal_name"] == "Empresa Piloto Ltda"
         assert projection["unit_count"] == 1
+        assert projection["fiscal_operation_executor_configured"] is True
         assert projection["fiscal_operations_configured"] is False
+        assert projection["configured_fiscal_operations"] == []
 
         units = client.get("/v1/portal/surfaces/units")
         assert units.status_code == 200
@@ -242,6 +250,32 @@ def test_postgres_runtime_composes_human_identity_recovery_and_durable_portal(
         unsupported = client.get("/v1/portal/surfaces/documents")
         assert unsupported.status_code == 503
         assert unsupported.json()["detail"]["code"] == "PORTAL_RUNTIME_NOT_READY"
+
+        bridge = client.post(
+            "/v1/queries",
+            headers={
+                "Authorization": f"Bearer {'s' * 32}",
+                "X-FM-Workload-Credential-Id": "missing-runtime-credential",
+                "X-FM-Host-Namespace": "fm-nfcore",
+                "X-FM-Tenant-Id": "tenant-a",
+                "X-FM-Unit-Id": "unit-a",
+                "X-FM-Environment": "homologation",
+                "X-Correlation-Id": "corr-bridge-t02",
+            },
+            json={"reference": "DOC-1"},
+        )
+        assert bridge.status_code == 401
+        assert bridge.json()["code"] == "WORKLOAD_AUTHENTICATION_FAILED"
+
+        csrf = client.cookies.get(CSRF_COOKIE)
+        assert csrf
+        portal_operation = client.post(
+            "/v1/portal/operations/queryFiscalDocument",
+            headers={CSRF_HEADER: csrf},
+            json={"unit_id": "unit-a", "document_id": "DOC-1"},
+        )
+        assert portal_operation.status_code == 503
+        assert portal_operation.json()["detail"]["code"] == "FISCAL_RUNTIME_NOT_READY"
 
     database = _RuntimeDatabase.last
     assert database is not None
