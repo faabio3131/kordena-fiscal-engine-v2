@@ -141,7 +141,7 @@
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
 - **Riscos / não confirmado:** política de aprovação/egress não definida; CRUD não integrado; catálogo/provider/Vault operacionais ausentes; staging drift; shell sem resposta, validação T03 remota quando disponível.
 - **Decisões do dono pendentes:** T03-B01 — aprovar/ajustar a política sensível de destinos/egress em `docs/NFV1_P02_T03_WEBHOOK_SECURITY_POLICY_PROPOSAL_2026-10-06.md` (DRAFT), antes de cadastrar/ativar webhooks pelo Portal. AGENTS.md e padrão mestre §6 exigem decisão; nenhuma aprovação implícita. T04 não liberada.
-- **Prova:** TASK COMPLETA PENDENTE; parcela de leitura implementada candidata, PR/CI/main ainda sujeitos aos gates; implementação `616549ded6c73ca0df44b1f686c688d8adbcf3b5`; predecessor main `4b0d008d39ef3c579fa0d521864a92a58907b0de`, CI #629 e Governance #58 SUCCESS; escopo em `docs/checkpoints/NFV1_P02_T03_CLIENT_CONFIGURATION_2026-10-06.md`.
+- **Prova:** TASK COMPLETA PENDENTE; parcela de consulta PR #119 MERGED, HEAD `c908848dff0d2ff7f45e33dfa5b2ff51943f54f9`, merge/main `db2a8fb71097eb4e1f6e5919e1eb544c8a3167ac`; CI PR #640/main #641 SUCCESS; Plan Governance #61/#62 SUCCESS; 1173 Python/PostgreSQL PASS/zero SKIP e 11 Playwright PASS; checkpoint `docs/checkpoints/NFV1_P02_T03_READ_ONLY_CHECKPOINT_2026-10-06.md`. T03-B01 permanece decisão humana; [ ] bloqueado externo; nenhuma certificação integral ou liberação T04.
 
 ### 11. NFV1-P02-T04 — Usuários e RBAC
 

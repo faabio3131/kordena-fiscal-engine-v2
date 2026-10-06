@@ -161,3 +161,12 @@ de leitura e o blocker T03-B01; não fecha CRUD nem libera T04. Decisão solicit
 aprovar ou ajustar a política DRAFT de egress já persistida, mantendo as demais
 operações reais/deploy sob gates humanos separados. PRODUCTION_APPROVED=NO;
 COMMERCIAL_LIVE=NO. Próxima ação canônica continua a própria P02-T03.
+
+
+## Registro superior da parcela mergeada
+
+PR #119 MERGED em `db2a8fb71097eb4e1f6e5919e1eb544c8a3167ac`; CI PR #640/main
+#641 e Governance #61/#62 SUCCESS. Evidência/limites/decisão consolidados em
+`NFV1_P02_T03_READ_ONLY_CHECKPOINT_2026-10-06.md`, condicionado a seu merge/gates.
+Parcela de consulta integrada, T03 ainda [ ] bloqueado externo por T03-B01.
+Snapshots candidatos/falhas acima permanecem históricos; não liberam T04.
