@@ -355,6 +355,24 @@ class SqliteBindingRepository:
             raise PersistenceStateError("no durable fiscal binding exists for exact host scope")
         return self._binding(row)
 
+    def list_for_fiscal_unit(
+        self, scope: ExecutionScope, *, limit: int = 100, offset: int = 0
+    ) -> tuple[FiscalAccountBinding, ...]:
+        # Human tenant authority selects internal account/unit, never external claims.
+        page = scoped_page(scope, limit, offset)
+        rows = self._connection.execute(
+            """
+            SELECT binding_id, host_namespace, external_tenant_id, external_unit_id,
+                   fiscal_account_id, fiscal_unit_id
+            FROM fm_fiscal_bindings
+            WHERE fiscal_account_id = ? AND fiscal_unit_id = ?
+            ORDER BY binding_id
+            LIMIT ? OFFSET ?
+            """,
+            (scope.tenant_id, scope.unit_id, page[-2], page[-1]),
+        ).fetchall()
+        return tuple(self._binding(tuple(row)) for row in rows)
+
     def get_by_id(self, binding_id: str) -> FiscalAccountBinding | None:
         normalized = binding_id.strip()
         if not normalized:

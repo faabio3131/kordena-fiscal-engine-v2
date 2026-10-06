@@ -82,3 +82,22 @@ PENDENTE implementação/testes/CI da parcela de leitura. Mutação webhook exig
 aprovação de proposta DRAFT; demais configurações/mutações ainda dentro de T03,
 não transferidas artificialmente para outra Task. PORTAL_COMMERCIAL_PARITY_CERTIFIED
 permanece NOT MET. Próxima Task P02-T04 somente após T03 completa e certificada.
+
+
+## Parcela implementada — candidata, ainda sem CI
+
+Cinco consultas no mesmo executor, 16 surfaces genéricas duráveis quando integradas
+(12 anteriores + quatro novas; settings aprimorada). Projeções nos stores existentes
+sem schema/migration nova: refs opacas, provider bindings, destino IDs/enabled sem
+URL bruta, módulos/bindings de integração e políticas runtime. Cada coleção <=100,
+integrações combina até duas coleções; scope antes do LIMIT. Binding não possui
+partição por environment no modelo existente: resposta declara isso, não inventa.
+UI consulta com seleção/página e aviso read-only; nenhuma escrita nova cadastrada.
+
+22 testes parametrizados SQLite/PostgreSQL candidatos + uma jornada Playwright
+HTTP durável candidata. PostgreSQL local NÃO executado; resultados CI pendentes.
+Todos os testes anteriores preservados; teste de surface indisponível usa users
+porque certificates agora é conectada e possui testes positivos/negativos próprios.
+
+DRAFT concreto: docs/NFV1_P02_T03_WEBHOOK_SECURITY_POLICY_PROPOSAL_2026-10-06.md.
+Sem aprovação implícita. Demais mutações T03 continuam pendentes dentro desta Task.
