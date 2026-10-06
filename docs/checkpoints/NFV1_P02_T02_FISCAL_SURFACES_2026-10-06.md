@@ -126,3 +126,9 @@ Fixture v8 agora reconstrói schema 1..8 completo e preserva lifecycle legado NU
 no upgrade; expectativa da migration12 inclui13; query de overlap de profile usa
 CAST do parâmetro NULL para TEXT (SQLite/PostgreSQL), sem relaxar conflito/vigência.
 Nenhum teste/gate removido ou skip novo para contornar essa falha. Reexecutar CI.
+
+CI #625: PostgreSQL/Pytest 1149 PASS, zero SKIP; E2E 9 PASS/1 FAIL por selector
+antigo ambíguo após adição de details (ID/estado aparecem também no detalhe).
+Selector atualizado para ID primário/badge visíveis, preservando asserções originais;
+nenhum teste removido/desabilitado. Três novas jornadas HTTP duráveis passaram.
+Reexecutar CI completa no novo HEAD; containers/audits posteriores ainda não certificados.

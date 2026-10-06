@@ -38,8 +38,8 @@ test("authenticated portal loads governed tenant context and real surface", asyn
   await expect(page.getByText("tenant-e2e · owner")).toBeVisible();
   await expect(page.locator("#critical-state-title")).toHaveText("BLOCKED_EXTERNAL");
   await page.getByRole("button", { name: "Documentos" }).click();
-  await expect(page.getByText("DOC-E2E-1")).toBeVisible();
-  await expect(page.getByText("AUTHORIZED")).toBeVisible();
+  await expect(page.locator(".grid-list .row strong").filter({hasText: "DOC-E2E-1"})).toBeVisible();
+  await expect(page.locator(".grid-list .row .badge").filter({hasText: "AUTHORIZED"})).toBeVisible();
 });
 
 test("governed mutation sends csrf and idempotency proof", async ({ page, context }) => {
