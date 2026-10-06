@@ -105,7 +105,12 @@ class FiscalApplicationService:
         correlation_id: str,
     ) -> ExecutionScope:
         with self._uow_factory() as uow:
-            binding = uow.bindings.resolve(host_scope)
+            try:
+                binding = uow.bindings.resolve(host_scope)
+            except PersistenceStateError as exc:
+                raise FiscalValidationError(
+                    "exact durable fiscal binding is required for host scope"
+                ) from exc
             return binding.to_execution_scope(
                 environment=environment,
                 correlation_id=correlation_id,
