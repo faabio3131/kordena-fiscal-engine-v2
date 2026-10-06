@@ -38,6 +38,10 @@ class RecordingPortalExecutor:
         *,
         surface_id: str,
         authority: AuthenticatedHuman,
+        unit_id: str | None = None,
+        environment: object = None,
+        limit: int = 100,
+        offset: int = 0,
     ) -> Sequence[Mapping[str, Any]]:
         self.surface_authority = authority
         return ({"document_id": "DOC-1", "status": "AUTHORIZED"},)

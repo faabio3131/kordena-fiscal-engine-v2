@@ -122,10 +122,10 @@
 - [ ] **Estado:** em execução
 - **Objetivo:** executar exatamente a tarefa NFV1-P02-T02 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P02-T01 concluído e certificado; mais as dependências formais do cronograma
-- **Entregar:** tudo que o cronograma exige para NFV1-P02-T02, mais os testes/evidências diretamente necessários.
+- **Entregar:** cinco projeções fiscais duráveis no Portal existente, filtros de unidade/ambiente, metadados sanitizados, readiness governado/bloqueado, reserva com escopo canônico, migração aditiva 13, UI/paginação/retry e testes dirigidos + E2E HTTP durável.
 - **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
 - **Critério de aceite:** critérios específicos de NFV1-P02-T02 no cronograma satisfeitos e nenhum gate transversal violado.
-- **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
+- **Verificação:** testes tenant/unit/host/environment, auth/RBAC/CSRF, colisão/replay/legado, paginação/erro, readiness; Python/PostgreSQL, frontend/Playwright, migration/secret policy, containers/smokes/audits/SBOM/backup-restore; CI PR/main e `python3 scripts/check_nfcore_plan.py`.
 - **Riscos / não confirmado:** lifecycle legado sem escopo recuperável não pode ser exposto; readiness/handlers externos ausentes; staging em drift. Consultar checkpoint T02 para tratamento e ownership.
 - **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
 - **Prova:** PENDENTE; escopo/aceite/impacto e auditoria em `docs/checkpoints/NFV1_P02_T02_FISCAL_SURFACES_2026-10-06.md`; main de entrada `5454a05619feafb4c179d9b047817d8593a46437`, CI #623 e Plan Governance #52 SUCCESS.

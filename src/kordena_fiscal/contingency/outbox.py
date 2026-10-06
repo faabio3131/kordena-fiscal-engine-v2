@@ -84,9 +84,7 @@ class FiscalRetryPolicy:
             if value < 1:
                 raise FiscalValidationError(f"{field_name} must be >= 1")
         if self.max_delay_seconds < self.initial_delay_seconds:
-            raise FiscalValidationError(
-                "max_delay_seconds must be >= initial_delay_seconds"
-            )
+            raise FiscalValidationError("max_delay_seconds must be >= initial_delay_seconds")
 
     def delay_for_attempt(self, attempt_number: int) -> timedelta:
         if not isinstance(attempt_number, int) or isinstance(attempt_number, bool):
@@ -215,6 +213,15 @@ class FiscalDispatchResult:
 
 
 class FiscalOutboxStore(Protocol):
+    def list_for_scope(
+        self,
+        scope: ExecutionScope,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+        statuses: frozenset[FiscalOutboxStatus] | None = None,
+    ) -> tuple[FiscalOutboxEntry, ...]: ...
+
     def enqueue(self, entry: FiscalOutboxEntry) -> FiscalOutboxEnqueueResult: ...
 
     def claim_due(
@@ -263,6 +270,33 @@ class InMemoryFiscalOutboxStore:
     def __init__(self) -> None:
         self._lock = Lock()
         self._entries: dict[str, FiscalOutboxEntry] = {}
+
+    def list_for_scope(
+        self,
+        scope: ExecutionScope,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+        statuses: frozenset[FiscalOutboxStatus] | None = None,
+    ) -> tuple[FiscalOutboxEntry, ...]:
+        if not isinstance(scope, ExecutionScope):
+            raise FiscalValidationError("scope must be ExecutionScope")
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
+            raise FiscalValidationError("limit must be an integer between 1 and 100")
+        if isinstance(offset, bool) or not isinstance(offset, int) or not 0 <= offset <= 10000:
+            raise FiscalValidationError("offset must be an integer between 0 and 10000")
+        with self._lock:
+            rows = sorted(
+                (
+                    item
+                    for item in self._entries.values()
+                    if item.scope.identity_material == scope.identity_material
+                    and (statuses is None or item.status in statuses)
+                ),
+                key=lambda item: (item.created_at, item.entry_id),
+                reverse=True,
+            )
+            return tuple(rows[offset : offset + limit])
 
     def enqueue(self, entry: FiscalOutboxEntry) -> FiscalOutboxEnqueueResult:
         if not isinstance(entry, FiscalOutboxEntry):
@@ -516,8 +550,7 @@ class FiscalOutboxDispatcher:
                     self._store.reschedule(
                         entry.entry_id,
                         expected_attempt=entry.attempt_count,
-                        available_at=now
-                        + self._policy.delay_for_attempt(entry.attempt_count),
+                        available_at=now + self._policy.delay_for_attempt(entry.attempt_count),
                         error=result.error,
                     )
                 )

@@ -40,8 +40,12 @@ class PricingPortalExecutor:
         *,
         surface_id: str,
         authority: object,
+        unit_id: str | None = None,
+        environment: object = None,
+        limit: int = 100,
+        offset: int = 0,
     ) -> Sequence[Mapping[str, Any]]:
-        del surface_id, authority
+        del surface_id, authority, unit_id, environment, limit, offset
         return ()
 
     def execute(

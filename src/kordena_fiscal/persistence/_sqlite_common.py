@@ -15,6 +15,24 @@ def host_key(value: str | None) -> str:
     return value or ""
 
 
+def scoped_page(scope: ExecutionScope, limit: int, offset: int) -> tuple[object, ...]:
+    """Exact partition plus a bounded page; correlation does not select ownership."""
+    if not isinstance(scope, ExecutionScope):
+        raise FiscalValidationError("scope must be ExecutionScope")
+    if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 100:
+        raise FiscalValidationError("limit must be an integer between 1 and 100")
+    if isinstance(offset, bool) or not isinstance(offset, int) or not 0 <= offset <= 10000:
+        raise FiscalValidationError("offset must be an integer between 0 and 10000")
+    return (
+        host_key(scope.host_namespace),
+        scope.tenant_id,
+        scope.unit_id,
+        scope.environment.value,
+        limit,
+        offset,
+    )
+
+
 def host_or_none(value: str) -> str | None:
     return value or None
 

@@ -251,7 +251,7 @@ def test_postgres_runtime_composes_human_identity_recovery_and_durable_portal(
         assert units.status_code == 200
         assert units.json()["rows"][0]["unit_id"] == "unit-a"
 
-        unsupported = client.get("/v1/portal/surfaces/documents")
+        unsupported = client.get("/v1/portal/surfaces/certificates")
         assert unsupported.status_code == 503
         assert unsupported.json()["detail"]["code"] == "PORTAL_RUNTIME_NOT_READY"
 

@@ -63,5 +63,53 @@ PRODUCTION_APPROVED=NO; COMMERCIAL_LIVE=NO. Nenhuma autorização humana nova co
 
 ## Provas e closeout
 
-PENDENTES. Atualizar após implementação e gates; não converter TARGET em CURRENT.
+Implementação local concluída, ainda SEM certificação remota/merge:
+- 12 surfaces duráveis (7 anteriores + 5 fiscais); archive e lifecycle separados,
+  emissão/fila com tipos explícitos; sem inferir autorização do archive ou da outbox.
+- Unidade/ambiente selecionados propagados e revalidados no backend. Tenant e
+  namespace derivados da sessão/runtime; listagens usam partição exata em SQL.
+- Cada coleção canônica tem limit 1..100 e offset 0..10000; documents/issuances/errors
+  combinam no máximo duas coleções (até 200 linhas/página), sem total inventado.
+  Estado de erro filtrado ANTES de LIMIT. UI possui seleção e paginação explícitas.
+- Reserva nova exige ExecutionScope; replay e colisão cross-scope/legado rejeitados
+  atomicamente. Migração 13 adiciona colunas de escopo no lifecycle e índices; NÃO
+  inventa backfill nem altera regra fiscal, numbering ou conteúdo histórico.
+- Capabilities delegadas à autoridade existente, com profile/context/vigência. Root
+  continua sem matriz: estado blocked. CONTRACT_ONLY não é promovido a readiness.
+- UI permite apenas operações configuradas e permissões declaradas pelo backend;
+  CSRF/idempotência permanecem server-side. Retry com conteúdo igual preserva a key;
+  tentativa pendente impede mudança silenciosa do pedido.
+- Filtro do contrato também restringe audit a unidades permitidas/selecionadas,
+  sem novo papel/autoridade. Certificação transversal permanece P02-T04.
+
+Validação local inicial: Ruff/Mypy (180 arquivos), secret scan, migration policy,
+frontend lint/typecheck/11 testes/build PASS. Pytest então 1095 PASS/48 SKIP (DSN
+PostgreSQL ausente); novos casos readiness/paginação adicionados depois, a suíte
+final será registrada em closeout. Esses skips NÃO certificam PostgreSQL.
+Teste HTTP via HTTPS loopback + router real + SQLite: cinco GETs 200; falha sintética
+após commit 503 → retry mesma key 200 reserved_internal_replay; sem emissão/provider.
+Playwright local não certificado (Chromium ausente após download truncado); CI remota
+obrigatória tem 7 jornadas anteriores + 3 jornadas fiscais duráveis novas.
+
+Auditoria zero pendência invisível do diff: nenhum TODO/FIXME/HACK novo, sem teste
+removido/desabilitado. Expectativas de migration-version nos testes foram atualizadas;
+reconstruções históricas removem 13 também para provar upgrade exato. O teste de
+surface não composta usa certificates, pois documents agora é implementada; novas
+jornadas cobrem documents real. Mocks antigos permanecem apenas provas de UI;
+novos E2E fiscais não usam page.route. SQLite/test TLS/handler de reserva vivem
+exclusivamente em tests, loopback e diretório temporário; nenhum provider fake no root.
+
+Pendência explícita P2-G13 / P02-T07: a key de tentativa pendente vive na página;
+recuperação após reload/crash do browser exige jornada governada adicional. Nenhum
+handler externo está ativo nesta tarefa; não certificar replay fiscal externo por esse
+harness. P2-G02/P6/P7/P10 continuam bloqueando integração real. Perfis/matriz
+operacionais ausentes não são supridos por regras sintéticas dos testes.
+
+Rollback: migração aditiva mantém colunas/tabelas antigas; reversão de código conserva
+os dados novos e bloqueia surfaces antes indisponíveis. Não executar down migration,
+DROP ou atribuição de scope a legado. Rehearsal de backup/restore/containers será
+provado novamente pela CI; rollout/rollback em staging pertence a P5 e requer deploy
+autorizado. Nenhuma migration aplicada a staging/produção.
+
+PR/HEAD/CI final/main/closeout: PENDENTES. Não converter TARGET em CURRENT.
 Próxima Task ID, somente após certificação: NFV1-P02-T03.

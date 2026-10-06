@@ -207,9 +207,12 @@ class FiscalApplicationService:
         request_fingerprint: str,
         document_id: str,
         created_at: datetime,
+        scope: ExecutionScope,
     ) -> DurableIssuanceReservation:
         """Atomically persist issuance authority before any provider side effect."""
 
+        if not isinstance(scope, ExecutionScope):
+            raise FiscalValidationError("scope must be ExecutionScope")
         with self._uow_factory() as uow:
             reservation = uow.idempotency.reserve(key, request_fingerprint, document_id)
             attempt = reservation.attempt
@@ -220,7 +223,9 @@ class FiscalApplicationService:
                         "idempotency replay has no durable lifecycle authority"
                     )
                 lifecycle = FiscalStateSnapshot.initial(attempt.document_id, created_at)
-                uow.lifecycle.add(lifecycle)
+                uow.lifecycle.add(lifecycle, scope=scope)
+            else:
+                uow.lifecycle.assert_scope(attempt.document_id, scope)
             disposition = self._disposition(reservation)
             uow.commit()
             return DurableIssuanceReservation(

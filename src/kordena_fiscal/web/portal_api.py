@@ -14,6 +14,7 @@ from typing import Annotated, Any, Protocol, runtime_checkable
 
 from fastapi import APIRouter, Body, HTTPException, Request, status
 
+from kordena_fiscal.domain import FiscalEnvironment
 from kordena_fiscal.security.human_identity import (
     AuthenticatedHuman,
     CsrfValidationError,
@@ -36,6 +37,10 @@ class HumanPortalExecutor(Protocol):
         *,
         surface_id: str,
         authority: AuthenticatedHuman,
+        unit_id: str | None = None,
+        environment: FiscalEnvironment | None = None,
+        limit: int = 100,
+        offset: int = 0,
     ) -> Sequence[Mapping[str, Any]]: ...
 
     def execute(
@@ -245,11 +250,7 @@ def create_portal_router(
                     normalized.append(platform_surface)
             projection["available_surfaces"] = normalized
         _safe_payload(projection)
-        unit_ids = (
-            sorted(auth.account.unit_ids)
-            if auth.account.unit_ids is not None
-            else None
-        )
+        unit_ids = sorted(auth.account.unit_ids) if auth.account.unit_ids is not None else None
         return {
             "product": "FM NFCORE",
             "version": "1.0",
@@ -273,9 +274,30 @@ def create_portal_router(
         auth = authority(request)
         unit_id = request.query_params.get("unit_id")
         _authorized(auth, permission, unit_id=unit_id)
+        try:
+            raw_environment = request.query_params.get("environment")
+            environment = FiscalEnvironment(raw_environment) if raw_environment else None
+            limit = int(request.query_params.get("limit", "100"))
+            offset = int(request.query_params.get("offset", "0"))
+            if not 1 <= limit <= 100 or not 0 <= offset <= 10000:
+                raise ValueError("invalid page")
+            if unit_id is not None and not unit_id.strip():
+                raise ValueError("blank unit")
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "INVALID_SURFACE_FILTER",
+                    "message": "Invalid unit, environment or page",
+                },
+            ) from exc
         projected_rows = require_executor().surface(
             surface_id=surface_id,
             authority=auth,
+            unit_id=unit_id,
+            environment=environment,
+            limit=limit,
+            offset=offset,
         )
         rows = [dict(row) for row in projected_rows]
         _safe_payload(rows)
