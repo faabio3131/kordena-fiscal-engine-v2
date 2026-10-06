@@ -12,7 +12,6 @@ from kordena_fiscal.domain import (
     ExecutionScope,
     FiscalAccountBinding,
     FiscalAccountId,
-    FiscalEnvironment,
     FiscalUnitId,
     HostNamespace,
     HostScope,
