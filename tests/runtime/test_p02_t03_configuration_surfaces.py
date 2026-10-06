@@ -18,6 +18,7 @@ from kordena_fiscal.security.human_identity import (
     ScryptPasswordHasher,
 )
 from kordena_fiscal.web import create_app
+from kordena_fiscal.web.human_auth import CSRF_COOKIE, CSRF_HEADER
 from kordena_fiscal.web.portal_runtime import DurableHumanPortalExecutor
 
 ROOT = Path(__file__).parents[1]
@@ -140,3 +141,24 @@ def test_pages_are_bounded_and_cannot_change_configuration(database):
     assert http.post("/v1/portal/surfaces/webhooks", json={}).status_code == 405
     rows = http.get("/v1/portal/surfaces/webhooks?unit_id=unit-a").json()["rows"]
     assert rows[0]["destination_id"] == "events-a"
+
+
+def test_read_cannot_enable_or_cross_an_environment(database):
+    http = client(database)
+    created = http.post(
+        "/v1/portal/operations/onboardUnit",
+        json={"unit_id": "hml-only", "display_name": "Synthetic HML only"},
+        headers={
+            CSRF_HEADER: http.cookies.get(CSRF_COOKIE),
+            "Idempotency-Key": "synthetic-hml-unit-t03",
+        },
+    )
+    assert created.status_code == 200, created.text
+    for surface in SURFACES:
+        endpoint = "/v1/portal/surfaces/" + surface + "?unit_id=hml-only"
+        assert http.get(endpoint + "&environment=homologation").status_code == 200
+        assert http.get(endpoint + "&environment=production").status_code == 409
+    with database() as uow:
+        unit = uow.control_plane.get_unit("tenant-a", "hml-only")
+    assert unit is not None
+    assert unit.enabled_environments == frozenset({FiscalEnvironment.HOMOLOGATION})

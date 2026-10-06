@@ -94,7 +94,7 @@ integrações combina até duas coleções; scope antes do LIMIT. Binding não p
 partição por environment no modelo existente: resposta declara isso, não inventa.
 UI consulta com seleção/página e aviso read-only; nenhuma escrita nova cadastrada.
 
-22 testes parametrizados SQLite/PostgreSQL candidatos + uma jornada Playwright
+24 testes parametrizados SQLite/PostgreSQL candidatos + uma jornada Playwright
 HTTP durável candidata. PostgreSQL local NÃO executado; resultados CI pendentes.
 Todos os testes anteriores preservados; teste de surface indisponível usa users
 porque certificates agora é conectada e possui testes positivos/negativos próprios.
