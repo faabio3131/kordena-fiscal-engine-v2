@@ -6,6 +6,16 @@ Baseline auditado: `main@0e5be77267a800384d111c03e30705d95bdb0d28`.
 CI de origem: FM NFCORE V1 CI #618 SUCCESS; NFCore Plan Governance #47 SUCCESS.
 PRs abertas na entrada: zero. P0/P1 certificados; closeout P1: PR #114 mergeada.
 
+## Evolução CURRENT — 2026-10-06
+
+As tabelas abaixo conservam o baseline T01. T02 (#117/#118) conectou cinco vistas
+fiscais; T03 parcela (#119, main `db2a8fb71097eb4e1f6e5919e1eb544c8a3167ac`,
+CI #641/Governance #62 SUCCESS) conectou quatro novas vistas e aprimorou settings.
+CURRENT: 16 surfaces genéricas duráveis; users T04, usage/billing/plans T05 e
+support T07 restantes. Configuração integral/write continua T03, bloqueada por
+T03-B01 (política de destinos DRAFT); não há Task T03 certificada nem P2 concluída.
+Registro superior: `checkpoints/NFV1_P02_T03_READ_ONLY_CHECKPOINT_2026-10-06.md`.
+
 ## Escopo congelado e aceite
 
 Esta tarefa registra, para TODAS as superfícies do cronograma e da navegação existente,
