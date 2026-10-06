@@ -91,3 +91,8 @@ PRODUCTION_APPROVED=NO. COMMERCIAL_LIVE=NO.
 Gate de saída da tarefa: PENDING até gates/merge/main/closeout.
 Gate de fase PORTAL_COMMERCIAL_PARITY_CERTIFIED: NOT MET.
 Próxima ação: certificar T01; somente depois iniciar NFV1-P02-T02.
+
+## Pointer de closeout pós-merge
+
+Snapshot acima preservado. Entrega #115 mergeada; CI #620/#621 e Governance #49/#50 SUCCESS.
+Registro final: `NFV1_P02_T01_CLOSEOUT_2026-10-06.md`.

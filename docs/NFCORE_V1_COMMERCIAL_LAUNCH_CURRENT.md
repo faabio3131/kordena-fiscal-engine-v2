@@ -9,6 +9,27 @@
 This file is the persistent CURRENT checkpoint for FM NFCORE V1 Commercial Launch. GitHub remains the first technical source of truth and must be revalidated on every resume.
 
 
+## CURRENT superior — 2026-10-06 — NFV1-P02-T01 CLOSEOUT
+
+- main certificado da entrega: `d38226b66b4a56bbd507b4b74ed20f9d6b94e0fb`;
+- PR #115 MERGED; HEAD `46b92811d52ab03864dd35377f3f918c31e5f83b`;
+- CI PR #620 / main #621 SUCCESS; Plan Governance PR #49 / main #50 SUCCESS;
+- NFV1-P02-T01: DONE_CERTIFIED após este registro integrar main;
+- matriz: `NFCORE_V1_P02_FRONTEND_BACKEND_MATRIX_2026-10-06.md`;
+- closeout: `checkpoints/NFV1_P02_T01_CLOSEOUT_2026-10-06.md`;
+- próximo item: **NFV1-P02-T02 — Superfícies fiscais**, somente após closeout mergeado/gates verdes;
+- P0/P1 certificados; P2 em execução; PORTAL_COMMERCIAL_PARITY_CERTIFIED = NOT MET;
+- gaps P2-G01..G18 continuam atribuídos; nenhuma superfície foi implementada nesta tarefa.
+
+Staging revalidado READ-ONLY pós-merge: deployments inalterados; API/Portal
+`f9b5b2c5b436045947159f1e76be9303f5a95d90`, 1/1 cada; Worker
+`1c34ba001935952f83ec0b065144e0b8311a5650`, 0/1; Postgres 18/volume 5000 MB/1/1.
+STAGING_REAL / VERSION_DRIFT_PRESENT / NOT_CERTIFIED_AGAINST_CURRENT.
+Sem deploy ou operação externa. PRODUCTION_APPROVED=NO; COMMERCIAL_LIVE=NO.
+Snapshots abaixo são históricos e não substituem este closeout nem o GitHub.
+
+---
+
 ## CURRENT superior — 2026-10-06 — NFV1-P02-T01 em execução
 
 Este checkpoint prevalece sobre os snapshots históricos abaixo. O GitHub foi

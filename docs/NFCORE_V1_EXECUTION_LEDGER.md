@@ -106,7 +106,7 @@
 
 ### 8. NFV1-P02-T01 — Matriz frontend x backend
 
-- [ ] **Estado:** em execução
+- [x] **Estado:** concluído
 - **Objetivo:** registrar authority, endpoint, projection, mutações, RBAC, tenant/unit, estados e audit trail de todas as superfícies P2 e da navegação CURRENT.
 - **Depende de:** NFV1-P01-T04 concluído e certificado; closeout PR #114 mergeado; main de entrada `0e5be77267a800384d111c03e30705d95bdb0d28`, CI #618 e Plan Governance #47 SUCCESS.
 - **Entregar:** matriz `docs/NFCORE_V1_P02_FRONTEND_BACKEND_MATRIX_2026-10-06.md`, cobertura 24 itens de navegação + inutilização, gaps P2-G01..G18 com ownership e checkpoint T01.
@@ -115,7 +115,7 @@
 - **Verificação:** cobertura frontend × permissões × executor × matriz; secret scan; migration policy; `python3 scripts/check_nfcore_plan.py`; CI completa remota no exact HEAD e pós-merge.
 - **Riscos / não confirmado:** 14 projeções genéricas não compostas; audit sem filtro de unidade; seleção unit_id não propagada; UI não filtra todos os papéis; E2E mock não prova runtime; gaps e tarefas donas constam na matriz. Staging em drift; produção não aprovada.
 - **Decisões do dono pendentes:** nenhuma para T01; política nova de segurança/usuários e qualquer deploy/secret/fiscal real seguem gates humanos específicos.
-- **Prova:** branch `docs/nfv1-p02-t01-frontend-backend-matrix`; checkpoint `docs/checkpoints/NFV1_P02_T01_FRONTEND_BACKEND_MATRIX_2026-10-06.md`; PR/CI pendentes.
+- **Prova:** PR #115; HEAD `46b92811d52ab03864dd35377f3f918c31e5f83b`; merge SHA `d38226b66b4a56bbd507b4b74ed20f9d6b94e0fb`; CI #620 (PR) e CI #621 (main) SUCCESS; Plan Governance #49 (PR) e #50 (main) SUCCESS; checkpoint `docs/checkpoints/NFV1_P02_T01_CLOSEOUT_2026-10-06.md`.
 
 ### 9. NFV1-P02-T02 — Superfícies fiscais
 
