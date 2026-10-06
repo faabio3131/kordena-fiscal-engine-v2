@@ -9,6 +9,28 @@
 This file is the persistent CURRENT checkpoint for FM NFCORE V1 Commercial Launch. GitHub remains the first technical source of truth and must be revalidated on every resume.
 
 
+## CURRENT superior — 2026-10-06 — NFV1-P02-T03 CLOSEOUT
+
+- PR #121 MERGED; HEAD certificado `2e7333f02d3673196d18c25702b1ab39fbfb5eb8`;
+- main certificado da entrega `1e9c102ab250b822c89cfbb5c3d185ba3c62d9ea`;
+- CI PR #647 / main #648 SUCCESS; Plan Governance PR #68 / main #69 SUCCESS;
+- 1277 Python/PostgreSQL PASS/zero SKIP, 12 frontend e 18 Playwright PASS nas duas CIs;
+- T03 DONE_CERTIFIED após este closeout integrar main e seus gates verdes;
+- cinco formulários/comandos compostos com autoridades existentes, schema aditivo 14;
+- política integral aprovada pelo dono: pedido separado de aprovação canônica de plataforma,
+  scope/versão/expiry, auditoria durável, fail-closed no delivery/retry e DNS/IP/SNI/TLS;
+- outbox fornece telemetria sanitizada; cadastro/aprovação não comprovam tráfego real;
+- closeout: `checkpoints/NFV1_P02_T03_CLOSEOUT_2026-10-06.md`;
+- staging READ-ONLY pós-merge inalterado: API/Portal f9b5b2c 1/1, Worker 1c34ba0 0/1;
+- próxima Task: **NFV1-P02-T04 — Usuários e RBAC**, somente após closeout/main verdes;
+- T04 não iniciada nesta entrega. P0/P1 certificados; P2 em execução; gate NOT MET.
+
+Sem deploy/migration externa/destino/tráfego/secret/certificado real/custo/operação
+fiscal/financeira/homologação/piloto/cutover/Go-No-Go. PRODUCTION_APPROVED=NO;
+COMMERCIAL_LIVE=NO. Registros abaixo são históricos; prevalecem GitHub e este closeout.
+
+---
+
 ## CURRENT superior — 2026-10-06 — P02-T03 política aprovada / implementação interna
 
 - main revalidado: `e203adc111d5e503c68a88bf6104df905b8fe18f`; PR #120 MERGED;
