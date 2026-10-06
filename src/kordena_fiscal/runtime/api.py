@@ -321,6 +321,13 @@ def create_runtime_app(
                 if composition is None
                 else list(composition.fiscal_operation_path.configured_operations)
             ),
+            # P1 certification must distinguish internal ingress composition from
+            # external fiscal execution dependencies. These remain false until
+            # their concrete adapters are composed in the owning phases.
+            "fiscal_provider_transport_real_configured": False,
+            "fiscal_external_secret_client_configured": False,
+            "fiscal_signer_configured": False,
+            "fiscal_runtime_external_execution_ready": False,
             "password_recovery_configured": composition is not None,
             "password_reset_delivery_configured": password_reset_delivery is not None,
             "commercial_activation_configured": (
