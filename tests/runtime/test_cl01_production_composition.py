@@ -209,6 +209,10 @@ def test_postgres_runtime_composes_human_identity_recovery_and_durable_portal(
         assert profile["bridge_workload_identity_configured"] is False
         assert profile["portal_fiscal_operation_executor_configured"] is True
         assert profile["fiscal_operation_handlers_configured"] == []
+        assert profile["fiscal_provider_transport_real_configured"] is False
+        assert profile["fiscal_external_secret_client_configured"] is False
+        assert profile["fiscal_signer_configured"] is False
+        assert profile["fiscal_runtime_external_execution_ready"] is False
         assert profile["password_recovery_configured"] is True
         assert profile["commercial_release_admin_configured"] is True
         assert profile["commercial_release_status"] == "unavailable"
