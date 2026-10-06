@@ -1,7 +1,7 @@
 # NFV1-P02-T03 — Configuração do cliente
 
 Data: 2026-10-06. Repository: `faabio3131/kordena-fiscal-engine-v2`.
-Status: EM EXECUÇÃO; task NÃO certificada.
+Status: BLOQUEADO EXTERNO (T03-B01 — decisão humana de segurança); task NÃO certificada.
 main de entrada: `4b0d008d39ef3c579fa0d521864a92a58907b0de`; PRs abertas: zero.
 Predecessor P02-T02: entrega #117 + closeout #118 MERGED.
 CI main #629 (37503486524) e Plan Governance #58 (37503486424): SUCCESS.
@@ -107,3 +107,30 @@ E2E antigo de ativação: variável de callback assíncrono era verificada de fo
 síncrona após click. 1149 Python/PostgreSQL PASS; não certificar esse run.
 Asserção passou a aguardar o mesmo valor por expect.poll; nenhum teste removido,
 retry de suite introduzido ou comportamento de reset alterado. Reexecutar CI completa.
+
+
+## Checkpoint de parada revisável — T03-B01
+
+Parcela interna de leitura implementada em 616549ded6c73ca0df44b1f686c688d8adbcf3b5,
+ainda candidata aos gates finais. 24 testes Python/PostgreSQL novos e uma jornada
+Playwright nova; fonte verificada sem TODO/FIXME/HACK novos, teste desabilitado,
+provider fake no root, secret real ou endpoint privado real. Nenhuma migration nova.
+Ruff/Mypy/plan passaram na execução anterior; não usar isso como certificação final.
+
+Recurso/autorização exata: aprovação humana da tabela DRAFT de política de destinos
+(e controle de solicitação/aprovação/revogação/egress). Escrever aprovação com dono,
+data e escopo, sem autorizar deploy/credenciais/entrega real. Source: AGENTS.md e
+padrão mestre §6; C04 requer política, mas não especifica esses poderes/limites.
+
+Após aprovação: concluir, na T03, formulários/mutações de referências/bindings/
+destinos/configuração com audit/idempotência/versão, seleção subordinada aos catálogos
+canônicos, policy de webhook no cadastro e no delivery existente; reexecutar gates,
+PR/main/closeout e só então concluir. Não usar esta parcela como DONE_CERTIFIED T03.
+
+Não implementar decisão sensível DRAFT, não acessar DNS/rede privada/secret real,
+não enviar webhook, não criar account/infra, não migrar/deployar staging/produção,
+não antecipar T04, não emitir PRODUCTION_APPROVED/COMMERCIAL_LIVE.
+
+PR/CI/main da parcela de leitura: consultar GitHub no exact HEAD; pending até gates.
+Próxima ação permitida depois dos gates desta parcela: obter decisão T03-B01 e
+retomar esta MESMA Task; não existe successor liberado no grafo sequencial.

@@ -132,7 +132,7 @@
 
 ### 10. NFV1-P02-T03 — Configuração do cliente
 
-- [ ] **Estado:** em execução
+- [ ] **Estado:** bloqueado externo
 - **Objetivo:** executar exatamente a tarefa NFV1-P02-T03 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P02-T02 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** cinco vistas de configuração no Portal existente; leituras duráveis sanitizadas e mutações governadas. Parcela de leitura antes da aprovação da política de destinos; task não certificada.
@@ -140,8 +140,8 @@
 - **Critério de aceite:** critérios específicos de NFV1-P02-T03 no cronograma satisfeitos e nenhum gate transversal violado.
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
 - **Riscos / não confirmado:** política de aprovação/egress não definida; CRUD não integrado; catálogo/provider/Vault operacionais ausentes; staging drift; shell sem resposta, validação T03 remota quando disponível.
-- **Decisões do dono pendentes:** aprovar política sensível de destinos/egress antes de expor cadastro/ativação de webhooks; AGENTS.md e padrão mestre §6; proposta DRAFT será persistida.
-- **Prova:** PENDENTE; predecessor main `4b0d008d39ef3c579fa0d521864a92a58907b0de`, CI #629 e Governance #58 SUCCESS; escopo em `docs/checkpoints/NFV1_P02_T03_CLIENT_CONFIGURATION_2026-10-06.md`.
+- **Decisões do dono pendentes:** T03-B01 — aprovar/ajustar a política sensível de destinos/egress em `docs/NFV1_P02_T03_WEBHOOK_SECURITY_POLICY_PROPOSAL_2026-10-06.md` (DRAFT), antes de cadastrar/ativar webhooks pelo Portal. AGENTS.md e padrão mestre §6 exigem decisão; nenhuma aprovação implícita. T04 não liberada.
+- **Prova:** TASK COMPLETA PENDENTE; parcela de leitura implementada candidata, PR/CI/main ainda sujeitos aos gates; implementação `616549ded6c73ca0df44b1f686c688d8adbcf3b5`; predecessor main `4b0d008d39ef3c579fa0d521864a92a58907b0de`, CI #629 e Governance #58 SUCCESS; escopo em `docs/checkpoints/NFV1_P02_T03_CLIENT_CONFIGURATION_2026-10-06.md`.
 
 ### 11. NFV1-P02-T04 — Usuários e RBAC
 
