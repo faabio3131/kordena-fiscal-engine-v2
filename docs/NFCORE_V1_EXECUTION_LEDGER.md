@@ -106,16 +106,16 @@
 
 ### 8. NFV1-P02-T01 — Matriz frontend x backend
 
-- [ ] **Estado:** pendente
-- **Objetivo:** executar exatamente a tarefa NFV1-P02-T01 do cronograma mestre, sem ampliar escopo.
-- **Depende de:** NFV1-P01-T04 concluído e certificado; mais as dependências formais do cronograma
-- **Entregar:** tudo que o cronograma exige para NFV1-P02-T01, mais os testes/evidências diretamente necessários.
-- **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
-- **Critério de aceite:** critérios específicos de NFV1-P02-T01 no cronograma satisfeitos e nenhum gate transversal violado.
-- **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
-- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** PENDENTE
+- [ ] **Estado:** em execução
+- **Objetivo:** registrar authority, endpoint, projection, mutações, RBAC, tenant/unit, estados e audit trail de todas as superfícies P2 e da navegação CURRENT.
+- **Depende de:** NFV1-P01-T04 concluído e certificado; closeout PR #114 mergeado; main de entrada `0e5be77267a800384d111c03e30705d95bdb0d28`, CI #618 e Plan Governance #47 SUCCESS.
+- **Entregar:** matriz `docs/NFCORE_V1_P02_FRONTEND_BACKEND_MATRIX_2026-10-06.md`, cobertura 24 itens de navegação + inutilização, gaps P2-G01..G18 com ownership e checkpoint T01.
+- **Não fazer:** não implementar T02 ou posteriores; não criar autoridade paralela; não transformar mocks em integração real; não fazer deploy ou operação externa.
+- **Critério de aceite:** 15 superfícies launch-scope e todas as surfaces CURRENT cobertas nos oito eixos; disponibilidade e integração separadas; mutações/gates identificados; gaps atribuídos; CI/Plan Governance verdes; merge/main/closeout antes de concluir.
+- **Verificação:** cobertura frontend × permissões × executor × matriz; secret scan; migration policy; `python3 scripts/check_nfcore_plan.py`; CI completa remota no exact HEAD e pós-merge.
+- **Riscos / não confirmado:** 14 projeções genéricas não compostas; audit sem filtro de unidade; seleção unit_id não propagada; UI não filtra todos os papéis; E2E mock não prova runtime; gaps e tarefas donas constam na matriz. Staging em drift; produção não aprovada.
+- **Decisões do dono pendentes:** nenhuma para T01; política nova de segurança/usuários e qualquer deploy/secret/fiscal real seguem gates humanos específicos.
+- **Prova:** branch `docs/nfv1-p02-t01-frontend-backend-matrix`; checkpoint `docs/checkpoints/NFV1_P02_T01_FRONTEND_BACKEND_MATRIX_2026-10-06.md`; PR/CI pendentes.
 
 ### 9. NFV1-P02-T02 — Superfícies fiscais
 
