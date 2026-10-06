@@ -93,16 +93,16 @@
 
 ### 7. NFV1-P01-T04 — Certificar API fiscal
 
-- [ ] **Estado:** pendente
-- **Objetivo:** executar exatamente a tarefa NFV1-P01-T04 do cronograma mestre, sem ampliar escopo.
+- [ ] **Estado:** em execução
+- **Objetivo:** certificar emissão, consulta, cancelamento, inutilização, reconciliação, capabilities e archive reference sobre o runtime fiscal canônico, sem ampliar escopo.
 - **Depende de:** NFV1-P01-T03 concluído e certificado; mais as dependências formais do cronograma
-- **Entregar:** tudo que o cronograma exige para NFV1-P01-T04, mais os testes/evidências diretamente necessários.
-- **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
-- **Critério de aceite:** critérios específicos de NFV1-P01-T04 no cronograma satisfeitos e nenhum gate transversal violado.
-- **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
-- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** PENDENTE
+- **Entregar:** matriz integrada das sete rotas Bridge do launch-scope, status/operation IDs, idempotência, scope interno, fail-closed sem dependência e readiness sem overclaim.
+- **Não fazer:** não antecipar P2/P6/P7; não criar provider/secret/signer paralelo; não usar synthetic/fake como prova de integração externa real; não executar deploy, homologação ou produção.
+- **Critério de aceite:** sete operações canônicas atravessam um único path quando dependências são explicitamente injetadas em teste; ausência de dependência real retorna FISCAL_RUNTIME_NOT_READY; mutações exigem idempotência; perfil declara provider/secret/signer externo como não configurados; nenhum gate transversal violado.
+- **Verificação:** testes T04 + contratos Bridge + suíte existente e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
+- **Riscos / não confirmado:** esta tarefa certifica a API e integração interna; não prova FiscalProviderTransport real, ExternalSecretClient real, signing operacional externo, homologação oficial, staging CURRENT ou produção.
+- **Decisões do dono pendentes:** nenhuma para certificação interna; merge/deploy/produção permanecem sujeitos a autorização específica.
+- **Prova:** branch `test/nfv1-p01-t04-fiscal-api-certification`; checkpoint `docs/checkpoints/NFV1_P01_T04_FISCAL_API_CERTIFICATION_2026-10-06.md`; PR/CI pendentes.
 
 ### 8. NFV1-P02-T01 — Matriz frontend x backend
 
