@@ -158,16 +158,16 @@
 
 ### 12. NFV1-P02-T05 — Billing/Planos/Uso
 
-- [ ] **Estado:** pendente
-- **Objetivo:** executar exatamente a tarefa NFV1-P02-T05 do cronograma mestre, sem ampliar escopo.
-- **Depende de:** NFV1-P02-T04 concluído e certificado; mais as dependências formais do cronograma
-- **Entregar:** tudo que o cronograma exige para NFV1-P02-T05, mais os testes/evidências diretamente necessários.
-- **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
-- **Critério de aceite:** critérios específicos de NFV1-P02-T05 no cronograma satisfeitos e nenhum gate transversal violado.
-- **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
-- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** PENDENTE
+- [ ] **Estado:** em execução
+- **Objetivo:** expor Billing, Planos e Uso a partir das autoridades comerciais canônicas, mantendo provider/gateway externo como adapter.
+- **Depende de:** NFV1-P02-T04 DONE_CERTIFIED; main de entrada `acc8510f3df11fb284386f951e427dffdeeef242`, CI #654 e Plan Governance #75 SUCCESS.
+- **Entregar:** projeções read-only `billing`, `plans` e `usage` no Portal existente, compostas com subscription durável e catálogo de pricing publicado; RBAC `billing.read`; testes tenant/RBAC/PostgreSQL/frontend.
+- **Não fazer:** não inventar preço/plano/promoção; não alterar billing status/entitlement/usage pelo Portal; não transformar provider externo em autoridade; não iniciar T06; não fazer deploy/operação externa.
+- **Critério de aceite:** assinatura/uso/plano vêm do estado canônico persistido; ausência retorna vazio sem fabricar estado; OWNER/ADMIN/AUDITOR/BILLING têm leitura e OPERATOR falha fechado; tenant vem da sessão; referências externas/provider não vazam; CI integral verde.
+- **Verificação:** Ruff, Mypy, Pytest/PostgreSQL, frontend lint/typecheck/test/build, Playwright, secret/migration/container/SBOM/backup-restore e `python scripts/check_nfcore_plan.py`.
+- **Riscos / não confirmado:** preço/plano/provider reais continuam decisões/configurações externas; P3/P8 ainda precisam certificar aquisição/cobrança operacional; staging permanece em drift.
+- **Decisões do dono pendentes:** nenhuma para esta implementação read-only. Qualquer preço/plano/promoção/provider real exige decisão humana própria e não será inferido.
+- **Prova:** branch `feat/nfv1-p02-t05-billing-plans-usage`; checkpoint `docs/checkpoints/NFV1_P02_T05_BILLING_PLANS_USAGE_2026-10-07.md`; PR/CI pendentes.
 
 ### 13. NFV1-P02-T06 — Inutilização
 

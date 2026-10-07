@@ -1139,6 +1139,12 @@ async function renderSurface(viewId) {
     }
     loading.remove();
     article.append(grid);
+    if (["billing", "plans", "usage"].includes(viewId)) {
+      const notice = document.createElement("p");
+      notice.className = "empty-state";
+      notice.textContent = "Estado lido das autoridades comerciais canônicas do NFCore. Gateways externos permanecem adapters e não definem assinatura, plano, entitlement ou uso.";
+      article.append(notice);
+    }
     if (configurationViews.has(viewId)) {
       const notice = document.createElement("p");
       notice.className = "form-error";

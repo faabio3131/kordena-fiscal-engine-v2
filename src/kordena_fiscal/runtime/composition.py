@@ -16,6 +16,7 @@ from kordena_fiscal.application.commercial_activation import (
 )
 from kordena_fiscal.application.commercial_claim import CommercialClaimService
 from kordena_fiscal.application.commercial_fulfillment import CommercialFulfillmentService
+from kordena_fiscal.application.commercial_portal import CommercialPortalReadService
 from kordena_fiscal.application.commercial_trial import GovernedTrialService
 from kordena_fiscal.application.service import FiscalApplicationService
 from kordena_fiscal.compliance import CapabilityReadinessService
@@ -67,6 +68,7 @@ class RuntimeComposition:
     commercial_provisioning: CommercialCustomerProvisioningService
     commercial_fulfillment: CommercialFulfillmentService
     commercial_claim: CommercialClaimService
+    commercial_portal_read: CommercialPortalReadService
     commercial_activation: CommercialCustomerActivationService
     commercial_trial: GovernedTrialService
     pricing_administration: CommercialPricingAdministrationService
@@ -137,6 +139,10 @@ def build_postgres_runtime_composition(
     pricing_administration = CommercialPricingAdministrationService(
         database.pricing_catalog()
     )
+    commercial_portal_read = CommercialPortalReadService(
+        unit_of_work_factory=canonical_commercial_database,
+        pricing=pricing_administration,
+    )
     commercial_activation = CommercialCustomerActivationService(
         unit_of_work_factory=canonical_commercial_database,
         provisioning=provisioning,
@@ -186,6 +192,7 @@ def build_postgres_runtime_composition(
         operation_executor=portal_fiscal_operation_executor,
         capability_readiness=capability_readiness,
         user_administration=human_administration,
+        commercial_reader=commercial_portal_read,
     )
     return RuntimeComposition(
         human_identity=identity,
@@ -194,6 +201,7 @@ def build_postgres_runtime_composition(
         commercial_provisioning=provisioning,
         commercial_fulfillment=commercial_fulfillment,
         commercial_claim=commercial_claim,
+        commercial_portal_read=commercial_portal_read,
         commercial_activation=commercial_activation,
         commercial_trial=commercial_trial,
         pricing_administration=pricing_administration,

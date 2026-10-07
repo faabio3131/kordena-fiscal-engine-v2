@@ -15,6 +15,10 @@ from typing import Any, Protocol
 
 from fastapi import HTTPException, status
 
+from kordena_fiscal.application.commercial_portal import (
+    CommercialPortalReader,
+    CommercialPortalReadError,
+)
 from kordena_fiscal.compliance import CapabilityReadinessService, JurisdictionCapabilityError
 from kordena_fiscal.compliance.capability_api import CapabilityReadinessError
 from kordena_fiscal.contingency import FiscalOutboxStatus
@@ -116,10 +120,12 @@ class DurableHumanPortalExecutor:
         operation_executor: PortalOperationExecutor | None = None,
         capability_readiness: CapabilityReadinessService | None = None,
         user_administration: HumanAdministrationService | None = None,
+        commercial_reader: CommercialPortalReader | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
         self._operation_executor = operation_executor
         self._user_administration = user_administration
+        self._commercial_reader = commercial_reader
         self._capabilities = (
             GovernedCapabilityReadinessService(
                 unit_of_work_factory=unit_of_work_factory,
@@ -167,6 +173,7 @@ class DurableHumanPortalExecutor:
             "available_surfaces": sorted(
                 self._DURABLE_SURFACES
                 | ({"users"} if self._user_administration is not None else set())
+                | ({"billing", "plans", "usage"} if self._commercial_reader is not None else set())
                 | ({"webhook-egress"} if authority.account.platform_admin else set())
             ),
             "customer_configuration_mode": "governed_configuration",
@@ -193,6 +200,16 @@ class DurableHumanPortalExecutor:
             if self._user_administration is None:
                 raise _runtime_unavailable("Human administration is not configured")
             return self._user_administration.list_users(authority=authority)
+        if surface_id in {"billing", "plans", "usage"}:
+            if self._commercial_reader is None:
+                raise _runtime_unavailable("Canonical commercial reader is not configured")
+            try:
+                return self._commercial_reader.surface(
+                    surface_id=surface_id,
+                    tenant_id=authority.tenant_id,
+                )
+            except CommercialPortalReadError as exc:
+                raise _runtime_unavailable("Canonical commercial state is not readable") from exc
         if surface_id not in self._DURABLE_SURFACES:
             raise _runtime_unavailable(
                 f"Durable projection is not configured for portal surface {surface_id}"

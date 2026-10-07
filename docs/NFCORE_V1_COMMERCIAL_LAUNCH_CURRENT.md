@@ -8,6 +8,27 @@
 
 This file is the persistent CURRENT checkpoint for FM NFCORE V1 Commercial Launch. GitHub remains the first technical source of truth and must be revalidated on every resume.
 
+## CURRENT superior — 2026-10-07 — NFV1-P02-T05 EM EXECUÇÃO
+
+- entrada revalidada: main `acc8510f3df11fb284386f951e427dffdeeef242`, zero PRs abertas;
+- FM NFCORE V1 CI #654 e NFCore Plan Governance #75 SUCCESS no exact main;
+- predecessor P02-T04 DONE_CERTIFIED; P02-T05 é o primeiro item incompleto do ledger;
+- branch `feat/nfv1-p02-t05-billing-plans-usage`;
+- T05 expõe somente leitura de Billing/Planos/Uso a partir de subscription durável e pricing publicado;
+- OWNER/ADMIN/AUDITOR/BILLING usam `billing.read`; OPERATOR permanece negado;
+- tenant é derivado da sessão; ausência de estado canônico retorna vazio;
+- provider/gateway externo permanece adapter e suas referências externas não são projetadas;
+- nenhum preço/plano/promoção/provider real foi criado ou decidido;
+- checkpoint: `checkpoints/NFV1_P02_T05_BILLING_PLANS_USAGE_2026-10-07.md`;
+- gates locais focados e Mypy verdes; PostgreSQL real será autoridade na CI;
+- T05 permanece IN_PROGRESS; T06 não iniciada; gate P2 NOT MET.
+
+Sem deploy, staging write, billing externo, checkout, segredo/credencial real,
+operação fiscal/financeira externa, produção, DNS ou Go-Live.
+PRODUCTION_APPROVED=NO; COMMERCIAL_LIVE=NO.
+
+---
+
 ## CURRENT superior — 2026-10-07 — NFV1-P02-T04 CLOSEOUT
 
 - PR #123 MERGED; HEAD `14e27b269344b9bec549d13dd96434e8a41ad8aa`;
