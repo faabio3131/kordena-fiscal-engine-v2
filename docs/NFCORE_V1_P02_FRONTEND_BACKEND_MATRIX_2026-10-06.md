@@ -8,20 +8,24 @@ PRs abertas na entrada: zero. P0/P1 certificados; closeout P1: PR #114 mergeada.
 
 ## Evolução CURRENT T05 — 2026-10-07
 
-Branch candidata `feat/nfv1-p02-t05-billing-plans-usage` conecta as três superfícies
-read-only `billing`, `plans` e `usage` às autoridades comerciais já existentes.
-A composição usa subscription durável por tenant e catálogo de pricing publicado;
-nenhum provider externo vira fonte de verdade.
+PR #125 MERGED; HEAD `d0a81ca9cf641295498b3ef92db256d4b3f417c0`; merge/main
+`7332943467dd876c6c72c163d73a9c3454e05828`. CI #655 (PR) e #656 (main)
+SUCCESS; Plan Governance #76 (PR) e #77 (main) SUCCESS.
 
-RBAC existente é preservado: OWNER/ADMIN/AUDITOR/BILLING possuem `billing.read`;
+As três superfícies read-only `billing`, `plans` e `usage` estão compostas sobre
+as autoridades comerciais existentes. Subscription durável por tenant governa
+Billing/Uso; catálogo de pricing publicado governa Planos; provider externo permanece
+adapter e nunca vira fonte de verdade.
+
+RBAC existente foi preservado: OWNER/ADMIN/AUDITOR/BILLING possuem `billing.read`;
 OPERATOR falha fechado. Tenant vem da sessão. Billing não projeta provider/external
 subscription; plans não projeta external_price_reference/contract_reference; usage
 deriva somente do checkpoint persistido e quotas do plano. Ausência de subscription
 ou pricing retorna lista vazia e não fabrica estado.
 
 Nenhum preço, plano, promoção, trial ou provider real foi decidido nesta tarefa.
-Valores em testes são sintéticos. P2-G10 fica em implementação nesta T05; validação
-operacional de cobrança/aquisição permanece P3/P8. P2 segue NOT MET.
+Valores em testes são sintéticos. P2-G10 está resolvido internamente por T05;
+validação operacional de cobrança/aquisição permanece P3/P8. P2 segue NOT MET.
 
 ## Evolução CURRENT T04 — 2026-10-07
 
