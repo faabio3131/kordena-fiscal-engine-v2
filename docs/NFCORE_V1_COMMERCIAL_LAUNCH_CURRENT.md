@@ -9,6 +9,29 @@
 This file is the persistent CURRENT checkpoint for FM NFCORE V1 Commercial Launch. GitHub remains the first technical source of truth and must be revalidated on every resume.
 
 
+## CURRENT superior — 2026-10-07 — NFV1-P02-T04 EM EXECUÇÃO
+
+- entrada revalidada: main `d8d958a33a7a2364e005cb5742baecae9ed1e341`, zero PRs abertas;
+- FM NFCORE V1 CI #650 e NFCore Plan Governance #71 SUCCESS no exact main;
+- predecessor P02-T03 DONE_CERTIFIED; P02-T04 é o primeiro item incompleto do ledger;
+- branch `feat/nfv1-p02-t04-users-rbac` criada exatamente do main certificado;
+- implementação candidata reutiliza HumanAccount/PortalRole/PortalPermission e `user.manage`;
+- política T04 aprovada pelo dono em 2026-10-07: OWNER administra todos os papéis do tenant; ADMIN administra somente OPERATOR/AUDITOR/BILLING; OPERATOR/AUDITOR/BILLING não administram usuários;
+- tenant deriva da sessão, unit scope não pode ampliar, cross-tenant falha sem disclosure;
+- `platform_admin` não é papel novo e não pode ser concedido/mutado pela administração do tenant;
+- criação não retorna senha/token; ativação continua pelo fluxo canônico de recuperação;
+- update é versionado, replay-safe, revoga sessões/resets e registra audit atômico no PostgreSQL;
+- backend agora filtra `available_surfaces` pela permissão real antes da navegação;
+- checkpoint: `checkpoints/NFV1_P02_T04_USERS_RBAC_2026-10-07.md`;
+- gates locais dirigidos e frontend verdes; suíte integral/CI/PR/main ainda pendentes;
+- T04 permanece IN_PROGRESS, T05 não iniciada, gate P2 NOT MET.
+
+Sem deploy, staging write, migration externa, segredo/credencial real, e-mail real,
+operação fiscal/financeira, homologação, produção ou Go-Live. PRODUCTION_APPROVED=NO;
+COMMERCIAL_LIVE=NO.
+
+---
+
 ## CURRENT superior — 2026-10-06 — NFV1-P02-T03 CLOSEOUT
 
 - PR #121 MERGED; HEAD certificado `2e7333f02d3673196d18c25702b1ab39fbfb5eb8`;

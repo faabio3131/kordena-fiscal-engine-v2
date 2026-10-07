@@ -6,6 +6,21 @@ Baseline auditado: `main@0e5be77267a800384d111c03e30705d95bdb0d28`.
 CI de origem: FM NFCORE V1 CI #618 SUCCESS; NFCore Plan Governance #47 SUCCESS.
 PRs abertas na entrada: zero. P0/P1 certificados; closeout P1: PR #114 mergeada.
 
+## Evolução CURRENT T04 — 2026-10-07
+
+Política T04 aprovada pelo dono como conjunto: OWNER administra todos os papéis do
+próprio tenant; ADMIN somente OPERATOR/AUDITOR/BILLING; demais papéis não administram
+usuários. Tenant e unit scope permanecem derivados da sessão; `platform_admin` é
+autoridade separada e não concedível/mutável pelo tenant.
+
+Implementação candidata em `feat/nfv1-p02-t04-users-rbac`: surface `users`
+durável, createUser/updateUser com CSRF, Idempotency-Key, versão e audit; atualização
+revoga sessões/resets e protege o último OWNER ativo; navegação é filtrada pela
+permissão backend. O filtro de audit para contas restritas por unidade também foi
+corrigido. Isso fecha internamente P2-G05, P2-G06 (parcela RBAC/navegação) e P2-G09,
+condicionado a PR/CI/main/closeout verdes. Com a T04 integrada, serão 17 surfaces
+genéricas duráveis; usage/billing/plans permanecem T05 e support permanece T07.
+
 ## Evolução CURRENT T03 — 2026-10-06
 
 PR #121: cinco formulários/comandos canônicos (configureCertificates/Providers/

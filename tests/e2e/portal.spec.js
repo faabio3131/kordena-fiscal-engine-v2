@@ -380,3 +380,60 @@ test("platform egress review uses existing session and approved target version",
   await page.getByRole("button", {name: "Aprovar egress"}).click();
   await expect(page.locator("#egress-review-form [role=status]")).toContainText("Decisão approved registrada · versão 2");
 });
+
+
+test("tenant admin user management exposes only approved delegated roles and server-owned authority", async ({page, context}) => {
+  await context.addCookies([
+    {name: "nfcore_session", value: "synthetic-session", domain: "127.0.0.1", path: "/"},
+    {name: "nfcore_csrf", value: "synthetic-csrf", domain: "127.0.0.1", path: "/"},
+  ]);
+  await page.route("**/v1/portal/bootstrap", (route) => route.fulfill({json: {
+    tenant_id: "tenant-a", role: "admin", platform_admin: false,
+    unit_ids: ["unit-a"], permissions: ["portal.read", "user.manage"],
+    supported_documents: ["nfe"],
+    projection: {
+      available_surfaces: ["overview", "users"],
+      authorized_units: [{unit_id: "unit-a", display_name: "Unit A", environments: ["homologation"]}],
+    },
+  }}));
+  await page.route("**/v1/portal/surfaces/users*", (route) => route.fulfill({json: {
+    surface: "users",
+    rows: [
+      {account_id: "admin-a", email: "admin@example.com", role: "admin", unit_ids: ["unit-a"], enabled: true, platform_admin: false, version: 0, mutable: false},
+      {account_id: "operator-a", email: "operator@example.com", role: "operator", unit_ids: ["unit-a"], enabled: true, platform_admin: false, version: 0, mutable: true},
+    ],
+  }}));
+
+  let command = null;
+  await page.route("**/v1/portal/operations/createUser", async (route) => {
+    command = route.request().postDataJSON();
+    expect(route.request().headers()["x-csrf-token"]).toBe("synthetic-csrf");
+    expect(route.request().headers()["idempotency-key"].length).toBeGreaterThan(10);
+    await route.fulfill({json: {
+      account_id: "billing-a", email: "billing@example.com", role: "billing",
+      unit_ids: ["unit-a"], enabled: true, platform_admin: false, version: 0,
+      created: true, replay: false, activation: "password_recovery",
+    }});
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", {name: "Usuários", exact: true}).click();
+  await expect(page.locator("#user-administration-form")).toBeVisible();
+
+  const roleOptions = await page.locator("#user-target-role option").allTextContents();
+  expect(roleOptions).toEqual(["OPERATOR", "AUDITOR", "BILLING"]);
+
+  await page.locator("#user-administration-form input[type=email]").fill("billing@example.com");
+  await page.locator("#user-target-role").selectOption("billing");
+  await page.locator("#user-target-units").fill("unit-a");
+  await page.getByRole("button", {name: "Criar usuário"}).click();
+
+  await expect.poll(() => command).not.toBeNull();
+  expect(command).toEqual({
+    email: "billing@example.com",
+    target_role: "billing",
+    target_unit_ids: ["unit-a"],
+  });
+  expect(command.tenant_id).toBeUndefined();
+  expect(command.platform_admin).toBeUndefined();
+});

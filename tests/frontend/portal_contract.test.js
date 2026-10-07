@@ -116,6 +116,18 @@ test("activation delivery consumes the reset token from the URL fragment", () =>
   assert.match(script, /fragment\.delete\("token"\)/);
 });
 
+test("tenant user administration is session-authorized and cannot grant platform authority", () => {
+  assert.match(script, /createUser/);
+  assert.match(script, /updateUser/);
+  assert.match(script, /user\.manage/);
+  assert.match(script, /user-administration-form/);
+  assert.match(script, /target_role/);
+  assert.match(script, /target_unit_ids/);
+  assert.match(script, /platform_admin não pode ser concedido aqui/);
+  assert.match(script, /sessões anteriores revogadas/);
+  assert.doesNotMatch(script, /platform_admin\s*:\s*true/);
+});
+
 test("customer configuration forms use existing portal commands and distinguish approval from delivery", () => {
   for (const operation of ["configureCertificates", "configureProviders", "configureWebhooks", "configureIntegrations", "configureSettings"]) assert.ok(script.includes(operation));
   assert.match(script, /customer_configuration_operations/);

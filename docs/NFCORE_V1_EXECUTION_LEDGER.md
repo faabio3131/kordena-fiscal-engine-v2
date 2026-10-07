@@ -145,16 +145,16 @@
 
 ### 11. NFV1-P02-T04 — Usuários e RBAC
 
-- [ ] **Estado:** pendente
-- **Objetivo:** executar exatamente a tarefa NFV1-P02-T04 do cronograma mestre, sem ampliar escopo.
-- **Depende de:** NFV1-P02-T03 concluído e certificado; mais as dependências formais do cronograma
-- **Entregar:** tudo que o cronograma exige para NFV1-P02-T04, mais os testes/evidências diretamente necessários.
-- **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
-- **Critério de aceite:** critérios específicos de NFV1-P02-T04 no cronograma satisfeitos e nenhum gate transversal violado.
-- **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
-- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** PENDENTE
+- [ ] **Estado:** em execução
+- **Objetivo:** administrar usuários pelo HumanAccount/RBAC canônico, sem segunda autenticação ou autoridade paralela.
+- **Depende de:** NFV1-P02-T03 DONE_CERTIFIED; main de entrada `d8d958a33a7a2364e005cb5742baecae9ed1e341`, CI #650 e Plan Governance #71 SUCCESS.
+- **Entregar:** superfície `users`, criação/alteração governadas, OWNER/ADMIN via `user.manage`, testes de OPERATOR/AUDITOR/BILLING/platform_admin, escopo tenant/unit, revogação de sessões, audit e UI.
+- **Não fazer:** não permitir tenant/browser definir autoridade; não conceder/mutar `platform_admin`; não criar papéis/RBAC/auth paralelos; não iniciar T05; não fazer deploy/operação externa.
+- **Critério de aceite:** papéis existentes e platform_admin certificados; grants seguem exatamente a matriz de delegação aprovada e nunca excedem tenant/unit scope do ator; cross-tenant/unit falha fechado; mutações têm CSRF/idempotência/versão/audit; sessões são revogadas; frontend e CI verdes.
+- **Verificação:** Ruff, Mypy, Pytest/real PostgreSQL na CI, frontend lint/typecheck/test/build, security/migration/secret gates e `python scripts/check_nfcore_plan.py`.
+- **Riscos / não confirmado:** CI remota/PostgreSQL e gates de PR/main ainda pendentes; staging permanece em drift e fora desta tarefa.
+- **Decisões do dono pendentes:** nenhuma. Política T04 aprovada como conjunto pelo dono em 2026-10-07: OWNER pode administrar todos os papéis do próprio tenant; ADMIN somente OPERATOR/AUDITOR/BILLING; OPERATOR/AUDITOR/BILLING não administram usuários; tenant/unit permanecem server-side; platform_admin não é concedível pelo tenant; mudanças de autoridade revogam sessões; último OWNER ativo é protegido; criação usa o fluxo canônico de ativação/reset sem senha/token expostos.
+- **Prova:** branch `feat/nfv1-p02-t04-users-rbac`; checkpoint `docs/checkpoints/NFV1_P02_T04_USERS_RBAC_2026-10-07.md`; PR/CI ainda pendentes.
 
 ### 12. NFV1-P02-T05 — Billing/Planos/Uso
 
