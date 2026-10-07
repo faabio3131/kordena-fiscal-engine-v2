@@ -6,6 +6,23 @@ Baseline auditado: `main@0e5be77267a800384d111c03e30705d95bdb0d28`.
 CI de origem: FM NFCORE V1 CI #618 SUCCESS; NFCore Plan Governance #47 SUCCESS.
 PRs abertas na entrada: zero. P0/P1 certificados; closeout P1: PR #114 mergeada.
 
+## Evolução CURRENT T05 — 2026-10-07
+
+Branch candidata `feat/nfv1-p02-t05-billing-plans-usage` conecta as três superfícies
+read-only `billing`, `plans` e `usage` às autoridades comerciais já existentes.
+A composição usa subscription durável por tenant e catálogo de pricing publicado;
+nenhum provider externo vira fonte de verdade.
+
+RBAC existente é preservado: OWNER/ADMIN/AUDITOR/BILLING possuem `billing.read`;
+OPERATOR falha fechado. Tenant vem da sessão. Billing não projeta provider/external
+subscription; plans não projeta external_price_reference/contract_reference; usage
+deriva somente do checkpoint persistido e quotas do plano. Ausência de subscription
+ou pricing retorna lista vazia e não fabrica estado.
+
+Nenhum preço, plano, promoção, trial ou provider real foi decidido nesta tarefa.
+Valores em testes são sintéticos. P2-G10 fica em implementação nesta T05; validação
+operacional de cobrança/aquisição permanece P3/P8. P2 segue NOT MET.
+
 ## Evolução CURRENT T04 — 2026-10-07
 
 Política T04 aprovada explicitamente pelo dono como conjunto: OWNER administra todos

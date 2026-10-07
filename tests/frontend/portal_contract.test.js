@@ -128,6 +128,15 @@ test("tenant user administration is session-authorized and cannot grant platform
   assert.doesNotMatch(script, /platform_admin\s*:\s*true/);
 });
 
+test("billing plans and usage remain read-only canonical projections", () => {
+  assert.match(script, /usage.*Uso/);
+  assert.match(script, /billing.*Billing/);
+  assert.match(script, /plans.*Planos/);
+  assert.match(script, /autoridades comerciais canônicas do NFCore/);
+  assert.match(script, /Gateways externos permanecem adapters/);
+  assert.doesNotMatch(script, /updateSubscription|setBillingStatus|recordUsage/);
+});
+
 test("customer configuration forms use existing portal commands and distinguish approval from delivery", () => {
   for (const operation of ["configureCertificates", "configureProviders", "configureWebhooks", "configureIntegrations", "configureSettings"]) assert.ok(script.includes(operation));
   assert.match(script, /customer_configuration_operations/);
