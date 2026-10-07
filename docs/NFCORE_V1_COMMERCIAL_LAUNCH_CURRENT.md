@@ -8,6 +8,31 @@
 
 This file is the persistent CURRENT checkpoint for FM NFCORE V1 Commercial Launch. GitHub remains the first technical source of truth and must be revalidated on every resume.
 
+## CURRENT superior — 2026-10-07 — NFV1-P02-T04 CLOSEOUT
+
+- PR #123 MERGED; HEAD `14e27b269344b9bec549d13dd96434e8a41ad8aa`;
+- merge/main da implementação `459f7d1d4fd54997345d9458e1b365d49a50e31d`;
+- CI PR #651 SUCCESS; Plan Governance PR #72 e main #73 SUCCESS;
+- política T04 explicitamente aprovada pelo dono em 2026-10-07 e reconciliada contra o merge concorrente;
+- OWNER administra OWNER/ADMIN/OPERATOR/AUDITOR/BILLING no próprio tenant;
+- ADMIN administra somente OPERATOR/AUDITOR/BILLING; demais papéis falham fechado;
+- tenant/unit são server-side; platform_admin permanece separado e não concedível;
+- updates incrementam session_epoch, revogam sessões/resets e protegem o último OWNER ativo;
+- criação não recebe senha arbitrária nem retorna senha/token; usa recovery canônico;
+- users durável + createUser/updateUser + audit sanitizado + UI integrada;
+- navegação filtrada por permissão backend e audit restrito por unit_ids;
+- CI main #652 da implementação ficou presa em infraestrutura no Install Chromium e não é prova final;
+- closeout: `checkpoints/NFV1_P02_T04_CLOSEOUT_2026-10-07.md`;
+- T04 = DONE_CERTIFIED somente após este closeout integrar main e seus próprios gates completos verdes;
+- próxima Task: **NFV1-P02-T05 — Billing/Planos/Uso**; não iniciada neste closeout;
+- P0/P1 certificados; P2 continua em execução; gate PORTAL_COMMERCIAL_PARITY_CERTIFIED = NOT MET.
+
+Sem deploy, staging write, migration externa, segredo/credencial real, e-mail real,
+operação fiscal/financeira, homologação, produção, DNS ou Go-Live.
+PRODUCTION_APPROVED=NO; COMMERCIAL_LIVE=NO.
+
+---
+
 
 ## CURRENT superior — 2026-10-07 — NFV1-P02-T04 EM EXECUÇÃO
 
