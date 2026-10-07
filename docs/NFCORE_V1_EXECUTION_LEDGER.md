@@ -145,16 +145,16 @@
 
 ### 11. NFV1-P02-T04 — Usuários e RBAC
 
-- [ ] **Estado:** em execução
+- [x] **Estado:** concluído
 - **Objetivo:** administrar usuários pelo HumanAccount/RBAC canônico, sem segunda autenticação ou autoridade paralela.
 - **Depende de:** NFV1-P02-T03 DONE_CERTIFIED; main de entrada `d8d958a33a7a2364e005cb5742baecae9ed1e341`, CI #650 e Plan Governance #71 SUCCESS.
 - **Entregar:** superfície `users`, criação/alteração governadas, OWNER/ADMIN via `user.manage`, testes de OPERATOR/AUDITOR/BILLING/platform_admin, escopo tenant/unit, revogação de sessões, audit e UI.
 - **Não fazer:** não permitir tenant/browser definir autoridade; não conceder/mutar `platform_admin`; não criar papéis/RBAC/auth paralelos; não iniciar T05; não fazer deploy/operação externa.
 - **Critério de aceite:** papéis existentes e platform_admin certificados; grants seguem exatamente a matriz de delegação aprovada e nunca excedem tenant/unit scope do ator; cross-tenant/unit falha fechado; mutações têm CSRF/idempotência/versão/audit; sessões são revogadas; frontend e CI verdes.
-- **Verificação:** Ruff, Mypy, Pytest/real PostgreSQL na CI, frontend lint/typecheck/test/build, security/migration/secret gates e `python scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** CI remota/PostgreSQL e gates de PR/main ainda pendentes; staging permanece em drift e fora desta tarefa.
-- **Decisões do dono pendentes:** nenhuma. Política T04 aprovada como conjunto pelo dono em 2026-10-07: OWNER pode administrar todos os papéis do próprio tenant; ADMIN somente OPERATOR/AUDITOR/BILLING; OPERATOR/AUDITOR/BILLING não administram usuários; tenant/unit permanecem server-side; platform_admin não é concedível pelo tenant; mudanças de autoridade revogam sessões; último OWNER ativo é protegido; criação usa o fluxo canônico de ativação/reset sem senha/token expostos.
-- **Prova:** branch `feat/nfv1-p02-t04-users-rbac`; checkpoint `docs/checkpoints/NFV1_P02_T04_USERS_RBAC_2026-10-07.md`; PR/CI ainda pendentes.
+- **Verificação:** Ruff, Mypy, Pytest/PostgreSQL, frontend lint/typecheck/test/build, Playwright, security/migration/secret gates, containers/SBOM/backup-restore e `python scripts/check_nfcore_plan.py` na PR e no closeout/main.
+- **Riscos / não confirmado:** staging permanece em drift e fora desta tarefa; integração operacional externa/produção não foi executada. CI main #652 da implementação ficou presa em infraestrutura no Install Chromium após gates anteriores verdes e não é usada como evidência final; este closeout exige sua própria PR/main integral verde.
+- **Decisões do dono pendentes:** nenhuma. Política T04 aprovada explicitamente como conjunto em 2026-10-07: OWNER administra todos os papéis do próprio tenant; ADMIN somente OPERATOR/AUDITOR/BILLING; demais papéis não administram usuários; tenant/unit permanecem server-side; platform_admin não é concedível pelo tenant; mudanças de autoridade revogam sessões; último OWNER ativo é protegido; criação usa o fluxo canônico de ativação/reset sem senha/token expostos. A reconciliação pós-merge confirmou que a PR #123 corresponde exatamente a esta política.
+- **Prova:** PR #123 MERGED; HEAD `14e27b269344b9bec549d13dd96434e8a41ad8aa`; merge/main `459f7d1d4fd54997345d9458e1b365d49a50e31d`; CI #651 (PR) SUCCESS; Plan Governance #72 (PR) e #73 (main) SUCCESS; checkpoint `docs/checkpoints/NFV1_P02_T04_USERS_RBAC_2026-10-07.md`; closeout `docs/checkpoints/NFV1_P02_T04_CLOSEOUT_2026-10-07.md`, certificação final condicionada ao merge/gates completos deste registro.
 
 ### 12. NFV1-P02-T05 — Billing/Planos/Uso
 
