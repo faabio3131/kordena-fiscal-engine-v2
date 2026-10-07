@@ -8,18 +8,23 @@ PRs abertas na entrada: zero. P0/P1 certificados; closeout P1: PR #114 mergeada.
 
 ## Evolução CURRENT T04 — 2026-10-07
 
-Política T04 aprovada pelo dono como conjunto: OWNER administra todos os papéis do
-próprio tenant; ADMIN somente OPERATOR/AUDITOR/BILLING; demais papéis não administram
-usuários. Tenant e unit scope permanecem derivados da sessão; `platform_admin` é
-autoridade separada e não concedível/mutável pelo tenant.
+Política T04 aprovada explicitamente pelo dono como conjunto: OWNER administra todos
+os papéis do próprio tenant; ADMIN somente OPERATOR/AUDITOR/BILLING; demais papéis
+não administram usuários. Tenant e unit scope permanecem derivados da sessão;
+`platform_admin` é autoridade separada e não concedível/mutável pelo tenant.
 
-Implementação candidata em `feat/nfv1-p02-t04-users-rbac`: surface `users`
-durável, createUser/updateUser com CSRF, Idempotency-Key, versão e audit; atualização
-revoga sessões/resets e protege o último OWNER ativo; navegação é filtrada pela
-permissão backend. O filtro de audit para contas restritas por unidade também foi
-corrigido. Isso fecha internamente P2-G05, P2-G06 (parcela RBAC/navegação) e P2-G09,
-condicionado a PR/CI/main/closeout verdes. Com a T04 integrada, serão 17 surfaces
-genéricas duráveis; usage/billing/plans permanecem T05 e support permanece T07.
+PR #123 MERGED, HEAD `14e27b269344b9bec549d13dd96434e8a41ad8aa`, merge/main
+`459f7d1d4fd54997345d9458e1b365d49a50e31d`. CI PR #651 SUCCESS; Governance
+#72 (PR) e #73 (main) SUCCESS. A implementação integra surface `users` durável,
+createUser/updateUser com CSRF, Idempotency-Key, versão e audit; update revoga
+sessões/resets e protege o último OWNER ativo; navegação é filtrada pela permissão
+backend; audit de conta restrita respeita unit_ids. P2-G05, P2-G06 na parcela
+RBAC/navegação e P2-G09 ficam resolvidos internamente, condicionado ao closeout/main
+verdes. CI main #652 da implementação ficou presa em infraestrutura no Install
+Chromium e não é usada como evidência final.
+
+Com T04 certificada serão 17 surfaces genéricas duráveis; usage/billing/plans
+permanecem T05 e support permanece T07. P2 continua aberto.
 
 ## Evolução CURRENT T03 — 2026-10-06
 
