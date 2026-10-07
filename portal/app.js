@@ -922,6 +922,165 @@ function appendEgressReview(article) {
   }); article.append(form, decisionForm);
 }
 
+/** @returns {string[]} */
+function assignableUserRoles() {
+  if (bootstrapState?.role === "owner") return ["owner", "admin", "operator", "auditor", "billing"];
+  if (bootstrapState?.role === "admin") return ["operator", "auditor", "billing"];
+  return [];
+}
+
+/** @param {string} value @returns {string[]|null} */
+function parseUserUnits(value) {
+  const normalized = value.split(",").map((item) => item.trim()).filter(Boolean);
+  return normalized.length ? [...new Set(normalized)] : null;
+}
+
+/** @param {HTMLElement} article @param {Record<string, unknown>[]} rows */
+function appendUserAdministration(article, rows) {
+  if (!bootstrapState?.permissions.includes("user.manage")) return;
+  const roles = assignableUserRoles();
+  if (!roles.length) return;
+
+  const form = document.createElement("form");
+  form.id = "user-administration-form";
+  form.className = "panel-form";
+
+  const intro = document.createElement("p");
+  intro.textContent = "Administração baseada na autoridade da sessão. O tenant nunca vem do navegador, platform_admin não pode ser concedido aqui e alterações revogam sessões ativas.";
+
+  const existingLabel = document.createElement("label");
+  existingLabel.textContent = "Usuário";
+  const existing = document.createElement("select");
+  existing.id = "user-existing";
+  const createOption = document.createElement("option");
+  createOption.value = "";
+  createOption.textContent = "Novo usuário";
+  existing.append(createOption);
+  rows.forEach((row, index) => {
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = String(row.email || row.account_id || ("Usuário " + (index + 1)));
+    existing.append(option);
+  });
+  existingLabel.append(existing);
+
+  const emailLabel = document.createElement("label");
+  emailLabel.textContent = "E-mail";
+  const email = document.createElement("input");
+  email.type = "email";
+  email.autocomplete = "email";
+  email.required = true;
+  emailLabel.append(email);
+
+  const roleLabel = document.createElement("label");
+  roleLabel.textContent = "Papel";
+  const role = document.createElement("select");
+  role.id = "user-target-role";
+  for (const roleName of roles) {
+    const option = document.createElement("option");
+    option.value = roleName;
+    option.textContent = roleName.toUpperCase();
+    role.append(option);
+  }
+  roleLabel.append(role);
+
+  const unitsLabel = document.createElement("label");
+  unitsLabel.textContent = "Unidades (separadas por vírgula; vazio = todas, quando autorizado)";
+  const units = document.createElement("input");
+  units.id = "user-target-units";
+  units.autocomplete = "off";
+  unitsLabel.append(units);
+
+  const enabledLabel = document.createElement("label");
+  const enabled = document.createElement("input");
+  enabled.type = "checkbox";
+  enabled.checked = true;
+  enabledLabel.append(enabled, document.createTextNode(" Conta habilitada"));
+
+  const submit = document.createElement("button");
+  submit.type = "submit";
+  submit.className = "primary";
+  submit.textContent = "Criar usuário";
+  const statusLine = document.createElement("p");
+  statusLine.setAttribute("role", "status");
+  statusLine.className = "form-error";
+
+  /** @type {{fingerprint:string,key:string}|null} */
+  let attempt = null;
+
+  function loadSelection() {
+    const row = existing.value === "" ? null : rows[Number(existing.value)];
+    email.disabled = Boolean(row);
+    email.value = row ? String(row.email || "") : "";
+    const rowRole = row ? String(row.role || "") : "";
+    if (rowRole && roles.includes(rowRole)) role.value = rowRole;
+    else role.value = roles[0];
+    units.value = row && Array.isArray(row.unit_ids) ? row.unit_ids.join(", ") : "";
+    enabled.checked = row ? row.enabled === true : true;
+    const mutable = !row || row.mutable === true;
+    role.disabled = !mutable;
+    units.disabled = !mutable;
+    enabled.disabled = !mutable;
+    submit.disabled = !mutable;
+    submit.textContent = row ? "Salvar usuário" : "Criar usuário";
+    statusLine.textContent = row && !mutable
+      ? "Conta visível, mas protegida contra alteração por esta autoridade."
+      : row?.platform_admin === true
+        ? "Autoridade de plataforma nunca é administrada por esta tela."
+        : "";
+    attempt = null;
+  }
+  existing.addEventListener("change", loadSelection);
+  loadSelection();
+
+  form.append(intro, existingLabel, emailLabel, roleLabel, unitsLabel, enabledLabel, submit, statusLine);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    const row = existing.value === "" ? null : rows[Number(existing.value)];
+    if (row && row.mutable !== true) return;
+    const operation = row ? "updateUser" : "createUser";
+    const payload = row
+      ? {
+          target_account_id: row.account_id,
+          expected_version: Number(row.version),
+          target_role: role.value,
+          target_unit_ids: parseUserUnits(units.value),
+          enabled: enabled.checked,
+        }
+      : {
+          email: email.value.trim(),
+          target_role: role.value,
+          target_unit_ids: parseUserUnits(units.value),
+        };
+    const fingerprint = JSON.stringify([operation, payload]);
+    if (!attempt || attempt.fingerprint !== fingerprint) {
+      attempt = {fingerprint, key: crypto.randomUUID()};
+    }
+    submit.disabled = true;
+    statusLine.textContent = "";
+    try {
+      const result = await api("/v1/portal/operations/" + operation, {
+        method: "POST",
+        headers: {"X-CSRF-Token": csrfToken(), "Idempotency-Key": attempt.key},
+        body: JSON.stringify(payload),
+      });
+      statusLine.textContent = result.created
+        ? "Usuário criado. A senha deve ser definida pelo fluxo existente de recuperação."
+        : result.replay
+          ? "Estado já aplicado; nenhuma duplicação foi criada."
+          : "Usuário atualizado e sessões anteriores revogadas.";
+      attempt = null;
+      await bootstrap();
+      await renderSurface("users");
+    } catch (error) {
+      statusLine.textContent = error instanceof Error ? error.message : "Administração de usuário rejeitada";
+      submit.disabled = false;
+    }
+  });
+  article.append(form);
+}
+
 /** @param {string} viewId */
 async function renderSurface(viewId) {
   if (currentView !== viewId) fiscalPageOffset = 0;
@@ -988,6 +1147,7 @@ async function renderSurface(viewId) {
       article.append(notice);
     }
     if (viewId === "onboarding") appendOnboardingControls(article);
+    if (viewId === "users") appendUserAdministration(article, rows);
     if (["documents", "issuances", "reconciliation"].includes(viewId)) appendFiscalActions(article);
     if (scopedViews.has(viewId) && viewId !== "capabilities") {
       const previous = document.createElement("button");

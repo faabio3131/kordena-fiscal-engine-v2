@@ -84,6 +84,8 @@ _OPERATION_PERMISSIONS: dict[str, PortalPermission] = {
     "configureWebhooks": PortalPermission.INTEGRATION_MANAGE,
     "configureIntegrations": PortalPermission.INTEGRATION_MANAGE,
     "configureSettings": PortalPermission.CONFIGURATION_WRITE,
+    "createUser": PortalPermission.USER_MANAGE,
+    "updateUser": PortalPermission.USER_MANAGE,
     "issueFiscalDocument": PortalPermission.DOCUMENT_ISSUE,
     "queryFiscalDocument": PortalPermission.DOCUMENT_QUERY,
     "cancelFiscalDocument": PortalPermission.DOCUMENT_CANCEL,
@@ -98,6 +100,8 @@ _IDEMPOTENT_MUTATIONS = {
     "configureWebhooks",
     "configureIntegrations",
     "configureSettings",
+    "createUser",
+    "updateUser",
     "issueFiscalDocument",
     "cancelFiscalDocument",
     "inutilizeFiscalRange",
@@ -254,11 +258,19 @@ def create_portal_router(
         _authorized(auth, PortalPermission.PORTAL_READ)
         projection = dict(require_executor().snapshot(authority=auth))
         available = projection.get("available_surfaces")
-        if auth.account.platform_admin and isinstance(available, (list, tuple)):
-            normalized = [str(item) for item in available]
-            for platform_surface in platform_surfaces:
-                if platform_surface not in normalized:
-                    normalized.append(platform_surface)
+        if isinstance(available, (list, tuple)):
+            normalized = [
+                str(item)
+                for item in available
+                if (
+                    _SURFACE_PERMISSIONS.get(str(item)) is None
+                    or _SURFACE_PERMISSIONS[str(item)] in auth.permissions
+                )
+            ]
+            if auth.account.platform_admin:
+                for platform_surface in platform_surfaces:
+                    if platform_surface not in normalized:
+                        normalized.append(platform_surface)
             projection["available_surfaces"] = normalized
         _safe_payload(projection)
         unit_ids = sorted(auth.account.unit_ids) if auth.account.unit_ids is not None else None

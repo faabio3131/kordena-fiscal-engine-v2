@@ -31,6 +31,7 @@ from kordena_fiscal.persistence.commercial_fulfillment import (
     postgres_canonical_commercial_database,
 )
 from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
+from kordena_fiscal.security.human_administration import HumanAdministrationService
 from kordena_fiscal.security.human_identity import (
     HumanIdentityService,
     LoginAttemptLimiter,
@@ -61,6 +62,7 @@ class RuntimeComposition:
     """Canonical durable services owned by one runtime database lifecycle."""
 
     human_identity: HumanIdentityService
+    human_administration: HumanAdministrationService | None
     password_recovery: PasswordRecoveryService
     commercial_provisioning: CommercialCustomerProvisioningService
     commercial_fulfillment: CommercialFulfillmentService
@@ -101,6 +103,15 @@ def build_postgres_runtime_composition(
         sessions=sessions,
         password_hasher=password_hasher,
         login_limiter=LoginAttemptLimiter(),
+    )
+    human_administration_factory = getattr(database, "human_administration", None)
+    human_administration = (
+        HumanAdministrationService(
+            store=human_administration_factory(),
+            password_hasher=password_hasher,
+        )
+        if callable(human_administration_factory)
+        else None
     )
     recovery = PasswordRecoveryService(
         accounts=accounts,
@@ -174,9 +185,11 @@ def build_postgres_runtime_composition(
         database,
         operation_executor=portal_fiscal_operation_executor,
         capability_readiness=capability_readiness,
+        user_administration=human_administration,
     )
     return RuntimeComposition(
         human_identity=identity,
+        human_administration=human_administration,
         password_recovery=recovery,
         commercial_provisioning=provisioning,
         commercial_fulfillment=commercial_fulfillment,

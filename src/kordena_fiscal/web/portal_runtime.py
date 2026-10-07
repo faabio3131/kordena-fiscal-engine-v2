@@ -45,6 +45,12 @@ from kordena_fiscal.domain import (
 )
 from kordena_fiscal.lifecycle import FiscalDocumentState
 from kordena_fiscal.persistence.ports import FiscalUnitOfWorkFactory, PersistenceConflictError
+from kordena_fiscal.security.human_administration import (
+    HumanAdministrationConflictError,
+    HumanAdministrationNotFoundError,
+    HumanAdministrationResult,
+    HumanAdministrationService,
+)
 from kordena_fiscal.security.human_identity import (
     AuthenticatedHuman,
     HumanAuthorizationError,
@@ -109,9 +115,11 @@ class DurableHumanPortalExecutor:
         *,
         operation_executor: PortalOperationExecutor | None = None,
         capability_readiness: CapabilityReadinessService | None = None,
+        user_administration: HumanAdministrationService | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
         self._operation_executor = operation_executor
+        self._user_administration = user_administration
         self._capabilities = (
             GovernedCapabilityReadinessService(
                 unit_of_work_factory=unit_of_work_factory,
@@ -158,6 +166,7 @@ class DurableHumanPortalExecutor:
             "basic_onboarding_complete": organization is not None and bool(units),
             "available_surfaces": sorted(
                 self._DURABLE_SURFACES
+                | ({"users"} if self._user_administration is not None else set())
                 | ({"webhook-egress"} if authority.account.platform_admin else set())
             ),
             "customer_configuration_mode": "governed_configuration",
@@ -180,6 +189,10 @@ class DurableHumanPortalExecutor:
         limit: int = 100,
         offset: int = 0,
     ) -> Sequence[Mapping[str, Any]]:
+        if surface_id == "users":
+            if self._user_administration is None:
+                raise _runtime_unavailable("Human administration is not configured")
+            return self._user_administration.list_users(authority=authority)
         if surface_id not in self._DURABLE_SURFACES:
             raise _runtime_unavailable(
                 f"Durable projection is not configured for portal surface {surface_id}"
@@ -547,6 +560,13 @@ class DurableHumanPortalExecutor:
                 payload=payload,
                 idempotency_key=idempotency_key,
             )
+        if operation_id in {"createUser", "updateUser"}:
+            return self._user_command(
+                operation_id=operation_id,
+                authority=authority,
+                payload=payload,
+                idempotency_key=idempotency_key,
+            )
         if operation_id == "onboardUnit":
             return self._onboard_unit(
                 authority=authority,
@@ -561,6 +581,84 @@ class DurableHumanPortalExecutor:
             payload=payload,
             idempotency_key=idempotency_key,
         )
+
+    @staticmethod
+    def _user_result(result: HumanAdministrationResult) -> Mapping[str, Any]:
+        account = result.account
+        return {
+            "account_id": account.account_id,
+            "email": account.email,
+            "role": account.role.value,
+            "unit_ids": None if account.unit_ids is None else sorted(account.unit_ids),
+            "enabled": account.enabled,
+            "platform_admin": account.platform_admin,
+            "version": account.session_epoch,
+            "created": result.created,
+            "replay": result.replay,
+            "activation": "password_recovery",
+        }
+
+    def _known_tenant_units(self, tenant_id: str) -> frozenset[str]:
+        with self._unit_of_work_factory() as uow:
+            events = uow.control_plane.list_audit(tenant_id)
+        return frozenset(
+            event.target_id
+            for event in events
+            if event.action is ControlPlaneAuditAction.UNIT_ONBOARDED
+        )
+
+    def _user_command(
+        self,
+        *,
+        operation_id: str,
+        authority: AuthenticatedHuman,
+        payload: Mapping[str, Any],
+        idempotency_key: str | None,
+    ) -> Mapping[str, Any]:
+        if self._user_administration is None:
+            raise _runtime_unavailable("Human administration is not configured")
+        try:
+            if operation_id == "createUser":
+                if set(payload) != {"email", "target_role", "target_unit_ids"}:
+                    raise ValueError("invalid createUser fields")
+                result = self._user_administration.create_user(
+                    authority=authority,
+                    email=payload["email"],
+                    target_role=payload["target_role"],
+                    target_unit_ids=payload["target_unit_ids"],
+                    known_unit_ids=self._known_tenant_units(authority.tenant_id),
+                    idempotency_key=idempotency_key or "",
+                )
+            elif operation_id == "updateUser":
+                if set(payload) != {
+                    "target_account_id",
+                    "expected_version",
+                    "target_role",
+                    "target_unit_ids",
+                    "enabled",
+                }:
+                    raise ValueError("invalid updateUser fields")
+                result = self._user_administration.update_user(
+                    authority=authority,
+                    target_account_id=payload["target_account_id"],
+                    expected_version=payload["expected_version"],
+                    target_role=payload["target_role"],
+                    target_unit_ids=payload["target_unit_ids"],
+                    enabled=payload["enabled"],
+                    known_unit_ids=self._known_tenant_units(authority.tenant_id),
+                    idempotency_key=idempotency_key or "",
+                )
+            else:
+                raise ValueError("unknown human administration operation")
+            return self._user_result(result)
+        except HumanAuthorizationError as exc:
+            raise _portal_error(403, "USER_ADMIN_FORBIDDEN", "User administration denied") from exc
+        except HumanAdministrationNotFoundError as exc:
+            raise _portal_error(404, "USER_NOT_FOUND", "User account not found") from exc
+        except HumanAdministrationConflictError as exc:
+            raise _portal_error(409, "USER_ADMIN_CONFLICT", "Reload current user state") from exc
+        except (ValueError, TypeError, AttributeError) as exc:
+            raise _portal_error(400, "INVALID_USER_ADMINISTRATION", "Invalid user command") from exc
 
     def configure(
         self,

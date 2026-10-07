@@ -62,6 +62,8 @@ class SecretReferenceKind(StrEnum):
 class ControlPlaneAuditAction(StrEnum):
     CUSTOMER_CONFIGURATION_CHANGED = "customer_configuration.changed"
     WEBHOOK_EGRESS_DECIDED = "webhook_egress.decided"
+    HUMAN_ACCOUNT_CREATED = "human_account.created"
+    HUMAN_ACCOUNT_UPDATED = "human_account.updated"
     ORGANIZATION_ONBOARDED = "organization.onboarded"
     UNIT_ONBOARDED = "unit.onboarded"
     SECRET_REFERENCE_BOUND = "secret_reference.bound"

@@ -20,12 +20,14 @@ from contextlib import contextmanager
 from datetime import datetime
 from types import TracebackType
 from typing import Any, TypeVar, cast
+from uuid import uuid4
 
 from psycopg import Connection, Cursor, IntegrityError
 from psycopg.errors import UndefinedTable
 from psycopg_pool import ConnectionPool
 
 from kordena_fiscal.contingency import FiscalOutboxEnqueueResult, FiscalOutboxEntry
+from kordena_fiscal.control_plane.models import ControlPlaneAuditAction
 from kordena_fiscal.domain import FiscalValidationError
 from kordena_fiscal.events import FiscalInboxEntry, FiscalInboxReceiveResult
 from kordena_fiscal.lifecycle import IdempotencyKey, IdempotencyReservation
@@ -33,6 +35,10 @@ from kordena_fiscal.numbering import (
     FiscalNumberReservation,
     FiscalSequenceKey,
     FiscalSequencePolicy,
+)
+from kordena_fiscal.security.human_administration import (
+    HumanAdministrationConflictError,
+    HumanAdministrationNotFoundError,
 )
 from kordena_fiscal.security.human_identity import (
     HumanAccount,
@@ -775,6 +781,9 @@ class PostgresFiscalDatabase:
     def human_accounts(self) -> PostgresHumanAccountRepository:
         return PostgresHumanAccountRepository(self)
 
+    def human_administration(self) -> PostgresHumanAdministrationStore:
+        return PostgresHumanAdministrationStore(self)
+
     def web_sessions(self) -> PostgresWebSessionRepository:
         return PostgresWebSessionRepository(self)
 
@@ -879,6 +888,266 @@ class PostgresHumanAccountRepository:
             except IntegrityError as exc:
                 raw.rollback()
                 raise ValueError("email is already assigned to another account") from exc
+
+
+class PostgresHumanAdministrationStore:
+    """Atomic PostgreSQL adapter for tenant human-account administration."""
+
+    def __init__(self, database: PostgresFiscalDatabase) -> None:
+        self._database = database
+
+    @staticmethod
+    def _row_account(row: tuple[object, ...]) -> HumanAccount:
+        return PostgresHumanAccountRepository._account(row)
+
+    def by_email(self, email: str) -> HumanAccount | None:
+        return PostgresHumanAccountRepository(self._database).by_email(email)
+
+    def by_id(self, account_id: str) -> HumanAccount | None:
+        return PostgresHumanAccountRepository(self._database).by_id(account_id)
+
+    def list_for_tenant(self, tenant_id: str) -> tuple[HumanAccount, ...]:
+        normalized = tenant_id.strip()
+        with self._database._pool.connection() as raw:
+            rows = raw.execute(
+                """
+                SELECT account_id, email, password_hash, tenant_id, role,
+                       unit_ids_json, enabled, session_epoch, platform_admin
+                FROM fm_human_accounts
+                WHERE tenant_id = %s
+                ORDER BY email, account_id
+                """,
+                (normalized,),
+            ).fetchall()
+        return tuple(
+            self._row_account(cast(tuple[object, ...], row))
+            for row in rows
+        )
+
+    def command_target(
+        self, tenant_id: str, correlation_id: str
+    ) -> tuple[str, str] | None:
+        with self._database._pool.connection() as raw:
+            row = raw.execute(
+                """
+                SELECT action, target_id
+                FROM fm_control_plane_audit
+                WHERE tenant_id = %s AND correlation_id = %s
+                ORDER BY occurred_at, event_id
+                LIMIT 1
+                """,
+                (tenant_id.strip(), correlation_id.strip()),
+            ).fetchone()
+        if row is None:
+            return None
+        return str(row[0]), str(row[1])
+
+    @staticmethod
+    def _claim_command(
+        raw: Connection[Any],
+        *,
+        tenant_id: str,
+        correlation_id: str,
+    ) -> None:
+        raw.execute(
+            "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+            (tenant_id + "|" + correlation_id,),
+        )
+        previous = raw.execute(
+            """
+            SELECT event_id
+            FROM fm_control_plane_audit
+            WHERE tenant_id = %s AND correlation_id = %s
+            LIMIT 1
+            FOR UPDATE
+            """,
+            (tenant_id, correlation_id),
+        ).fetchone()
+        if previous is not None:
+            raise HumanAdministrationConflictError("idempotency key was already used")
+
+    @staticmethod
+    def _append_audit(
+        raw: Connection[Any],
+        *,
+        action: ControlPlaneAuditAction,
+        account: HumanAccount,
+        actor_id: str,
+        correlation_id: str,
+        occurred_at: datetime,
+    ) -> None:
+        raw.execute(
+            """
+            INSERT INTO fm_control_plane_audit (
+                event_id, occurred_at, actor_id, action, target_type,
+                target_id, correlation_id, tenant_id, unit_id
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NULL)
+            """,
+            (
+                f"audit-{uuid4().hex}",
+                occurred_at.isoformat(),
+                actor_id,
+                action.value,
+                "human-account",
+                account.account_id,
+                correlation_id,
+                account.tenant_id,
+            ),
+        )
+
+    def create(
+        self,
+        account: HumanAccount,
+        *,
+        actor_id: str,
+        correlation_id: str,
+        occurred_at: datetime,
+    ) -> HumanAccount:
+        units_json = None if account.unit_ids is None else json.dumps(sorted(account.unit_ids))
+        try:
+            with self._database._pool.connection() as raw:
+                with raw.transaction():
+                    self._claim_command(
+                        raw,
+                        tenant_id=account.tenant_id,
+                        correlation_id=correlation_id,
+                    )
+                    collision = raw.execute(
+                        """
+                        SELECT account_id
+                        FROM fm_human_accounts
+                        WHERE account_id = %s OR email = %s
+                        LIMIT 1
+                        FOR UPDATE
+                        """,
+                        (account.account_id, account.email),
+                    ).fetchone()
+                    if collision is not None:
+                        raise HumanAdministrationConflictError("human account already exists")
+                    raw.execute(
+                        """
+                        INSERT INTO fm_human_accounts (
+                            account_id, email, password_hash, tenant_id, role, unit_ids_json,
+                            enabled, session_epoch, platform_admin
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 0)
+                        """,
+                        (
+                            account.account_id,
+                            account.email,
+                            account.password_hash,
+                            account.tenant_id,
+                            account.role.value,
+                            units_json,
+                            int(account.enabled),
+                            account.session_epoch,
+                        ),
+                    )
+                    self._append_audit(
+                        raw,
+                        action=ControlPlaneAuditAction.HUMAN_ACCOUNT_CREATED,
+                        account=account,
+                        actor_id=actor_id,
+                        correlation_id=correlation_id,
+                        occurred_at=occurred_at,
+                    )
+        except IntegrityError as exc:
+            raise HumanAdministrationConflictError("human account already exists") from exc
+        return account
+
+    def update(
+        self,
+        account: HumanAccount,
+        *,
+        expected_session_epoch: int,
+        actor_id: str,
+        correlation_id: str,
+        occurred_at: datetime,
+    ) -> HumanAccount:
+        units_json = None if account.unit_ids is None else json.dumps(sorted(account.unit_ids))
+        with self._database._pool.connection() as raw:
+            with raw.transaction():
+                self._claim_command(
+                    raw,
+                    tenant_id=account.tenant_id,
+                    correlation_id=correlation_id,
+                )
+                current_row = raw.execute(
+                    """
+                    SELECT account_id, email, password_hash, tenant_id, role,
+                           unit_ids_json, enabled, session_epoch, platform_admin
+                    FROM fm_human_accounts
+                    WHERE account_id = %s
+                    FOR UPDATE
+                    """,
+                    (account.account_id,),
+                ).fetchone()
+                if current_row is None:
+                    raise HumanAdministrationNotFoundError("human account was not found")
+                current = self._row_account(cast(tuple[object, ...], current_row))
+                if current.tenant_id != account.tenant_id:
+                    raise HumanAdministrationNotFoundError("human account was not found")
+                if current.platform_admin:
+                    raise HumanAdministrationConflictError(
+                        "platform authority cannot be changed by tenant admin"
+                    )
+                if current.session_epoch != expected_session_epoch:
+                    raise HumanAdministrationConflictError("human account version changed")
+
+                if current.role is PortalRole.OWNER and current.enabled and (
+                    account.role is not PortalRole.OWNER or not account.enabled
+                ):
+                    owner_rows = raw.execute(
+                        """
+                        SELECT account_id
+                        FROM fm_human_accounts
+                        WHERE tenant_id = %s AND role = %s AND enabled = 1
+                        FOR UPDATE
+                        """,
+                        (account.tenant_id, PortalRole.OWNER.value),
+                    ).fetchall()
+                    if not any(str(row[0]) != current.account_id for row in owner_rows):
+                        raise HumanAdministrationConflictError(
+                            "tenant must retain at least one enabled owner"
+                        )
+
+                changed = raw.execute(
+                    """
+                    UPDATE fm_human_accounts
+                    SET role = %s,
+                        unit_ids_json = %s,
+                        enabled = %s,
+                        session_epoch = %s
+                    WHERE account_id = %s AND tenant_id = %s AND session_epoch = %s
+                    """,
+                    (
+                        account.role.value,
+                        units_json,
+                        int(account.enabled),
+                        account.session_epoch,
+                        account.account_id,
+                        account.tenant_id,
+                        expected_session_epoch,
+                    ),
+                )
+                if changed.rowcount != 1:
+                    raise HumanAdministrationConflictError("human account version changed")
+                raw.execute(
+                    "UPDATE fm_web_sessions SET revoked = 1 WHERE account_id = %s",
+                    (account.account_id,),
+                )
+                raw.execute(
+                    "UPDATE fm_password_resets SET used = 1 WHERE account_id = %s AND used = 0",
+                    (account.account_id,),
+                )
+                self._append_audit(
+                    raw,
+                    action=ControlPlaneAuditAction.HUMAN_ACCOUNT_UPDATED,
+                    account=account,
+                    actor_id=actor_id,
+                    correlation_id=correlation_id,
+                    occurred_at=occurred_at,
+                )
+        return account
 
 
 class PostgresWebSessionRepository:
