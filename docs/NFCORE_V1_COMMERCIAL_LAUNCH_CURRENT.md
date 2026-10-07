@@ -8,6 +8,28 @@
 
 This file is the persistent CURRENT checkpoint for FM NFCORE V1 Commercial Launch. GitHub remains the first technical source of truth and must be revalidated on every resume.
 
+## CURRENT superior — 2026-10-07 — NFV1-P02-T05 CLOSEOUT
+
+- PR #125 MERGED; HEAD `d0a81ca9cf641295498b3ef92db256d4b3f417c0`;
+- merge/main da implementação `7332943467dd876c6c72c163d73a9c3454e05828`;
+- CI PR #655 e CI main #656 SUCCESS;
+- Plan Governance PR #76 e main #77 SUCCESS;
+- Billing/Planos/Uso agora são projeções read-only de autoridades comerciais canônicas;
+- OWNER/ADMIN/AUDITOR/BILLING usam `billing.read`; OPERATOR falha fechado;
+- tenant deriva exclusivamente da sessão;
+- provider/gateway externo permanece adapter e referências externas não são projetadas;
+- ausência de subscription/pricing retorna vazio, sem fabricar estado;
+- nenhum preço/plano/promoção/provider real foi inferido ou hardcoded;
+- closeout: `checkpoints/NFV1_P02_T05_CLOSEOUT_2026-10-07.md`;
+- T05 = DONE_CERTIFIED após este closeout integrar main e seus próprios gates completos verdes;
+- próxima Task: **NFV1-P02-T06 — Inutilização**;
+- P0/P1 certificados; P2 continua em execução; gate PORTAL_COMMERCIAL_PARITY_CERTIFIED = NOT MET.
+
+Sem deploy, staging write, billing externo, checkout real, segredo/credencial real,
+produção fiscal, DNS ou Go-Live. PRODUCTION_APPROVED=NO; COMMERCIAL_LIVE=NO.
+
+---
+
 ## CURRENT superior — 2026-10-07 — NFV1-P02-T05 EM EXECUÇÃO
 
 - entrada revalidada: main `acc8510f3df11fb284386f951e427dffdeeef242`, zero PRs abertas;

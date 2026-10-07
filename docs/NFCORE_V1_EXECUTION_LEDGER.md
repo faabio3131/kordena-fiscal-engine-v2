@@ -158,7 +158,7 @@
 
 ### 12. NFV1-P02-T05 — Billing/Planos/Uso
 
-- [ ] **Estado:** em execução
+- [x] **Estado:** concluído
 - **Objetivo:** expor Billing, Planos e Uso a partir das autoridades comerciais canônicas, mantendo provider/gateway externo como adapter.
 - **Depende de:** NFV1-P02-T04 DONE_CERTIFIED; main de entrada `acc8510f3df11fb284386f951e427dffdeeef242`, CI #654 e Plan Governance #75 SUCCESS.
 - **Entregar:** projeções read-only `billing`, `plans` e `usage` no Portal existente, compostas com subscription durável e catálogo de pricing publicado; RBAC `billing.read`; testes tenant/RBAC/PostgreSQL/frontend.
@@ -167,7 +167,7 @@
 - **Verificação:** Ruff, Mypy, Pytest/PostgreSQL, frontend lint/typecheck/test/build, Playwright, secret/migration/container/SBOM/backup-restore e `python scripts/check_nfcore_plan.py`.
 - **Riscos / não confirmado:** preço/plano/provider reais continuam decisões/configurações externas; P3/P8 ainda precisam certificar aquisição/cobrança operacional; staging permanece em drift.
 - **Decisões do dono pendentes:** nenhuma para esta implementação read-only. Qualquer preço/plano/promoção/provider real exige decisão humana própria e não será inferido.
-- **Prova:** branch `feat/nfv1-p02-t05-billing-plans-usage`; checkpoint `docs/checkpoints/NFV1_P02_T05_BILLING_PLANS_USAGE_2026-10-07.md`; PR/CI pendentes.
+- **Prova:** PR #125 MERGED; HEAD `d0a81ca9cf641295498b3ef92db256d4b3f417c0`; merge/main `7332943467dd876c6c72c163d73a9c3454e05828`; CI #655 (PR) e #656 (main) SUCCESS; Plan Governance #76 (PR) e #77 (main) SUCCESS; checkpoint `docs/checkpoints/NFV1_P02_T05_BILLING_PLANS_USAGE_2026-10-07.md`; closeout `docs/checkpoints/NFV1_P02_T05_CLOSEOUT_2026-10-07.md`.
 
 ### 13. NFV1-P02-T06 — Inutilização
 
