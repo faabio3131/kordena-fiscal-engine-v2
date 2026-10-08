@@ -154,6 +154,7 @@ def build_postgres_runtime_composition(
         activation=commercial_activation,
         pricing=pricing_administration,
         accounts=accounts,
+        request_guard=canonical_commercial_database.guard_trial,
     )
     commercial_release_administration = CommercialReleaseAdministrationService(
         database.commercial_release_catalog()

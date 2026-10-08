@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Callable, Sequence
-from contextlib import AbstractContextManager
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import AbstractContextManager, contextmanager
 from datetime import datetime
 from types import TracebackType
 from typing import Protocol, Self, cast
@@ -326,6 +326,17 @@ class CommercialSqlStore(CanonicalCommercialStore):
             (purchase_id.strip().lower(),),
         ).fetchone()
         return None if row is None else self._purchase(row)
+
+    def get_trial_for_email(self, email: str) -> CommercialPurchaseRecord | None:
+        row = self._connection.execute(
+            """
+            SELECT purchase_id FROM fm_commercial_purchases
+            WHERE provider_id = 'nfcore-trial' AND buyer_email = ?
+            ORDER BY created_at, purchase_id LIMIT 1
+            """,
+            (email.strip().casefold(),),
+        ).fetchone()
+        return None if row is None else self.get_purchase(str(row[0]))
 
     def get_purchase_by_external_order(
         self,
@@ -842,6 +853,26 @@ class CanonicalCommercialDatabase:
 
     def __call__(self) -> CommercialSqlUnitOfWork:
         return CommercialSqlUnitOfWork(self._acquire)
+
+    @contextmanager
+    def guard_trial(self, identities: tuple[str, ...]) -> Iterator[None]:
+        """Bounded PostgreSQL transaction locks for the entire trial begin saga.
+
+        Child steps retain their existing durable UOWs. This transaction only
+        owns locks, so rollback always releases them even after a child failure.
+        Lock waits are bounded to avoid exhausting the shared connection pool.
+        """
+        with self._acquire() as connection:
+            try:
+                connection.execute("SET LOCAL lock_timeout = '5s'")
+                for identity in sorted(set(identities)):
+                    connection.execute(
+                        "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))",
+                        (identity,),
+                    )
+                yield
+            finally:
+                connection.rollback()
 
 
 def postgres_canonical_commercial_database(

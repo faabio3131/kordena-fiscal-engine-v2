@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import hashlib
 import secrets
+from collections.abc import Callable
+from contextlib import AbstractContextManager
 from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Protocol
@@ -59,11 +61,13 @@ class GovernedTrialService:
         activation: CommercialCustomerActivationService,
         pricing: TrialPricingReader,
         accounts: HumanAccountRepository,
+        request_guard: Callable[[tuple[str, ...]], AbstractContextManager[None]],
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
         self._activation = activation
         self._pricing = pricing
         self._accounts = accounts
+        self._request_guard = request_guard
 
     def begin(
         self,
@@ -81,6 +85,37 @@ class GovernedTrialService:
         buyer_email = self._email(buyer_email)
         legal_name = self._legal_name(legal_name)
         digest = self._idempotency_digest(idempotency_key)
+
+        # Serialize the existing email/idempotency invariants across replicas.
+        # Raw email and idempotency material never become lock identities.
+        identities = tuple(
+            sorted(
+                (
+                    f"trial-request:{digest}",
+                    f"trial-owner:{hashlib.sha256(buyer_email.encode()).hexdigest()}",
+                )
+            )
+        )
+        with self._request_guard(identities):
+            return self._begin_guarded(
+                plan_id=plan_id,
+                price_id=price_id,
+                buyer_email=buyer_email,
+                legal_name=legal_name,
+                digest=digest,
+                now=now,
+            )
+
+    def _begin_guarded(
+        self,
+        *,
+        plan_id: str,
+        price_id: str,
+        buyer_email: str,
+        legal_name: str,
+        digest: str,
+        now: datetime,
+    ) -> GovernedTrialStart:
 
         pricing = self._pricing.current
         if pricing is None:
@@ -118,9 +153,12 @@ class GovernedTrialService:
                 replay = True
                 purchase = current
             else:
-                if existing_account is not None:
+                if (
+                    existing_account is not None
+                    or uow.commercial.get_trial_for_email(buyer_email) is not None
+                ):
                     raise CommercialFulfillmentError(
-                        "trial is not available for an existing account"
+                        "trial is not available for an existing account or trial reservation"
                     )
                 purchase = CommercialPurchaseRecord(
                     purchase_id=purchase_id,

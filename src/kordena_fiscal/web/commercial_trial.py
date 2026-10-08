@@ -93,6 +93,13 @@ def create_commercial_trial_router(
                 status_code=409,
                 content={"detail": "commercial trial could not be created"},
             )
+        except Exception:
+            # Storage/lock/provider failures must not expose personal data or
+            # secrets. Canonical committed state remains available for retry.
+            return JSONResponse(
+                status_code=503,
+                content={"detail": "commercial trial is temporarily unavailable"},
+            )
 
         if started.activation_reset is not None:
             try:

@@ -207,7 +207,11 @@ def create_runtime_app(
     )
     app.state.nfcore_commercial_acquisition = commercial_acquisition
     app.state.nfcore_commercial_trial = (
-        None if composition is None else composition.commercial_trial
+        composition.commercial_trial
+        if composition is not None
+        and commercial_trial_security is not None
+        and password_reset_delivery is not None
+        else None
     )
     app.state.nfcore_metrics = runtime_metrics
     app.state.nfcore_logger = runtime_logger
@@ -383,9 +387,7 @@ def create_runtime_app(
                 commercial_acquisition is not None
             ),
             "commercial_trial_configured": (
-                composition is not None
-                and commercial_trial_security is not None
-                and password_reset_delivery is not None
+                app.state.nfcore_commercial_trial is not None
             ),
             "cakto_checkout_admin_configured": (
                 cakto_checkout_administration is not None
