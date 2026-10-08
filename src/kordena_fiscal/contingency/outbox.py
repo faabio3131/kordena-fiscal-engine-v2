@@ -220,6 +220,7 @@ class FiscalOutboxStore(Protocol):
         limit: int = 100,
         offset: int = 0,
         statuses: frozenset[FiscalOutboxStatus] | None = None,
+        operations: frozenset[str] | None = None,
     ) -> tuple[FiscalOutboxEntry, ...]: ...
 
     def enqueue(self, entry: FiscalOutboxEntry) -> FiscalOutboxEnqueueResult: ...
@@ -278,6 +279,7 @@ class InMemoryFiscalOutboxStore:
         limit: int = 100,
         offset: int = 0,
         statuses: frozenset[FiscalOutboxStatus] | None = None,
+        operations: frozenset[str] | None = None,
     ) -> tuple[FiscalOutboxEntry, ...]:
         if not isinstance(scope, ExecutionScope):
             raise FiscalValidationError("scope must be ExecutionScope")
@@ -292,6 +294,7 @@ class InMemoryFiscalOutboxStore:
                     for item in self._entries.values()
                     if item.scope.identity_material == scope.identity_material
                     and (statuses is None or item.status in statuses)
+                    and (operations is None or item.operation in operations)
                 ),
                 key=lambda item: (item.created_at, item.entry_id),
                 reverse=True,

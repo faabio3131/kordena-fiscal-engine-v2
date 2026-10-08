@@ -48,6 +48,7 @@ class SqliteFiscalOutboxStore:
         limit: int = 100,
         offset: int = 0,
         statuses: frozenset[FiscalOutboxStatus] | None = None,
+        operations: frozenset[str] | None = None,
     ) -> tuple[FiscalOutboxEntry, ...]:
         page = scoped_page(scope, limit, offset)
         if statuses is not None and not statuses:
@@ -56,6 +57,11 @@ class SqliteFiscalOutboxStore:
             "" if statuses is None else " AND status IN (" + ",".join("?" for _ in statuses) + ")"
         )
         values = () if statuses is None else tuple(sorted(item.value for item in statuses))
+        if operations is not None:
+            if not operations:
+                return ()
+            filtering += " AND operation IN (" + ",".join("?" for _ in operations) + ")"
+            values += tuple(sorted(operations))
         rows = self._connection.execute(
             f"""SELECT entry_id, host_namespace, tenant_id, unit_id, environment,
                       correlation_id, operation, deduplication_key, payload, payload_sha256,

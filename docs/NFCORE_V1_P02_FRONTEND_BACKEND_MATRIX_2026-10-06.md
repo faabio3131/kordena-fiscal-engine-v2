@@ -6,6 +6,16 @@ Baseline auditado: `main@0e5be77267a800384d111c03e30705d95bdb0d28`.
 CI de origem: FM NFCORE V1 CI #618 SUCCESS; NFCore Plan Governance #47 SUCCESS.
 PRs abertas na entrada: zero. P0/P1 certificados; closeout P1: PR #114 mergeada.
 
+## Evolução candidata T06 — 2026-10-08
+
+Surface `inutilizations` e formulário dedicado chamam F(inutilizeFiscalRange) no
+mesmo path canônico. document.inutilize existente (OWNER/ADMIN/OPERATOR), sessão,
+CSRF, key, tenant/unit/env server-side, contrato InutilizationRequest e metadados
+scoped da outbox. Filtro de operação aplicado antes de LIMIT/OFFSET; sem payload/
+justificativa/key/protocolo raw. 2xx/outbox não viram confirmação fiscal oficial.
+P2-G07 candidato a resolvido internamente; gates/PR/main/closeout pendentes.
+Provider/secret/signer/homologação continuam P6/P7/P10; T07 não iniciada.
+
 ## Evolução CURRENT T05 — 2026-10-07
 
 PR #125 MERGED; HEAD `d0a81ca9cf641295498b3ef92db256d4b3f417c0`; merge/main
