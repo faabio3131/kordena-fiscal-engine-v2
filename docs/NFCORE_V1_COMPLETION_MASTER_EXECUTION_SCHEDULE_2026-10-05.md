@@ -303,6 +303,12 @@ Validar emissão, consulta, cancelamento, inutilização, reconciliação e dema
 **Status inicial:** NOT_STARTED  
 **Dependência:** P1
 
+**Status interno certificado em 2026-10-08:** DONE_CERTIFIED condicionado ao
+merge/gates completos do closeout T07. Evidência PR #131, CI #676/#677 e
+Governance #97/#98 SUCCESS; checkpoint
+`checkpoints/NFV1_P02_T07_CLOSEOUT_2026-10-08.md`. Não certifica staging,
+provider/secret fiscal real, homologação ou produção.
+
 ## Objetivo
 
 Expor no mesmo Portal as capacidades necessárias ao V1, reutilizando autoridades existentes.
@@ -357,12 +363,12 @@ Preservar identidade, mobile, acessibilidade e estados reais de bloqueio.
 
 ## Gate
 
-- [ ] nenhum item visível aponta para superfície inexistente;
-- [ ] mutações usam controles exigidos;
-- [ ] RBAC e tenant/unit validados;
-- [ ] Playwright cobre jornadas críticas;
-- [ ] visual premium preservado;
-- [ ] CI verde.
+- [x] nenhum item visível aponta para superfície inexistente;
+- [x] mutações usam controles exigidos;
+- [x] RBAC e tenant/unit validados;
+- [x] Playwright cobre jornadas críticas;
+- [x] visual premium preservado;
+- [x] CI verde.
 
 **Gate de saída:** PORTAL_COMMERCIAL_PARITY_CERTIFIED
 
@@ -1116,3 +1122,14 @@ Regras adicionais:
 ## Decisão T07-B01 — 2026-10-08
 
 Política de recuperação aprovada integralmente como POLICY_APPROVED_FOR_INTERNAL_IMPLEMENTATION. Implementação/testes e publicação da PR Draft autorizados. Reconstrução ativa; gates e integração continuam obrigatórios. T07/P2 não certificados; P3 não iniciada.
+
+## Integração T07 e gate P2 interno — 2026-10-08
+
+Integração/validação pós-merge autorizadas explicitamente pelo dono. PR #131
+MERGED;HEAD7518662a188aba98c3d1b615ccb5ba3408286e41;main
+3d7b4698629c312cdb5ee6b04791bf57d05e2179. CI #676/#677,Governance #97/#98
+SUCCESS,1413 Python/PostgreSQL,14 frontend,28 Playwright PASS/zero SKIP/zero FAIL
+em PR/main; revisão visual320/390/1280px concluída. T07/P2 internos certificados
+condicionados ao merge/gates deste closeout; registro no ledger/checkpoint
+NFV1_P02_T07_CLOSEOUT_2026-10-08.md. Próxima NFV1-P03-T01,não iniciada.
+Nenhum deploy,credencial/provider real,fiscal oficial ou produção autorizado.

@@ -8,6 +8,29 @@
 
 This file is the persistent CURRENT checkpoint for FM NFCORE V1 Commercial Launch. GitHub remains the first technical source of truth and must be revalidated on every resume.
 
+## CURRENT superior — 2026-10-08 — T07/P2 closeout interno
+
+- PR #131 MERGED por autorização explícita; HEAD `7518662a188aba98c3d1b615ccb5ba3408286e41`;
+- main implementação `3d7b4698629c312cdb5ee6b04791bf57d05e2179`, árvore PR/main idêntica;
+- CI #676/#677 e Governance #97/#98 SUCCESS nos HEADs exatos;
+- PR/main:1413 Python/PostgreSQL,14 frontend,28 Playwright PASS;zero FAIL/zero SKIP;
+- política T07-B01 aprovada e implementada nos receipts canônicos,24h/mesma conta/
+  epoch/scope/permissão,claim atômico,key original backend,sem browser storage;
+- reload/perda de resposta/concorrência provados internamente; unknown outcome
+  exige evidência/reconciliação,sem redispatch automático;
+- seis capturas PR e seis main320/390/1280px baixadas,digests conferidos e inspecionadas;
+- T07 = DONE_CERTIFIED e PORTAL_COMMERCIAL_PARITY_CERTIFIED interno condicionados
+  ao merge/gates PR/main deste closeout documental;
+- checkpoint `checkpoints/NFV1_P02_T07_CLOSEOUT_2026-10-08.md` supersede candidatas;
+- P0/P1/P2 internos certificados após closeout; próxima Task NFV1-P03-T01,
+  P3 não iniciada. Staging em drift,sem deploy/secret/provider/homologação real.
+
+PRODUCTION_APPROVED=NO; COMMERCIAL_LIVE=NO. Nenhuma promoção operacional externa.
+
+---
+
+## Snapshot histórico da reconstrução candidata
+
 ## CURRENT superior — 2026-10-08 — recuperação T07 candidata em validação
 
 Main de entrada `82e05f7af6ffca031f457ff93f43ae875ad05122`; PR #131 Draft,

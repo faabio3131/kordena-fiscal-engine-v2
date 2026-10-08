@@ -6,6 +6,29 @@ Baseline auditado: `main@0e5be77267a800384d111c03e30705d95bdb0d28`.
 CI de origem: FM NFCORE V1 CI #618 SUCCESS; NFCore Plan Governance #47 SUCCESS.
 PRs abertas na entrada: zero. P0/P1 certificados; closeout P1: PR #114 mergeada.
 
+## CURRENT T07/P2 — closeout interno — 2026-10-08
+
+PR #131 MERGED,HEAD `7518662a188aba98c3d1b615ccb5ba3408286e41`,main
+`3d7b4698629c312cdb5ee6b04791bf57d05e2179`,árvore idêntica. CI #676/#677 e
+Governance #97/#98 SUCCESS;1413 Python/PostgreSQL,14 frontend,28 Playwright PASS,
+zero FAIL/SKIP em PR/main. Política T07-B01 aprovada,implementada e retomada
+segura sem browser storage provada. Capturas PR/main320/390/1280px inspecionadas.
+
+P2-G13/G14 resolvidos internamente com recuperação explícita,key original/CAS,
+reload/perda de resposta/concorrência/expiração/revogação,labels e mobile/teclado.
+P2-G11 support sanitizado; P2-G17 compatibilidade documentada. P2-G18 conserva
+versionamento/replay; wiring operacional continua P3. Disposição de TODOS os gaps
+P2-G01..G18 e STG-B01..B08 no closeout
+`checkpoints/NFV1_P02_T07_CLOSEOUT_2026-10-08.md`.
+
+T01..T07 cumprem os gates internos P2. PORTAL_COMMERCIAL_PARITY_CERTIFIED interno
+condicionado ao merge/gates completos deste closeout. Provider/secret/homologação,
+cobrança/SLA/tracing/staging real continuam nas tasks donas; nenhuma evidência
+sintética certifica operação externa. P3 não iniciada. Tabelas e snapshots abaixo
+conservam a auditoria histórica T01 e sua evolução,sem reescrever o passado.
+
+## Snapshot histórico T07 parcial
+
 ## Evolução CURRENT T07 parcial / gate T07-B01 — 2026-10-08
 
 PR #129 MERGED, HEAD `95c8e4b85bf61cf1d761d3a0785e1e6da79c9340`; main
@@ -313,7 +336,7 @@ Não foi feita leitura de secret nem transação fiscal/comercial real.
 Próxima tarefa após CI, merge e closeout T01 certificados: **NFV1-P02-T02 — Superfícies fiscais**.
 O gate de fase PORTAL_COMMERCIAL_PARITY_CERTIFIED continua NOT MET.
 
-## Candidata T07 — recuperação aprovada, PR #131 Draft
+## Snapshot histórico da candidata T07 — recuperação aprovada, PR #131 Draft
 
 Metadados GET fiscal-intents, prepare/resume no mesmo Portal; mesma conta/epoch/
 scopes/permissões. Backend original key e CAS antes do efeito, sem browser storage.
