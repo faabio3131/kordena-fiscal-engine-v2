@@ -66,7 +66,13 @@ test("governed mutation sends csrf and idempotency proof", async ({ page, contex
 
   let seenCsrf = "";
   let seenIdempotency = "";
-  await page.route("**/v1/portal/operations/issueFiscalDocument", async (route) => {
+  await page.route("**/v1/portal/fiscal-intents?**", (route) => route.fulfill({json:{rows:[]}}));
+  await page.route("**/v1/portal/fiscal-intents/prepare/issueFiscalDocument", (route) => {
+    expect(route.request().headers()["x-csrf-token"]).toBe("csrf-e2e");
+    expect(route.request().headers()["idempotency-key"].length).toBeGreaterThan(10);
+    return route.fulfill({json:{intent_id:"synthetic-ui-proof-intent",state:"prepared"}});
+  });
+  await page.route("**/v1/portal/fiscal-intents/*/resume", async (route) => {
     seenCsrf = route.request().headers()["x-csrf-token"] || "";
     seenIdempotency = route.request().headers()["idempotency-key"] || "";
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ status: "ACCEPTED" }) });
@@ -84,7 +90,7 @@ test("governed mutation sends csrf and idempotency proof", async ({ page, contex
   await page.locator("#operation-payload").fill('{"document":{"model":"55"}}');
   await page.getByRole("button", { name: "Executar", exact: true }).click();
 
-  expect(seenCsrf).toBe("csrf-e2e");
+  await expect.poll(() => seenCsrf).toBe("csrf-e2e");
   expect(seenIdempotency.length).toBeGreaterThan(10);
 });
 
