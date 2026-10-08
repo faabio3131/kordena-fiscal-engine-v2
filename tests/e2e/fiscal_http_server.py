@@ -49,6 +49,13 @@ assert configuration_spec and configuration_spec.loader
 configuration_fixture = importlib.util.module_from_spec(configuration_spec)
 configuration_spec.loader.exec_module(configuration_fixture)
 
+inutilization_spec = importlib.util.spec_from_file_location(
+    "p02_inutilization_fixture", ROOT / "tests/support/p02_inutilization_fixture.py"
+)
+assert inutilization_spec and inutilization_spec.loader
+inutilization_fixture = importlib.util.module_from_spec(inutilization_spec)
+inutilization_spec.loader.exec_module(inutilization_fixture)
+
 
 def build_app(database):
     fixture.seed(database)
@@ -80,7 +87,15 @@ def build_app(database):
             "document_id": reservation.lifecycle.document_id,
         }
 
-    path = CanonicalFiscalOperationPath(service, handlers={"issueFiscalDocument": reserve_internal})
+    path = CanonicalFiscalOperationPath(
+        service,
+        handlers={
+            "issueFiscalDocument": reserve_internal,
+            "inutilizeFiscalRange": inutilization_fixture.internal_handler(
+                database, response_loss=True
+            ),
+        },
+    )
     portal = DurableHumanPortalExecutor(
         database,
         operation_executor=CanonicalPortalOperationExecutor(
@@ -90,11 +105,16 @@ def build_app(database):
     )
     accounts = InMemoryHumanAccountRepository()
     identity = fixture.identity(accounts)
-    accounts.save(HumanAccount(
-        account_id="synthetic-platform", email="platform@example.com",
-        password_hash=ScryptPasswordHasher().hash(fixture.PASSWORD),
-        tenant_id="tenant-a", role=PortalRole.OWNER, platform_admin=True,
-    ))
+    accounts.save(
+        HumanAccount(
+            account_id="synthetic-platform",
+            email="platform@example.com",
+            password_hash=ScryptPasswordHasher().hash(fixture.PASSWORD),
+            tenant_id="tenant-a",
+            role=PortalRole.OWNER,
+            platform_admin=True,
+        )
+    )
     app = create_app(human_identity=identity, portal_executor=portal)
     app.mount("/", StaticFiles(directory=ROOT / "portal", html=True), name="test-portal")
     return app

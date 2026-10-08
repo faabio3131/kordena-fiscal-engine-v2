@@ -8,6 +8,23 @@
 
 This file is the persistent CURRENT checkpoint for FM NFCORE V1 Commercial Launch. GitHub remains the first technical source of truth and must be revalidated on every resume.
 
+## CURRENT superior — 2026-10-08 — NFV1-P02-T06 EM EXECUÇÃO
+
+- entrada revalidada: main `6506e3c50dec9e1f948311a13301c6524e26d1b0`, zero PRs abertas;
+- CI main #658 e Plan Governance #79 SUCCESS; predecessor P02-T05 DONE_CERTIFIED;
+- branch `feat/nfv1-p02-t06-inutilization`; próxima tarefa incompleta T06;
+- candidata: jornada Inutilização no Portal existente, formulário sem JSON, validação
+  por InutilizationRequest, outbox sanitizada por tenant/unit/host/env e filtro antes de paginação;
+- permissões e autoridades existentes preservadas; nenhuma operação externa ativada;
+- testes sintéticos e gates/PR/main/closeout pendentes; T06 não certificada, T07 não iniciada;
+- staging READ-ONLY permanece drift: API/Portal deployments anteriores 1/1, Worker 0/1;
+- checkpoint: `checkpoints/NFV1_P02_T06_INUTILIZATION_2026-10-08.md`.
+
+P2 gate NOT MET; sem deploy/secret/certificado real/produção/operação fiscal oficial.
+PRODUCTION_APPROVED=NO; COMMERCIAL_LIVE=NO. Snapshots abaixo são históricos.
+
+---
+
 ## CURRENT superior — 2026-10-07 — NFV1-P02-T05 CLOSEOUT
 
 - PR #125 MERGED; HEAD `d0a81ca9cf641295498b3ef92db256d4b3f417c0`;

@@ -15,12 +15,14 @@ from fastapi import HTTPException, status
 
 from kordena_fiscal.application.service import FiscalApplicationService
 from kordena_fiscal.domain import (
+    ElectronicInvoiceModel,
     ExecutionScope,
     FiscalEnvironment,
     FiscalValidationError,
     HostNamespace,
     HostScope,
 )
+from kordena_fiscal.operations import InutilizationRequest
 from kordena_fiscal.persistence.ports import FiscalUnitOfWorkFactory
 from kordena_fiscal.security.human_identity import AuthenticatedHuman
 from kordena_fiscal.security.s2s import (
@@ -363,6 +365,35 @@ class CanonicalPortalOperationExecutor:
             host_namespace="fm-nfcore",
         )
         try:
+            if operation_id == "inutilizeFiscalRange":
+                fields = {"model", "series", "first_number", "last_number", "justification"}
+                if set(payload) - fields - {"unit_id", "environment"} or not fields <= set(payload):
+                    raise FiscalValidationError("inutilization fields do not match the contract")
+                if type(payload["model"]) is not int or not isinstance(
+                    payload["justification"], str
+                ):
+                    raise FiscalValidationError("inutilization model/justification type is invalid")
+                try:
+                    model = ElectronicInvoiceModel(payload["model"])
+                except ValueError as exc:
+                    raise FiscalValidationError("inutilization model is invalid") from exc
+                request = InutilizationRequest.build(
+                    scope=scope,
+                    model=model,
+                    series=payload["series"],
+                    first_number=payload["first_number"],
+                    last_number=payload["last_number"],
+                    justification=payload["justification"],
+                )
+                payload = {
+                    "unit_id": scope.unit_id,
+                    "environment": scope.environment.value,
+                    "model": request.model.value,
+                    "series": request.series,
+                    "first_number": request.first_number,
+                    "last_number": request.last_number,
+                    "justification": request.justification,
+                }
             return self._path.execute(
                 operation_id=operation_id,
                 scope=scope,

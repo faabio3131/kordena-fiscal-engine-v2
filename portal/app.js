@@ -4,7 +4,7 @@
 /** @typedef {{method?:string, headers?:Record<string,string>, body?:string}} ApiOptions */
 
 const navigation = [
-  { label: "Operação", items: [["overview", "Visão geral"], ["documents", "Documentos"], ["issuances", "Emissões"], ["errors", "Erros"], ["reconciliation", "Reconciliação"]] },
+  { label: "Operação", items: [["overview", "Visão geral"], ["documents", "Documentos"], ["issuances", "Emissões"], ["inutilizations", "Inutilização"], ["errors", "Erros"], ["reconciliation", "Reconciliação"]] },
   { label: "Configuração", items: [["onboarding", "Onboarding"], ["companies", "Empresas"], ["units", "Unidades"], ["environments", "Ambientes"], ["capabilities", "Capabilities"], ["certificates", "Certificados"], ["providers", "Providers"], ["users", "Usuários"]] },
   { label: "Plataforma", items: [["webhooks", "Webhooks"], ["webhook-egress", "Aprovação de egress"], ["integrations", "Integrações"], ["usage", "Uso"], ["billing", "Billing"], ["plans", "Planos"], ["pricing-admin", "Catálogo comercial"], ["commercial-release", "Liberação comercial"], ["checkout-admin", "Canais de Venda / Checkout"], ["audit", "Auditoria"], ["support", "Suporte"], ["settings", "Configurações"]] },
 ];
@@ -21,6 +21,7 @@ const descriptions = {
   overview: "Visão governada da operação fiscal e do readiness real do tenant.",
   documents: "Lifecycle documental, consulta, archive e correlação.",
   issuances: "Emissões idempotentes e rastreáveis.",
+  inutilizations: "Solicitação governada de inutilização de faixa e acompanhamento do processamento interno.",
   errors: "Falhas operacionais sem exposição de segredo.",
   reconciliation: "Convergência segura entre estado interno e provider.",
   onboarding: "Onboarding configurável por tenant e unidade.",
@@ -82,7 +83,7 @@ if (!loginView || !appShell || !loginForm || !nav || !workspace || !title || !op
 /** @type {BootstrapState|null} */
 let bootstrapState = null;
 let currentView = "overview";
-const fiscalViews = new Set(["documents", "issuances", "errors", "reconciliation", "capabilities"]);
+const fiscalViews = new Set(["documents", "issuances", "inutilizations", "errors", "reconciliation", "capabilities"]);
 const configurationViews = new Set(["certificates", "providers", "webhooks", "integrations", "settings"]);
 const scopedViews = new Set([...fiscalViews, ...configurationViews]);
 let selectedFiscalUnit = "";
@@ -1081,6 +1082,86 @@ function appendUserAdministration(article, rows) {
   article.append(form);
 }
 
+/** @param {HTMLElement} article */
+function appendInutilizationForm(article) {
+  const notice = document.createElement("p");
+  notice.setAttribute("role", "status");
+  notice.textContent = "Estado da fila não confirma inutilização fiscal. Cadastro, envio ou resposta HTTP não substituem protocolo e evidência oficial. Produção exige autoridade específica do backend.";
+  article.append(notice);
+  const operations = bootstrapState?.projection.configured_fiscal_operations;
+  if (!bootstrapState?.permissions.includes("document.inutilize")
+    || !Array.isArray(operations) || !operations.includes("inutilizeFiscalRange")
+    || !authorizedFiscalUnits().some((unit) => unit.unit_id === selectedFiscalUnit
+      && unit.environments.includes(selectedFiscalEnvironment))) {
+    notice.textContent += " Solicitação bloqueada: executor, permissão ou unidade/ambiente indisponível. Nenhuma operação fiscal foi realizada.";
+    return;
+  }
+  const form = document.createElement("form");
+  form.id = "inutilization-form";
+  const modelLabel = document.createElement("label"); modelLabel.textContent = "Modelo";
+  const model = document.createElement("select"); model.id = "inutilization-model";
+  for (const [value, label] of [["55", "NF-e (55)"], ["65", "NFC-e (65)"]]) {
+    const option = document.createElement("option"); option.value = value; option.textContent = label;
+    model.append(option);
+  }
+  modelLabel.append(model); form.append(modelLabel);
+  /** @type {Record<string, HTMLInputElement>} */
+  const numbers = {};
+  for (const [name, label, min, max] of [["series", "Série", "0", "999"], ["first_number", "Número inicial", "1", ""], ["last_number", "Número final", "1", ""]]) {
+    const wrapper = document.createElement("label"); wrapper.textContent = label;
+    const input = document.createElement("input"); input.type = "number"; input.step = "1";
+    input.id = `inutilization-${name}`; input.required = true; input.min = min;
+    if (max) input.max = max;
+    numbers[name] = input; wrapper.append(input); form.append(wrapper);
+  }
+  const reasonLabel = document.createElement("label"); reasonLabel.textContent = "Justificativa (15 a 255 caracteres)";
+  const reason = document.createElement("textarea"); reason.id = "inutilization-justification";
+  reason.required = true; reason.minLength = 15; reason.maxLength = 255;
+  reasonLabel.append(reason); form.append(reasonLabel);
+  const confirmLabel = document.createElement("label");
+  const confirm = document.createElement("input"); confirm.type = "checkbox"; confirm.required = true;
+  confirm.id = "inutilization-confirm";
+  confirmLabel.append(confirm, document.createTextNode(" Conferi modelo, série, faixa, unidade e ambiente."));
+  form.append(confirmLabel);
+  const resultLine = document.createElement("p"); resultLine.id = "inutilization-result";
+  resultLine.setAttribute("role", "status"); resultLine.setAttribute("aria-live", "polite");
+  const submit = document.createElement("button"); submit.type = "submit"; submit.className = "primary";
+  submit.textContent = "Solicitar inutilização";
+  form.append(resultLine, submit);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault(); resultLine.textContent = "";
+    const payload = {unit_id: selectedFiscalUnit, environment: selectedFiscalEnvironment,
+      model: Number(model.value), series: Number(numbers.series.value),
+      first_number: Number(numbers.first_number.value), last_number: Number(numbers.last_number.value),
+      justification: reason.value.trim()};
+    if (![payload.series, payload.first_number, payload.last_number].every(Number.isSafeInteger)
+      || payload.last_number < payload.first_number) {
+      resultLine.textContent = "Informe números inteiros válidos e uma faixa crescente."; return;
+    }
+    const fingerprint = `inutilizeFiscalRange:${JSON.stringify(payload)}`;
+    if (pendingFiscalRequest && pendingFiscalRequest.fingerprint !== fingerprint) {
+      resultLine.textContent = "Há uma tentativa pendente com outro conteúdo. Preserve o pedido original até confirmar seu resultado."; return;
+    }
+    pendingFiscalRequest ||= {fingerprint, key: crypto.randomUUID()};
+    submit.disabled = true;
+    try {
+      await api("/v1/portal/operations/inutilizeFiscalRange", {method: "POST",
+        headers: {"X-CSRF-Token": csrfToken(), "Idempotency-Key": pendingFiscalRequest.key},
+        body: JSON.stringify(payload)});
+      pendingFiscalRequest = null;
+      form.reset();
+      resultLine.textContent = "Resposta recebida do executor. Consulte o estado registrado; a confirmação fiscal depende da evidência oficial.";
+      const refresh = document.createElement("button"); refresh.type = "button";
+      refresh.textContent = "Atualizar acompanhamento";
+      refresh.addEventListener("click", () => void renderSurface("inutilizations"));
+      resultLine.append(refresh);
+    } catch (error) {
+      resultLine.textContent = error instanceof Error ? error.message : "Resultado não confirmado. Repita o mesmo pedido, sem alterar conteúdo.";
+    } finally { submit.disabled = false; }
+  });
+  article.append(form);
+}
+
 /** @param {string} viewId */
 async function renderSurface(viewId) {
   if (currentView !== viewId) fiscalPageOffset = 0;
@@ -1154,6 +1235,7 @@ async function renderSurface(viewId) {
     }
     if (viewId === "onboarding") appendOnboardingControls(article);
     if (viewId === "users") appendUserAdministration(article, rows);
+    if (viewId === "inutilizations") appendInutilizationForm(article);
     if (["documents", "issuances", "reconciliation"].includes(viewId)) appendFiscalActions(article);
     if (scopedViews.has(viewId) && viewId !== "capabilities") {
       const previous = document.createElement("button");

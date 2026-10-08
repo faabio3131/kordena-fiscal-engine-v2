@@ -171,15 +171,15 @@
 
 ### 13. NFV1-P02-T06 — Inutilização
 
-- [ ] **Estado:** pendente
+- [ ] **Estado:** em execução
 - **Objetivo:** executar exatamente a tarefa NFV1-P02-T06 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P02-T05 concluído e certificado; mais as dependências formais do cronograma
-- **Entregar:** tudo que o cronograma exige para NFV1-P02-T06, mais os testes/evidências diretamente necessários.
+- **Entregar:** jornada própria de Inutilização no Portal existente, validação do contrato canônico, estado sanitizado da outbox e controles de ingresso/retry; sem operação externa.
 - **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
 - **Critério de aceite:** critérios específicos de NFV1-P02-T06 no cronograma satisfeitos e nenhum gate transversal violado.
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
-- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
+- **Riscos / não confirmado:** provider/handler/secret real e homologação permanecem P6/P7/P10; staging drift P4/P5/P9/P11; checkpoint docs/checkpoints/NFV1_P02_T06_INUTILIZATION_2026-10-08.md.
+- **Decisões do dono pendentes:** nenhuma nova decisão: reutilizar papéis/permissões/contratos existentes; operação fiscal real/deploy seguem gates humanos.
 - **Prova:** PENDENTE
 
 ### 14. NFV1-P02-T07 — Premium UX

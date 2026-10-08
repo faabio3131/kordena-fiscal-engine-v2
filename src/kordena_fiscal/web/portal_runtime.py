@@ -97,6 +97,7 @@ class DurableHumanPortalExecutor:
             "overview",
             "documents",
             "issuances",
+            "inutilizations",
             "errors",
             "reconciliation",
             "capabilities",
@@ -223,6 +224,7 @@ class DurableHumanPortalExecutor:
         if surface_id in {
             "documents",
             "issuances",
+            "inutilizations",
             "errors",
             "reconciliation",
             "capabilities",
@@ -400,6 +402,26 @@ class DurableHumanPortalExecutor:
             return self._capability_rows(authority, scope)[offset : offset + limit]
         rows: list[Mapping[str, Any]] = []
         with self._unit_of_work_factory() as uow:
+            if surface_id == "inutilizations":
+                return tuple(
+                    {
+                        **base,
+                        "record_type": "outbox",
+                        "entry_id": entry.entry_id,
+                        "operation": entry.operation,
+                        "status": entry.status.value,
+                        "attempt_count": entry.attempt_count,
+                        "created_at": entry.created_at.isoformat(),
+                        "available_at": entry.available_at.isoformat(),
+                        "fiscal_confirmation": "not_inferred_from_outbox",
+                    }
+                    for entry in uow.outbox.list_for_scope(
+                        scope,
+                        limit=limit,
+                        offset=offset,
+                        operations=frozenset({"inutilize", "inutilizefiscalrange"}),
+                    )
+                )
             if surface_id in {"documents", "issuances", "errors"}:
                 for snapshot in uow.lifecycle.list_for_scope(
                     scope,

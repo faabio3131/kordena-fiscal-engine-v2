@@ -57,6 +57,7 @@ _SURFACE_PERMISSIONS: dict[str, PortalPermission] = {
     "overview": PortalPermission.PORTAL_READ,
     "documents": PortalPermission.DOCUMENT_QUERY,
     "issuances": PortalPermission.DOCUMENT_QUERY,
+    "inutilizations": PortalPermission.DOCUMENT_INUTILIZE,
     "errors": PortalPermission.PORTAL_READ,
     "reconciliation": PortalPermission.DOCUMENT_QUERY,
     "onboarding": PortalPermission.CONFIGURATION_WRITE,
