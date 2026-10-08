@@ -195,7 +195,8 @@ class FiscalIntentRecovery:
             or row.get("environment") != scope.environment.value
         ):
             self.blocked(auth, scope, intent, "FISCAL_INTENT_AUTHORITY_CHANGED", 403)
-        self.permission(auth, str(row.get("operation")))
+        if PERMISSIONS.get(str(row.get("operation"))) not in auth.account.permissions:
+            self.blocked(auth, scope, intent, "PORTAL_FORBIDDEN", 403)
         try:
             expired = datetime.fromisoformat(str(row["expires_at"])) <= datetime.now(UTC)
         except (ValueError, KeyError) as exc:

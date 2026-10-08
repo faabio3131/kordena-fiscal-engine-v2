@@ -215,6 +215,16 @@ def test_revoked_session_epoch_permission_and_csrf(database):
     assert http.post(f"/v1/portal/fiscal-intents/{intent}/resume", json=BODY).status_code == 403
     assert post(http, key="").status_code == 400
     assert resume(http, "missing").status_code == 404
+    account = accounts.by_id("synthetic-operator")
+    assert account
+    accounts.save(replace(account, role=PortalRole.AUDITOR))
+    assert resume(http, intent).status_code == 403
+    with database() as uow:
+        assert any(
+            e.action.value == "fiscal_intent.blocked"
+            for e in uow.control_plane.list_audit("tenant-a")
+        )
+    accounts.save(account)
     identity.revoke_all_sessions("synthetic-operator")
     assert resume(http, intent).status_code == 401
     fresh = login(app)
