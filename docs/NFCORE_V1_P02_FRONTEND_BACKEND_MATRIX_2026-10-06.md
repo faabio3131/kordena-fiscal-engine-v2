@@ -6,6 +6,19 @@ Baseline auditado: `main@0e5be77267a800384d111c03e30705d95bdb0d28`.
 CI de origem: FM NFCORE V1 CI #618 SUCCESS; NFCore Plan Governance #47 SUCCESS.
 PRs abertas na entrada: zero. P0/P1 certificados; closeout P1: PR #114 mergeada.
 
+## Evolução candidata T07 / gate T07-B01 — 2026-10-08
+
+Predecessor T06 DONE_CERTIFIED em main fdf9855c7b8048870ff89d91d4d03797d2f11c49;
+CI #662/Governance #83 SUCCESS. Parcela candidata support usa unidades/configuração
+autorizadas e não inventa SLA/atendimento/health; details mobile/teclado, labels,
+busy/error/retry de leitura e negative readiness. P2-G11 parcela de configuração
+tratada internamente, condicionada aos gates desta PR/main. P2-G14 UX parcial;
+P2-G17 compatibilidade documentada no runbook, sem remoção de links válidos.
+P2-G13 crash/reload permanece T07-B01: política server-side de conta/intento requer
+aprovação; proibição de browser storage preservada. Proposta/checkpoint T07 no repo.
+Não há T07 certificada ou P2 gate; P3 não iniciada; decisões/integrações externas
+seguem suas tasks canônicas. Snapshots abaixo são históricos.
+
 ## Evolução CURRENT T06 — 2026-10-08
 
 PR #127 MERGED; HEAD `c92bcf5fe56df09ffa3f5bfd7101c9d6f7489abb`; main

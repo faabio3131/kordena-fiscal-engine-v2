@@ -111,6 +111,7 @@ class DurableHumanPortalExecutor:
             "providers",
             "webhooks",
             "integrations",
+            "support",
         }
     )
 
@@ -253,6 +254,30 @@ class DurableHumanPortalExecutor:
             if surface_id in {"certificates", "providers", "webhooks", "integrations", "settings"}:
                 return self._configuration_surface(surface_id, authority, scope, limit, offset)
             return self._fiscal_surface(surface_id, authority, scope, limit, offset)
+
+        if surface_id == "support":
+            # Existing authorized unit/configuration state, not an SLA or health probe.
+            return tuple(
+                {
+                    "unit_id": unit.unit_id,
+                    "environment": selected.value,
+                    "record_type": "support_configuration",
+                    "status": "operational_evidence_required",
+                    "fiscal_executor": (
+                        "configured_internal"
+                        if getattr(self._operation_executor, "configured_operations", ())
+                        else "unavailable"
+                    ),
+                    "capability_authority": (
+                        "configured_internal" if self._capabilities is not None else "unavailable"
+                    ),
+                    "support_delivery": "not_configured",
+                    "production": "not_authorized_by_portal",
+                }
+                for unit in units
+                for selected in sorted(unit.enabled_environments, key=lambda item: item.value)
+                if environment is None or selected == environment
+            )[offset : offset + limit]
 
         if surface_id == "companies":
             if organization is None:

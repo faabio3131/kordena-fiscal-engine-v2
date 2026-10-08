@@ -126,6 +126,28 @@ Recovery validation: controlled delivery succeeds and retries drain without dupl
 
 Never execute destructive restore against real production under an automated repository workflow.
 
+## Portal recovery compatibility and unknown fiscal outcome — P02-T07
+
+New activation/recovery delivery uses `#token=`. Previously issued `?reset_token=`
+links remain compatible; the Portal consumes the token in memory and immediately
+removes it from browser history/URL before issuing API requests. Do not log, copy
+or persist these links/tokens. Existing valid links must not be invalidated merely
+to simplify the UI. Compatibility removal requires a separate approved migration
+and proof that previously issued links no longer need support.
+
+An interrupted fiscal response is not a confirmed failure or success. While the
+page remains open, retry the same content/key and consult the scoped durable
+state. Do not refresh, close the tab, change the content or create another intent
+to bypass an unknown result. No official protocol is inferred from an HTTP status,
+number reservation or outbox record.
+
+After reload, automatic recovery of the original fiscal intent is not certified.
+T07-B01 governs a proposed server-side receipt/recovery policy; no new browser
+storage, fiscal receipt API or authorization policy is implemented by this partial
+UX delivery. Preserve existing records and reconcile through the canonical fiscal
+authority/provider. Real reconciliation/provider behavior remains P4/P7/P9/P10;
+never edit queue rows or synthesize acceptance to clear uncertainty.
+
 ## Runbook — suspected credential leakage
 
 Symptoms: secret-like material observed outside approved secret backend or unexpected authorization activity.
