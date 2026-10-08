@@ -485,7 +485,9 @@ def create_runtime_app(
             commercial_release_administration=commercial_release_administration,
             commercial_checkout=selected_checkout,
             commercial_checkout_processing_configured=(
-                selected_checkout_processing
+                # The first-party offer must not advertise a purchase without
+                # the signed acquisition route and its matching checkout starter.
+                selected_checkout_processing and commercial_acquisition is not None
             ),
             commercial_delivery_readiness=commercial_delivery_readiness,
             cakto_checkout_administration=cakto_checkout_administration,

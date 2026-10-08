@@ -1133,3 +1133,11 @@ em PR/main; revisão visual320/390/1280px concluída. T07/P2 internos certificad
 condicionados ao merge/gates deste closeout; registro no ledger/checkpoint
 NFV1_P02_T07_CLOSEOUT_2026-10-08.md. Próxima NFV1-P03-T01,não iniciada.
 Nenhum deploy,credencial/provider real,fiscal oficial ou produção autorizado.
+
+## Execução NFV1-P03-T01 — 2026-10-08
+
+Dono autorizou implementação, testes e publicação Draft da aquisição first-party.
+Primeira tarefa aberta do ledger: NFV1-P03-T01, em execução. Reutilizar serviço,
+assinatura, rate limit, catálogo/release e persistência canônicos. Oferta bloqueada
+sem aquisição autenticada composta; provas internas com PostgreSQL no CI.
+T02..T05, integração externa, merge/deploy e transação real seguem seus gates.
