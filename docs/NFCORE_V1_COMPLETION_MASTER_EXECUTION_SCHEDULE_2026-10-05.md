@@ -424,6 +424,8 @@ Compor GovernedTrialService, security, anti-abuse, rate limit, activation delive
 
 Quando Cakto for selecionada, resolver secret por boundary governada, compor receiver, autenticar assinatura, registrar inbox, traduzir evento canônico e acionar fulfillment/provisioning/activation.
 
+Reconciliar com a decisão vigente do dono: pagamentos da FM centralizados no Command. O canal de lançamento deve receber eventos comerciais autenticados do Command, mantendo gateways como adapters no Command e reutilizando autoridades comerciais locais. Segurança do binding/contrato proposta em `NFV1_P03_T03_COMMAND_POLICY_PROPOSAL_2026-10-08.md`; T03-B01 resolvido: política integral aprovada explicitamente pelo dono em 2026-10-08 (POLICY_APPROVED_FOR_INTERNAL_IMPLEMENTATION); implementação interna e testes autorizados, sem merge/deploy. Não altera IDs ou ordem; não ativa Cakto por inferência.
+
 ### NFV1-P03-T04 — Purchase readiness
 
 purchase_enabled deve permanecer falso se faltar pricing, release, checkout, receiver, canonical persistence, fulfillment, provisioning ou activation delivery.

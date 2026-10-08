@@ -41,7 +41,7 @@ def database() -> PostgresFiscalDatabase:
         connection.execute("DROP SCHEMA public CASCADE")
         connection.execute("CREATE SCHEMA public")
     database = PostgresFiscalDatabase(dsn)
-    assert database.initialize() == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14)
+    assert database.initialize() == (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15)
     try:
         yield database
     finally:

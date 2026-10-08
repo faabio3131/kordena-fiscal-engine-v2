@@ -12,6 +12,11 @@ from kordena_fiscal.persistence.cakto import (
     CAKTO_SCHEMA_STATEMENTS,
     CAKTO_SCHEMA_VERSION,
 )
+from kordena_fiscal.persistence.command_commercial_schema import (
+    COMMAND_COMMERCIAL_NAME,
+    COMMAND_COMMERCIAL_SCHEMA,
+    COMMAND_COMMERCIAL_VERSION,
+)
 from kordena_fiscal.persistence.customer_configuration_schema import (
     CUSTOMER_CONFIGURATION_NAME,
     CUSTOMER_CONFIGURATION_SCHEMA,
@@ -77,6 +82,7 @@ def validate_policy() -> tuple[int, ...]:
         PostgresFiscalDatabase.COMMERCIAL_LIFECYCLE_MIGRATION_VERSION,
         FISCAL_SCOPE_VERSION,
         CUSTOMER_CONFIGURATION_VERSION,
+        COMMAND_COMMERCIAL_VERSION,
     )
     if versions != tuple(range(1, max(versions) + 1)):
         raise RuntimeError(f"migration versions must be contiguous from 1: {versions!r}")
@@ -131,6 +137,10 @@ def validate_policy() -> tuple[int, ...]:
         version=CUSTOMER_CONFIGURATION_VERSION,
         name=CUSTOMER_CONFIGURATION_NAME,
         statements=CUSTOMER_CONFIGURATION_SCHEMA,
+    )
+    _reject_unapproved_destructive(
+        version=COMMAND_COMMERCIAL_VERSION, name=COMMAND_COMMERCIAL_NAME,
+        statements=COMMAND_COMMERCIAL_SCHEMA,
     )
     print(
         "migration policy: PASS "
