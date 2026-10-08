@@ -10,8 +10,10 @@ from uuid import uuid4
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from kordena_fiscal.application.command_commercial import CommandCommercialReceiver
 from kordena_fiscal.application.commercial_acquisition import CommercialAcquisitionService
 from kordena_fiscal.gateway.production_activation import ProductionExecutionAuthority
+from kordena_fiscal.persistence.command_commercial import CommandCommercialStore
 from kordena_fiscal.persistence.commercial_fulfillment import (
     postgres_canonical_commercial_database,
 )
@@ -28,7 +30,9 @@ from kordena_fiscal.security.s2s import (
     WebhookSecurity,
     WorkloadCredentialRecord,
 )
+from kordena_fiscal.security.secrets import SecretResolver
 from kordena_fiscal.web.app import create_app
+from kordena_fiscal.web.command_commercial import create_command_commercial_router
 from kordena_fiscal.web.commercial_acquisition import (
     create_commercial_acquisition_router,
 )
@@ -109,6 +113,9 @@ def create_runtime_app(
     metrics: MetricsRegistry | None = None,
     logger: StructuredLogger | None = None,
     cakto_receiver: CaktoWebhookReceiver | None = None,
+    command_secret_resolver: SecretResolver | None = None,
+    command_product_id: str = "nfcore",
+    command_rate_limiter: FixedWindowRateLimiter | None = None,
     commercial_checkout_projector: CommercialCheckoutProjector | None = None,
     commercial_checkout_starter: CommercialCheckoutStarter | None = None,
     commercial_checkout_processing_configured: bool = False,
@@ -155,6 +162,21 @@ def create_runtime_app(
         selected_checkout = None
         selected_checkout_starter = None
         selected_checkout_processing = False
+
+    command_receiver: CommandCommercialReceiver | None = None
+    if composition is not None and runtime.database is not None and command_secret_resolver:
+        command_receiver = CommandCommercialReceiver(
+            store=CommandCommercialStore(runtime.database.connection),
+            secrets=command_secret_resolver, product_id=command_product_id,
+            environment=resolved.environment.value,
+            unit_of_work_factory=postgres_canonical_commercial_database(runtime.database),
+            fulfillment=composition.commercial_fulfillment,
+            activation=composition.commercial_activation, delivery=password_reset_delivery,
+            pricing=composition.pricing_administration,
+            release=composition.commercial_release_administration,
+        )
+    if selected_checkout is not None and selected_checkout.provider_id == "command":
+        selected_checkout_processing = command_receiver is not None
 
     commercial_delivery_readiness = CommercialDeliveryPathReadiness(
         canonical_commercial_persistence=(
@@ -205,6 +227,7 @@ def create_runtime_app(
     app.state.nfcore_commercial_activation = (
         None if composition is None else composition.commercial_activation
     )
+    app.state.nfcore_command_commercial = command_receiver
     app.state.nfcore_commercial_acquisition = commercial_acquisition
     app.state.nfcore_commercial_trial = (
         composition.commercial_trial
@@ -403,8 +426,16 @@ def create_runtime_app(
             ),
             "fiscal_production_activated": active_grants > 0,
             "fiscal_production_active_grants": active_grants,
+            "command_webhook_configured": command_receiver is not None,
             "cakto_webhook_configured": cakto_receiver is not None,
         }
+
+    if command_receiver is not None:
+        app.include_router(create_command_commercial_router(
+            command_receiver, rate_limiter=command_rate_limiter or FixedWindowRateLimiter(
+                max_requests=120, window_seconds=60,
+            ),
+        ))
 
     if cakto_receiver is not None:
         app.include_router(build_cakto_webhook_router(cakto_receiver))

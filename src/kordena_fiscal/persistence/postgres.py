@@ -47,6 +47,11 @@ from kordena_fiscal.security.human_identity import (
 )
 from kordena_fiscal.security.human_recovery import PasswordResetRecord
 
+from .command_commercial_schema import (
+    COMMAND_COMMERCIAL_NAME,
+    COMMAND_COMMERCIAL_SCHEMA,
+    COMMAND_COMMERCIAL_VERSION,
+)
 from .commercial_release import PostgresCommercialReleaseRepository
 from .customer_configuration_schema import (
     CUSTOMER_CONFIGURATION_NAME,
@@ -755,6 +760,16 @@ class PostgresFiscalDatabase:
                         ),
                     )
                     new_versions.append(CUSTOMER_CONFIGURATION_VERSION)
+                if COMMAND_COMMERCIAL_VERSION not in applied:
+                    for statement in COMMAND_COMMERCIAL_SCHEMA:
+                        raw.execute(statement)
+                    raw.execute(
+                        "INSERT INTO fm_schema_migrations (version, name, applied_at) "
+                        "VALUES (%s, %s, %s)",
+                        (COMMAND_COMMERCIAL_VERSION, COMMAND_COMMERCIAL_NAME,
+                         datetime.now().astimezone().isoformat()),
+                    )
+                    new_versions.append(COMMAND_COMMERCIAL_VERSION)
                 raw.commit()
                 return tuple(new_versions)
             except Exception:
