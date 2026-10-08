@@ -5,7 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import psycopg
@@ -281,7 +281,11 @@ def test_postgres_runtime_signature_tampering_and_expiration(settings):
         assert post(client, security()).status_code == 201
         database = app.state.nfcore_runtime.database
         with database.connection() as connection:
-            connection.execute("UPDATE fm_commercial_acquisitions SET expires_at = created_at")
+            now = datetime.now(UTC)
+            connection.execute(
+                "UPDATE fm_commercial_acquisitions SET created_at = ?, expires_at = ?",
+                ((now - timedelta(hours=2)).isoformat(), (now - timedelta(hours=1)).isoformat()),
+            )
             connection.commit()
         assert post(client, security()).status_code == 409
         assert_counts(app, 1)
