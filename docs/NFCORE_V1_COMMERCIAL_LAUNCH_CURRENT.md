@@ -8,7 +8,27 @@
 
 This file is the persistent CURRENT checkpoint for FM NFCORE V1 Commercial Launch. GitHub remains the first technical source of truth and must be revalidated on every resume.
 
-## CURRENT superior — 2026-10-08 — NFV1-P02-T07 / T07-B01
+## CURRENT superior — 2026-10-08 — NFV1-P02-T07 parcela integrada / T07-B01
+
+- PR #129 MERGED; HEAD `95c8e4b85bf61cf1d761d3a0785e1e6da79c9340`;
+- main da parcela `3181dcdf614d8b22d8fab9e2238050d0c2207772`, árvore idêntica;
+- CI PR #665 (37733283484)/Governance #86 (37733283404) SUCCESS;
+- CI main #666 (37733952353)/Governance #87 (37733952332) SUCCESS;
+- 1371 Python/PostgreSQL, 14 frontend e 26 Playwright PASS/zero SKIP em PR/main;
+- support sanitizado/filtros reais, detalhes mobile/teclado, labels, bloqueios,
+  read retry/submit lock e preservação da key após consulta integrados;
+- screenshots 320/390/1280px baixadas, digest conferido e inspeção visual concluída;
+- T07 continua `[ ] bloqueado interno`: T07-B01 exige aprovação da política DRAFT
+  server-side de recuperação após reload/crash; browser storage permanece proibido;
+- checkpoint: `checkpoints/NFV1_P02_T07_PARTIAL_CLOSEOUT_POLICY_GATE_2026-10-08.md`;
+- closeout documental exige seus próprios gates PR/main verdes; não certifica T07;
+- primeira incompleta T07; P2 NOT MET; P3 não iniciada; staging READ-ONLY em drift.
+
+PRODUCTION_APPROVED=NO; COMMERCIAL_LIVE=NO. Nenhuma operação externa realizada.
+
+---
+
+## Snapshot histórico — 2026-10-08 — NFV1-P02-T07 candidata / T07-B01
 
 - main de entrada `fdf9855c7b8048870ff89d91d4d03797d2f11c49`, zero PRs abertas;
 - T06 DONE_CERTIFIED, #127/#128 MERGED; CI main #662 e Governance #83 SUCCESS;
