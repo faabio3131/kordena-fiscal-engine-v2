@@ -54,3 +54,11 @@ Nenhum segredo real acessado, deploy realizado ou pagamento efetuado.
 Prova de PR/HEAD/CI será registrada no corpo da PR após publicação, evitando SHA
 circular no commit. Ledger permanece em execução até integração autorizada,
 gates de main e closeout persistente.
+
+## Snapshot supersedente — integração em 2026-10-08
+
+PR #133 MERGED por autorização explícita;HEAD0a1397328db3aa315433389c0aad858a2d097caa,
+main e13dd86c1782f759f66d9369493735467496b8f7. CI #681/#682,Governance #102/#103
+SUCCESS;1429 Python/PostgreSQL,14 frontend,28 Playwright PASS/zero FAIL/zero SKIP.
+Pendências de teste/merge acima são históricas. Evidência final e limites no
+NFV1_P03_T01_CLOSEOUT_2026-10-08.md, condicionado aos próprios gates de integração.

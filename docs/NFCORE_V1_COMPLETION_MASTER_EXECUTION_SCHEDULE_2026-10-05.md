@@ -1141,3 +1141,14 @@ Primeira tarefa aberta do ledger: NFV1-P03-T01, em execução. Reutilizar servi�
 assinatura, rate limit, catálogo/release e persistência canônicos. Oferta bloqueada
 sem aquisição autenticada composta; provas internas com PostgreSQL no CI.
 T02..T05, integração externa, merge/deploy e transação real seguem seus gates.
+
+## Integração NFV1-P03-T01 — 2026-10-08
+
+Merge/validação pós-merge/fechamento autorizados explicitamente pelo dono.
+PR #133 MERGED;HEAD0a1397328db3aa315433389c0aad858a2d097caa;main
+e13dd86c1782f759f66d9369493735467496b8f7. CI #681/#682,Governance #102/#103
+SUCCESS;1429 Python/PostgreSQL,14 frontend,28 Playwright PASS/zero FAIL/zero SKIP.
+T01 interno certificado condicionado à integração/gates deste closeout;
+próxima NFV1-P03-T02,não iniciada. Gate de fase P3 ainda não concluído.
+Provider/secret/delivery operacionais,deploy e transação real não certificados.
+Registro:docs/checkpoints/NFV1_P03_T01_CLOSEOUT_2026-10-08.md.

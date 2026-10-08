@@ -8,6 +8,28 @@
 
 This file is the persistent CURRENT checkpoint for FM NFCORE V1 Commercial Launch. GitHub remains the first technical source of truth and must be revalidated on every resume.
 
+## CURRENT superior — 2026-10-08 — NFV1-P03-T01 closeout interno
+
+- PR #133 MERGED por autorização explícita; HEAD `0a1397328db3aa315433389c0aad858a2d097caa`;
+- main implementação `e13dd86c1782f759f66d9369493735467496b8f7`, árvore PR/main idêntica;
+- CI #681/#682 e Governance #102/#103 SUCCESS nos SHAs exatos;
+- PR/main:1429 Python/PostgreSQL,14 frontend,28 Playwright PASS;zero FAIL/zero SKIP;
+- aquisição autenticada composta no runtime com serviços/persistência canônicos;
+- oferta bloqueada sem security/starter/serviço de aquisição compatível;
+- persistência/replay após reinício,assinatura/rate limit/dependências/expiração/
+  perdas de resposta/falha de escrita e ausência de provisioning provados internamente;
+- T01 DONE_CERTIFIED interno condicionado à integração/gates deste closeout;
+- checkpoint `checkpoints/NFV1_P03_T01_CLOSEOUT_2026-10-08.md`;
+- próxima Task NFV1-P03-T02 — Trial,ainda não iniciada; gate de fase P3 ainda não concluído;
+- checkout/chave/delivery sintéticos; provider/secret/delivery operacionais não certificados;
+- staging em drift,deployments históricos inalterados; nenhum patch pendente na consulta atual.
+
+PRODUCTION_APPROVED=NO;COMMERCIAL_LIVE=NO. Nenhum deploy/cobrança real realizado.
+
+---
+
+## Snapshot histórico — T07/P2 closeout interno
+
 ## CURRENT superior — 2026-10-08 — T07/P2 closeout interno
 
 - PR #131 MERGED por autorização explícita; HEAD `7518662a188aba98c3d1b615ccb5ba3408286e41`;
