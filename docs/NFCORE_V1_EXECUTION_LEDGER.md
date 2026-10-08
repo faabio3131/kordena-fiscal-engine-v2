@@ -197,16 +197,17 @@
 
 ### 15. NFV1-P03-T01 — First-party acquisition
 
-- [ ] **Estado:** em execução
+- [x] **Estado:** concluído
 - **Objetivo:** executar exatamente a tarefa NFV1-P03-T01 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P02-T07 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** composição existente da aquisição autenticada no runtime, bloqueio da oferta sem serviço/starter/security, provas de persistência e replay PostgreSQL, rate limit e activation readiness.
 - **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
 - **Critério de aceite:** critérios específicos de NFV1-P03-T01 no cronograma satisfeitos e nenhum gate transversal violado.
-- **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
+- **Verificação:** runtime HTTP/PostgreSQL, assinatura/rate limit/payload, falta de dependências, replay/restart, conflito/expiração, falha de escrita/perda de resposta, ausência de provisioning; CI integral PR/main e plan validator PASS.
 - **Riscos / não confirmado:** checkout, assinatura e entrega sintéticos nos testes internos; integração operacional de provider/secret/delivery e staging não confirmada. T02..T05 não antecipadas; nenhum deploy ou cobrança real.
-- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** execução autorizada em 2026-10-08; baseline main a5b8edcb637b53c66995a039494eded4f5b0c6fa, CI #679/Governance #100 SUCCESS; implementação/CI da tarefa pendentes.
+- **Decisões do dono pendentes:** nenhuma para T01; implementação/publicação e integração/validação pós-merge/fechamento autorizados em 2026-10-08. Sem deploy ou transação real.
+- **Prova:** PR #133 MERGED; HEAD `0a1397328db3aa315433389c0aad858a2d097caa`; merge/main `e13dd86c1782f759f66d9369493735467496b8f7`, árvore idêntica `adafe68060a96de9950063f497a7d8b99d0e058c`; CI #681 (PR,37813395682)/#682 (main,37818624738) e Governance #102/#103 SUCCESS;1429 Python/PostgreSQL,14 frontend,28 Playwright PASS/zero FAIL/zero SKIP em PR/main;41/41 etapas PASS. Closeout `docs/checkpoints/NFV1_P03_T01_CLOSEOUT_2026-10-08.md`; certificação final condicionada à integração/gates deste registro.
+
 
 ### 16. NFV1-P03-T02 — Trial
 
