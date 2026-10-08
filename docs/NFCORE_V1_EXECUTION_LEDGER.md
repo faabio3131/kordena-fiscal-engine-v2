@@ -184,16 +184,16 @@
 
 ### 14. NFV1-P02-T07 — Premium UX
 
-- [ ] **Estado:** em execução
+- [x] **Estado:** concluído
 - **Objetivo:** executar exatamente a tarefa NFV1-P02-T07 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P02-T06 concluído e certificado; mais as dependências formais do cronograma
-- **Entregar:** UX/mobile/acessibilidade/bloqueios reais e suporte sanitizado no Portal existente; recuperação de intento após reload/crash somente depois da aprovação de T07-B01. Parcela independente integrada pela PR #129; tarefa não certificada.
+- **Entregar:** UX/mobile/acessibilidade/bloqueios reais e suporte sanitizado no Portal existente (#129); recuperação fiscal durável após reload/crash conforme política T07-B01 aprovada (#131). Certificação interna condicionada à integração/gates deste closeout.
 - **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
 - **Critério de aceite:** critérios específicos de NFV1-P02-T07 no cronograma satisfeitos e nenhum gate transversal violado.
-- **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** P2-G13 crash/reload candidato na PR #131 Draft, CI/visual/integração pendentes; support não certifica SLA/atendimento/health externo; staging drift STG-B01..B08 permanece P4/P5/P9/P11. Closeout parcial `docs/checkpoints/NFV1_P02_T07_PARTIAL_CLOSEOUT_POLICY_GATE_2026-10-08.md`; T07/P2 não certificados.
-- **Decisões do dono pendentes:** política T07-B01 aprovada como conjunto, implementação e publicação da PR Draft autorizadas em 2026-10-08. Merge/deploy/produção não autorizados. Reconstrução após indisponibilidade dos commits locais; testes anteriores não certificam a nova candidata.
-- **Prova:** PENDENTE integral por CI/visual/integração da recuperação aprovada; candidata PR #131 Draft, runtime faa6970bd13afb3110cd6c1430b8cbe9d17d984b, local1255 PASS/158 SKIP/zero FAIL, frontend14 PASS; evidência final da própria PR obrigatória; parcela PR #129 MERGED, HEAD `95c8e4b85bf61cf1d761d3a0785e1e6da79c9340`, main `3181dcdf614d8b22d8fab9e2238050d0c2207772`; CI PR #665 (37733283484)/Governance #86 (37733283404) e CI main #666 (37733952353)/Governance #87 (37733952332) SUCCESS nos HEADs exatos. PR/main: 1371 Python/PostgreSQL, 14 frontend e 26 Playwright PASS/zero SKIP; evidência visual inspecionada. Closeout parcial condicionado aos próprios gates PR/main verdes; sem DONE_CERTIFIED. T06 predecessor certificado por #128/main `fdf9855c7b8048870ff89d91d4d03797d2f11c49`.
+- **Verificação:** SQLite/PostgreSQL, sessão/CSRF/RBAC/isolamento, expiração/epoch/permissão, concorrência/abas, resposta perdida/rollback/persistência indisponível; frontend/Playwright/visual320/390/1280px; gates integrais PR/main e `python3 scripts/check_nfcore_plan.py`.
+- **Riscos / não confirmado:** sem confirmação fiscal/handler/provider/secret real (P6/P7/P10); support não certifica SLA/atendimento/health externo (P9/P12); staging drift STG-B01..B08 (P4/P5/P9/P11). Gate P2 interno, sem deploy/homologação externa. Closeout condicionado aos próprios gates verdes.
+- **Decisões do dono pendentes:** nenhuma para T07: política T07-B01 aprovada integralmente, implementação/publicação e integração/validação pós-merge autorizadas em 2026-10-08. Deploy/produção não autorizados. Commits anteriores indisponíveis não usados como prova desta reconstrução.
+- **Prova:** PR #131 MERGED; HEAD `7518662a188aba98c3d1b615ccb5ba3408286e41`; main `3d7b4698629c312cdb5ee6b04791bf57d05e2179`, árvore idêntica `2aed4cb93b4eeb6a6af770af14035671013e7d1d`; CI #676 (PR,37791568289)/#677 (main,37803776151) e Governance #97 (37791567996)/#98 (37803776193) SUCCESS. PR/main:1413 Python/PostgreSQL,14 frontend,28 Playwright PASS/zero SKIP/zero FAIL; capturas320/390/1280px PR/main inspecionadas, digests conferidos. Parcela #129/#130 preservada. Closeout `docs/checkpoints/NFV1_P02_T07_CLOSEOUT_2026-10-08.md`; DONE_CERTIFIED e gate P2 interno condicionados ao merge/gates completos deste registro.
 
 ### 15. NFV1-P03-T01 — First-party acquisition
 
