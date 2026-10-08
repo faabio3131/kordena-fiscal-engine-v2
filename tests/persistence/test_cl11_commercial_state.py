@@ -471,6 +471,7 @@ def test_migration_11_upgrades_existing_version_10_state() -> None:
             12,
             13,
             14,
+            15,
         )
         with database.connection() as connection:
             assert connection.execute(
@@ -501,7 +502,7 @@ def test_migration_12_upgrades_existing_version_11_state() -> None:
     try:
         assert database.initialize() == (12,)
         assert database.applied_migrations() == (
-            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
         )
         with database.connection() as connection:
             columns = connection.execute(

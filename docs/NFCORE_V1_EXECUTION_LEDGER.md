@@ -233,7 +233,7 @@
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
 - **Riscos / não confirmado:** Canal histórico Cakto reconciliado com pagamento central no Command; T03-B01 resolvido. Contrato/emissor real do Command e staging não confirmados. Implementação interna autorizada; nenhum deploy.
 - **Decisões do dono pendentes:** T03-B01 RESOLVIDO: política integral aprovada pelo dono em 2026-10-08 (POLICY_APPROVED_FOR_INTERNAL_IMPLEMENTATION), registrada em `docs/NFV1_P03_T03_COMMAND_POLICY_PROPOSAL_2026-10-08.md` para implementação interna; merge/deploy não autorizados; decisão comercial centralizada no Command já confirmada.
-- **Prova:** auditoria read-only main `0bbd02984aa6ac357d9ffc48d43dcfc1c1cc9c89`, CI #688/Governance #109 SUCCESS; PR #137 Draft; implementação interna publicada HEAD `10892b87e64f6a39fd829b7d04a5a97ad0c24105`; CI #689/Governance #110 em verificação; certificação/merge PENDENTES.
+- **Prova:** auditoria read-only main `0bbd02984aa6ac357d9ffc48d43dcfc1c1cc9c89`, CI #688/Governance #109 SUCCESS; PR #137 Draft; implementação interna publicada HEAD `10892b87e64f6a39fd829b7d04a5a97ad0c24105`; CI #691 no HEAD `eaac43a866d863ca4169e006bf8dab5d57749b40`: 1498 PASS/5 FAIL; causas corrigidas na branch (fixtures imutáveis/versão 15 e conflito de correlação). Evidência final de HEAD/CI atualizada no corpo da PR #137; certificação/merge PENDENTES.
 
 ### 18. NFV1-P03-T04 — Purchase readiness
 

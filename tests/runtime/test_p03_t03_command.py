@@ -401,7 +401,9 @@ def test_postgres_claim_activation_delivery_failure_replays_without_duplicate_ow
         services = app.state.nfcore_runtime_composition
         claim = services.commercial_claim.issue(purchase_id=purchase_id, now=datetime.now(UTC))
         services.commercial_claim.complete(
-            claim_token=claim.claim_token, legal_name="Synthetic LTDA", now=datetime.now(UTC)
+            claim_token=claim.claim_token,
+            legal_name=json.loads(acquisition.acquisition_body())["legal_name"],
+            now=datetime.now(UTC),
         )
         activation = {
             **payload,
@@ -524,11 +526,15 @@ def test_postgres_expired_acquisition_cannot_open_purchase(settings):
             uow.commercial.put_acquisition(
                 replace(
                     acquired,
+                    acquisition_id="acq-synthetic-expired",
+                    idempotency_sha256="e" * 64,
+                    request_sha256="f" * 64,
                     created_at=datetime.now(UTC) - timedelta(hours=1),
                     expires_at=datetime.now(UTC) - timedelta(minutes=1),
                 )
             )
             uow.commit()
+        payload["acquisition_id"] = "acq-synthetic-expired"
         assert post(client, payload).status_code == 409
         assert count(app, "fm_commercial_purchases") == 0
         assert count(app, "fm_command_commercial_inbox") == 0
@@ -564,3 +570,29 @@ def test_opaque_identifier_separators_cannot_collide_across_products_or_environm
         assert command_identity(kind, "nfcore", "staging", "same") != command_identity(
             kind, "nfcore", "production", "same"
         )
+
+
+def test_postgres_migration_15_upgrades_14_without_rewriting_canonical_acquisition(settings):
+    app, _, _, _ = setup(settings)
+    with TestClient(app, base_url="https://testserver") as client:
+        payload = begin(client)
+        database = app.state.nfcore_runtime.database
+        commercial = postgres_canonical_commercial_database(database)
+        with commercial() as uow:
+            original = uow.commercial.get_acquisition(payload["acquisition_id"])
+        with database.connection() as connection:
+            for table in (
+                "fm_command_bindings",
+                "fm_command_binding_audit",
+                "fm_command_commercial_inbox",
+                "fm_command_commercial_correlations",
+            ):
+                connection.execute(f"DROP TABLE {table}")
+            connection.execute("DELETE FROM fm_schema_migrations WHERE version=15")
+            connection.commit()
+        assert database.initialize() == (15,)
+        assert database.initialize() == ()
+        with commercial() as uow:
+            assert uow.commercial.get_acquisition(payload["acquisition_id"]) == original
+        assert count(app, "fm_command_commercial_inbox") == 0
+        assert client.get("/health/ready").status_code == 200

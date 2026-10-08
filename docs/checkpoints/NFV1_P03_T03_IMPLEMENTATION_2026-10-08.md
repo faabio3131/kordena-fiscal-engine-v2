@@ -29,7 +29,7 @@ Mudanças e autoridades reutilizadas:
   Falha de delivery mantém evento pendente, reprocessamento não duplica org/OWNER.
 
 Testes: Ruff/Mypy/plan/migration policy e testes dirigidos locais; suite local inicial: 1289 PASS/204 SKIP (sem DSN), sem falhas;
-testes dirigidos finais: 31 PASS/18 SKIP locais; PostgreSQL remoto em execução. Sem DSN PostgreSQL local; SKIP local não é prova.
+testes dirigidos: 32 PASS/18 SKIP locais; PostgreSQL remoto em execução. Sem DSN PostgreSQL local; SKIP local não é prova.
 Remote CI obrigatório antes de propor certificação. Não remover/enfraquecer gates.
 
 Security/Tenant/Unit: contrato nega tenant/unit/role/permissões/PII livres; binding
@@ -50,3 +50,13 @@ Riscos/pendências:
 
 Gate de saída: PENDENTE (CI remota/integração).
 Próxima ação: publicar PR Draft P03-T03 e validar todos os gates. T04 não iniciada.
+
+## Correções da CI #691
+
+HEAD eaac43a866d863ca4169e006bf8dab5d57749b40: 1498 PASS/5 FAIL, sem SKIP.
+Duas expectativas de upgrade ainda omitiam a migração 15; corrigidas. Fixtures
+de claim e expiração agora preservam nome/identidade imutáveis da aquisição.
+Binding de outra assinatura com aquisição já vinculada agora rejeita explicitamente
+409; colisão SQL de correlação também vira conflito canônico e rollback, sem
+tratá-la como indisponibilidade transitória. Nenhum teste foi removido ou relaxado.
+Revisão corrigida em nova CI; prova final de HEAD/CI no corpo da PR #137.

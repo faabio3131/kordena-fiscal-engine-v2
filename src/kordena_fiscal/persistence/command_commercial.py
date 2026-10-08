@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import asdict
@@ -135,20 +136,26 @@ class CommandCommercialStore:
                     raise CommercialFulfillmentError("Command event identity conflict")
                 return row[2] is not None, datetime.fromisoformat(str(row[3])), True
             if opening:
-                connection.execute(
-                    "INSERT INTO fm_command_commercial_correlations "
-                    "(product_id, environment, command_subscription_id, command_customer_id, "
-                    "acquisition_id, opening_invoice_id, purchase_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    (
-                        event.product_id,
-                        event.environment,
-                        event.command_subscription_id,
-                        event.command_customer_id,
-                        event.acquisition_id,
-                        event.command_invoice_id,
-                        purchase_id,
-                    ),
-                )
+                try:
+                    connection.execute(
+                        "INSERT INTO fm_command_commercial_correlations "
+                        "(product_id, environment, command_subscription_id, command_customer_id, "
+                        "acquisition_id, opening_invoice_id, purchase_id) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                        (
+                            event.product_id,
+                            event.environment,
+                            event.command_subscription_id,
+                            event.command_customer_id,
+                            event.acquisition_id,
+                            event.command_invoice_id,
+                            purchase_id,
+                        ),
+                    )
+                except sqlite3.IntegrityError as exc:
+                    raise CommercialFulfillmentError(
+                        "Command correlation identity conflict"
+                    ) from exc
             connection.execute(
                 "INSERT INTO fm_command_commercial_inbox "
                 "(product_id, environment, event_id, binding_id, fingerprint, purchase_id, "

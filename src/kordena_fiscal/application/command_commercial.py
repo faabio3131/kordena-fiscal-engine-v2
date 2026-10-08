@@ -134,7 +134,7 @@ class CommandCommercialReceiver:
                     or acquisition.price_id != event.price_id
                     or now >= acquisition.expires_at
                     or now < acquisition.created_at
-                    or acquisition.linked_purchase_id not in {None, purchase_id}
+                    or acquisition.linked_purchase_id is not None
                 ):
                     raise CommercialFulfillmentError("Command acquisition mismatch")
                 pricing = self._pricing.current
