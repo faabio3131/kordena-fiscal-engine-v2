@@ -105,3 +105,12 @@ o seletor em que OWNER legitimamente possui unit-a e unit-b. Corrigido o alvo pa
 os registros .grid-list, preservadas as asserções negativas de isolamento e
 adicionados count=2 do seletor e confirmação HTTP exata [unit-a]. Nenhum teste
 removido/skipped, nenhuma autorização ou gate reduzido; repetir CI integral.
+
+CI #664 (37732555915), HEAD b0090f06e235ce1294c6b0620109984755c99f2a:
+Playwright/gate de upload PASS, com screenshots em 320/390/1280px. Inspeção
+das três capturas mostrou detalhes legíveis, foco, logo/paleta/layout preservados,
+mas o link skip fora da tela aparecia sobre a navegação na captura fullPage após
+scroll de foco. Revisão da evidência: provar link dentro do viewport quando
+focado, Enter transfere foco ao main e link fora do viewport ao focar detalhes;
+zerar scroll antes da captura fullPage. Sem alteração de CSS/layout/autoridade.
+Nova CI integral exigida para confirmar e inspecionar a evidência corrigida.

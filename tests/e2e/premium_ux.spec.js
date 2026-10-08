@@ -22,6 +22,10 @@ for (const width of [320, 390, 1280]) {
     const projection = await page.request.get(`${origin}/v1/portal/surfaces/support?unit_id=unit-a&environment=homologation`);
     expect(projection.status()).toBe(200);
     expect((await projection.json()).rows.map((row) => row.unit_id)).toEqual(["unit-a"]);
+    await page.locator(".skip-link").focus();
+    await expect(page.locator(".skip-link")).toBeInViewport();
+    await page.keyboard.press("Enter");
+    await expect(page.locator("#main")).toBeFocused();
     await page.locator(".row summary").first().focus();
     await page.keyboard.press("Enter");
     await expect(page.locator(".row details").first()).toHaveAttribute("open", "");
@@ -34,6 +38,8 @@ for (const width of [320, 390, 1280]) {
     expect(geometry.left).toBeGreaterThanOrEqual(0);
     expect(geometry.right).toBeLessThanOrEqual(geometry.viewport);
     expect(geometry.overflow).toBeLessThanOrEqual(1);
+    await expect(page.locator(".skip-link")).not.toBeInViewport();
+    await page.evaluate(() => window.scrollTo(0, 0));
     await page.screenshot({path: `.artifacts/p02-t07/support-${width}.png`, fullPage: true});
     await page.locator("#fiscal-unit-filter").selectOption("unit-b");
     await expect(page.locator("#workspace .grid-list")).toContainText("unit-b");
