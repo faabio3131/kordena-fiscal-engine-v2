@@ -70,7 +70,10 @@ def test_runtime_does_not_expose_cakto_webhook_without_explicit_injection() -> N
     assert response.status_code == 404
 
 
-def test_runtime_accepts_authenticated_cakto_webhook_only_after_injection(tmp_path) -> None:
+def test_runtime_accepts_authenticated_cakto_webhook_only_after_injection(
+    tmp_path, monkeypatch
+) -> None:
+    monkeypatch.setitem(globals(), "NOW", datetime.now(UTC))
     receiver = _receiver(tmp_path)
     app = create_runtime_app(
         RuntimeSettings.from_mapping({}),
@@ -90,7 +93,8 @@ def test_runtime_accepts_authenticated_cakto_webhook_only_after_injection(tmp_pa
     assert client.get("/runtime/profile").json()["cakto_webhook_configured"] is True
 
 
-def test_http_boundary_rejects_missing_or_invalid_authentication(tmp_path) -> None:
+def test_http_boundary_rejects_missing_or_invalid_authentication(tmp_path, monkeypatch) -> None:
+    monkeypatch.setitem(globals(), "NOW", datetime.now(UTC))
     receiver = _receiver(tmp_path)
     app = create_runtime_app(
         RuntimeSettings.from_mapping({}),

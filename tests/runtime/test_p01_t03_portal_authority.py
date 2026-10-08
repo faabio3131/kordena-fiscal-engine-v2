@@ -227,7 +227,7 @@ def test_portal_valid_session_scope_and_idempotency_reach_canonical_path(
     assert accepted.status_code == 200
     assert accepted.json()["tenant_id"] == "tenant-a"
     assert accepted.json()["unit_id"] == "unit-a"
-    assert accepted.json()["idempotency_key"] == "idem-portal-001"
+    assert "idempotency_key" not in accepted.json()
     assert len(handler.calls) == 1
     scope, _payload, key = handler.calls[0]
     assert scope.tenant_id == "tenant-a"

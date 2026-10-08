@@ -327,6 +327,62 @@ def create_portal_router(
         _safe_payload(rows)
         return {"surface": surface_id, "rows": rows}
 
+    def recovery_method(name: str) -> Any:
+        method = getattr(require_executor(), name, None)
+        if not callable(method):
+            raise HTTPException(503, detail={"code": "FISCAL_RECOVERY_NOT_READY"})
+        return method
+
+    @router.get("/fiscal-intents")
+    async def fiscal_intents(
+        request: Request,
+        unit_id: str,
+        environment: FiscalEnvironment = FiscalEnvironment.HOMOLOGATION,
+    ) -> dict[str, Any]:
+        auth = authority(request)
+        _authorized(auth, PortalPermission.PORTAL_READ, unit_id=unit_id)
+        return {
+            "rows": list(
+                recovery_method("fiscal_intents")(
+                    authority=auth, unit_id=unit_id, environment=environment
+                )
+            )
+        }
+
+    @router.post("/fiscal-intents/prepare/{operation_id}")
+    async def prepare_intent(
+        operation_id: str, request: Request, payload: Annotated[dict[str, Any], Body()]
+    ) -> dict[str, Any]:
+        auth = authority(request)
+        _reject_browser_authority(payload)
+        _csrf(request, identity, auth)
+        return dict(
+            recovery_method("prepare_fiscal_intent")(
+                authority=auth,
+                operation_id=operation_id,
+                payload=payload,
+                idempotency_key=request.headers.get("Idempotency-Key"),
+            )
+        )
+
+    @router.post("/fiscal-intents/{intent_id}/resume")
+    async def resume_intent(
+        intent_id: str, request: Request, payload: Annotated[dict[str, Any], Body()]
+    ) -> dict[str, Any]:
+        auth = authority(request)
+        _reject_browser_authority(payload)
+        _csrf(request, identity, auth)
+        result = dict(
+            recovery_method("resume_fiscal_intent")(
+                authority=auth,
+                intent_id=intent_id,
+                payload=payload,
+                idempotency_key=request.headers.get("Idempotency-Key"),
+            )
+        )
+        _safe_payload(result)
+        return result
+
     @router.post("/operations/{operation_id}")
     async def execute_operation(
         operation_id: str,

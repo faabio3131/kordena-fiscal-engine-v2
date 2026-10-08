@@ -1,8 +1,8 @@
 # NFV1-P02-T07 — Política proposta de recuperação de intento fiscal
 
-Status: DRAFT / HUMAN_POLICY_APPROVAL_REQUIRED. Data: 2026-10-08 UTC.
+Status: POLICY_APPROVED_FOR_INTERNAL_IMPLEMENTATION. Data: 2026-10-08 UTC.
 Repository: faabio3131/kordena-fiscal-engine-v2. Blocker: T07-B01.
-Nenhuma parte desta política está implementada ou aprovada por este documento.
+Política aprovada integralmente pelo dono no chat em 2026-10-08. Implementação e publicação da PR Draft autorizadas; certificação, merge e deploy dependem dos próprios gates.
 
 ## Problema CURRENT / autoridade
 

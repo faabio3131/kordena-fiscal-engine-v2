@@ -60,6 +60,10 @@ class SecretReferenceKind(StrEnum):
 
 
 class ControlPlaneAuditAction(StrEnum):
+    FISCAL_INTENT_PREPARED = "fiscal_intent.prepared"
+    FISCAL_INTENT_RECOVERED = "fiscal_intent.recovered"
+    FISCAL_INTENT_RESUMED = "fiscal_intent.resumed"
+    FISCAL_INTENT_BLOCKED = "fiscal_intent.blocked"
     CUSTOMER_CONFIGURATION_CHANGED = "customer_configuration.changed"
     WEBHOOK_EGRESS_DECIDED = "webhook_egress.decided"
     HUMAN_ACCOUNT_CREATED = "human_account.created"

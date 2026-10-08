@@ -46,7 +46,7 @@ test("retry after post-commit failure reuses intent and shows one durable reserv
   await page.locator("#operation-payload").fill('{"document_kind":"nfe","synthetic_test":true}');
   const keys = [];
   page.on("request", (request) => {
-    if (request.url().endsWith("/operations/issueFiscalDocument")) keys.push(request.headers()["idempotency-key"]);
+    if (request.url().includes("/fiscal-intents/") && request.url().endsWith("/resume")) keys.push(request.headers()["idempotency-key"]);
   });
   await page.getByRole("button", {name: "Executar", exact: true}).click();
   await expect(page.locator("#operation-error")).toContainText("Synthetic response loss");

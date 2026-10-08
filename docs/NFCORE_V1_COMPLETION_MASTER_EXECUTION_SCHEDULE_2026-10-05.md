@@ -1112,3 +1112,7 @@ Regras adicionais:
 # 15. PRINCÍPIO FINAL
 
 > O NFCore não será considerado concluído por possuir muito código, documentação, testes ou infraestrutura preparada. Será concluído somente quando a mesma aplicação, na mesma linha arquitetural, estiver integrada, testada, implantada, observável, homologada, operável e comercialmente comprovada.
+
+## Decisão T07-B01 — 2026-10-08
+
+Política de recuperação aprovada integralmente como POLICY_APPROVED_FOR_INTERNAL_IMPLEMENTATION. Implementação/testes e publicação da PR Draft autorizados. Reconstrução ativa; gates e integração continuam obrigatórios. T07/P2 não certificados; P3 não iniciada.

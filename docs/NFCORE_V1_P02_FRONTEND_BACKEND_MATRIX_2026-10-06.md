@@ -312,3 +312,11 @@ Não foi feita leitura de secret nem transação fiscal/comercial real.
 
 Próxima tarefa após CI, merge e closeout T01 certificados: **NFV1-P02-T02 — Superfícies fiscais**.
 O gate de fase PORTAL_COMMERCIAL_PARITY_CERTIFIED continua NOT MET.
+
+## Candidata T07 — recuperação aprovada, PR #131 Draft
+
+Metadados GET fiscal-intents, prepare/resume no mesmo Portal; mesma conta/epoch/
+scopes/permissões. Backend original key e CAS antes do efeito, sem browser storage.
+Executing consulta evidência canônica ou exige reconciliação. T07 em execução;
+P2-G13/P2 ainda não certificados até CI, visual e integração. Checkpoint ativo:
+checkpoints/NFV1_P02_T07_FISCAL_RECOVERY_IMPLEMENTATION_2026-10-08.md.

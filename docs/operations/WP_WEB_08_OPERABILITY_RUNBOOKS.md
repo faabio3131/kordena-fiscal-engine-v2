@@ -157,3 +157,18 @@ Immediate actions: stop propagation; preserve non-secret audit evidence; revoke/
 Checks: Git history, CI logs, runtime logs/traces, artifact/image history, provider audit logs.
 
 Recovery validation: old credential rejected, replacement works, no raw material remains in current logs/artifacts, incident reviewed by human authority.
+
+## T07 — recuperação de pedido fiscal original (candidata PR #131)
+
+Após reload/crash, abrir a superfície fiscal na mesma conta/unidade/ambiente.
+Em Pedidos fiscais recentes, selecionar Retomar pedido original e preencher
+exatamente o conteúdo original. O backend conserva a chave original; não copiar
+keys/payloads para browser storage. Prepared pode despachar uma vez; executing
+somente consulta evidência existente. Sem evidência exata, usar reconciliação
+canônica: não criar novo intento para contornar erro, expiry ou revogação.
+Recorded indica registro interno, nunca autorização fiscal/produção.
+Janela de 24h não libera numeração ou apaga histórico. Troca de conta/epoch,
+permissão/escopo inválido ou indisponibilidade de persistência falham fechado.
+Retenção/purge continuam P9/P12. Rollback do código conserva schema e metadados;
+não implica compensação de operação externa. Somente harness interno certificado
+por PR/CI quando verdes; não há homologação oficial ou deploy nesta parcela.

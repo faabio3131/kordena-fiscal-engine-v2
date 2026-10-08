@@ -208,6 +208,22 @@ class CommercialConfigurationStore(Protocol):
         result: Mapping[str, object],
     ) -> None: ...
 
+    def configuration_receipt(
+        self, scope: ExecutionScope, command_key: str
+    ) -> Mapping[str, object] | None: ...
+
+    def list_configuration_receipts(
+        self, scope: ExecutionScope, prefix: str
+    ) -> tuple[Mapping[str, object], ...]: ...
+
+    def replace_configuration_receipt(
+        self,
+        scope: ExecutionScope,
+        command_key: str,
+        expected: Mapping[str, object],
+        updated: Mapping[str, object],
+    ) -> bool: ...
+
     def webhook_approval(
         self, scope: ExecutionScope, destination_id: str
     ) -> Mapping[str, object] | None: ...

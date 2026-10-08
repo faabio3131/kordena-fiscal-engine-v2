@@ -90,8 +90,10 @@ let selectedFiscalUnit = "";
 let selectedFiscalEnvironment = "homologation";
 let fiscalPageOffset = 0;
 let surfaceGeneration = 0;
-/** @type {{fingerprint:string, key:string}|null} */
+/** @type {{fingerprint:string, key:string, intent_id?:string}|null} */
 let pendingFiscalRequest = null;
+/** @type {{intent_id:string,operation:string}|null} */
+let selectedFiscalIntent = null;
 const fiscalOperationPermissions = {
   issueFiscalDocument: "document.issue",
   queryFiscalDocument: "document.query",
@@ -896,7 +898,7 @@ function appendCustomerConfiguration(article, viewId, rows) {
   submit.textContent = viewId === "webhooks" ? "Solicitar destino" : "Salvar configuração";
   const result = document.createElement("p"); result.setAttribute("role", "status");
   form.append(submit, result);
-  /** @type {{fingerprint:string,key:string}|null} */
+  /** @type {{fingerprint:string,key:string,intent_id?:string}|null} */
   let attempt = null;
   form.addEventListener("submit", async (event) => {
     event.preventDefault(); if (!form.reportValidity()) return;
@@ -937,7 +939,7 @@ function appendEgressReview(article) {
   decisionForm.append(notice);
   /** @type {{url:string,version:number,path:string}|null} */
   let reviewed = null;
-  /** @type {{fingerprint:string,key:string}|null} */
+  /** @type {{fingerprint:string,key:string,intent_id?:string}|null} */
   let attempt = null;
   for (const [decision, label] of [["approved", "Aprovar egress"], ["revoked", "Revogar egress"]]) {
     const button = document.createElement("button"); button.type = "button"; button.textContent = label;
@@ -1051,7 +1053,7 @@ function appendUserAdministration(article, rows) {
   statusLine.setAttribute("role", "status");
   statusLine.className = "form-error";
 
-  /** @type {{fingerprint:string,key:string}|null} */
+  /** @type {{fingerprint:string,key:string,intent_id?:string}|null} */
   let attempt = null;
 
   function loadSelection() {
@@ -1127,6 +1129,67 @@ function appendUserAdministration(article, rows) {
   article.append(form);
 }
 
+/** @param {string} operation @param {Record<string,unknown>} payload */
+async function sendFiscalMutation(operation, payload) {
+  const fingerprint = `${operation}:${JSON.stringify(payload)}`;
+  if (pendingFiscalRequest && pendingFiscalRequest.fingerprint !== fingerprint) {
+    throw new Error("Há uma tentativa pendente com outro conteúdo. Preserve o pedido original.");
+  }
+  pendingFiscalRequest ||= {fingerprint, key: crypto.randomUUID()};
+  const headers = {"X-CSRF-Token": csrfToken(), "Idempotency-Key": pendingFiscalRequest.key};
+  if (!pendingFiscalRequest.intent_id) {
+    if (selectedFiscalIntent?.operation === operation) {
+      pendingFiscalRequest.intent_id = selectedFiscalIntent.intent_id;
+    } else {
+      const list = await api(`/v1/portal/fiscal-intents?${new URLSearchParams({unit_id:String(payload.unit_id), environment:String(payload.environment)})}`);
+      if ((list.rows || []).some((/** @type {Record<string,unknown>} */ row) => row.operation === operation && row.state !== "recorded")) {
+        throw new Error("Há um pedido original pendente. Selecione Retomar pedido original e reenvie o mesmo conteúdo.");
+      }
+      const receipt = await api(`/v1/portal/fiscal-intents/prepare/${encodeURIComponent(operation)}`, {method:"POST", headers, body:JSON.stringify(payload)});
+      pendingFiscalRequest.intent_id = String(receipt.intent_id);
+    }
+  }
+  const result = await api(`/v1/portal/fiscal-intents/${encodeURIComponent(pendingFiscalRequest.intent_id)}/resume`, {method:"POST", headers, body:JSON.stringify(payload)});
+  pendingFiscalRequest = null; selectedFiscalIntent = null;
+  const previous = document.querySelector("#fiscal-recovery");
+  const article = previous?.parentElement;
+  if (previous && article) {
+    const marker = document.createElement("span"); previous.replaceWith(marker);
+    const refreshed = await appendFiscalRecovery(article);
+    if (refreshed) marker.replaceWith(refreshed); else marker.remove();
+  }
+  return result;
+}
+
+/** @param {HTMLElement} article */
+async function appendFiscalRecovery(article) {
+  if (!selectedFiscalUnit) return;
+  const section = document.createElement("section"); section.id = "fiscal-recovery";
+  const title = document.createElement("h3"); title.textContent = "Pedidos fiscais recentes"; section.append(title);
+  const notice = document.createElement("p"); notice.textContent = "Retome o pedido original reenviando o mesmo conteúdo. Registro interno não comprova autorização fiscal; resultado desconhecido exige reconciliação."; section.append(notice);
+  article.append(section);
+  try {
+    const response = await api(`/v1/portal/fiscal-intents?${new URLSearchParams({unit_id:selectedFiscalUnit, environment:selectedFiscalEnvironment})}`);
+    for (const row of response.rows || []) {
+      const item = document.createElement("div"); item.dataset.intentId = String(row.intent_id); item.dataset.intentState = String(row.state);
+      /** @type {Record<string,string>} */
+      const operationNames = {issueFiscalDocument:"Emissão", cancelFiscalDocument:"Cancelamento", inutilizeFiscalRange:"Inutilização", reconcileFiscalOperation:"Reconciliação"};
+      /** @type {Record<string,string>} */
+      const stateNames = {prepared:"Preparado para retomada", executing:"Resultado a verificar", recorded:"Resposta registrada"};
+      const label = document.createElement("p"); label.textContent = `${operationNames[String(row.operation)] || "Pedido fiscal"} · ${stateNames[String(row.state)] || "Estado a verificar"} · ${new Date(String(row.created_at)).toLocaleString("pt-BR")}`; item.append(label);
+      const button = document.createElement("button"); button.type = "button"; button.className = "ghost"; button.textContent = "Retomar pedido original";
+      button.addEventListener("click", () => {
+        if (pendingFiscalRequest?.intent_id && pendingFiscalRequest.intent_id !== row.intent_id) {
+          notice.textContent = "Preserve a tentativa selecionada até confirmar o resultado."; return;
+        }
+        selectedFiscalIntent = {intent_id:String(row.intent_id), operation:String(row.operation)};
+        notice.textContent = "Pedido original selecionado. Preencha os mesmos dados e solicite novamente para consultar ou retomar.";
+      }); item.append(button); section.append(item);
+    }
+  } catch (error) { notice.textContent = error instanceof Error ? error.message : "Recuperação indisponível"; }
+  return section;
+}
+
 /** @param {HTMLElement} article */
 function appendInutilizationForm(article) {
   const notice = document.createElement("p");
@@ -1191,10 +1254,8 @@ function appendInutilizationForm(article) {
     pendingFiscalRequest ||= {fingerprint, key: crypto.randomUUID()};
     submit.disabled = true;
     try {
-      await api("/v1/portal/operations/inutilizeFiscalRange", {method: "POST",
-        headers: {"X-CSRF-Token": csrfToken(), "Idempotency-Key": pendingFiscalRequest.key},
-        body: JSON.stringify(payload)});
-      pendingFiscalRequest = null;
+      await sendFiscalMutation("inutilizeFiscalRange", payload);
+      pendingFiscalRequest = null; selectedFiscalIntent = null;
       form.reset();
       resultLine.textContent = "Resposta recebida do executor. Consulte o estado registrado; a confirmação fiscal depende da evidência oficial.";
       const refresh = document.createElement("button"); refresh.type = "button";
@@ -1290,6 +1351,7 @@ async function renderSurface(viewId) {
     }
     if (viewId === "onboarding") appendOnboardingControls(article);
     if (viewId === "users") appendUserAdministration(article, rows);
+    if (["inutilizations", "documents", "issuances", "reconciliation"].includes(viewId)) await appendFiscalRecovery(article);
     if (viewId === "inutilizations") appendInutilizationForm(article);
     if (["documents", "issuances", "reconciliation"].includes(viewId)) appendFiscalActions(article);
     if (scopedViews.has(viewId) && viewId !== "capabilities") {
@@ -1437,7 +1499,7 @@ logoutAction.addEventListener("click", async () => {
     await api("/v1/auth/logout", { method: "POST", headers: { "X-CSRF-Token": csrfToken() } });
   } finally {
     bootstrapState = null;
-    pendingFiscalRequest = null;
+    pendingFiscalRequest = null; selectedFiscalIntent = null;
     showLogin();
   }
 });
@@ -1465,12 +1527,10 @@ operationForm.addEventListener("submit", async (event) => {
       pendingFiscalRequest ||= {fingerprint, key: crypto.randomUUID()};
       headers["Idempotency-Key"] = pendingFiscalRequest.key;
     }
-    await api(`/v1/portal/operations/${encodeURIComponent(selected)}`, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(payload),
+    if (mutation) await sendFiscalMutation(selected, payload);
+    else await api(`/v1/portal/operations/${encodeURIComponent(selected)}`, {
+      method: "POST", headers, body: JSON.stringify(payload),
     });
-    if (mutation) pendingFiscalRequest = null;
     operationDialog.close();
     await renderSurface(currentView);
   } catch (error) {

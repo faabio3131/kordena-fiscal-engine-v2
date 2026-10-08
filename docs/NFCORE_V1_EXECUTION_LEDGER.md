@@ -184,16 +184,16 @@
 
 ### 14. NFV1-P02-T07 — Premium UX
 
-- [ ] **Estado:** bloqueado interno
+- [ ] **Estado:** em execução
 - **Objetivo:** executar exatamente a tarefa NFV1-P02-T07 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P02-T06 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** UX/mobile/acessibilidade/bloqueios reais e suporte sanitizado no Portal existente; recuperação de intento após reload/crash somente depois da aprovação de T07-B01. Parcela independente integrada pela PR #129; tarefa não certificada.
 - **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
 - **Critério de aceite:** critérios específicos de NFV1-P02-T07 no cronograma satisfeitos e nenhum gate transversal violado.
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** P2-G13 crash/reload aberto; support não certifica SLA/atendimento/health externo; staging drift STG-B01..B08 permanece P4/P5/P9/P11. Closeout parcial `docs/checkpoints/NFV1_P02_T07_PARTIAL_CLOSEOUT_POLICY_GATE_2026-10-08.md`; T07/P2 não certificados.
-- **Decisões do dono pendentes:** T07-B01: aprovar/ajustar como conjunto a política de recuperação fiscal server-side em `docs/NFV1_P02_T07_FISCAL_INTENT_RECOVERY_POLICY_PROPOSAL_2026-10-08.md`, incluindo mesma conta/session_epoch, janela de 24h e nenhum bypass/storage. AGENTS.md/padrão mestre §6 exigem aprovação de mudança sensível de segurança/associação conta-intento. Implementação dependente parada; P3 não iniciada.
-- **Prova:** PENDENTE integral por T07-B01; parcela PR #129 MERGED, HEAD `95c8e4b85bf61cf1d761d3a0785e1e6da79c9340`, main `3181dcdf614d8b22d8fab9e2238050d0c2207772`; CI PR #665 (37733283484)/Governance #86 (37733283404) e CI main #666 (37733952353)/Governance #87 (37733952332) SUCCESS nos HEADs exatos. PR/main: 1371 Python/PostgreSQL, 14 frontend e 26 Playwright PASS/zero SKIP; evidência visual inspecionada. Closeout parcial condicionado aos próprios gates PR/main verdes; sem DONE_CERTIFIED. T06 predecessor certificado por #128/main `fdf9855c7b8048870ff89d91d4d03797d2f11c49`.
+- **Riscos / não confirmado:** P2-G13 crash/reload candidato na PR #131 Draft, CI/visual/integração pendentes; support não certifica SLA/atendimento/health externo; staging drift STG-B01..B08 permanece P4/P5/P9/P11. Closeout parcial `docs/checkpoints/NFV1_P02_T07_PARTIAL_CLOSEOUT_POLICY_GATE_2026-10-08.md`; T07/P2 não certificados.
+- **Decisões do dono pendentes:** política T07-B01 aprovada como conjunto, implementação e publicação da PR Draft autorizadas em 2026-10-08. Merge/deploy/produção não autorizados. Reconstrução após indisponibilidade dos commits locais; testes anteriores não certificam a nova candidata.
+- **Prova:** PENDENTE integral por CI/visual/integração da recuperação aprovada; candidata PR #131 Draft, runtime faa6970bd13afb3110cd6c1430b8cbe9d17d984b, local1255 PASS/158 SKIP/zero FAIL, frontend14 PASS; evidência final da própria PR obrigatória; parcela PR #129 MERGED, HEAD `95c8e4b85bf61cf1d761d3a0785e1e6da79c9340`, main `3181dcdf614d8b22d8fab9e2238050d0c2207772`; CI PR #665 (37733283484)/Governance #86 (37733283404) e CI main #666 (37733952353)/Governance #87 (37733952332) SUCCESS nos HEADs exatos. PR/main: 1371 Python/PostgreSQL, 14 frontend e 26 Playwright PASS/zero SKIP; evidência visual inspecionada. Closeout parcial condicionado aos próprios gates PR/main verdes; sem DONE_CERTIFIED. T06 predecessor certificado por #128/main `fdf9855c7b8048870ff89d91d4d03797d2f11c49`.
 
 ### 15. NFV1-P03-T01 — First-party acquisition
 

@@ -8,6 +8,20 @@
 
 This file is the persistent CURRENT checkpoint for FM NFCORE V1 Commercial Launch. GitHub remains the first technical source of truth and must be revalidated on every resume.
 
+## CURRENT superior — 2026-10-08 — recuperação T07 candidata em validação
+
+Main de entrada `82e05f7af6ffca031f457ff93f43ae875ad05122`; PR #131 Draft,
+branch `feat/nfv1-p02-t07-fiscal-recovery`. Política integral, implementação/testes
+ e publicação autorizados pelo dono. Commits locais anteriores indisponíveis:
+não reutilizar resultados anteriores como prova da reconstrução. Reutilizar
+receipts canônicos; sem browser storage. Runtime local faa6970:1255 PASS/158 SKIP/zero FAIL, frontend14 PASS; PostgreSQL/Playwright/CI final pendentes. T07 em execução, P2 NOT MET, P3 não iniciada.
+Checkpoint: `checkpoints/NFV1_P02_T07_FISCAL_RECOVERY_IMPLEMENTATION_2026-10-08.md`.
+Gates da candidata/CI/visual/integração pendentes. Merge/deploy não autorizados.
+
+---
+
+## Snapshot histórico da parcela integrada
+
 ## CURRENT superior — 2026-10-08 — NFV1-P02-T07 parcela integrada / T07-B01
 
 - PR #129 MERGED; HEAD `95c8e4b85bf61cf1d761d3a0785e1e6da79c9340`;
