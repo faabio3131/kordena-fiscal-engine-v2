@@ -171,7 +171,7 @@
 
 ### 13. NFV1-P02-T06 — Inutilização
 
-- [ ] **Estado:** em execução
+- [x] **Estado:** concluído
 - **Objetivo:** executar exatamente a tarefa NFV1-P02-T06 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P02-T05 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** jornada própria de Inutilização no Portal existente, validação do contrato canônico, estado sanitizado da outbox e controles de ingresso/retry; sem operação externa.
@@ -180,7 +180,7 @@
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
 - **Riscos / não confirmado:** provider/handler/secret real e homologação permanecem P6/P7/P10; staging drift P4/P5/P9/P11; checkpoint docs/checkpoints/NFV1_P02_T06_INUTILIZATION_2026-10-08.md.
 - **Decisões do dono pendentes:** nenhuma nova decisão: reutilizar papéis/permissões/contratos existentes; operação fiscal real/deploy seguem gates humanos.
-- **Prova:** PENDENTE
+- **Prova:** PR #127 MERGED; HEAD `c92bcf5fe56df09ffa3f5bfd7101c9d6f7489abb`; merge/main `e03201bc01bc1f6acbeca6c161d02ea157512d43`; CI #659 (PR, 37727606308) e #660 (main, 37728314258) SUCCESS; Plan Governance #80 (PR) e #81 (main) SUCCESS; 1359 Python/PostgreSQL, 14 frontend e 21 Playwright PASS/zero SKIP; closeout `docs/checkpoints/NFV1_P02_T06_CLOSEOUT_2026-10-08.md`. DONE_CERTIFIED condicionado ao merge e gates verdes deste closeout; T07 não iniciada.
 
 ### 14. NFV1-P02-T07 — Premium UX
 
