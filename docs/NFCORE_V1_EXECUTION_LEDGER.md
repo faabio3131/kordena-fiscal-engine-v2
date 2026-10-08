@@ -184,16 +184,16 @@
 
 ### 14. NFV1-P02-T07 — Premium UX
 
-- [ ] **Estado:** pendente
+- [ ] **Estado:** bloqueado interno
 - **Objetivo:** executar exatamente a tarefa NFV1-P02-T07 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P02-T06 concluído e certificado; mais as dependências formais do cronograma
-- **Entregar:** tudo que o cronograma exige para NFV1-P02-T07, mais os testes/evidências diretamente necessários.
+- **Entregar:** UX/mobile/acessibilidade/bloqueios reais e suporte sanitizado no Portal existente; recuperação de intento após reload/crash somente depois da aprovação de T07-B01. Parcela independente em implementação; tarefa não certificada.
 - **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
 - **Critério de aceite:** critérios específicos de NFV1-P02-T07 no cronograma satisfeitos e nenhum gate transversal violado.
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
-- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** PENDENTE
+- **Riscos / não confirmado:** P2-G13 crash/reload aberto; support não certifica SLA/atendimento/health externo; staging drift STG-B01..B08 permanece P4/P5/P9/P11. Checkpoint `docs/checkpoints/NFV1_P02_T07_UX_AND_POLICY_GATE_2026-10-08.md`.
+- **Decisões do dono pendentes:** T07-B01: aprovar/ajustar como conjunto a política de recuperação fiscal server-side em `docs/NFV1_P02_T07_FISCAL_INTENT_RECOVERY_POLICY_PROPOSAL_2026-10-08.md`, incluindo mesma conta/session_epoch, janela de 24h e nenhum bypass/storage. AGENTS.md/padrão mestre §6 exigem aprovação de mudança sensível de segurança/associação conta-intento. Implementação dependente parada; P3 não iniciada.
+- **Prova:** PENDENTE integral; predecessor T06 certificado em main `fdf9855c7b8048870ff89d91d4d03797d2f11c49`, PR #128, CI #662/Governance #83 SUCCESS. Parcela independente e proposta identificadas pela PR que contém este checkpoint; sem DONE_CERTIFIED.
 
 ### 15. NFV1-P03-T01 — First-party acquisition
 

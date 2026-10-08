@@ -8,7 +8,24 @@
 
 This file is the persistent CURRENT checkpoint for FM NFCORE V1 Commercial Launch. GitHub remains the first technical source of truth and must be revalidated on every resume.
 
-## CURRENT superior — 2026-10-08 — NFV1-P02-T06 CLOSEOUT
+## CURRENT superior — 2026-10-08 — NFV1-P02-T07 / T07-B01
+
+- main de entrada `fdf9855c7b8048870ff89d91d4d03797d2f11c49`, zero PRs abertas;
+- T06 DONE_CERTIFIED, #127/#128 MERGED; CI main #662 e Governance #83 SUCCESS;
+- 1359 Python/PostgreSQL, 14 frontend e 21 Playwright PASS/zero SKIP no HEAD de entrada;
+- primeira incompleta T07; parcela independente candidata de UX/mobile/acessibilidade/
+  suporte sanitizado e estados de bloqueio; gates/PR/main desta parcela pendentes;
+- T07-B01 exige política de recuperação de intento após reload/crash; proposta DRAFT
+  `NFV1_P02_T07_FISCAL_INTENT_RECOVERY_POLICY_PROPOSAL_2026-10-08.md`;
+- storage no navegador permanece proibido; política nova não implementada;
+- checkpoint: `checkpoints/NFV1_P02_T07_UX_AND_POLICY_GATE_2026-10-08.md`;
+- T07 não certificada; P2 NOT MET; P3 não iniciada. Staging READ-ONLY em drift.
+
+PRODUCTION_APPROVED=NO; COMMERCIAL_LIVE=NO. Sem ações externas.
+
+---
+
+## Snapshot histórico — 2026-10-08 — NFV1-P02-T06 CLOSEOUT
 
 - PR #127 MERGED; HEAD `c92bcf5fe56df09ffa3f5bfd7101c9d6f7489abb`;
 - implementação main `e03201bc01bc1f6acbeca6c161d02ea157512d43`;

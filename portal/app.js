@@ -18,31 +18,31 @@ const safetyStates = {
 
 /** @type {Record<string,string>} */
 const descriptions = {
-  overview: "Visão governada da operação fiscal e do readiness real do tenant.",
-  documents: "Lifecycle documental, consulta, archive e correlação.",
+  overview: "Visão governada da operação fiscal e da prontidão comprovada da organização.",
+  documents: "Ciclo de vida documental, consulta, arquivo e correlação.",
   issuances: "Emissões idempotentes e rastreáveis.",
   inutilizations: "Solicitação governada de inutilização de faixa e acompanhamento do processamento interno.",
   errors: "Falhas operacionais sem exposição de segredo.",
-  reconciliation: "Convergência segura entre estado interno e provider.",
-  onboarding: "Onboarding configurável por tenant e unidade.",
+  reconciliation: "Convergência segura entre estado interno e provedor.",
+  onboarding: "Configuração inicial por organização e unidade.",
   companies: "Empresas visíveis no escopo autorizado da sessão.",
   units: "Unidades permitidas para o usuário autenticado.",
   environments: "Homologação e produção com autoridade segregada.",
-  capabilities: "Capabilities e readiness baseados em evidência.",
+  capabilities: "Capacidades e prontidão fiscal baseadas em evidência.",
   certificates: "Referências de certificado; material secreto nunca é exibido.",
-  providers: "Bindings de providers por documento, operação e jurisdição.",
+  providers: "Vínculos de provedores por documento, operação e jurisdição.",
   users: "Usuários, papéis e permissões do tenant.",
   webhooks: "Destinos e estado de entrega governada.",
   "webhook-egress": "Aprovação e revogação de destinos pela autoridade da plataforma.",
   integrations: "Integrações do tenant via contratos versionados.",
   usage: "Uso medido sem interferir na autoridade fiscal.",
   billing: "Cobrança separada da autoridade fiscal.",
-  plans: "Plano e entitlements comerciais configurados.",
+  plans: "Plano e direitos comerciais configurados.",
   "pricing-admin": "Catálogo comercial versionado, durável e restrito à administração da plataforma.",
   "commercial-release": "Decisão humana versionada que governa a disponibilidade comercial pública do NFCore.",
   "checkout-admin": "Canais de venda governados por adapters. O provider configurado traduz checkout e eventos sem virar autoridade comercial do NFCore.",
   audit: "Auditoria administrativa e operacional.",
-  support: "Saúde operacional, incidentes e suporte.",
+  support: "Configuração autorizada e limites do suporte operacional.",
   settings: "Políticas e configurações autorizadas.",
 };
 
@@ -85,10 +85,11 @@ let bootstrapState = null;
 let currentView = "overview";
 const fiscalViews = new Set(["documents", "issuances", "inutilizations", "errors", "reconciliation", "capabilities"]);
 const configurationViews = new Set(["certificates", "providers", "webhooks", "integrations", "settings"]);
-const scopedViews = new Set([...fiscalViews, ...configurationViews]);
+const scopedViews = new Set([...fiscalViews, ...configurationViews, "support"]);
 let selectedFiscalUnit = "";
 let selectedFiscalEnvironment = "homologation";
 let fiscalPageOffset = 0;
+let surfaceGeneration = 0;
 /** @type {{fingerprint:string, key:string}|null} */
 let pendingFiscalRequest = null;
 const fiscalOperationPermissions = {
@@ -151,6 +152,9 @@ function appendFiscalFilters(article, viewId) {
 
 /** @param {HTMLElement} article */
 function appendFiscalActions(article) {
+  const recoveryNotice = document.createElement("p");
+  recoveryNotice.textContent = "Se a resposta for interrompida, mantenha esta página aberta e preserve o pedido original. Após recarregar, consulte o estado fiscal antes de iniciar outra solicitação.";
+  article.append(recoveryNotice);
   const operations = bootstrapState?.projection.configured_fiscal_operations;
   const configured = Array.isArray(operations) ? operations : [];
   for (const option of operationId.options) {
@@ -214,14 +218,31 @@ async function api(path, options = {}) {
     credentials: "same-origin",
     ...options,
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+  }).catch(() => {
+    throw new Error("Conexão interrompida. O resultado não está confirmado; consulte o acompanhamento antes de repetir uma operação.");
   });
   if (response.status === 204) return null;
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     const detail = body && typeof body === "object" ? body.detail : null;
-    const message = detail && typeof detail === "object" && typeof detail.message === "string"
+    const messages = {
+      SESSION_REQUIRED: "Entre novamente para acessar o escopo autorizado.",
+      INVALID_SESSION: "A sessão expirou ou foi revogada. Entre novamente.",
+      CSRF_REQUIRED: "A proteção da sessão precisa ser renovada. Entre novamente antes de repetir.",
+      CSRF_INVALID: "A proteção da sessão não é válida. Entre novamente.",
+      UNIT_NOT_CONFIGURED: "A unidade selecionada não está configurada.",
+      UNIT_SELECTION_REQUIRED: "Selecione uma unidade autorizada.",
+      ENVIRONMENT_NOT_ENABLED: "O ambiente selecionado não está habilitado para esta unidade.",
+      FISCAL_RUNTIME_NOT_READY: "O executor fiscal está indisponível. Nenhuma autorização fiscal foi confirmada.",
+      PORTAL_RUNTIME_NOT_READY: "Esta capacidade ainda não está disponível no runtime. Tente novamente após a configuração governada.",
+      BROWSER_AUTHORITY_REJECTED: "Tenant e permissões são definidos pela sessão. Remova campos de autoridade do pedido.",
+      MISSING_IDEMPOTENCY_KEY: "O pedido precisa de um identificador de tentativa para ser processado com segurança.",
+    };
+    const code = detail && typeof detail === "object" && typeof detail.code === "string" ? detail.code : "";
+    const translated = messages[/** @type {keyof typeof messages} */ (code)];
+    const message = translated || (detail && typeof detail === "object" && typeof detail.message === "string"
       ? detail.message
-      : `Falha HTTP ${response.status}`;
+      : `Falha HTTP ${response.status}`);
     throw Object.assign(new Error(message), { status: response.status, body });
   }
   return body;
@@ -288,10 +309,10 @@ function passwordResetErrorMessage(error) {
   return error instanceof Error ? error.message : "Não foi possível alterar a senha.";
 }
 
-/** @param {unknown} value */
+/** @param {unknown} value @returns {string} */
 function text(value) {
   if (value === null || value === undefined) return "—";
-  if (Array.isArray(value)) return value.join(", ");
+  if (Array.isArray(value)) return value.map(text).join(", ");
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }
@@ -300,9 +321,33 @@ function text(value) {
 function tone(value) {
   const normalized = text(value).toUpperCase();
   if (/FAIL|ERROR|REJECT|UNAVAILABLE/.test(normalized)) return "danger";
-  if (/BLOCKED|PENDING|MISSING|REQUIRED|HOMOLOG/.test(normalized)) return "warning";
+  if (/NOT_|UNCONFIRMED|EXCLUDED|DISABLED|BLOCKED|PENDING|MISSING|REQUIRED|HOMOLOG/.test(normalized)) return "warning";
   if (/READY|ACTIVE|ATIVA|AUTHORIZED|OK|HEALTHY|CONCLU/.test(normalized)) return "success";
   return "neutral";
+}
+
+/** @param {string} key */
+function fieldLabel(key) {
+  const labels = {
+    organization_onboarded: "Organização cadastrada", legal_name: "Razão social",
+    unit_count: "Quantidade de unidades", authorized_units: "Unidades autorizadas",
+    capability_readiness_configured: "Autoridade de capacidades configurada",
+    legacy_unscoped_lifecycle_visibility: "Registros legados sem escopo",
+    unit_scope: "Escopo de unidades", enabled_environments: "Ambientes habilitados",
+    fiscal_operation_executor_configured: "Executor fiscal composto",
+    fiscal_operations_configured: "Operações fiscais configuradas",
+    configured_fiscal_operations: "Operações fiscais disponíveis", onboarding_stage: "Etapa de configuração",
+    basic_onboarding_complete: "Configuração básica concluída", customer_configuration_mode: "Modo de configuração",
+    customer_configuration_operations: "Comandos de configuração", unit_id: "Unidade", environment: "Ambiente",
+    record_type: "Tipo de registro", entry_id: "Identificador na fila", operation: "Operação",
+    status: "Estado registrado", attempt_count: "Tentativas", created_at: "Criado em",
+    available_at: "Próxima tentativa a partir de", fiscal_confirmation: "Confirmação fiscal",
+    fiscal_executor: "Executor fiscal", capability_authority: "Autoridade de capacidades",
+    support_delivery: "Canal de atendimento", production: "Produção", document_id: "Documento",
+    document_reference: "Referência do documento", readiness: "Prontidão", state: "Estado", code: "Código",
+    version: "Versão", operational_verification: "Verificação operacional", reference_id: "Referência",
+  };
+  return labels[/** @type {keyof typeof labels} */ (key)] || key.replaceAll("_", " ");
 }
 
 /** @param {Record<string, unknown>} row */
@@ -337,7 +382,7 @@ function fiscalRowElement(row) {
   summary.textContent = "Detalhes do registro";
   const values = document.createElement("dl");
   for (const [key, value] of Object.entries(row)) {
-    const term = document.createElement("dt"); term.textContent = key;
+    const term = document.createElement("dt"); term.textContent = fieldLabel(key);
     const description = document.createElement("dd"); description.textContent = text(value);
     values.append(term, description);
   }
@@ -366,7 +411,7 @@ function panel(titleText, eyebrow = "FM NFCORE V1.0") {
 function renderOverview() {
   workspace.replaceChildren();
   const projection = bootstrapState?.projection || {};
-  const article = panel("Estado operacional", "Control Plane");
+  const article = panel("Estado operacional", "Controle da plataforma");
   const grid = document.createElement("div");
   grid.className = "grid-list";
   const visible = Object.entries(projection).filter(([key]) => key !== "available_surfaces");
@@ -376,11 +421,11 @@ function renderOverview() {
     empty.textContent = "A API não retornou projeções operacionais para este escopo.";
     grid.append(empty);
   } else {
-    for (const [key, value] of visible) grid.append(rowElement({ item: key, value, status: value }));
+    for (const [key, value] of visible) grid.append(rowElement({ item: fieldLabel(key), value, status: value }));
   }
   article.append(grid);
 
-  const identity = panel("Autoridade da sessão", "Security boundary");
+  const identity = panel("Autoridade da sessão", "Proteção de acesso");
   const identityGrid = document.createElement("div");
   identityGrid.className = "grid-list";
   identityGrid.append(
@@ -457,7 +502,7 @@ function appendOnboardingControls(article) {
 
 async function renderPricingAdmin() {
   workspace.replaceChildren();
-  const article = panel("Catálogo comercial", "Platform administration");
+  const article = panel("Catálogo comercial", "Administração da plataforma");
   const statusLine = document.createElement("p");
   statusLine.className = "form-error";
   statusLine.setAttribute("role", "status");
@@ -547,7 +592,7 @@ async function renderPricingAdmin() {
 
 async function renderCommercialRelease() {
   workspace.replaceChildren();
-  const article = panel("Liberação comercial", "Platform administration");
+  const article = panel("Liberação comercial", "Administração da plataforma");
   const statusLine = document.createElement("p");
   statusLine.className = "form-error";
   statusLine.setAttribute("role", "status");
@@ -669,7 +714,7 @@ async function renderCommercialRelease() {
 
 async function renderCheckoutAdmin() {
   workspace.replaceChildren();
-  const article = panel("Canais de Venda / Checkout", "Platform administration");
+  const article = panel("Canais de Venda / Checkout", "Administração da plataforma");
   const statusLine = document.createElement("p");
   statusLine.className = "form-error";
   statusLine.setAttribute("role", "status");
@@ -1087,6 +1132,7 @@ function appendInutilizationForm(article) {
   const notice = document.createElement("p");
   notice.setAttribute("role", "status");
   notice.textContent = "Estado da fila não confirma inutilização fiscal. Cadastro, envio ou resposta HTTP não substituem protocolo e evidência oficial. Produção exige autoridade específica do backend.";
+  notice.textContent += " Se a resposta for interrompida, mantenha a página aberta. Após recarregar, consulte o estado fiscal antes de iniciar outra solicitação.";
   article.append(notice);
   const operations = bootstrapState?.projection.configured_fiscal_operations;
   if (!bootstrapState?.permissions.includes("document.inutilize")
@@ -1164,6 +1210,8 @@ function appendInutilizationForm(article) {
 
 /** @param {string} viewId */
 async function renderSurface(viewId) {
+  const generation = ++surfaceGeneration;
+  workspace.setAttribute("aria-busy", "false");
   if (currentView !== viewId) fiscalPageOffset = 0;
   currentView = viewId;
   const label = navigation.flatMap((group) => group.items).find(([id]) => id === viewId)?.[1] || viewId;
@@ -1199,6 +1247,8 @@ async function renderSurface(viewId) {
   if (scopedViews.has(viewId)) appendFiscalFilters(article, viewId);
   const loading = document.createElement("p");
   loading.textContent = "Carregando dados autorizados...";
+  loading.setAttribute("role", "status");
+  workspace.setAttribute("aria-busy", "true");
   article.append(loading);
   workspace.append(article);
   try {
@@ -1216,10 +1266,15 @@ async function renderSurface(viewId) {
       empty.textContent = scopedViews.has(viewId) ? "Nenhum registro nesta página do escopo autorizado." : "Nenhum registro disponível neste escopo autorizado.";
       grid.append(empty);
     } else {
-      for (const row of rows) grid.append(scopedViews.has(viewId) ? fiscalRowElement(row) : rowElement(row));
+      for (const row of rows) grid.append(scopedViews.has(viewId) || viewId === "support" ? fiscalRowElement(row) : rowElement(row));
     }
     loading.remove();
     article.append(grid);
+    if (viewId === "support") {
+      const notice = document.createElement("p"); notice.className = "empty-state";
+      notice.textContent = "Esta página mostra configuração do escopo autorizado. Atendimento, SLA, incidentes e saúde operacional externa ainda não estão certificados. Não envie senha, token, certificado ou conteúdo fiscal em solicitações de suporte.";
+      article.append(notice);
+    }
     if (["billing", "plans", "usage"].includes(viewId)) {
       const notice = document.createElement("p");
       notice.className = "empty-state";
@@ -1250,6 +1305,13 @@ async function renderSurface(viewId) {
   } catch (error) {
     loading.textContent = error instanceof Error ? error.message : "Falha ao carregar superfície";
     loading.className = "form-error";
+    loading.setAttribute("role", "alert");
+    const retry = document.createElement("button"); retry.type = "button";
+    retry.textContent = "Tentar carregar novamente";
+    retry.addEventListener("click", () => void renderSurface(viewId));
+    article.append(retry);
+  } finally {
+    if (generation === surfaceGeneration) workspace.setAttribute("aria-busy", "false");
   }
 }
 
@@ -1293,7 +1355,7 @@ function applyBootstrap(state) {
   runtimeState.textContent = "API autenticada conectada";
   const productionState = state.projection.production_state || state.projection.readiness || safetyStates.approval;
   criticalTitle.textContent = text(productionState);
-  criticalCopy.textContent = /READY|APPROVED/i.test(text(productionState))
+  criticalCopy.textContent = /^(READY|APPROVED)$/i.test(text(productionState))
     ? "Readiness retornado pelo backend; operações continuam sujeitas a RBAC e gates fiscais."
     : `${safetyStates.blocked}: Produção permanece bloqueada até que o backend comprove os gates aplicáveis (${safetyStates.external} / ${safetyStates.approval}).`;
   buildNavigation();
@@ -1383,6 +1445,9 @@ logoutAction.addEventListener("click", async () => {
 operationCancel.addEventListener("click", () => operationDialog.close());
 operationForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  const submit = operationForm.querySelector('button[type="submit"]');
+  if (!(submit instanceof HTMLButtonElement) || submit.disabled) return;
+  submit.disabled = true;
   operationError.textContent = "";
   try {
     const selected = operationId.value;
@@ -1405,11 +1470,13 @@ operationForm.addEventListener("submit", async (event) => {
       headers,
       body: JSON.stringify(payload),
     });
-    pendingFiscalRequest = null;
+    if (mutation) pendingFiscalRequest = null;
     operationDialog.close();
     await renderSurface(currentView);
   } catch (error) {
     operationError.textContent = error instanceof Error ? error.message : "Operação rejeitada";
+  } finally {
+    submit.disabled = false;
   }
 });
 

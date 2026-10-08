@@ -102,6 +102,14 @@ jobs:
       - name: E2E critical
         run: npm run test:e2e
 
+      - name: Upload portal UX evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfcore-portal-ux-${{ github.sha }}
+          path: .artifacts/p02-t07/*.png
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Validate compose
         run: docker compose config --quiet
 
