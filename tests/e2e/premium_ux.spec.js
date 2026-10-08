@@ -78,6 +78,9 @@ test("an in-flight submit is locked and a read cannot erase a pending mutation k
       authorized_units: [{unit_id: "unit-a", display_name: "Synthetic unit", environments: ["homologation"]}]},
   })}));
   await page.route("**/v1/portal/surfaces/issuances*", (route) => route.fulfill({status: 200, contentType: "application/json", body: '{"rows":[]}'}));
+  // New recovery protocol is stubbed only in this existing UI-only contract.
+  await page.route("**/v1/portal/fiscal-intents?**", (route) => route.fulfill({status:200, contentType:"application/json", body:'{"rows":[]}'}));
+  await page.route("**/v1/portal/fiscal-intents/prepare/issueFiscalDocument", (route) => route.fulfill({status:200, contentType:"application/json", body:'{"intent_id":"synthetic-ui-only-intent","state":"prepared"}'}));
   const keys = [];
   await page.route("**/v1/portal/fiscal-intents/*/resume", async (route) => {
     keys.push(route.request().headers()["idempotency-key"]);
