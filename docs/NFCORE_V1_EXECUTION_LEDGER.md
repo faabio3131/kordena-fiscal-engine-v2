@@ -224,16 +224,17 @@
 
 ### 17. NFV1-P03-T03 — Provider webhook runtime
 
-- [ ] **Estado:** em execução
+- [x] **Estado:** concluído
 - **Objetivo:** executar exatamente a tarefa NFV1-P03-T03 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P03-T02 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** tudo que o cronograma exige para NFV1-P03-T03, mais os testes/evidências diretamente necessários.
 - **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
 - **Critério de aceite:** critérios específicos de NFV1-P03-T03 no cronograma satisfeitos e nenhum gate transversal violado.
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** Canal histórico Cakto reconciliado com pagamento central no Command; T03-B01 resolvido. Contrato/emissor real do Command e staging não confirmados. Implementação interna autorizada; nenhum deploy.
-- **Decisões do dono pendentes:** T03-B01 RESOLVIDO: política integral aprovada pelo dono em 2026-10-08 (POLICY_APPROVED_FOR_INTERNAL_IMPLEMENTATION), registrada em `docs/NFV1_P03_T03_COMMAND_POLICY_PROPOSAL_2026-10-08.md` para implementação interna; merge/deploy não autorizados; decisão comercial centralizada no Command já confirmada.
-- **Prova:** auditoria read-only main `0bbd02984aa6ac357d9ffc48d43dcfc1c1cc9c89`, CI #688/Governance #109 SUCCESS; PR #137 Draft; implementação interna publicada HEAD `10892b87e64f6a39fd829b7d04a5a97ad0c24105`; CI #691 no HEAD `eaac43a866d863ca4169e006bf8dab5d57749b40`: 1498 PASS/5 FAIL; causas corrigidas na branch (fixtures imutáveis/versão 15 e conflito de correlação). Evidência final de HEAD/CI atualizada no corpo da PR #137; certificação/merge PENDENTES.
+- **Riscos / não confirmado:** Canal histórico Cakto reconciliado com pagamento central no Command; T03-B01 resolvido. Contrato/emissor real do Command e staging não confirmados. Receiver/inbox/fulfillment/activation certificados internamente; retry do emissor recupera pendências; worker contínuo P4, readiness T04 e lifecycle T05. Nenhum deploy.
+- **Decisões do dono pendentes:** T03-B01 RESOLVIDO: política integral aprovada pelo dono em 2026-10-08 (POLICY_APPROVED_FOR_INTERNAL_IMPLEMENTATION), registrada em `docs/NFV1_P03_T03_COMMAND_POLICY_PROPOSAL_2026-10-08.md`. Merge da PR #137 e validação pós-merge da main autorizados explicitamente; deploy não autorizado. Integração documental ainda requer autorização específica.
+- **Prova:** PR #137 MERGED; HEAD `1404cdc5f12525e15c5e887c0b8a4579e3e75793`; merge/main `bfb31e5f8d6924f4fff8f92c37c8e420b04c871f`, árvore idêntica `c683b03891a5d0421260e18d85234f0d33d2c711`. CI #692 (PR,37850360972)/Governance #113 SUCCESS;1504 Python/PostgreSQL,14 frontend,28 Playwright PASS/zero FAIL/zero SKIP. CI #693 (main,37857702520) e Governance #114/run37857702555 SUCCESS;41/41 etapas main PASS;1504 Python/PostgreSQL,14 frontend,28 Playwright PASS/zero FAIL/zero SKIP nas duas CIs. Checkpoint `docs/checkpoints/NFV1_P03_T03_IMPLEMENTATION_2026-10-08.md` atualizado como fechamento; certificação documental condicionada à integração/gates deste registro.
+
 
 ### 18. NFV1-P03-T04 — Purchase readiness
 

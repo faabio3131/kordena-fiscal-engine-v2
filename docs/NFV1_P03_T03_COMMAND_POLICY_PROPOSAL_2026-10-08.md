@@ -80,5 +80,5 @@ Decisão: política acima aprovada como conjunto para implementação interna
 governada. O AGENTS.md exige autorização específica antes de mudança de segurança
 sensível; este binding amplia a autoridade comercial recebida de um sistema externo.
 T03-B01 RESOLVIDO: dono respondeu “Autorizado” em 2026-10-08 à política completa.
-Implementação interna, testes e PR Draft autorizados; merge/deploy não autorizados.
+Implementação interna, testes e PR Draft autorizados. Em autorização específica posterior, o dono aprovou integrar a PR #137 e validar a main após o merge. PR #137 integrada em `bfb31e5f8d6924f4fff8f92c37c8e420b04c871f`; deploy permanece não autorizado.
 T04 não foi iniciada.

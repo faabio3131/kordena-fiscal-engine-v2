@@ -8,6 +8,28 @@
 
 This file is the persistent CURRENT checkpoint for FM NFCORE V1 Commercial Launch. GitHub remains the first technical source of truth and must be revalidated on every resume.
 
+## CURRENT superior — 2026-10-08 — Command integrado e pós-merge certificado
+
+- PR #137 MERGED por autorização explícita;HEAD `1404cdc5f12525e15c5e887c0b8a4579e3e75793`;
+- main implementação `bfb31e5f8d6924f4fff8f92c37c8e420b04c871f`, árvore PR/main idêntica `c683b03891a5d0421260e18d85234f0d33d2c711`;
+- CI #692/run37850360972 (PR) e #693/run37857702520 (main) SUCCESS;
+- Governance #113/run37850360981 e #114/run37857702555 SUCCESS;
+- PR/main:1504 Python/PostgreSQL,14 frontend,28 Playwright PASS;zero FAIL/zero SKIP;41/41 etapas main PASS;
+- receiver Command configurável por produto/ambiente/key/reference/version; HMAC existente e contrato estrito;
+- migração aditiva15, inbox e correlações duráveis; replay/restart/concurrency/rollback/recovery internos provados;
+- aquisição/fulfillment/claim/provisioning/activation canônicos reutilizados; pagamento não concede OWNER/platform_admin/autoridade fiscal;
+- T03 DONE_CERTIFIED interno condicionado à integração/gates deste registro documental;
+- checkpoint existente atualizado: `checkpoints/NFV1_P03_T03_IMPLEMENTATION_2026-10-08.md`;
+- próxima tarefa NFV1-P03-T04 — Purchase readiness, ainda não iniciada; P3 incompleta até T04/T05;
+- worker contínuo P4; secret backend/transportes reais e homologação comercial externa seguem fases próprias;
+- staging não reconfirmado; último checkpoint indica drift; nenhum deploy realizado.
+
+PRODUCTION_APPROVED=NO;COMMERCIAL_LIVE=NO.
+
+---
+
+## Snapshot histórico — Trial
+
 ## CURRENT superior — 2026-10-08 — Trial integrado e pós-merge certificado
 
 - PR #135 MERGED por autorização explícita; HEAD `5ef259e380a1814c82f5067e1d3962f30922472b`;
