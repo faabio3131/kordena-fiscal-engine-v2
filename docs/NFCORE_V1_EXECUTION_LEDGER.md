@@ -211,7 +211,7 @@
 
 ### 16. NFV1-P03-T02 — Trial
 
-- [ ] **Estado:** pendente
+- [ ] **Estado:** em execução
 - **Objetivo:** executar exatamente a tarefa NFV1-P03-T02 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P03-T01 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** tudo que o cronograma exige para NFV1-P03-T02, mais os testes/evidências diretamente necessários.
@@ -220,7 +220,7 @@
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
 - **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
 - **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** PENDENTE
+- **Prova:** execução autorizada em 2026-10-08; baseline main d7a7fb443ef6d72124c39bfe2d62b2e27c0bd293, CI #684 SUCCESS. Auditoria/composição/provas de Trial em andamento; sem merge/deploy ou entrega externa real.
 
 ### 17. NFV1-P03-T03 — Provider webhook runtime
 

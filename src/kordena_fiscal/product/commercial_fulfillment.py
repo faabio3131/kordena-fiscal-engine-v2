@@ -448,6 +448,8 @@ class CanonicalCommercialStore(Protocol):
 
     def get_purchase(self, purchase_id: str) -> CommercialPurchaseRecord | None: ...
 
+    def get_trial_for_email(self, email: str) -> CommercialPurchaseRecord | None: ...
+
     def get_purchase_by_external_order(
         self,
         provider_id: str,
