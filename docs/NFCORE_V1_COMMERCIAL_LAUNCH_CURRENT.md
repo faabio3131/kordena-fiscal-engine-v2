@@ -8,7 +8,27 @@
 
 This file is the persistent CURRENT checkpoint for FM NFCORE V1 Commercial Launch. GitHub remains the first technical source of truth and must be revalidated on every resume.
 
-## CURRENT superior — 2026-10-08 — NFV1-P02-T06 EM EXECUÇÃO
+## CURRENT superior — 2026-10-08 — NFV1-P02-T06 CLOSEOUT
+
+- PR #127 MERGED; HEAD `c92bcf5fe56df09ffa3f5bfd7101c9d6f7489abb`;
+- implementação main `e03201bc01bc1f6acbeca6c161d02ea157512d43`;
+- CI #659/#660 e Plan Governance #80/#81 SUCCESS nos HEADs exatos;
+- 1359 Python/PostgreSQL, 14 frontend e 21 Playwright PASS, zero SKIP em PR/main;
+- jornada própria de Inutilização no mesmo Portal/router/path, contrato canônico e
+  acompanhamento sanitizado de outbox por tenant/unit/host/environment;
+- RBAC, sessão, CSRF, Idempotency-Key e retry existentes preservados; sem migrations;
+- estado da fila/2xx não confirma inutilização fiscal; handler sintético somente nos testes;
+- closeout: `checkpoints/NFV1_P02_T06_CLOSEOUT_2026-10-08.md`;
+- T06 = DONE_CERTIFIED após este closeout integrar main e seus próprios gates verdes;
+- próxima Task **NFV1-P02-T07 — Premium UX**, ainda não iniciada;
+- P2 continua em execução; PORTAL_COMMERCIAL_PARITY_CERTIFIED = NOT MET.
+
+Staging somente READ-ONLY, drift STG-B01..B08 preservado. Sem deploy, segredo real,
+fiscal oficial, homologação ou produção. PRODUCTION_APPROVED=NO; COMMERCIAL_LIVE=NO.
+
+---
+
+## Snapshot histórico — 2026-10-08 — NFV1-P02-T06 EM EXECUÇÃO
 
 - entrada revalidada: main `6506e3c50dec9e1f948311a13301c6524e26d1b0`, zero PRs abertas;
 - CI main #658 e Plan Governance #79 SUCCESS; predecessor P02-T05 DONE_CERTIFIED;

@@ -6,7 +6,17 @@ Baseline auditado: `main@0e5be77267a800384d111c03e30705d95bdb0d28`.
 CI de origem: FM NFCORE V1 CI #618 SUCCESS; NFCore Plan Governance #47 SUCCESS.
 PRs abertas na entrada: zero. P0/P1 certificados; closeout P1: PR #114 mergeada.
 
-## Evolução candidata T06 — 2026-10-08
+## Evolução CURRENT T06 — 2026-10-08
+
+PR #127 MERGED; HEAD `c92bcf5fe56df09ffa3f5bfd7101c9d6f7489abb`; main
+`e03201bc01bc1f6acbeca6c161d02ea157512d43`. CI #659/#660 e Governance #80/#81
+SUCCESS. 1359 Python/PostgreSQL, 14 frontend e 21 Playwright PASS/zero SKIP.
+P2-G07 resolvido internamente, condicionado ao merge/gates do closeout. Sem
+confirmação fiscal oficial ou handler real; P6/P7/P10 continuam donos externos.
+P2-G13: retry sem reload provado T02/T06; crash/reload e UX restante são T07.
+Closeout: checkpoints/NFV1_P02_T06_CLOSEOUT_2026-10-08.md. P2 NOT MET.
+
+## Snapshot candidato histórico T06 — 2026-10-08
 
 Surface `inutilizations` e formulário dedicado chamam F(inutilizeFiscalRange) no
 mesmo path canônico. document.inutilize existente (OWNER/ADMIN/OPERATOR), sessão,
