@@ -166,6 +166,64 @@ class SqliteCommercialConfigurationStore:
             ),
         )
 
+    def configuration_receipt(
+        self, scope: ExecutionScope, command_key: str
+    ) -> Mapping[str, object] | None:
+        row = one_row(
+            self._connection.execute(
+                """SELECT result_json FROM fm_configuration_commands
+            WHERE tenant_id = ? AND unit_id = ? AND environment = ? AND command_key = ?""",
+                (scope.tenant_id, scope.unit_id, scope.environment.value, command_key),
+            )
+        )
+        if row is None or row[0] is None:
+            return None
+        result = json.loads(text(row[0], "result_json"))
+        if not isinstance(result, dict):
+            raise PersistenceStateError("invalid configuration receipt")
+        return result
+
+    def list_configuration_receipts(
+        self, scope: ExecutionScope, prefix: str
+    ) -> tuple[Mapping[str, object], ...]:
+        rows = self._connection.execute(
+            """SELECT result_json FROM fm_configuration_commands
+            WHERE tenant_id = ? AND unit_id = ? AND environment = ?
+            AND command_key LIKE ? AND result_json IS NOT NULL ORDER BY command_key""",
+            (scope.tenant_id, scope.unit_id, scope.environment.value, prefix + "%"),
+        ).fetchall()
+        results: list[Mapping[str, object]] = []
+        for row in rows:
+            result = json.loads(text(row[0], "result_json"))
+            if not isinstance(result, dict):
+                raise PersistenceStateError("invalid configuration receipt")
+            results.append(result)
+        return tuple(results)
+
+    def replace_configuration_receipt(
+        self,
+        scope: ExecutionScope,
+        command_key: str,
+        expected: Mapping[str, object],
+        updated: Mapping[str, object],
+    ) -> bool:
+        row = one_row(
+            self._connection.execute(
+                """UPDATE fm_configuration_commands SET result_json = ?
+            WHERE tenant_id = ? AND unit_id = ? AND environment = ?
+            AND command_key = ? AND result_json = ? RETURNING command_key""",
+                (
+                    json.dumps(dict(updated), sort_keys=True),
+                    scope.tenant_id,
+                    scope.unit_id,
+                    scope.environment.value,
+                    command_key,
+                    json.dumps(dict(expected), sort_keys=True),
+                ),
+            )
+        )
+        return row is not None
+
     def webhook_approval(
         self, scope: ExecutionScope, destination_id: str
     ) -> Mapping[str, object] | None:
@@ -302,9 +360,16 @@ class SqliteCommercialConfigurationStore:
             metadata: dict[str, object] = dict(zip(columns, row, strict=True))
             if "enabled" in metadata:
                 metadata["enabled"] = bool(metadata["enabled"])
-            target_key = str(metadata[{"providers": "binding_id", "webhooks": "destination_id",
-                                       "integrations": "module_id", "settings": "provider_id"}
-                                      [surface_id]])
+            target_key = str(
+                metadata[
+                    {
+                        "providers": "binding_id",
+                        "webhooks": "destination_id",
+                        "integrations": "module_id",
+                        "settings": "provider_id",
+                    }[surface_id]
+                ]
+            )
             metadata["version"] = self.configuration_version(scope, surface_id, target_key)
             result.append(metadata)
         return tuple(result)

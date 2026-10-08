@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import ipaddress
 import json
+import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -156,7 +157,7 @@ if __name__ == "__main__":
         uvicorn.run(
             build_app(database),
             host="127.0.0.1",
-            port=4174,
+            port=int(os.environ.get("NFCORE_E2E_PORT", "4174")),
             ssl_certfile=str(cert_path),
             ssl_keyfile=str(key_path),
             log_level="warning",

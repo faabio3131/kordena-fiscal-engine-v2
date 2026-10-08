@@ -601,6 +601,76 @@ class DurableHumanPortalExecutor:
             rows.append(row)
         return tuple(rows)
 
+    def fiscal_intents(
+        self, *, authority: AuthenticatedHuman, unit_id: str, environment: FiscalEnvironment
+    ) -> Sequence[Mapping[str, Any]]:
+        from .fiscal_intent_recovery import FiscalIntentRecovery
+
+        return FiscalIntentRecovery(self._unit_of_work_factory).list(
+            authority, {"unit_id": unit_id, "environment": environment.value}
+        )
+
+    def prepare_fiscal_intent(
+        self,
+        *,
+        authority: AuthenticatedHuman,
+        operation_id: str,
+        payload: Mapping[str, Any],
+        idempotency_key: str | None,
+    ) -> Mapping[str, Any]:
+        from .fiscal_intent_recovery import FiscalIntentRecovery
+
+        if self._operation_executor is None or operation_id not in getattr(
+            self._operation_executor, "configured_operations", ()
+        ):
+            raise _portal_error(
+                503, "FISCAL_RUNTIME_NOT_READY", "Fiscal operation is not configured"
+            )
+        try:
+            return FiscalIntentRecovery(self._unit_of_work_factory).prepare(
+                authority, operation_id, payload, idempotency_key
+            )
+        except PersistenceConflictError as exc:
+            raise _portal_error(
+                409, "FISCAL_INTENT_CONTENT_CONFLICT", "Preserve the original request"
+            ) from exc
+
+    def resume_fiscal_intent(
+        self,
+        *,
+        authority: AuthenticatedHuman,
+        intent_id: str,
+        payload: Mapping[str, Any],
+        idempotency_key: str | None,
+        legacy_result: bool = False,
+    ) -> Mapping[str, Any]:
+        from .fiscal_intent_recovery import FiscalIntentRecovery
+
+        recovery = FiscalIntentRecovery(self._unit_of_work_factory)
+        scope, row, dispatch = recovery.claim(authority, intent_id, payload, idempotency_key)
+        if not dispatch:
+            return recovery.project(row)
+        if self._operation_executor is None:
+            raise _portal_error(
+                503, "FISCAL_RUNTIME_NOT_READY", "Fiscal operation is not configured"
+            )
+        result = self._operation_executor.execute(
+            operation_id=str(row["operation"]),
+            authority=authority,
+            payload=payload,
+            idempotency_key=str(row["original_key"]),
+        )
+        updated = recovery.finish(
+            authority, scope, row, result.get("entry_id", result.get("document_id"))
+        )
+        if not legacy_result:
+            return recovery.project(updated, replay=False)
+        return {
+            k: v
+            for k, v in result.items()
+            if k not in {"idempotency_key", "original_key", "fingerprint"}
+        }
+
     def execute(
         self,
         *,
@@ -636,6 +706,22 @@ class DurableHumanPortalExecutor:
                 authority=authority,
                 payload=payload,
                 idempotency_key=idempotency_key,
+            )
+        from .fiscal_intent_recovery import PERMISSIONS
+
+        if operation_id in PERMISSIONS:
+            receipt = self.prepare_fiscal_intent(
+                authority=authority,
+                operation_id=operation_id,
+                payload=payload,
+                idempotency_key=idempotency_key,
+            )
+            return self.resume_fiscal_intent(
+                authority=authority,
+                intent_id=str(receipt["intent_id"]),
+                payload=payload,
+                idempotency_key=idempotency_key,
+                legacy_result=True,
             )
         if self._operation_executor is None:
             raise _runtime_unavailable("Fiscal portal operation executor is not configured")

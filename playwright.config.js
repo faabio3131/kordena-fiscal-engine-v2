@@ -19,5 +19,11 @@ export default defineConfig({
     ignoreHTTPSErrors: true,
     reuseExistingServer: false,
     timeout: 20_000,
+  }, {
+    command: "NFCORE_E2E_PORT=4175 python tests/e2e/fiscal_http_server.py",
+    url: "https://127.0.0.1:4175/",
+    ignoreHTTPSErrors: true,
+    reuseExistingServer: false,
+    timeout: 20_000,
   }],
 });

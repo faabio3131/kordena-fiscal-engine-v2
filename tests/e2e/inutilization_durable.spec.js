@@ -21,7 +21,7 @@ test("inutilization has typed fields and retries the same internal durable inten
   await page.locator("#inutilization-confirm").check();
   const keys = [], bodies = [];
   page.on("request", (request) => {
-    if (request.url().endsWith("/operations/inutilizeFiscalRange")) {
+    if (request.url().includes("/fiscal-intents/") && request.url().endsWith("/resume")) {
       keys.push(request.headers()["idempotency-key"]); bodies.push(request.postDataJSON());
     }
   });
