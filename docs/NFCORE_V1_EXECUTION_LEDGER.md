@@ -197,16 +197,16 @@
 
 ### 15. NFV1-P03-T01 — First-party acquisition
 
-- [ ] **Estado:** pendente
+- [ ] **Estado:** em execução
 - **Objetivo:** executar exatamente a tarefa NFV1-P03-T01 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P02-T07 concluído e certificado; mais as dependências formais do cronograma
-- **Entregar:** tudo que o cronograma exige para NFV1-P03-T01, mais os testes/evidências diretamente necessários.
+- **Entregar:** composição existente da aquisição autenticada no runtime, bloqueio da oferta sem serviço/starter/security, provas de persistência e replay PostgreSQL, rate limit e activation readiness.
 - **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
 - **Critério de aceite:** critérios específicos de NFV1-P03-T01 no cronograma satisfeitos e nenhum gate transversal violado.
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
+- **Riscos / não confirmado:** checkout, assinatura e entrega sintéticos nos testes internos; integração operacional de provider/secret/delivery e staging não confirmada. T02..T05 não antecipadas; nenhum deploy ou cobrança real.
 - **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** PENDENTE
+- **Prova:** execução autorizada em 2026-10-08; baseline main a5b8edcb637b53c66995a039494eded4f5b0c6fa, CI #679/Governance #100 SUCCESS; implementação/CI da tarefa pendentes.
 
 ### 16. NFV1-P03-T02 — Trial
 
