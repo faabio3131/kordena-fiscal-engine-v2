@@ -95,3 +95,13 @@ consulta intermediária + mesma key. Não resolve T07-B01 após reload/crash.
 Varredura TODO/FIXME/HACK relevante sem ocorrência nova; forms/routes realmente
 chamam o Portal existente, dados de suporte são configuração e não saúde/SLA.
 API/Portal/Worker staging continuam SHA divergente e sem certificação atual.
+
+## Falha CI investigada e corrigida
+
+CI candidata #663 (37731471523), HEAD 30f7a271cb0eb59501ec7eaedcddc7b4cc2e6c30:
+1371 Python/PostgreSQL PASS/zero SKIP, frontend 14 PASS; Playwright 23 PASS/3 FAIL.
+Causa: testes novos verificavam todo #workspace para ausência de unit-b, incluindo
+o seletor em que OWNER legitimamente possui unit-a e unit-b. Corrigido o alvo para
+os registros .grid-list, preservadas as asserções negativas de isolamento e
+adicionados count=2 do seletor e confirmação HTTP exata [unit-a]. Nenhum teste
+removido/skipped, nenhuma autorização ou gate reduzido; repetir CI integral.

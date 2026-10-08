@@ -16,8 +16,12 @@ for (const width of [320, 390, 1280]) {
     await expect(page.locator(".product-banner-logo-approved")).toBeVisible();
     await page.getByRole("button", {name: "Suporte", exact: true}).click();
     await expect(page.locator("#workspace")).toContainText("Atendimento, SLA, incidentes e saúde operacional externa ainda não estão certificados");
-    await expect(page.locator("#workspace")).toContainText("unit-a");
-    await expect(page.locator("#workspace")).not.toContainText("unit-b");
+    await expect(page.locator("#fiscal-unit-filter option")).toHaveCount(2);
+    await expect(page.locator("#workspace .grid-list")).toContainText("unit-a");
+    await expect(page.locator("#workspace .grid-list")).not.toContainText("unit-b");
+    const projection = await page.request.get(`${origin}/v1/portal/surfaces/support?unit_id=unit-a&environment=homologation`);
+    expect(projection.status()).toBe(200);
+    expect((await projection.json()).rows.map((row) => row.unit_id)).toEqual(["unit-a"]);
     await page.locator(".row summary").first().focus();
     await page.keyboard.press("Enter");
     await expect(page.locator(".row details").first()).toHaveAttribute("open", "");
@@ -32,8 +36,8 @@ for (const width of [320, 390, 1280]) {
     expect(geometry.overflow).toBeLessThanOrEqual(1);
     await page.screenshot({path: `.artifacts/p02-t07/support-${width}.png`, fullPage: true});
     await page.locator("#fiscal-unit-filter").selectOption("unit-b");
-    await expect(page.locator("#workspace")).toContainText("unit-b");
-    await expect(page.locator("#workspace")).not.toContainText("unit-a");
+    await expect(page.locator("#workspace .grid-list")).toContainText("unit-b");
+    await expect(page.locator("#workspace .grid-list")).not.toContainText("unit-a");
   });
 }
 
