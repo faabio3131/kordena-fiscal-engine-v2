@@ -211,16 +211,16 @@
 
 ### 16. NFV1-P03-T02 — Trial
 
-- [ ] **Estado:** em execução
+- [x] **Estado:** concluído
 - **Objetivo:** executar exatamente a tarefa NFV1-P03-T02 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P03-T01 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** tudo que o cronograma exige para NFV1-P03-T02, mais os testes/evidências diretamente necessários.
 - **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
 - **Critério de aceite:** critérios específicos de NFV1-P03-T02 no cronograma satisfeitos e nenhum gate transversal violado.
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
-- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** execução autorizada em 2026-10-08; baseline main d7a7fb443ef6d72124c39bfe2d62b2e27c0bd293, CI #684 SUCCESS. Auditoria/composição/provas de Trial em andamento; sem merge/deploy ou entrega externa real.
+- **Riscos / não confirmado:** assinatura/delivery sintéticos; não certifica provider, secrets ou e-mail operacional. Rate limit por processo; scheduler/lifecycle permanecem P4/T05. Staging atual não reconfirmado neste closeout; último checkpoint indica drift. Sem deploy, cobrança ou fiscal real.
+- **Decisões do dono pendentes:** merge da PR #135 e validação da main autorizados em 2026-10-08. Publicação dos quatro documentos e abertura da PR documental autorizadas explicitamente em 2026-10-08; merge documental ainda requer autorização específica; nenhum deploy autorizado.
+- **Prova:** PR #135 MERGED; HEAD `5ef259e380a1814c82f5067e1d3962f30922472b`; merge/main `129e4f69eb7917ccd8b282a86b711542223d4390`, árvore idêntica `076a16ebc721db00a980b1b5e55bbf56c8f191ff`. CI #685 (PR,37824212940)/#686 (main,37837760017), Governance #106/#107 SUCCESS;1453 Python/PostgreSQL,14 frontend,28 Playwright PASS/zero FAIL/zero SKIP;41/41 etapas main PASS. Closeout `docs/checkpoints/NFV1_P03_T02_CLOSEOUT_2026-10-08.md`; certificação documental condicionada à integração/gates deste registro.
 
 ### 17. NFV1-P03-T03 — Provider webhook runtime
 
