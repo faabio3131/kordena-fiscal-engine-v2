@@ -147,6 +147,33 @@ STAGING_REAL / VERSION_DRIFT_PRESENT / NOT_CERTIFIED_AGAINST_CURRENT
 
 # 5. REGRAS ANTI-ERRO E ANTI-ESQUECIMENTO
 
+## Diretriz transversal aprovada — configuração externa — 2026-10-08
+
+O dono confirmou que credenciais, APIs e parâmetros de integrações externas
+devem ser configuráveis. Para providers já suportados, contratar ou configurar
+um novo cliente não pode exigir alteração de código nem novo deploy.
+
+- Adapters, contratos e validações permanecem no código; contas, ambientes,
+  bindings, parâmetros permitidos e referências de credenciais são configuração
+  governada, versionada e auditada pelas autoridades existentes.
+- Segredos, certificados, tokens e chaves reais não entram em Git, logs ou
+  respostas de leitura. A persistência canônica guarda referências/metadados;
+  o material secreto pertence ao backend seguro, com resolução efêmera.
+- Configuração do cliente respeita tenant/unidade/ambiente/purpose/version e
+  RBAC existentes. Credenciais da plataforma não são administradas pelo tenant.
+- Configuração incompleta, inválida, expirada ou revogada bloqueia a operação
+  dependente. A UI mostra o bloqueio; não promove readiness sem prova.
+- Rotação/revogação deve ser aplicada pelo mecanismo governado de configuração,
+  sem editar código por cliente. Endpoints/destinos continuam sujeitos à política
+  de egress/SSRF aprovada; configurável não significa URL arbitrária permitida.
+- Novo provider pode exigir um adapter novo. Após suportado, sua adoção por
+  clientes ocorre por configuração. Configurabilidade não substitui validação
+  de conectividade, credenciais e homologação externa por escopo.
+
+Esta diretriz rege os critérios das tarefas existentes de configuração,
+comercial, secrets e providers; não altera a ordem do ledger nem declara essas
+capacidades já implementadas ou homologadas.
+
 ## 5.1 Dependência obrigatória
 
 ~~~text
