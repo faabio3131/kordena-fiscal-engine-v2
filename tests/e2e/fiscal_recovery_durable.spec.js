@@ -34,6 +34,8 @@ test("reload after committed outbox and lost response recovers one original requ
   await resumeButton(page,intent).click();
   await page.getByRole("button",{name:"Solicitar inutilização",exact:true}).click();
   await expect(page.locator("#inutilization-result")).toContainText("Resposta recebida do executor");
+  await expect(page.locator(`[data-intent-id="${intent}"]`)).toHaveAttribute("data-intent-state","recorded");
+  await expect(page.locator("#fiscal-recovery")).toContainText("Resposta registrada");
   expect(requests).toHaveLength(2);
   expect(requests[0].postDataJSON()).toEqual(requests[1].postDataJSON());
   const receipts=(await (await page.request.get(`${origin}/v1/portal/fiscal-intents?unit_id=unit-a`)).json()).rows;

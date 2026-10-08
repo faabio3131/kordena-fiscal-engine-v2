@@ -90,3 +90,18 @@ Worker3215f498 0/1 apesar de Online; patch8d720a42 sem changes. Mesmo drift;
 sem deploy/write/secret externo. P5/P9/P11 preservam autoridades destas pendências.
 P2 NOT MET; P3 não iniciada. Próxima ação: concluir CI/E2E, baixar/conferir/inspecionar
 screenshots, persistir resultado na PR e propor merge ao dono somente com gates verdes.
+
+## CI #675 verde / correção visual observada
+
+HEAD b15264d684c9459792dc8addd4d28fd09f769565: CI #675/run37789942776
+SUCCESS, Governance96 SUCCESS;1413 Python/PostgreSQL PASS/zero SKIP/zero FAIL,
+frontend14 PASS, Playwright28 PASS; todos os gates, containers e backup/restore PASS.
+Artifact11555928104, digest5e8e4b25852a2b5d79749591d6badb2c2c3c320a7be1d594d524807d2420e94c
+baixado/conferido. Inspeção320/390/1280 revelou lista com estado anterior executing
+após resposta registrada no backend: evidência não aceita como closeout visual.
+Correção candidata: refazer leitura dos metadados após retomada, preservar posição
+na página e formulário, estado visível em pt-BR e botão com estilo ghost existente.
+E2E passa a exigir data-intent-state=recorded e Resposta registrada na lista.
+Runtime Python/persistência inalterados; frontend lint/typecheck/tests14/build PASS.
+Nova CI e screenshots deste HEAD obrigatórias; não certificar pela CI anterior.
+PR continua Draft; tarefa em execução até integração autorizada e CI main verde.

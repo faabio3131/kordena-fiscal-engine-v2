@@ -1151,6 +1151,13 @@ async function sendFiscalMutation(operation, payload) {
   }
   const result = await api(`/v1/portal/fiscal-intents/${encodeURIComponent(pendingFiscalRequest.intent_id)}/resume`, {method:"POST", headers, body:JSON.stringify(payload)});
   pendingFiscalRequest = null; selectedFiscalIntent = null;
+  const previous = document.querySelector("#fiscal-recovery");
+  const article = previous?.parentElement;
+  if (previous && article) {
+    const marker = document.createElement("span"); previous.replaceWith(marker);
+    const refreshed = await appendFiscalRecovery(article);
+    if (refreshed) marker.replaceWith(refreshed); else marker.remove();
+  }
   return result;
 }
 
@@ -1164,9 +1171,13 @@ async function appendFiscalRecovery(article) {
   try {
     const response = await api(`/v1/portal/fiscal-intents?${new URLSearchParams({unit_id:selectedFiscalUnit, environment:selectedFiscalEnvironment})}`);
     for (const row of response.rows || []) {
-      const item = document.createElement("div"); item.dataset.intentId = String(row.intent_id);
-      const label = document.createElement("p"); label.textContent = `${row.operation} · ${row.state} · ${row.created_at}`; item.append(label);
-      const button = document.createElement("button"); button.type = "button"; button.textContent = "Retomar pedido original";
+      const item = document.createElement("div"); item.dataset.intentId = String(row.intent_id); item.dataset.intentState = String(row.state);
+      /** @type {Record<string,string>} */
+      const operationNames = {issueFiscalDocument:"Emissão", cancelFiscalDocument:"Cancelamento", inutilizeFiscalRange:"Inutilização", reconcileFiscalOperation:"Reconciliação"};
+      /** @type {Record<string,string>} */
+      const stateNames = {prepared:"Preparado para retomada", executing:"Resultado a verificar", recorded:"Resposta registrada"};
+      const label = document.createElement("p"); label.textContent = `${operationNames[String(row.operation)] || "Pedido fiscal"} · ${stateNames[String(row.state)] || "Estado a verificar"} · ${new Date(String(row.created_at)).toLocaleString("pt-BR")}`; item.append(label);
+      const button = document.createElement("button"); button.type = "button"; button.className = "ghost"; button.textContent = "Retomar pedido original";
       button.addEventListener("click", () => {
         if (pendingFiscalRequest?.intent_id && pendingFiscalRequest.intent_id !== row.intent_id) {
           notice.textContent = "Preserve a tentativa selecionada até confirmar o resultado."; return;
@@ -1176,6 +1187,7 @@ async function appendFiscalRecovery(article) {
       }); item.append(button); section.append(item);
     }
   } catch (error) { notice.textContent = error instanceof Error ? error.message : "Recuperação indisponível"; }
+  return section;
 }
 
 /** @param {HTMLElement} article */
