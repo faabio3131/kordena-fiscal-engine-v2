@@ -76,7 +76,7 @@ não será ativada diretamente como autoridade comercial do lançamento por infe
 Nenhum novo repositório, preço, segredo real, cobrança, deploy ou emissão fiscal.
 Nenhuma mudança de código desta política foi executada antes da decisão humana.
 
-Solicitação: aprovar a política acima como conjunto para implementação interna
+Decisão: política acima aprovada como conjunto para implementação interna
 governada. O AGENTS.md exige autorização específica antes de mudança de segurança
 sensível; este binding amplia a autoridade comercial recebida de um sistema externo.
 T03-B01 RESOLVIDO: dono respondeu “Autorizado” em 2026-10-08 à política completa.

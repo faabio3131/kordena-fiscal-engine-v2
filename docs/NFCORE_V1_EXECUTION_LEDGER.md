@@ -231,9 +231,9 @@
 - **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
 - **Critério de aceite:** critérios específicos de NFV1-P03-T03 no cronograma satisfeitos e nenhum gate transversal violado.
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** T03-B01: cronograma histórico Cakto precisa de reconciliação com pagamento central no Command. Contrato/emissor real do Command e staging não confirmados. Implementação interna autorizada; nenhum deploy.
+- **Riscos / não confirmado:** Canal histórico Cakto reconciliado com pagamento central no Command; T03-B01 resolvido. Contrato/emissor real do Command e staging não confirmados. Implementação interna autorizada; nenhum deploy.
 - **Decisões do dono pendentes:** T03-B01 RESOLVIDO: política integral aprovada pelo dono em 2026-10-08 (POLICY_APPROVED_FOR_INTERNAL_IMPLEMENTATION), registrada em `docs/NFV1_P03_T03_COMMAND_POLICY_PROPOSAL_2026-10-08.md` para implementação interna; merge/deploy não autorizados; decisão comercial centralizada no Command já confirmada.
-- **Prova:** auditoria read-only main `0bbd02984aa6ac357d9ffc48d43dcfc1c1cc9c89`, CI #688/Governance #109 SUCCESS; proposta preparada; implementação e certificação PENDENTES.
+- **Prova:** auditoria read-only main `0bbd02984aa6ac357d9ffc48d43dcfc1c1cc9c89`, CI #688/Governance #109 SUCCESS; PR #137 Draft; implementação interna publicada HEAD `10892b87e64f6a39fd829b7d04a5a97ad0c24105`; CI #689/Governance #110 em verificação; certificação/merge PENDENTES.
 
 ### 18. NFV1-P03-T04 — Purchase readiness
 

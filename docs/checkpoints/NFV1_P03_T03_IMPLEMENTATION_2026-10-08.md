@@ -3,7 +3,7 @@
 Data: 2026-10-08. Produto: FM NFCORE V1.
 Repository: faabio3131/kordena-fiscal-engine-v2.
 Main HEAD: 0bbd02984aa6ac357d9ffc48d43dcfc1c1cc9c89 (PR #136).
-Branch: feat/nfv1-p03-t03-webhook. PR/HEAD/CI: registrar após publicação.
+Branch: feat/nfv1-p03-t03-webhook. PR: #137 Draft. HEAD/CI final: registrar na PR após gates.
 CI main de entrada: #688 / 37842407176 SUCCESS; Governance #109 SUCCESS.
 
 CURRENT: P03-T02 certificado; P03-T03 em execução.
@@ -28,8 +28,8 @@ Mudanças e autoridades reutilizadas:
   Após claim, evento elegível reutiliza provisioning/activation/delivery existentes.
   Falha de delivery mantém evento pendente, reprocessamento não duplica org/OWNER.
 
-Testes: Ruff/Mypy/plan/migration policy e testes dirigidos locais; suite local e
-PostgreSQL remoto em execução. Sem DSN PostgreSQL local; SKIP local não é prova.
+Testes: Ruff/Mypy/plan/migration policy e testes dirigidos locais; suite local inicial: 1289 PASS/204 SKIP (sem DSN), sem falhas;
+testes dirigidos finais: 31 PASS/18 SKIP locais; PostgreSQL remoto em execução. Sem DSN PostgreSQL local; SKIP local não é prova.
 Remote CI obrigatório antes de propor certificação. Não remover/enfraquecer gates.
 
 Security/Tenant/Unit: contrato nega tenant/unit/role/permissões/PII livres; binding

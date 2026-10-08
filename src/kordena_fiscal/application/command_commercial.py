@@ -103,6 +103,11 @@ class CommandCommercialReceiver:
             current = self.store.binding(binding.key_id)
             if current is None or current[0] != binding or now >= binding.not_after:
                 raise CommercialFulfillmentError("Command binding changed")
+            with self._secrets.resolve(
+                SecretReference(binding.secret_reference, binding.secret_version),
+                scope=binding.scope,
+            ):
+                pass
             correlation = self.store.correlation(event)
             opening = correlation is None
             if opening:
@@ -178,6 +183,10 @@ class CommandCommercialReceiver:
                 now=now,
             )
             if replay:
+                with self._uow() as uow:
+                    purchase = uow.commercial.get_purchase(purchase_id)
+                if purchase is None:
+                    raise CommercialFulfillmentError("Command processed result missing")
                 return CommandCommercialResult(purchase_id, True)
             # If inbox commit survived but fulfillment failed, its correlation
             # exists. Recover opening identity from the persisted acquisition.

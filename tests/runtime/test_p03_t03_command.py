@@ -18,7 +18,7 @@ from test_p03_t01_acquisition import settings as postgres_settings
 from kordena_fiscal.application.command_commercial import CommandCommercialReceiver
 from kordena_fiscal.control_plane.models import AdminPrincipal, ControlPlanePermission
 from kordena_fiscal.persistence.commercial_fulfillment import postgres_canonical_commercial_database
-from kordena_fiscal.product.command_commercial import CommandBinding
+from kordena_fiscal.product.command_commercial import CommandBinding, CommandCommercialEvent
 from kordena_fiscal.product.commercial_fulfillment import CommercialFulfillmentError
 from kordena_fiscal.runtime import api as runtime_api
 from kordena_fiscal.security.s2s import (
@@ -29,6 +29,7 @@ from kordena_fiscal.security.s2s import (
 from kordena_fiscal.security.secrets import (
     InMemorySecretBackend,
     SecretReference,
+    SecretResolutionError,
     SecretResolver,
     SecretScope,
 )
@@ -187,7 +188,18 @@ def test_command_authentication_fails_closed(variant):
 
 
 @pytest.mark.parametrize(
-    "variant", ("disabled", "expired", "product", "environment", "revoked", "scope", "unavailable")
+    "variant",
+    (
+        "disabled",
+        "expired",
+        "product",
+        "environment",
+        "revoked",
+        "scope",
+        "unavailable",
+        "secret-expired",
+        "secret-version",
+    ),
 )
 def test_binding_and_secret_resolution_denials_are_sanitized(variant):
     configured = binding()
@@ -202,6 +214,16 @@ def test_binding_and_secret_resolution_denials_are_sanitized(variant):
         configured = replace(configured, environment="production")
     elif variant == "revoked":
         secret_backend.revoke(SecretReference(REF, 1))
+    elif variant == "secret-expired":
+        secret_backend = SyntheticExternalBackend()
+        secret_backend.put(
+            reference_id=REF,
+            scope=configured.scope,
+            value=SECRET,
+            not_after=datetime.now(UTC) - timedelta(seconds=1),
+        )
+    elif variant == "secret-version":
+        configured = replace(configured, secret_version=2)
     elif variant == "scope":
         secret_backend = SyntheticExternalBackend()
         secret_backend.put(
@@ -313,6 +335,7 @@ def test_postgres_event_replay_rotation_and_restart_preserve_one_purchase(settin
         "acquisition_id",
         "plan_id",
         "price_id",
+        "command_invoice_id",
     ),
 )
 def test_postgres_correlation_rejects_other_customer_product_and_purchase(settings, field):
@@ -323,7 +346,7 @@ def test_postgres_correlation_rejects_other_customer_product_and_purchase(settin
         altered = {
             **payload,
             "event_id": "evt-2",
-            "event_type": "subscription_renewed",
+            "event_type": "subscription_activated",
             field: "other-synthetic",
         }
         assert post(client, altered).status_code == 409
@@ -440,3 +463,88 @@ def test_command_route_absent_without_configured_secret_resolver(monkeypatch):
     with TestClient(app, base_url="https://testserver") as client:
         assert post(client, envelope()).status_code == 404
         assert not client.get("/runtime/profile").json()["command_webhook_configured"]
+
+
+def test_postgres_secret_revocation_after_authentication_prevents_any_effect(settings):
+    app, _, secrets, _ = setup(settings)
+    try:
+        receiver = app.state.nfcore_command_commercial
+        payload = envelope()
+        encoded = json.dumps(payload).encode()
+        now = datetime.now(UTC)
+        authenticated = receiver.authenticate(encoded, signing().sign(encoded, now=now), now)
+        secrets.revoke(SecretReference(REF, 1))
+        with pytest.raises(SecretResolutionError, match="revoked"):
+            receiver.receive(
+                event=CommandCommercialEvent.parse(encoded), binding=authenticated, now=now
+            )
+        assert count(app, "fm_command_commercial_inbox") == 0
+        assert count(app, "fm_commercial_purchases") == 0
+    finally:
+        app.state.nfcore_runtime.close()
+
+
+def test_postgres_failure_after_fulfillment_commit_recovers_original_result(settings, monkeypatch):
+    app, options, _, _ = setup(settings)
+    with TestClient(app, base_url="https://testserver") as client:
+        payload = begin(client)
+
+        def fail(*_args):
+            raise RuntimeError("synthetic-private-result-commit-failure")
+
+        monkeypatch.setattr(app.state.nfcore_command_commercial.store, "processed", fail)
+        assert post(client, payload).status_code == 503
+        assert count(app, "fm_commercial_purchases") == 1
+        assert count(app, "fm_command_commercial_inbox") == 1
+    restarted = runtime_api.create_runtime_app(settings, **options)
+    with TestClient(restarted, base_url="https://testserver") as client:
+        assert post(client, payload).status_code == 200
+        assert post(client, payload).status_code == 200
+        assert count(restarted, "fm_commercial_purchases") == 1
+        with restarted.state.nfcore_runtime.database.connection() as connection:
+            assert (
+                connection.execute(
+                    "SELECT processed_at FROM fm_command_commercial_inbox"
+                ).fetchone()[0]
+                is not None
+            )
+
+
+def test_postgres_expired_acquisition_cannot_open_purchase(settings):
+    app, _, _, _ = setup(settings)
+    with TestClient(app, base_url="https://testserver") as client:
+        payload = begin(client)
+        commercial = postgres_canonical_commercial_database(app.state.nfcore_runtime.database)
+        with commercial() as uow:
+            acquired = uow.commercial.get_acquisition(payload["acquisition_id"])
+            uow.commercial.put_acquisition(
+                replace(
+                    acquired,
+                    created_at=datetime.now(UTC) - timedelta(hours=1),
+                    expires_at=datetime.now(UTC) - timedelta(minutes=1),
+                )
+            )
+            uow.commit()
+        assert post(client, payload).status_code == 409
+        assert count(app, "fm_commercial_purchases") == 0
+        assert count(app, "fm_command_commercial_inbox") == 0
+
+
+def test_contract_version_and_timestamps_do_not_allow_coercion():
+    for value in (True, "1", 2, 0):
+        with pytest.raises(CommercialFulfillmentError):
+            CommandCommercialEvent.parse(json.dumps({**envelope(), "version": value}).encode())
+    for value in ("not-a-time", "2026-10-08T12:00:00", None):
+        with pytest.raises(CommercialFulfillmentError):
+            CommandCommercialEvent.parse(json.dumps({**envelope(), "occurred_at": value}).encode())
+
+
+@pytest.mark.parametrize("missing", ("_release", "_pricing"))
+def test_postgres_missing_canonical_release_or_pricing_cannot_open_purchase(settings, missing):
+    app, _, _, _ = setup(settings)
+    with TestClient(app, base_url="https://testserver") as client:
+        payload = begin(client)
+        setattr(app.state.nfcore_command_commercial, missing, SimpleNamespace(current=None))
+        assert post(client, payload).status_code == 409
+        assert count(app, "fm_commercial_purchases") == 0
+        assert count(app, "fm_command_commercial_inbox") == 0
