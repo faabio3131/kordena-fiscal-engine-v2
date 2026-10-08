@@ -6,7 +6,20 @@ Baseline auditado: `main@0e5be77267a800384d111c03e30705d95bdb0d28`.
 CI de origem: FM NFCORE V1 CI #618 SUCCESS; NFCore Plan Governance #47 SUCCESS.
 PRs abertas na entrada: zero. P0/P1 certificados; closeout P1: PR #114 mergeada.
 
-## Evolução candidata T07 / gate T07-B01 — 2026-10-08
+## Evolução CURRENT T07 parcial / gate T07-B01 — 2026-10-08
+
+PR #129 MERGED, HEAD `95c8e4b85bf61cf1d761d3a0785e1e6da79c9340`; main
+`3181dcdf614d8b22d8fab9e2238050d0c2207772`. CI #665/#666 e Governance #86/#87
+SUCCESS; 1371 Python/PostgreSQL, 14 frontend e 26 Playwright PASS/zero SKIP em
+PR/main; screenshots 320/390/1280px inspecionadas. P2-G11 configuração support
+resolvida internamente, sem SLA/health/ticket externo; P2-G14 parcela UX/mobile/
+teclado/bloqueios provada; P2-G17 compatibilidade documentada. P2-G13 permanece
+T07-B01 (proposta DRAFT, aprovação sensível pendente); P2-G18 preserva controles
+canônicos, prova operacional P3. Closeout parcial:
+checkpoints/NFV1_P02_T07_PARTIAL_CLOSEOUT_POLICY_GATE_2026-10-08.md.
+Não certifica T07/P2; P3 não iniciada. Matriz histórica permanece auditável.
+
+## Snapshot candidato histórico T07 / gate T07-B01 — 2026-10-08
 
 Predecessor T06 DONE_CERTIFIED em main fdf9855c7b8048870ff89d91d4d03797d2f11c49;
 CI #662/Governance #83 SUCCESS. Parcela candidata support usa unidades/configuração
