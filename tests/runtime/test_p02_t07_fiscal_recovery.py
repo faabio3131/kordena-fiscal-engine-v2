@@ -111,6 +111,7 @@ def test_reload_after_prepare_reuses_original_key_and_has_no_payload_copy(databa
     assert row["intent_id"] == intent and row["state"] == "prepared"
     assert not ({"original_key", "fingerprint", "payload", "result"} & row.keys())
     assert BODY["justification"] not in str(stored(database, intent))
+    assert stored(database, intent)["fingerprint"] not in str(row)
     assert resume(http, intent, key="fresh-browser-key").status_code == 200
     assert calls == ["original-key"]
     assert resume(http, intent).json()["replay"]

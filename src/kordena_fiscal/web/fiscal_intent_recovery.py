@@ -212,7 +212,7 @@ class FiscalIntentRecovery:
             raise denied("MISSING_IDEMPOTENCY_KEY", 400)
         scope = self.scope(auth, payload)
         fingerprint = self.fingerprint(operation, scope, payload)
-        intent = self.prefix(auth) + fingerprint
+        intent = self.prefix(auth) + digest(self.prefix(auth) + fingerprint)
         alias = "fiscal-key:" + digest(HOST + ":" + auth.account.account_id + ":" + key)
         now = datetime.now(UTC)
         row: Mapping[str, object] = {
