@@ -23,6 +23,12 @@ def token(value: str) -> str:
     return value
 
 
+def command_identity(kind: str, product_id: str, environment: str, external_id: str) -> str:
+    """Unambiguous namespace even when opaque identifiers contain separators."""
+    material = json.dumps([kind, product_id, environment, external_id], separators=(",", ":"))
+    return f"command-{kind}-" + hashlib.sha256(material.encode()).hexdigest()
+
+
 @dataclass(frozen=True, slots=True)
 class CommandBinding:
     key_id: str

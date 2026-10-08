@@ -18,7 +18,11 @@ from test_p03_t01_acquisition import settings as postgres_settings
 from kordena_fiscal.application.command_commercial import CommandCommercialReceiver
 from kordena_fiscal.control_plane.models import AdminPrincipal, ControlPlanePermission
 from kordena_fiscal.persistence.commercial_fulfillment import postgres_canonical_commercial_database
-from kordena_fiscal.product.command_commercial import CommandBinding, CommandCommercialEvent
+from kordena_fiscal.product.command_commercial import (
+    CommandBinding,
+    CommandCommercialEvent,
+    command_identity,
+)
 from kordena_fiscal.product.commercial_fulfillment import CommercialFulfillmentError
 from kordena_fiscal.runtime import api as runtime_api
 from kordena_fiscal.security.s2s import (
@@ -548,3 +552,15 @@ def test_postgres_missing_canonical_release_or_pricing_cannot_open_purchase(sett
         assert post(client, payload).status_code == 409
         assert count(app, "fm_commercial_purchases") == 0
         assert count(app, "fm_command_commercial_inbox") == 0
+
+
+def test_opaque_identifier_separators_cannot_collide_across_products_or_environments():
+    # These triples collide when naively concatenated with ':'.
+    left = ("product:staging:other", "staging", "invoice")
+    right = ("product", "staging", "other:staging:invoice")
+    assert ":".join(left) == ":".join(right)
+    for kind in ("invoice", "event", "subscription", "customer"):
+        assert command_identity(kind, *left) != command_identity(kind, *right)
+        assert command_identity(kind, "nfcore", "staging", "same") != command_identity(
+            kind, "nfcore", "production", "same"
+        )

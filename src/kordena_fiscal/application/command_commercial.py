@@ -12,7 +12,11 @@ from kordena_fiscal.application.commercial_acquisition import (
 from kordena_fiscal.application.commercial_activation import CommercialCustomerActivationService
 from kordena_fiscal.application.commercial_fulfillment import CommercialFulfillmentService
 from kordena_fiscal.persistence.command_commercial import CommandCommercialStore
-from kordena_fiscal.product.command_commercial import CommandBinding, CommandCommercialEvent
+from kordena_fiscal.product.command_commercial import (
+    CommandBinding,
+    CommandCommercialEvent,
+    command_identity,
+)
 from kordena_fiscal.product.commercial_fulfillment import (
     CanonicalCommercialUnitOfWorkFactory,
     CommercialEventType,
@@ -118,7 +122,9 @@ class CommandCommercialReceiver:
                     raise CommercialFulfillmentError("unknown Command subscription")
                 purchase_id = commercial_purchase_id(
                     "command",
-                    f"{event.product_id}:{event.environment}:{event.command_invoice_id}",
+                    command_identity(
+                        "invoice", event.product_id, event.environment, event.command_invoice_id
+                    ),
                 )
                 with self._uow() as uow:
                     acquisition = uow.commercial.get_acquisition(event.acquisition_id)
@@ -144,8 +150,8 @@ class CommandCommercialReceiver:
                     raise CommercialFulfillmentError("Command canonical plan unavailable")
                 if not pricing.price(event.price_id).enabled:
                     raise CommercialFulfillmentError("Command canonical price unavailable")
-                external_order = (
-                    f"{event.product_id}:{event.environment}:{event.command_invoice_id}"
+                external_order = command_identity(
+                    "invoice", event.product_id, event.environment, event.command_invoice_id
                 )
             else:
                 assert correlation is not None
@@ -161,17 +167,28 @@ class CommandCommercialReceiver:
                     and event.command_invoice_id != invoice
                 ):
                     raise CommercialFulfillmentError("Command opening invoice mismatch")
-                external_order = f"{event.product_id}:{event.environment}:{invoice}"
+                external_order = command_identity(
+                    "invoice", event.product_id, event.environment, invoice
+                )
             validated = ValidatedCommercialEvent(
                 provider_id="command",
-                event_id=f"{event.product_id}:{event.environment}:{event.event_id}",
+                event_id=command_identity(
+                    "event", event.product_id, event.environment, event.event_id
+                ),
                 event_type=event.event_type,
                 external_order_id=external_order,
                 plan_id=event.plan_id,
                 price_id=event.price_id,
                 occurred_at=event.occurred_at,
-                external_subscription_id=event.command_subscription_id,
-                external_customer_id=event.command_customer_id,
+                external_subscription_id=command_identity(
+                    "subscription",
+                    event.product_id,
+                    event.environment,
+                    event.command_subscription_id,
+                ),
+                external_customer_id=command_identity(
+                    "customer", event.product_id, event.environment, event.command_customer_id
+                ),
                 # Lifecycle events must remain recoverable after acquisition TTL.
                 acquisition_id=event.acquisition_id if opening else None,
             )
