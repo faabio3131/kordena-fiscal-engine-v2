@@ -472,6 +472,8 @@ Transformar Worker de probe em processo operacional contínuo governado.
 
 Identificar handlers existentes, compor registry explícito e não criar fila paralela.
 
+Retomada em 2026-10-09: P3 fechada na PR #142, main `4c3838f0c35e728f36f9c15ac1c3f62c42cd35d2`, CI #711/Governance #132 SUCCESS. T01 em execução. Reutilizar SignedWebhookOutboxHandler, aprovação/destino duráveis, egress/transport existentes e a mesma outbox/UOW; registry explícito ligado ao entrypoint por dependências canônicas injetadas. Ausência de assinatura/configuração falha antes do poll; não inventar handlers fiscais/comerciais ou resolver externo P6. T02/T03/T04 não antecipadas; sem deploy.
+
 ### NFV1-P04-T02 — Outbox/inbox/background
 
 Provar poll/dispatch, retry, backoff, idempotência, dead-letter, shutdown, restart e replay seguro.

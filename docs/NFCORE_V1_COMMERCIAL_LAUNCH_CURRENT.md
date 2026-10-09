@@ -8,6 +8,23 @@
 
 This file is the persistent CURRENT checkpoint for FM NFCORE V1 Commercial Launch. GitHub remains the first technical source of truth and must be revalidated on every resume.
 
+## CURRENT superior — 2026-10-09 — P04-T01 em execução
+
+- main de entrada `4c3838f0c35e728f36f9c15ac1c3f62c42cd35d2`;
+- PR #142 MERGED; CI #711/Governance #132 SUCCESS; P3 interna certificada;
+- tarefa ativa NFV1-P04-T01, registry explícito do handler SignedWebhookOutboxHandler;
+- entrypoint usa composição canônica com dependências de assinatura injetadas;
+  mesma outbox/egress/UOW, sem provider/handler comercial inventado;
+- ausência de dependência continua fail-closed; resolver de segredo real P6 não certificado;
+- checkpoint `checkpoints/NFV1_P04_T01_HANDLER_REGISTRY_2026-10-09.md`;
+- T01 IN_PROGRESS, CI/merge/main pendentes; T02/T03/T04 não iniciadas;
+- staging read-only: API/Portal/PostgreSQL1/1, Worker0/1, drift conhecido;
+- nenhum deploy/operação real autorizado. PRODUCTION_APPROVED=NO;COMMERCIAL_LIVE=NO.
+
+---
+
+## Snapshot histórico — P3 fechado
+
 ## CURRENT superior — 2026-10-08 — Lifecycle comercial integrado e certificado
 
 - PR #141 MERGED por autorização específica do dono (“Aprovado”);

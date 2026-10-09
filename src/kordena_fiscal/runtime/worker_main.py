@@ -17,7 +17,11 @@ from kordena_fiscal.contingency import FiscalOutboxHandler
 from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
 
 from .config import RuntimeConfigurationError, RuntimeSettings
-from .worker_composition import build_production_worker_runtime
+from .worker_composition import (
+    WorkerWebhookDependencies,
+    build_canonical_worker_handlers,
+    build_production_worker_runtime,
+)
 
 _STOP = Event()
 WorkerHandlerFactory = Callable[
@@ -34,7 +38,11 @@ def _oneshot_requested() -> bool:
     return os.environ.get("NFCORE_WORKER_ONESHOT", "").strip().lower() == "true"
 
 
-def run(*, handler_factory: WorkerHandlerFactory | None = None) -> int:
+def run(
+    *,
+    handler_factory: WorkerHandlerFactory | None = None,
+    webhook: WorkerWebhookDependencies | None = None,
+) -> int:
     settings = RuntimeSettings.from_environ()
     if settings.persistence_backend != "postgres":
         raise RuntimeConfigurationError("durable worker runtime requires PostgreSQL persistence")
@@ -51,11 +59,15 @@ def run(*, handler_factory: WorkerHandlerFactory | None = None) -> int:
         if _oneshot_requested():
             return 0
 
-        if handler_factory is None:
+        if handler_factory is not None and webhook is not None:
             raise RuntimeConfigurationError(
-                "continuous worker requires an explicitly configured handler factory"
+                "worker must use one handler composition source"
             )
-        handlers = handler_factory(database, settings)
+        handlers = (
+            handler_factory(database, settings)
+            if handler_factory is not None
+            else build_canonical_worker_handlers(uow_factory=database, webhook=webhook)
+        )
         composition = build_production_worker_runtime(
             uow_factory=database,
             handlers=handlers,

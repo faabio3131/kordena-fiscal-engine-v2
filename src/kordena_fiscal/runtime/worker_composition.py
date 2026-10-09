@@ -9,8 +9,9 @@ integrations fail closed instead of consuming jobs with placeholder behavior.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
+from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -25,7 +26,64 @@ from kordena_fiscal.application import (
 from kordena_fiscal.contingency import FiscalOutboxHandler, FiscalRetryPolicy
 from kordena_fiscal.persistence.ports import FiscalUnitOfWorkFactory
 
+from .config import RuntimeConfigurationError
 from .observability import MetricsRegistry, StructuredLogger, WorkerObservability
+
+DELIVER_WEBHOOK_OPERATION = "deliver_webhook"
+
+
+@dataclass(frozen=True, slots=True)
+class WorkerWebhookDependencies:
+    """Explicit platform dependencies; no URL, raw key or tenant authority here.
+
+    Security must be supplied by the governed signing boundary. Destination URLs
+    and approvals are resolved durably for each entry's scope at dispatch time.
+    This dependency object does not certify an external secret backend.
+    """
+
+    security: WebhookSecurity = field(repr=False)
+    destination_id: str
+
+    def __post_init__(self) -> None:
+        from kordena_fiscal.security import WebhookSecurity
+
+        if not isinstance(self.security, WebhookSecurity):
+            raise RuntimeConfigurationError("worker webhook signing dependency is invalid")
+        if (
+            not isinstance(self.destination_id, str)
+            or not self.destination_id.strip()
+            or len(self.destination_id) > 256
+            or any(ord(char) < 32 or ord(char) == 127 for char in self.destination_id)
+        ):
+            raise RuntimeConfigurationError("worker webhook destination reference is invalid")
+        object.__setattr__(self, "destination_id", self.destination_id.strip())
+
+
+def build_canonical_worker_handlers(
+    *,
+    uow_factory: FiscalUnitOfWorkFactory,
+    webhook: WorkerWebhookDependencies | None,
+) -> Mapping[str, FiscalOutboxHandler]:
+    """Register existing concrete handlers only, over the canonical outbox.
+
+    No implicit fiscal provider, inbox replay or commercial provisioning handler
+    exists. Missing dependencies fail before claiming jobs. The immutable map has
+    one canonical operation, never tenant-selected aliases or dynamic imports.
+    """
+    if not isinstance(webhook, WorkerWebhookDependencies):
+        raise RuntimeConfigurationError(
+            "continuous worker requires an explicitly configured handler factory "
+            "or canonical webhook signing dependencies"
+        )
+    return MappingProxyType(
+        {
+            DELIVER_WEBHOOK_OPERATION: build_customer_webhook_handler(
+                uow_factory=uow_factory,
+                security=webhook.security,
+                destination_id=webhook.destination_id,
+            )
+        }
+    )
 
 
 @dataclass(frozen=True, slots=True)
