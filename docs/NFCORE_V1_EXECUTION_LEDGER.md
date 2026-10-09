@@ -265,16 +265,16 @@
 
 ### 20. NFV1-P04-T01 — Handler registry canônico
 
-- [ ] **Estado:** pendente
+- [ ] **Estado:** em execução
 - **Objetivo:** executar exatamente a tarefa NFV1-P04-T01 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P03-T05 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** tudo que o cronograma exige para NFV1-P04-T01, mais os testes/evidências diretamente necessários.
 - **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
 - **Critério de aceite:** critérios específicos de NFV1-P04-T01 no cronograma satisfeitos e nenhum gate transversal violado.
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
+- **Riscos / não confirmado:** assinatura exige WebhookSecurity injetada por boundary governada; secret backend real P6 ainda não certificado. Sem handler/credencial não consumir jobs. Worker contínuo operacional/staging e matriz de recuperação pertencem T02/T03/T04/P5. Sem deploy.
 - **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** PENDENTE
+- **Prova:** CURRENT main `4c3838f0c35e728f36f9c15ac1c3f62c42cd35d2`; PR #142 MERGED, CI #711/Governance #132 SUCCESS. Auditoria: único handler concreto SignedWebhookOutboxHandler; RoutedOutboxHandler/loop/UOW/outbox existentes. Implementação do registry explícito em execução; certificação pendente.16 casos novos; dirigidos29 PASS/5 PostgreSQL SKIP local (DSN ausente); Ruff/Mypy/plan59/migration16/secret PASS. Checkpoint `docs/checkpoints/NFV1_P04_T01_HANDLER_REGISTRY_2026-10-09.md`; nenhuma conclusão até CI/merge/main.
 
 ### 21. NFV1-P04-T02 — Outbox/inbox/background
 
