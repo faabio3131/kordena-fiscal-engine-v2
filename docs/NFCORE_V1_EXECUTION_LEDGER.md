@@ -319,16 +319,16 @@ Antecipação P6 antes de P5 aprovada em 2026-10-09 (“Autorizado”), conforme
 
 ### 24. NFV1-P06-T01 — Selecionar provider
 
-- [ ] **Estado:** pendente
+- [ ] **Estado:** bloqueado interno
 - **Objetivo:** executar exatamente a tarefa NFV1-P06-T01 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P04-T04 concluído e certificado; infraestrutura staging existente e gates/autorização P6; antecipação aprovada pelo dono em 2026-10-09
-- **Entregar:** tudo que o cronograma exige para NFV1-P06-T01, mais os testes/evidências diretamente necessários.
+- **Entregar:** comparação oficial IAM/rotação/disponibilidade/auditoria/custo/recovery, recomendação revisável e checkpoint T01; nenhuma implementação T02 ou provisionamento.
 - **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
 - **Critério de aceite:** critérios específicos de NFV1-P06-T01 no cronograma satisfeitos e nenhum gate transversal violado.
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
-- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** PENDENTE
+- **Riscos / não confirmado:** P6-T01-B01 decisão sensível de seleção/política; P6-T01-B02 bootstrap/conta/região/orçamento/operação externos não confirmados; T01 não concluída.
+- **Decisões do dono pendentes:** P6-T01-B01: aprovar provider e política concreta após estudo; autorização “Pode executar” cobre estudo/publicação Draft, não conta/gasto/credencial/deploy.
+- **Prova:** parcial de entrada: main `b87b64567b91b775a6b6a26b06724c33faf82645`, CI #734/run37952628383 e Governance #155/run37952628603 SUCCESS; PR #152 MERGED, zero PRs abertas na entrada. Runtime read-only API/Portal/PostgreSQL1/1,Worker0/1. Comparação/proposta `docs/NFV1_P06_T01_SECRET_PROVIDER_POLICY_PROPOSAL_2026-10-09.md` e checkpoint `docs/checkpoints/NFV1_P06_T01_SELECTION_2026-10-09.md`; seleçãoGSM recomendada, não aprovada; PR/CI próprios pendentes.
 
 ### 25. NFV1-P06-T02 — Implementar adapter de infraestrutura
 
