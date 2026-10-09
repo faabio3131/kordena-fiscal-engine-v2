@@ -368,6 +368,19 @@ def test_trial_replay_after_guard_uses_committed_reservation_time_without_extens
     app, _, _, _ = setup(settings)
     with TestClient(app, base_url="https://testserver"):
         services = app.state.nfcore_runtime_composition
+        configuration = services.pricing_administration.history()[-1].configuration
+        configured = replace(
+            configuration,
+            version=configuration.version + 1,
+            plans=tuple(replace(plan, trial_days=14) for plan in configuration.plans),
+        )
+        services.pricing_administration.publish(
+            actor=ACTOR,
+            configuration=configured,
+            expected_version=configuration.version,
+            correlation_id="synthetic-trial-clock-pricing",
+            published_at=datetime.now(UTC),
+        )
         now = datetime.now(UTC)
         request = dict(
             plan_id="growth",
