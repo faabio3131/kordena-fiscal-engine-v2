@@ -1,6 +1,27 @@
 # NFV1-P04-T01 — Handler registry canônico
 
-Data: 2026-10-09 (America/Sao_Paulo). Estado: IN_PROGRESS.
+Data: 2026-10-09 (America/Sao_Paulo). Estado: INTERNALLY_CERTIFIED; fechamento documental aguardando integração/gates.
+
+## Certificação final — prevalece sobre registros históricos abaixo
+
+PR #143 MERGED; HEAD `1d0dcc17b7d18016d5060ff2e3fd0c88aedd81b0`; main `d1007064c6997a0c303ae09e606e565e04ab1677`; árvore PR/main idêntica `dd82679dff6c59ee40dc14a96d6503ebc12122b2`. CI #713/run37879189354 (PR) e #714/run37880543365 (main), Governance #134/run37879189376 e #135/run37880543403 SUCCESS. PR/main:41/41 etapas,1587 Python/PostgreSQL,14 frontend,28 Playwright PASS,zero FAIL/zero SKIP;16 novos casos incluídos; warning TestClient existente.
+
+Merge #143 autorizado pelo dono: “Autorizo integrar a PR #143”.
+A CI main inclui lint/types/plan59/migrations1..16/secret scan, frontend, E2E,
+containers/non-root/secure profile/smokes/CVE policy/SBOM e backup/restore/readiness
+PostgreSQL. Nenhum teste existente removido, enfraquecido ou pulado na CI.
+Registro local:1355 PASS/232 PostgreSQL SKIP/zero FAIL por ausência de DSN;
+CI PostgreSQL real certificou os casos não executáveis localmente.
+
+Staging reconfirmado somente leitura após merge: API/Portal/PostgreSQL1/1,
+Worker0/1; deployments históricos inalterados. Sem deploy ou operação real.
+Assinatura externa/Secret Manager P6, matriz de recuperação T02, observabilidade
+T03, container contínuo T04 e staging P5/P9/P11 seguem não certificados.
+Próxima tarefa: NFV1-P04-T02, não iniciada até integração/gates deste fechamento.
+PRODUCTION_APPROVED=NO; COMMERCIAL_LIVE=NO.
+
+## Histórico de execução
+
 Autorização: dono instruiu “Prossiga” após fechamento P3 integrado/certificado.
 Base main: `4c3838f0c35e728f36f9c15ac1c3f62c42cd35d2`, PR #142 MERGED;
 CI #711/run37877105753 e Governance #132/run37877105824 SUCCESS.

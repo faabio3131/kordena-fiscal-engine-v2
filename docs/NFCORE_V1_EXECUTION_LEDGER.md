@@ -265,7 +265,7 @@
 
 ### 20. NFV1-P04-T01 — Handler registry canônico
 
-- [ ] **Estado:** em execução
+- [x] **Estado:** concluído
 - **Objetivo:** executar exatamente a tarefa NFV1-P04-T01 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P03-T05 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** tudo que o cronograma exige para NFV1-P04-T01, mais os testes/evidências diretamente necessários.
@@ -273,8 +273,8 @@
 - **Critério de aceite:** critérios específicos de NFV1-P04-T01 no cronograma satisfeitos e nenhum gate transversal violado.
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
 - **Riscos / não confirmado:** assinatura exige WebhookSecurity injetada por boundary governada; secret backend real P6 ainda não certificado. Sem handler/credencial não consumir jobs. Worker contínuo operacional/staging e matriz de recuperação pertencem T02/T03/T04/P5. Sem deploy.
-- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** CURRENT main `4c3838f0c35e728f36f9c15ac1c3f62c42cd35d2`; PR #142 MERGED, CI #711/Governance #132 SUCCESS. Auditoria: único handler concreto SignedWebhookOutboxHandler; RoutedOutboxHandler/loop/UOW/outbox existentes. Implementação do registry explícito em execução; certificação pendente.16 casos novos; dirigidos29 PASS/5 PostgreSQL SKIP local (DSN ausente); Ruff/Mypy/plan59/migration16/secret PASS. Checkpoint `docs/checkpoints/NFV1_P04_T01_HANDLER_REGISTRY_2026-10-09.md`; nenhuma conclusão até CI/merge/main.
+- **Decisões do dono pendentes:** merge #143 autorizado explicitamente (“Autorizo integrar a PR #143”). Integração deste novo fechamento documental requer autorização específica; deploy/operação real não autorizados.
+- **Prova:** PR #143 MERGED; HEAD `1d0dcc17b7d18016d5060ff2e3fd0c88aedd81b0`; main `d1007064c6997a0c303ae09e606e565e04ab1677`; árvore PR/main idêntica `dd82679dff6c59ee40dc14a96d6503ebc12122b2`. CI #713/run37879189354 (PR) e #714/run37880543365 (main), Governance #134/run37879189376 e #135/run37880543403 SUCCESS. PR/main:41/41 etapas,1587 Python/PostgreSQL,14 frontend,28 Playwright PASS,zero FAIL/zero SKIP;16 novos casos incluídos; warning TestClient existente. Registry imutável restrito a deliver_webhook, mesma outbox/UOW/handler/egress; isolamento/aprovação/revogação/assinatura e entrypoint PostgreSQL certificados internamente. Checkpoint `docs/checkpoints/NFV1_P04_T01_HANDLER_REGISTRY_2026-10-09.md`; fechamento documental condicionado à integração/gates deste registro. T02 permanece pendente até esse fechamento.
 
 ### 21. NFV1-P04-T02 — Outbox/inbox/background
 

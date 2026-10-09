@@ -8,6 +8,23 @@
 
 This file is the persistent CURRENT checkpoint for FM NFCORE V1 Commercial Launch. GitHub remains the first technical source of truth and must be revalidated on every resume.
 
+## CURRENT superior — 2026-10-09 — P04-T01 integrado e certificado internamente
+
+PR #143 MERGED; HEAD `1d0dcc17b7d18016d5060ff2e3fd0c88aedd81b0`; main `d1007064c6997a0c303ae09e606e565e04ab1677`; árvore PR/main idêntica `dd82679dff6c59ee40dc14a96d6503ebc12122b2`. CI #713/run37879189354 (PR) e #714/run37880543365 (main), Governance #134/run37879189376 e #135/run37880543403 SUCCESS. PR/main:41/41 etapas,1587 Python/PostgreSQL,14 frontend,28 Playwright PASS,zero FAIL/zero SKIP;16 novos casos incluídos; warning TestClient existente.
+
+- merge #143 autorizado pelo dono; registry canônico reutiliza handler/outbox/UOW/egress existentes;
+- 20/59 tarefas concluídas internamente; P4 ainda em execução;
+- fechamento documental aguarda CI/merge/main próprios; próxima NFV1-P04-T02 não iniciada;
+- checkpoint `checkpoints/NFV1_P04_T01_HANDLER_REGISTRY_2026-10-09.md`;
+- ausência de assinatura/configuração continua fail-closed; secret backend real P6 não certificado;
+- staging read-only após merge: API/Portal/PostgreSQL1/1, Worker0/1, deployments históricos inalterados;
+- runtime contínuo/recuperação/observabilidade/container e drift staging permanecem T02/T03/T04/P5/P9/P11;
+- nenhum deploy/operação real autorizado. PRODUCTION_APPROVED=NO; COMMERCIAL_LIVE=NO.
+
+---
+
+## Snapshot histórico — início P04-T01
+
 ## CURRENT superior — 2026-10-09 — P04-T01 em execução
 
 - main de entrada `4c3838f0c35e728f36f9c15ac1c3f62c42cd35d2`;
