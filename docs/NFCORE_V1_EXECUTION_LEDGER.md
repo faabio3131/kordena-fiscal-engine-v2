@@ -251,16 +251,16 @@
 
 ### 19. NFV1-P03-T05 — Lifecycle comercial
 
-- [ ] **Estado:** pendente
+- [ ] **Estado:** bloqueado interno
 - **Objetivo:** executar exatamente a tarefa NFV1-P03-T05 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P03-T04 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** tudo que o cronograma exige para NFV1-P03-T05, mais os testes/evidências diretamente necessários.
 - **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
 - **Critério de aceite:** critérios específicos de NFV1-P03-T05 no cronograma satisfeitos e nenhum gate transversal violado.
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
-- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** PENDENTE
+- **Riscos / não confirmado:** auditoria confirmou renovação sem avanço de period_end no serviço canônico; validade temporal e deduplicação de crédito por invoice ainda não certificadas. Staging drift/Worker0/1 permanecem P4/P5/P9/P11. Sem operação externa.
+- **Decisões do dono pendentes:** T05-B01: aprovar/ajustar como conjunto a política de período pago, invoice deduplicada, carência configurável default0, pausa/recuperação, terminalidade e quotas periódicas no documento `docs/NFV1_P03_T05_LIFECYCLE_POLICY_PROPOSAL_2026-10-08.md`. AGENTS.md exige decisão específica de produto/segurança; implementação comercial nova aguarda aprovação.
+- **Prova:** CURRENT main `c0e42fbb7ecfb1558c4aace664f971fb93eeeaba`, PR #140 MERGED; CI #701/Governance #122 SUCCESS. Auditoria/probe sintético do serviço e39 testes PASS/22 PostgreSQL SKIP/zero FAIL. Checkpoint/política T05 acima. Implementação/CI T05 pendentes; T05 NÃO CONCLUÍDA.
 
 ### 20. NFV1-P04-T01 — Handler registry canônico
 
