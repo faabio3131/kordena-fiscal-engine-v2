@@ -8,6 +8,19 @@
 
 This file is the persistent CURRENT checkpoint for FM NFCORE V1 Commercial Launch. GitHub remains the first technical source of truth and must be revalidated on every resume.
 
+## CURRENT superior — 2026-10-09 — P06-T01 estudo e política propostos
+
+- Entrada main `b87b64567b91b775a6b6a26b06724c33faf82645`, PR #152 MERGED, CI #734/run37952628383 e Governance #155/run37952628603 SUCCESS. Este resultado supera as pendências históricas de CI/main e registro de ordem abaixo.
+- “Pode executar” autoriza estudo T01/publicação revisável. Comparação oficial GSM/AWS/Azure/Vault e recomendação Google Secret Manager na proposta `NFV1_P06_T01_SECRET_PROVIDER_POLICY_PROPOSAL_2026-10-09.md`.
+- P6-T01-B01: seleção/política sensível aguarda aceitação humana. P6-T01-B02: conta/região/orçamento/bootstrap/IAM/operação real não confirmados. WIF de workload Railway não presumida; proposta de chavebootstrap staging não autoriza uso real ou produção.
+- Checkpoint `checkpoints/NFV1_P06_T01_SELECTION_2026-10-09.md`;T01 não concluída,23/59 concluídas;T02 não iniciada. Sem código/migration/workflow alterado.
+- Staging read-only permanece API/Portal/PostgreSQL1/1,Worker0/1, sem deployment novo. P5 continua bloqueada. PRODUCTION_APPROVED=NO;COMMERCIAL_LIVE=NO.
+- CI/HEAD desta entrega constam na PR; nenhuma integração/conta/custo/secret/deploy executada por esta proposta.
+
+---
+
+## Snapshot histórico — PR151 e ordem P6/P5
+
 ## CURRENT superior — 2026-10-09 — PR151 integrada, ordem P6 antes de P5 aprovada
 
 - PR #151 MERGED; main `250afa737fa970411d13fe1f48735b6147f9e13d`, árvore igual ao HEAD8bfa783: `7ff6b29b182e499ca5d1710d84ad43e93c6a4fb8`.

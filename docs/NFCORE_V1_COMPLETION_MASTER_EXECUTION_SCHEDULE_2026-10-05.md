@@ -520,6 +520,8 @@ Ligar ExternalSecretClient a um Secret Manager/Vault concreto sem alterar domín
 
 Critérios: IAM, rotação, disponibilidade, auditoria, custo e recovery.
 
+Execução do estudo T01 autorizada pelo dono em 2026-10-09 (“Pode executar”), após PR #152 integrada e main/CI certificados. Escopo congelado: auditar boundaries existentes, comparar fontes oficiais, preparar recomendação e política de identidade/rotação/recovery/custo para decisão humana, atualizar CURRENT/ledger/checkpoint e publicar PR Draft. T01 não implementa T02 nem provisiona conta/IAM/segredo/deploy. P6-T01-B01: aprovação específica da seleção e política sensível pendente; P6-T01-B02: identidade/bootstrap externo, conta/região/orçamento e evidência real ainda não confirmados. IDs/ordem/gates preservados;23/59 concluídas. Documento da decisão: `docs/NFV1_P06_T01_SECRET_PROVIDER_POLICY_PROPOSAL_2026-10-09.md`.
+
 ### NFV1-P06-T02 — Implementar adapter de infraestrutura
 
 Nenhuma regra de domínio no adapter.
