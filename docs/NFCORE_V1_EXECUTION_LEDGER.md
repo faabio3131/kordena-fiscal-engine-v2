@@ -238,16 +238,16 @@
 
 ### 18. NFV1-P03-T04 — Purchase readiness
 
-- [ ] **Estado:** em execução
+- [x] **Estado:** concluído
 - **Objetivo:** executar exatamente a tarefa NFV1-P03-T04 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P03-T03 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** tudo que o cronograma exige para NFV1-P03-T04, mais os testes/evidências diretamente necessários.
 - **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
 - **Critério de aceite:** critérios específicos de NFV1-P03-T04 no cronograma satisfeitos e nenhum gate transversal violado.
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** implementação interna em PR #139 Draft; readiness externa/Secret Manager/Command/checkout/delivery reais não certificados. Limite por processo; timeout do adapter real P6/P9. Staging histórico/Worker0/1 reconfirmados somente leitura. Sem deploy.
-- **Decisões do dono pendentes:** T04-B01 RESOLVIDO: política aprovada como conjunto em `docs/NFV1_P03_T04_PURCHASE_READINESS_POLICY_PROPOSAL_2026-10-08.md`: nova avaliação pública pode iniciar resolução governada de credencial; AGENTS.md exige autorização antes de mudança de segurança sensível. POLICY_APPROVED_FOR_INTERNAL_IMPLEMENTATION pelo dono em 2026-10-08 (“Autorizo”); publicação dos três documentos e PR Draft autorizadas; implementação interna em andamento. Merge/deploy/operação real não autorizados.
-- **Prova:** PR #139 DRAFT; main de entrada `5888efb7eba206bb348b54da6881afb64a4f2c38`, CI #695/Governance #116 SUCCESS. T04 implementada internamente;32 novos casos;dirigidos locais90 PASS/35 PostgreSQL SKIP/zero FAIL,Ruff/Mypy/plan/secret/migration/diff PASS. Checkpoint no documento existente da política T04;HEAD/árvore/CI final no corpo da PR. Certificação/integração PENDENTES;T04 NÃO CONCLUÍDA.
+- **Riscos / não confirmado:** certificação interna integrada em main; Secret Manager/Command emissor/checkout/delivery reais não certificados (P6/P8). Limite por processo; timeout do adapter real P6/P9. Staging histórico/Worker0/1 reconfirmados somente leitura; drift P4/P5/P9/P11. Sem deploy. Continuidade T05 condicionada à integração/gates deste fechamento documental.
+- **Decisões do dono pendentes:** T04-B01 RESOLVIDO: política integral POLICY_APPROVED_FOR_INTERNAL_IMPLEMENTATION e publicação dos três documentos/PR Draft aprovadas pelo dono em 2026-10-08. Merge #139 e validação pós-merge autorizados explicitamente (“Autorizo”). Merge do novo fechamento documental requer autorização específica; deploy/operação real não autorizados.
+- **Prova:** PR #139 MERGED; HEAD `d1b43e3738b90338c2e7a2ede939cb0126fb6b71`; merge/main `4c179ad59e61b66eaca3235488705d0d33316412`, árvore idêntica `e371cbc2d81493d400626edb036ac883ce920702`. CI #698 (PR,37864396703)/#699 (main,37865625879), Governance #119 (37864396694)/#120 (37865625855) SUCCESS;41/41 etapas PR/main;1536 Python/PostgreSQL,14 frontend,28 Playwright PASS/zero FAIL/zero SKIP nas duas CIs.32 novos casos incluídos. Checkpoint final no documento existente `docs/NFV1_P03_T04_PURCHASE_READINESS_POLICY_PROPOSAL_2026-10-08.md`; certificação documental condicionada à integração/gates deste registro. T05 não iniciada.
 
 ### 19. NFV1-P03-T05 — Lifecycle comercial
 
