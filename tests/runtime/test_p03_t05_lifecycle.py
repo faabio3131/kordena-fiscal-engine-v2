@@ -46,7 +46,10 @@ def claim(app, purchase_id, at=None):
     service = app.state.nfcore_runtime_composition.commercial_claim
     now = at or datetime.now(UTC)
     issued = service.issue(purchase_id=purchase_id, now=now)
-    service.complete(claim_token=issued.claim_token, legal_name=snapshot(app, purchase_id)[0].legal_name, now=now)
+    service.complete(
+        claim_token=issued.claim_token,
+        legal_name=snapshot(app, purchase_id)[0].legal_name, now=now,
+    )
 
 
 def activate(client, app, payload):
