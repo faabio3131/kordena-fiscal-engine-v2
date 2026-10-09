@@ -686,7 +686,7 @@ Detectar e corrigir drift provider x canonical state.
 
 **Status inicial:** NOT_STARTED  
 **Dependência:** P5  
-**Pode avançar em paralelo com P6-P8.**
+**Pode avançar em paralelo com P7-P8, sem mascarar blockers; P6 agora é predecessor de P5.**
 
 ## Objetivo
 
