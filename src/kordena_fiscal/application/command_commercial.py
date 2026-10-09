@@ -64,6 +64,39 @@ class CommandCommercialReceiver:
         self._pricing = pricing
         self._release = release
 
+    def ready(self, *, now: datetime) -> bool:
+        """Revalidate governed ingress without creating a commercial effect."""
+        try:
+            if now.tzinfo is None or now.utcoffset() is None:
+                return False
+            candidates = self.store.readiness_bindings(
+                product_id=self._product_id, environment=self._environment,
+            )
+            for binding in candidates:
+                if (
+                    not binding.enabled or now >= binding.not_after
+                    or binding.product_id != self._product_id
+                    or binding.environment != self._environment
+                    or binding.contract_version != 1
+                ):
+                    continue
+                try:
+                    with self._secrets.resolve(
+                        SecretReference(binding.secret_reference, binding.secret_version),
+                        scope=binding.scope,
+                    ) as material:
+                        valid_key = len(material.reveal()) >= 32
+                    current = self.store.binding(binding.key_id)
+                    if valid_key and current is not None and current[0] == binding:
+                        return True
+                except Exception:
+                    # Rotation may leave an older candidate revoked. Another exact,
+                    # currently usable binding may still serve this channel.
+                    continue
+        except Exception:
+            pass
+        return False
+
     def authenticate(
         self, body: bytes, signature: WebhookSignature, now: datetime
     ) -> CommandBinding:

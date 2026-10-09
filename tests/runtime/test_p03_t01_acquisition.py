@@ -13,6 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from kordena_fiscal.control_plane.models import AdminPrincipal, ControlPlanePermission
+from kordena_fiscal.product.command_commercial import CommandBinding
 from kordena_fiscal.product.commercial_release import (
     CommercialReleaseDecision,
     CommercialReleaseStatus,
@@ -24,6 +25,7 @@ from kordena_fiscal.security.s2s import (
     InMemoryWebhookKeyRing,
     WebhookSecurity,
 )
+from kordena_fiscal.security.secrets import InMemorySecretBackend, SecretResolver
 
 
 def load(name, relative):
@@ -45,6 +47,28 @@ ACTOR = AdminPrincipal(
 )
 
 
+class Checkout(acquisition.SyntheticCheckout):
+    provider_id = "command"
+
+
+class SyntheticBackend(InMemorySecretBackend):
+    @property
+    def production_safe(self):
+        return True  # CI harness only; never proof of an external provider.
+
+
+def receiver_binding():
+    return CommandBinding(
+        key_id="synthetic-acquisition-command",
+        binding_id="synthetic-acquisition-channel",
+        product_id="nfcore",
+        environment="staging",
+        secret_reference="sec_synthetic_acquisition_key_0001",
+        secret_version=1,
+        not_after=datetime.now(UTC) + timedelta(days=1),
+    )
+
+
 def security():
     return WebhookSecurity(
         key_resolver=InMemoryWebhookKeyRing(
@@ -56,17 +80,25 @@ def security():
 
 
 def options():
-    checkout = acquisition.SyntheticCheckout()
+    checkout = Checkout()
+    binding = receiver_binding()
+    secrets = SyntheticBackend()
+    secrets.put(
+        reference_id=binding.secret_reference,
+        scope=binding.scope,
+        value=acquisition.SECRET,
+    )
     return {
         "commercial_checkout_projector": checkout,
         "commercial_checkout_starter": checkout,
         "commercial_checkout_processing_configured": True,
         "commercial_acquisition_security": security(),
         "password_reset_delivery": composition._ResetDelivery(),
+        "command_secret_resolver": SecretResolver(secrets, environment="staging"),
     }
 
 
-def publish(app, *, pricing=True, release=True):
+def publish(app, *, pricing=True, release=True, receiver=False):
     services = app.state.nfcore_runtime_composition
     assert services is not None
     if pricing:
@@ -80,6 +112,22 @@ def publish(app, *, pricing=True, release=True):
             actor=ACTOR,
             decision=acquisition.approved_release(),
             expected_version=None,
+        )
+    if receiver and app.state.nfcore_command_commercial is not None:
+        app.state.nfcore_command_commercial.store.configure(
+            actor=AdminPrincipal(
+                actor_id="synthetic-platform-command",
+                global_scope=True,
+                permissions=frozenset(
+                    {
+                        ControlPlanePermission.COMMERCIAL_CONFIG_WRITE,
+                        ControlPlanePermission.SECRET_REFERENCE_WRITE,
+                    }
+                ),
+            ),
+            binding=receiver_binding(),
+            expected_revision=None,
+            now=datetime.now(UTC),
         )
 
 
@@ -163,7 +211,7 @@ def assert_counts(app, acquisitions):
 def test_postgres_signed_runtime_acquisition_replays_after_restart_without_provisioning(settings):
     configured = options()
     app = runtime_api.create_runtime_app(settings, **configured)
-    publish(app)
+    publish(app, receiver=True)
     with TestClient(app, base_url="https://testserver") as client:
         assert client.get("/health/ready").status_code == 200
         assert client.get("/runtime/profile").json()[
@@ -192,11 +240,11 @@ def test_postgres_signed_runtime_acquisition_replays_after_restart_without_provi
 def test_postgres_runtime_missing_dependency_blocks_offer_and_acquisition(settings, missing):
     configured = options()
     if missing == "processing":
-        configured["commercial_checkout_processing_configured"] = False
+        configured["command_secret_resolver"] = None
     if missing == "activation":
         configured["password_reset_delivery"] = None
     app = runtime_api.create_runtime_app(settings, **configured)
-    publish(app, pricing=missing != "pricing", release=missing != "release")
+    publish(app, pricing=missing != "pricing", release=missing != "release", receiver=True)
     with TestClient(app, base_url="https://testserver") as client:
         assert client.get("/v1/commercial/offer").json()["purchase_enabled"] is False
         assert post(client, security()).status_code == 503
@@ -208,7 +256,7 @@ def test_postgres_runtime_missing_dependency_blocks_offer_and_acquisition(settin
 )
 def test_postgres_runtime_rejects_browser_authority_before_persistence(settings, field):
     app = runtime_api.create_runtime_app(settings, **options())
-    publish(app)
+    publish(app, receiver=True)
     with TestClient(app, base_url="https://testserver") as client:
         assert client.post(ENDPOINT, content=acquisition.acquisition_body()).status_code == 401
         body = json.loads(acquisition.acquisition_body())
@@ -224,7 +272,7 @@ def test_postgres_runtime_rate_limit_and_release_revocation_prevent_new_acquisit
         window_seconds=60,
     )
     app = runtime_api.create_runtime_app(settings, **configured)
-    publish(app)
+    publish(app, receiver=True)
     with TestClient(app, base_url="https://testserver") as client:
         assert post(client, security()).status_code == 201
         assert post(client, security(), key=KEY + "-other").status_code == 429
@@ -242,7 +290,7 @@ def test_postgres_runtime_rate_limit_and_release_revocation_prevent_new_acquisit
 
 
 def test_postgres_runtime_checkout_response_loss_reuses_committed_reference(settings):
-    class LosingCheckout(acquisition.SyntheticCheckout):
+    class LosingCheckout(Checkout):
         references = []
 
         def start_checkout(self, *, item, acquisition_reference):
@@ -255,7 +303,7 @@ def test_postgres_runtime_checkout_response_loss_reuses_committed_reference(sett
     configured = options()
     configured.update(commercial_checkout_projector=checkout, commercial_checkout_starter=checkout)
     app = runtime_api.create_runtime_app(settings, **configured)
-    publish(app)
+    publish(app, receiver=True)
     with TestClient(app, base_url="https://testserver", raise_server_exceptions=False) as client:
         assert post(client, security()).status_code == 500
         assert_counts(app, 1)
@@ -267,7 +315,7 @@ def test_postgres_runtime_checkout_response_loss_reuses_committed_reference(sett
 
 def test_postgres_runtime_signature_tampering_and_expiration(settings):
     app = runtime_api.create_runtime_app(settings, **options())
-    publish(app)
+    publish(app, receiver=True)
     with TestClient(app, base_url="https://testserver") as client:
         body = acquisition.acquisition_body()
         signed = security().sign(body, now=datetime.now(UTC))
@@ -294,7 +342,7 @@ def test_postgres_runtime_signature_tampering_and_expiration(settings):
 def test_postgres_runtime_failed_persistence_never_starts_checkout(settings, monkeypatch):
     from kordena_fiscal.persistence.commercial_fulfillment import CommercialSqlStore
 
-    class RecordingCheckout(acquisition.SyntheticCheckout):
+    class RecordingCheckout(Checkout):
         references = []
 
         def start_checkout(self, *, item, acquisition_reference):
@@ -305,7 +353,7 @@ def test_postgres_runtime_failed_persistence_never_starts_checkout(settings, mon
     configured = options()
     configured.update(commercial_checkout_projector=checkout, commercial_checkout_starter=checkout)
     app = runtime_api.create_runtime_app(settings, **configured)
-    publish(app)
+    publish(app, receiver=True)
     original = CommercialSqlStore.put_acquisition
 
     def fail_write(*args):

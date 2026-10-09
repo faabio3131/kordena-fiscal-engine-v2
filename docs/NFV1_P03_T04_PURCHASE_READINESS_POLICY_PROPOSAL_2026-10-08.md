@@ -161,3 +161,63 @@ ledger), com abertura de PR Draft. T04-B01 RESOLVIDO. A publicação rejeitada a
 fica preservada como histórico; a nova autorização cobre a tentativa subsequente.
 Implementação e testes internos autorizados; merge/deploy/credencial ou cobrança
 real/produção não autorizados. A implementação deve respeitar integralmente a política.
+
+## CHECKPOINT DE IMPLEMENTAÇÃO — NFV1-P03-T04
+
+Data: 2026-10-08 (America/Sao_Paulo).
+Main de entrada: `5888efb7eba206bb348b54da6881afb64a4f2c38`, PR #138 MERGED,
+CI #695/Governance #116 SUCCESS. PR ativa: #139 DRAFT.
+Branch: docs/nfv1-p03-t04-readiness-policy.
+HEAD/árvore/CI finais: registrados no corpo da PR #139, evitando SHA circular.
+A auditoria/proposta acima permanece snapshot histórico; este checkpoint é superior.
+CURRENT: IMPLEMENTED_NOT_INTEGRATED, certificação remota ainda PENDENTE.
+TARGET: mesma oferta/aquisição canônicas, revalidação atual e fail-closed.
+
+Mudanças: predicate canônico agora aceita avaliação operacional, valida itens contra
+planos/preços ativos e preserva contratos provider-neutral. Runtime de lançamento
+exige Command composto, NFCore product exato, migrations1..15, banco e serviços reais
+na composição. Legacy receiver/flag isolados não habilitam compra. Command lê até
+8 bindings habilitados do escopo (LIMIT9 detecta excesso), revalida scope/expiry,
+resolve referência/version/purpose, exige chave compatível com HMAC e relê binding
+após resolução. Resolução sem cache positivo; material efêmero descartado.
+
+Limites técnicos: 120 avaliações/minuto por processo, bucket global fixo sem chaves
+fornecidas pelo cliente; no máximo8 resoluções por avaliação; consultas de bindings
+com statement_timeout2s. Cada aquisição pode consumir duas avaliações: antes da
+referência e imediatamente após seu commit, antes de iniciar checkout. Excesso
+bloqueia; não há bypass para aquisição. Limite distribuído e timeout do adapter
+externo concreto continuam dependências operacionais P6/P9, não provas deste harness.
+
+Oferta: no-store, URLs ocultas ao bloquear; readers indisponíveis falham fechado,
+sem exceção bruta ou referência secreta. Aquisição: revalida catálogo/receiver após
+commit; revogação nesse intervalo impede iniciar checkout, mantendo referência para
+replay seguro. Autenticação/assinatura/rate limit/idempotência existentes preservados.
+Nenhuma nova API/auth/frontend/tenant/persistence/fila ou migration.
+
+Testes novos:32 casos em test_p03_t04_readiness.py (29 locais PASS/3 PostgreSQL
+pendentes). Cobrem binding/secret denial, ambiente/produto, scopes/version/expiry,
+zeroização, ausência de cache, catálogo revogado/plan/price/projection inconsistentes,
+serviços ausentes, DB/migrations/readers, orçamento global, rotação sem restart,
+SQL scoped/budget e revogação após escrita sem iniciar checkout. Fixtures T01 agora
+compõem receiver Command real do harness e binding governado para cenários positivos;
+assertions de replay/persistência/isolamento/perda de resposta preservadas.
+
+Verificação local dirigida final:90 PASS/35 PostgreSQL SKIP/zero FAIL;Ruff PASS,
+Mypy0 issues em192 source files;plan59 PASS;secret scan PASS;migration policy1..15
+(Cakto2) PASS;diff check PASS. Warning Starlette/TestClient preservado.
+Suíte completa local em execução; PostgreSQL real e CI integral ainda obrigatórios.
+CI deve executar todas as jornadas, frontend, Playwright, containers/non-root,
+smokes, vulnerability policy/SBOM, backup/restore e readiness no HEAD final.
+
+Security/Tenant/Unit: nenhuma origem pública escolhe segredo/binding/scope; autoridade
+platform existente configura. GET não cria aquisição/purchase/subscription/OWNER.
+Callbacks de eventos mantêm autenticação e revalidação próprias. Sem nova PII.
+Staging: mesmos deployments históricos,Portal/API/Pg1/1 eWorker0/1;patch staged
+vazio, reconfirmado somente leitura na retomada. Nenhum deploy.
+Dependências externas: Secret Manager/checkout/Command emissor/delivery reais não
+certificados. Readiness interna não certifica canal externo.
+
+Gate de saída: PENDENTE (CI final/revisão/integração).
+Próxima ação: concluir gates da PR #139 e propor merge somente após CI verde.
+T04 não marcada concluída; T05 não iniciada.
+PRODUCTION_APPROVED=NO; COMMERCIAL_LIVE=NO.

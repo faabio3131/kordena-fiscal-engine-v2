@@ -245,9 +245,9 @@
 - **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
 - **Critério de aceite:** critérios específicos de NFV1-P03-T04 no cronograma satisfeitos e nenhum gate transversal violado.
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** T04-B01: oferta pode indicar compra com receiver Command sem binding utilizável; probe HTTP sintético reproduziu purchase_enabled=true com binding ausente. Implementação/canal externo ainda não certificados; staging histórico/Worker0/1 reconfirmados somente leitura.
+- **Riscos / não confirmado:** implementação interna em PR #139 Draft; readiness externa/Secret Manager/Command/checkout/delivery reais não certificados. Limite por processo; timeout do adapter real P6/P9. Staging histórico/Worker0/1 reconfirmados somente leitura. Sem deploy.
 - **Decisões do dono pendentes:** T04-B01 RESOLVIDO: política aprovada como conjunto em `docs/NFV1_P03_T04_PURCHASE_READINESS_POLICY_PROPOSAL_2026-10-08.md`: nova avaliação pública pode iniciar resolução governada de credencial; AGENTS.md exige autorização antes de mudança de segurança sensível. POLICY_APPROVED_FOR_INTERNAL_IMPLEMENTATION pelo dono em 2026-10-08 (“Autorizo”); publicação dos três documentos e PR Draft autorizadas; implementação interna em andamento. Merge/deploy/operação real não autorizados.
-- **Prova:** auditoria CURRENT main `5888efb7eba206bb348b54da6881afb64a4f2c38` (PR #138 MERGED); testes dirigidos locais 56 PASS/32 PostgreSQL SKIP/zero FAIL, não certificam PostgreSQL. Probe reproduzível no documento da política; CI/HEAD da PR de proposta registrados no corpo da PR. T04 NÃO CONCLUÍDA.
+- **Prova:** PR #139 DRAFT; main de entrada `5888efb7eba206bb348b54da6881afb64a4f2c38`, CI #695/Governance #116 SUCCESS. T04 implementada internamente;32 novos casos;dirigidos locais90 PASS/35 PostgreSQL SKIP/zero FAIL,Ruff/Mypy/plan/secret/migration/diff PASS. Checkpoint no documento existente da política T04;HEAD/árvore/CI final no corpo da PR. Certificação/integração PENDENTES;T04 NÃO CONCLUÍDA.
 
 ### 19. NFV1-P03-T05 — Lifecycle comercial
 

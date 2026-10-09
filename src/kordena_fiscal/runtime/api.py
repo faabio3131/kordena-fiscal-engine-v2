@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
@@ -14,6 +14,7 @@ from kordena_fiscal.application.command_commercial import CommandCommercialRecei
 from kordena_fiscal.application.commercial_acquisition import CommercialAcquisitionService
 from kordena_fiscal.gateway.production_activation import ProductionExecutionAuthority
 from kordena_fiscal.persistence.command_commercial import CommandCommercialStore
+from kordena_fiscal.persistence.command_commercial_schema import COMMAND_COMMERCIAL_VERSION
 from kordena_fiscal.persistence.commercial_fulfillment import (
     postgres_canonical_commercial_database,
 )
@@ -121,6 +122,7 @@ def create_runtime_app(
     commercial_checkout_processing_configured: bool = False,
     commercial_acquisition_security: WebhookSecurity | None = None,
     commercial_acquisition_rate_limiter: FixedWindowRateLimiter | None = None,
+    commercial_readiness_rate_limiter: FixedWindowRateLimiter | None = None,
     commercial_trial_security: WebhookSecurity | None = None,
     commercial_trial_rate_limiter: FixedWindowRateLimiter | None = None,
     password_reset_delivery: PasswordResetDelivery | None = None,
@@ -177,17 +179,54 @@ def create_runtime_app(
         )
     if selected_checkout is not None and selected_checkout.provider_id == "command":
         selected_checkout_processing = command_receiver is not None
+    else:
+        # The launch channel is Command. A legacy inbox receiver or a caller's
+        # boolean does not compose canonical processing/fulfillment/activation.
+        selected_checkout_processing = False
 
     commercial_delivery_readiness = CommercialDeliveryPathReadiness(
         canonical_commercial_persistence=(
             composition is not None and runtime.database is not None
         ),
-        fulfillment=composition is not None,
-        provisioning=composition is not None,
+        fulfillment=(composition is not None and composition.commercial_fulfillment is not None),
+        provisioning=(composition is not None and composition.commercial_provisioning is not None),
         activation_delivery=(
-            composition is not None and password_reset_delivery is not None
+            composition is not None and composition.commercial_activation is not None
+            and password_reset_delivery is not None
         ),
     )
+
+    readiness_limiter = commercial_readiness_rate_limiter or FixedWindowRateLimiter(
+        max_requests=120, window_seconds=60,
+    )
+
+    def commercial_operational_readiness() -> bool:
+        # One fixed process bucket: no attacker-controlled keys or positive cache.
+        # Each assessment resolves at most eight platform-owned candidates.
+        now = datetime.now(UTC)
+        if not readiness_limiter.allow("commercial-readiness", now):
+            return False
+        try:
+            if not runtime.ready()[0] or runtime.database is None or composition is None:
+                return False
+            if not set(range(1, COMMAND_COMMERCIAL_VERSION + 1)).issubset(
+                runtime.database.applied_migrations()
+            ):
+                return False
+            if (
+                composition.commercial_fulfillment is None
+                or composition.commercial_provisioning is None
+                or composition.commercial_activation is None
+                or password_reset_delivery is None
+                or selected_checkout is None
+                or selected_checkout.provider_id != "command"
+                or command_product_id != "nfcore"
+                or command_receiver is None
+            ):
+                return False
+            return command_receiver.ready(now=now)
+        except Exception:
+            return False
 
     commercial_acquisition: CommercialAcquisitionService | None = None
     if (
@@ -208,6 +247,7 @@ def create_runtime_app(
             checkout_starter=selected_checkout_starter,
             checkout_processing_configured=selected_checkout_processing,
             delivery_readiness=commercial_delivery_readiness,
+            operational_readiness=commercial_operational_readiness,
         )
 
     @asynccontextmanager
@@ -523,6 +563,7 @@ def create_runtime_app(
                 selected_checkout_processing and commercial_acquisition is not None
             ),
             commercial_delivery_readiness=commercial_delivery_readiness,
+            commercial_operational_readiness=commercial_operational_readiness,
             cakto_checkout_administration=cakto_checkout_administration,
         ),
     )

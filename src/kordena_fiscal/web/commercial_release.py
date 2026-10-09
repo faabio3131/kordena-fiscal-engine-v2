@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Annotated, Any
 from uuid import uuid4
 
-from fastapi import APIRouter, Body, HTTPException, Request, status
+from fastapi import APIRouter, Body, HTTPException, Request, Response, status
 
 from kordena_fiscal.control_plane.commercial_release import (
     CommercialReleaseAdministrationService,
@@ -38,14 +39,27 @@ def create_commercial_release_router(
     *,
     checkout_processing_configured: bool = False,
     delivery_readiness: CommercialDeliveryPathReadiness | None = None,
+    operational_readiness: Callable[[], bool] | None = None,
 ) -> APIRouter:
     router = APIRouter(tags=["commercial-release"])
     resolved_delivery_readiness = delivery_readiness or CommercialDeliveryPathReadiness()
 
     @router.get("/v1/commercial/offer")
-    async def public_offer() -> dict[str, object]:
-        pricing_current = pricing.current
-        release_current = release.current
+    async def public_offer(response: Response) -> dict[str, object]:
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        try:
+            pricing_current = pricing.current
+            release_current = release.current
+            checkout_projection = (
+                unconfigured_checkout_projection()
+                if checkout is None
+                else checkout.project(pricing_current)
+            )
+        except Exception:
+            # Loss of a canonical reader must not expose a cached charge URL.
+            pricing_current = None
+            release_current = None
+            checkout_projection = unconfigured_checkout_projection()
         pricing_payload: dict[str, object]
         if pricing_current is None:
             pricing_payload = {
@@ -72,18 +86,17 @@ def create_commercial_release_router(
                 "commercially_approved": release_current.commercially_approved,
             }
 
-        checkout_projection = (
-            unconfigured_checkout_projection()
-            if checkout is None
-            else checkout.project(pricing_current)
+        processing_configured = (
+            checkout is not None and checkout_processing_configured
+            and checkout_projection.provider == checkout.provider_id
         )
-        processing_configured = checkout is not None and checkout_processing_configured
         purchase_enabled = commercial_purchase_ready(
             release=release_current,
             pricing=pricing_current,
             checkout=checkout_projection,
             checkout_processing_configured=processing_configured,
             delivery=resolved_delivery_readiness,
+            operational_readiness=operational_readiness,
         )
         checkout_payload = checkout_projection.to_public_mapping(
             processing_configured=processing_configured,
