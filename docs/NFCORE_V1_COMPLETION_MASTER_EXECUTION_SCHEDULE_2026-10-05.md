@@ -406,6 +406,8 @@ Preservar identidade, mobile, acessibilidade e estados reais de bloqueio.
 **Status inicial:** NOT_STARTED  
 **Dependência:** P1
 
+**Certificação interna em 2026-10-08:** DONE_CERTIFIED condicionada à integração/gates do fechamento T05. PR #141 MERGED, CI #708/#709 e Governance #129/#130 SUCCESS; checkpoint `checkpoints/NFV1_P03_T05_IMPLEMENTATION_2026-10-08.md`. Não certifica integrações externas reais, staging ou produção.
+
 ## Objetivo
 
 Conectar os componentes comerciais já construídos ao runtime real.
@@ -440,14 +442,16 @@ Cobrir sale, activation, renewal, late payment, pause, recovery, cancel, refund 
 
 Auditoria T05 em 2026-10-08: transições existem, mas renovação não avança período da assinatura; política comercial T05-B01 proposta em `NFV1_P03_T05_LIFECYCLE_POLICY_PROPOSAL_2026-10-08.md`. T05-B01 RESOLVIDO: conjunto integral aprovado explicitamente pelo dono (“Aprovo”) em 2026-10-08, POLICY_APPROVED_FOR_INTERNAL_IMPLEMENTATION. Período pago, carência, invoice deduplicada e quotas periódicas autorizados para implementação/testes internos. T05 em execução, não concluída; IDs/ordem/escopo preservados. Merge/deploy/operação real não autorizados.
 
+**Certificação T05:** merge #141 autorizado especificamente pelo dono (“Aprovado”); main `b8b25fda37a6682bc57eb2349f132770e46b0362`, árvore idêntica à PR. CI #708 (PR)/#709 (main), Governance #129/#130 SUCCESS;41/41 etapas;1571 Python/PostgreSQL,14 frontend,28 Playwright PASS/zero FAIL/zero SKIP. Este registro prevalece sobre pendências históricas acima. Continuidade P4 condicionada à integração/gates do fechamento documental; deploy não autorizado.
+
 ## Gate
 
-- [ ] acquisition endpoint real registrado;
-- [ ] trial endpoint real registrado;
-- [ ] webhook somente quando configurado;
-- [ ] browser nunca define pagamento/tenant/entitlement;
-- [ ] replay não duplica org/OWNER/subscription;
-- [ ] CI verde.
+- [x] acquisition endpoint real registrado;
+- [x] trial endpoint real registrado;
+- [x] webhook somente quando configurado;
+- [x] browser nunca define pagamento/tenant/entitlement;
+- [x] replay não duplica org/OWNER/subscription;
+- [x] CI verde.
 
 **Gate de saída:** COMMERCIAL_RUNTIME_COMPOSED_INTERNAL
 
