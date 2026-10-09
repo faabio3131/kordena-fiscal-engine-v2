@@ -221,3 +221,61 @@ Gate de saída: PENDENTE (CI final/revisão/integração).
 Próxima ação: concluir gates da PR #139 e propor merge somente após CI verde.
 T04 não marcada concluída; T05 não iniciada.
 PRODUCTION_APPROVED=NO; COMMERCIAL_LIVE=NO.
+
+
+## CHECKPOINT FINAL — NFV1-P03-T04 — certificação interna pós-merge
+
+Data: 2026-10-08 (America/Sao_Paulo).
+Produto: FM NFCORE V1.
+Repositório: faabio3131/kordena-fiscal-engine-v2.
+Main/merge: `4c179ad59e61b66eaca3235488705d0d33316412`.
+HEAD de implementação: `d1b43e3738b90338c2e7a2ede939cb0126fb6b71`.
+Árvore PR/main idêntica: `e371cbc2d81493d400626edb036ac883ce920702`.
+PR: #139 MERGED por autorização explícita do dono (“Autorizo”).
+CI PR: #698/run37864396703/job113607556461 SUCCESS.
+CI main: #699/run37865625879/job113611539444 SUCCESS.
+Governance PR/main: #119/run37864396694 e #120/run37865625855 SUCCESS.
+Branch de fechamento: docs/nfv1-p03-t04-closeout; HEAD/PR/CI documental no corpo da PR.
+Este checkpoint é superior aos snapshots históricos de proposta/implementação acima.
+
+CURRENT: DONE_CERTIFIED interno; INTEGRATED_NOT_DEPLOYED quanto ao ambiente real.
+TARGET atingido: oferta e aquisição canônicas falham fechado quando falta pricing,
+release, checkout, receiver governado, persistência, fulfillment, provisioning ou
+activation delivery. Revogação/indisponibilidade após oferta positiva é reavaliada;
+revogação após commit da referência impede checkout. Sem cache positivo.
+
+Mudanças e autoridades: mesmas descritas no checkpoint de implementação; composição
+canônica, pricing/release, Command binding store, SecretResolver, aquisição/UOW e
+serviços de delivery existentes. Nenhuma segunda autoridade. Migrations: nenhuma;
+policy guard1..15/Cakto2 PASS. Fonte local e remoto tiveram tree SHA conferido.
+Arquivos do fechamento: somente este documento, cronograma e ledger existentes.
+
+Testes/evidências: 1536 Python/PostgreSQL,14 frontend,28 Playwright PASS nas CIs da
+PR e main;zero FAIL/zero SKIP.32 novos casos de readiness, incluindo três cenários
+PostgreSQL reais de CI. PR: Pytest293.69s/Playwright21.1s;main:327.14s/25.1s.
+41/41 etapas PASS em ambas: secret/plan/migration/Ruff/Mypy, dependency audits,
+frontend,containers/non-root,smokes,forbidden secrets,vulnerability policy,SBOM,
+backup/restore e readiness contra banco restaurado. Warning TestClient existente.
+Uma falha inicial de lifespan no novo teste foi corrigida preservando todas as
+assertivas dentro do TestClient; não houve remoção, skip ou enfraquecimento de testes.
+
+Security/Tenant/Unit: política T04-B01 integralmente aplicada; escolha de referência,
+version/purpose/scope permanece server-side/governada. Material efêmero zeroizado,
+URL de cobrança oculta ao bloquear, oferta no-store;sem nova PII ou segredo real.
+
+Staging reconfirmado somente leitura nesta integração: projeto FM NFCORE Staging,
+environment c9878b9b-62b2-4a97-b8ba-743c8a3e99ec chamado production na plataforma;
+Portal/API/PostgreSQL1/1,Worker0/1;mesmos deployments históricos e patch staged vazio.
+Nenhum deploy. Drift conhecido continua em P4/P5/P9/P11, sem overclaim de runtime.
+
+Dependências externas: Secret Manager/Command emissor/checkout/delivery reais não
+certificados (P6/P8);limite120/min é por processo,8 candidatos/avaliação e SQL2s;
+timeout do adapter e coordenação distribuída permanecem gates P6/P9. Testes com
+segredos/delivery sintéticos não são prova de integração externa real.
+
+Blockers: nenhum para implementação interna T04. Fechamento documental aguarda
+seus próprios gates/merge autorizado antes de avançar a T05.
+Gate de saída: PASS interno no exact merge acima; operação externa não certificada.
+Próxima tarefa: NFV1-P03-T05 — Lifecycle comercial, ainda não iniciada.
+Merge #139 autorizado não cobre automaticamente merge de nova PR documental.
+PRODUCTION_APPROVED=NO;COMMERCIAL_LIVE=NO.

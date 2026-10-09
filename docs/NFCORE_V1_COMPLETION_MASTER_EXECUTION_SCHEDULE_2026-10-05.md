@@ -432,6 +432,8 @@ purchase_enabled deve permanecer falso se faltar pricing, release, checkout, rec
 
 Auditoria de retomada em 2026-10-08 confirmou gap de receiver/binding na oferta. T04-B01 registrado em `NFV1_P03_T04_PURCHASE_READINESS_POLICY_PROPOSAL_2026-10-08.md`: política proposta de revalidação governada e fail-closed, incluindo nova origem de acesso ao resolver de segredos. Política integral aprovada pelo dono em 2026-10-08 (POLICY_APPROVED_FOR_INTERNAL_IMPLEMENTATION); publicação dos três documentos e PR Draft autorizadas. Implementação/testes internos permitidos; merge/deploy/operação real não autorizados; certificação T04 pendente. IDs, ordem e critério original preservados.
 
+**Certificação interna em 2026-10-08:** PR #139 MERGED por autorização específica; main `4c179ad59e61b66eaca3235488705d0d33316412`, árvore idêntica ao HEAD certificado. CI #698 (PR)/#699 (main) e Governance #119/#120 SUCCESS;41/41 etapas;1536 Python/PostgreSQL,14 frontend,28 Playwright PASS/zero FAIL/zero SKIP. Este registro prevalece sobre a pendência histórica acima. Checkpoint final no mesmo documento da política; continuidade T05 condicionada à integração/gates do fechamento documental. Não certifica Secret Manager, emissor Command, checkout ou delivery reais, staging, homologação ou produção. Deploy não autorizado.
+
 ### NFV1-P03-T05 — Lifecycle comercial
 
 Cobrir sale, activation, renewal, late payment, pause, recovery, cancel, refund e chargeback.
