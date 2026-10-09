@@ -344,10 +344,10 @@ def test_postgres_budget_and_scope_are_bounded_in_canonical_store(settings):
     with TestClient(app, base_url="https://testserver") as client:
         assert_blocked(client)
         assert count(app, "fm_commercial_acquisitions") == 0
-    with pytest.raises(CommercialFulfillmentError, match="budget exceeded"):
-        store.readiness_bindings(product_id="nfcore", environment="staging")
-    assert store.readiness_bindings(product_id="other", environment="staging") == ()
-    assert store.readiness_bindings(product_id="nfcore", environment="production") == ()
+        with pytest.raises(CommercialFulfillmentError, match="budget exceeded"):
+            store.readiness_bindings(product_id="nfcore", environment="staging")
+        assert store.readiness_bindings(product_id="other", environment="staging") == ()
+        assert store.readiness_bindings(product_id="nfcore", environment="production") == ()
 
 
 def test_postgres_revocation_after_reference_commit_never_starts_checkout(settings, monkeypatch):
