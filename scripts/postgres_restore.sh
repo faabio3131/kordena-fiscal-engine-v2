@@ -11,5 +11,5 @@ if [ ! -f "$BACKUP_PATH" ] || [ ! -f "$CHECKSUM_PATH" ]; then
 fi
 
 sha256sum --check "$CHECKSUM_PATH"
-pg_restore "$DATABASE_URL" --no-owner --no-acl --exit-on-error "$BACKUP_PATH"
+pg_restore --dbname="$DATABASE_URL" --no-owner --no-acl --exit-on-error "$BACKUP_PATH"
 printf 'restore_completed=%s\n' "$BACKUP_PATH"

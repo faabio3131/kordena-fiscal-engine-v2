@@ -8,6 +8,21 @@
 
 This file is the persistent CURRENT checkpoint for FM NFCORE V1 Commercial Launch. GitHub remains the first technical source of truth and must be revalidated on every resume.
 
+## CURRENT superior — 2026-10-09 — P05-T01 auditado e bloqueado
+
+- PR #150 MERGED; entrada main `5b63449d9ef3bbe7fdf7023e1d9bdfd96235f00c`, CI #728/run37942395431 e Governance #149/run37942395342 SUCCESS;41/41 etapas,1666 Python/PostgreSQL,14 frontend,28 Playwright PASS/zero FAIL/zero SKIP.
+- P4 interno certificado;23/59 concluídas;T01 autorizado por “Executar”, iniciado, não concluído;T02 não iniciado.
+- Auditoria read-only: API/Portal/PostgreSQL1/1,Worker0/1;SHA API/Portal f9b5b2c...,Worker1c34ba...;API live/ready e Portal HTTP200;rollback apenas candidatos.
+- Backup concluído/recibo, SQL/migrations atuais e compatibilidade não confirmados; driver aceita backup solicitado e deployment SUCCESS sem saúde/SHA exato. Bloqueios antes de deploy.
+- Correções mínimas de restore/SHA/baseline e provas na CI propostas nesta PR; integração ainda pendente.
+- Ciclo P5/P6: Worker contínuo real precisa boundary de assinatura concreta;P6 depende de P5. Proposta de antecipar P6 está no checkpoint, ainda não aprovada nem aplicada.
+- Checkpoint `checkpoints/NFV1_P05_T01_PREDEPLOY_2026-10-09.md`;retomar por decisão de dependência e canal operacional governado, sem solicitar segredo no chat.
+- Nenhum deploy/migration externa/mutação Railway. PRODUCTION_APPROVED=NO;COMMERCIAL_LIVE=NO.
+
+---
+
+## Snapshot histórico — fechamento P4
+
 ## CURRENT superior — 2026-10-09 — P04-T04 integrado e certificado internamente
 
 PR #149 MERGED; HEAD `732265ed0e7bab21b48e735ea296a2e8a3af7576`; main `d9f4d1d8c7fd60f927b2f3d3ba8f421a72c9bf82`; árvore PR/main idêntica `d7cbdf8baf65013c4f8542ac390c9c581b01ef7b`. CI #725/run37935705861 (PR) e #726/run37938638870 (main), Governance #146/run37935705764 e #147/run37938638865 SUCCESS. PR/main:41/41 etapas;1666 Python/PostgreSQL,14 frontend,28 Playwright PASS,zero FAIL/zero SKIP;29 novos casos incluídos;um warning TestClient preexistente.

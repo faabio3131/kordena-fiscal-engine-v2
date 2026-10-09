@@ -181,12 +181,28 @@ case "$command" in
       --json >/dev/null
     echo "railway staging driver: BACKUP_REQUESTED revision=$revision"
     ;;
-  deploy)
+  prepare-rollback)
     revision="${2:-}"
     require_revision "$revision"
     preflight_checks
     assert_local_revision "$revision"
     capture_rollback_baseline
+    ;;
+  deploy)
+    revision="${2:-}"
+    require_revision "$revision"
+    preflight_checks
+    assert_local_revision "$revision"
+    # Never replace the pre-migration baseline during a retry or partial deploy.
+    [ -f "$(rollback_baseline_file)" ] || fail "rollback baseline file is missing"
+    for service in \
+      "$NFCORE_RAILWAY_API_SERVICE" \
+      "$NFCORE_RAILWAY_WORKER_SERVICE" \
+      "$NFCORE_RAILWAY_PORTAL_SERVICE"
+    do
+      deployment_id="$(baseline_deployment_for_service "$service")"
+      [ -n "$deployment_id" ] || fail "service=$service rollback baseline is missing"
+    done
     deploy_service "$NFCORE_RAILWAY_API_SERVICE"
     deploy_service "$NFCORE_RAILWAY_WORKER_SERVICE"
     deploy_service "$NFCORE_RAILWAY_PORTAL_SERVICE"

@@ -317,16 +317,16 @@
 
 ### 24. NFV1-P05-T01 — Pré-deploy
 
-- [ ] **Estado:** pendente
+- [ ] **Estado:** bloqueado externo
 - **Objetivo:** executar exatamente a tarefa NFV1-P05-T01 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P04-T04 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** tudo que o cronograma exige para NFV1-P05-T01, mais os testes/evidências diretamente necessários.
 - **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
 - **Critério de aceite:** critérios específicos de NFV1-P05-T01 no cronograma satisfeitos e nenhum gate transversal violado.
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
-- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** PENDENTE
+- **Riscos / não confirmado:** T01-B01 backup concluído/recibo, B02 saúde SQL/migrations/compatibilidade, B04 bootstrap Worker e dependência P5/P6 não confirmados. B03 correções internas de restore/baseline nesta PR; B05 driver SUCCESS sem processo/SHA exato continua bloqueio interno antes de deploy. 23/59 concluídas; T02 não iniciada.
+- **Decisões do dono pendentes:** resolver dependência P5/P6 e aprovar canal operacional para prova de backup/SQL sem expor segredos; proposta concreta no checkpoint. Executar autoriza T01; não autoriza deploy/merge/credencial real.
+- **Prova:** parcial: entrada main `5b63449d9ef3bbe7fdf7023e1d9bdfd96235f00c`, PR #150 MERGED, CI #728/run37942395431 e Governance #149/run37942395342 SUCCESS; 41/41 etapas,1666 Python/PostgreSQL,14 frontend,28 Playwright,zero FAIL/SKIP. Auditoria Railway somente leitura 2026-10-09: API/Portal/PostgreSQL1/1,Worker0/1; versões divergentes. Checkpoint `docs/checkpoints/NFV1_P05_T01_PREDEPLOY_2026-10-09.md`. Prova externa insuficiente; checkbox permanece vazio.
 
 ### 25. NFV1-P05-T02 — Deploy reconciliado
 

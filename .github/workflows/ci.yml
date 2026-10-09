@@ -239,20 +239,17 @@ jobs:
             -c "CREATE TABLE IF NOT EXISTS wp08_restore_sentinel (id integer PRIMARY KEY, value text NOT NULL);" \
             -c "INSERT INTO wp08_restore_sentinel (id,value) VALUES (1,'restore-ok') ON CONFLICT (id) DO UPDATE SET value=EXCLUDED.value;"
           docker run --rm --network host \
-            -v "$PWD/.tmp-backup:/backup" \
-            -e PGPASSWORD=nfcore_test_password postgres:16-alpine \
-            pg_dump -h 127.0.0.1 -U nfcore -d nfcore_test -Fc -f /backup/nfcore.dump
-          sha256sum .tmp-backup/nfcore.dump > .tmp-backup/nfcore.dump.sha256
-          sha256sum --check .tmp-backup/nfcore.dump.sha256
+            -v "$PWD:/workspace" -w /workspace \
+            -e DATABASE_URL="$NFCORE_TEST_POSTGRES_DSN" postgres:16-alpine \
+            sh scripts/postgres_backup.sh .tmp-backup/nfcore.dump
           docker run --rm --network host \
             -e PGPASSWORD=nfcore_test_password postgres:16-alpine \
             psql -h 127.0.0.1 -U nfcore -d nfcore_test -v ON_ERROR_STOP=1 \
             -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
           docker run --rm --network host \
-            -v "$PWD/.tmp-backup:/backup" \
-            -e PGPASSWORD=nfcore_test_password postgres:16-alpine \
-            pg_restore -h 127.0.0.1 -U nfcore -d nfcore_test \
-            --no-owner --no-acl --exit-on-error /backup/nfcore.dump
+            -v "$PWD:/workspace" -w /workspace \
+            -e DATABASE_URL="$NFCORE_TEST_POSTGRES_DSN" postgres:16-alpine \
+            sh scripts/postgres_restore.sh .tmp-backup/nfcore.dump
           test "$(docker run --rm --network host -e PGPASSWORD=nfcore_test_password postgres:16-alpine psql -h 127.0.0.1 -U nfcore -d nfcore_test -Atqc "SELECT value FROM wp08_restore_sentinel WHERE id=1")" = "restore-ok"
           test "$(docker run --rm --network host -e PGPASSWORD=nfcore_test_password postgres:16-alpine psql -h 127.0.0.1 -U nfcore -d nfcore_test -Atqc "SELECT COUNT(*) FROM fm_schema_migrations")" -gt 0
 
