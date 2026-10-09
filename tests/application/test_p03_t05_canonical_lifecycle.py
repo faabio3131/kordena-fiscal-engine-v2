@@ -309,3 +309,19 @@ def test_paid_usage_cannot_be_erased_during_checkpoint_write(canonical):
                 replace(durable, checkpoint=replace(durable.checkpoint, usage=()))
             )
     assert snapshot(db, sale)[2] == contract
+
+
+def test_portal_usage_projects_effective_period_after_early_renewal(canonical):
+    from kordena_fiscal.application.commercial_portal import CommercialPortalReadService
+
+    db, service, sale = canonical
+    renewal = event(sale, Event.SUBSCRIPTION_RENEWED, 1, invoice="invoice-2")
+    service.process(event=renewal, received_at=renewal.occurred_at)
+    _, durable, _ = snapshot(db, sale)
+    current = CommercialPortalReadService._usage_rows(durable, at=NOW + timedelta(days=1))
+    assert current[0]["used"] == 2
+    assert current[0]["remaining"] == 1
+    assert current[0]["period_start"] == NOW.isoformat()
+    future = CommercialPortalReadService._usage_rows(durable, at=durable.checkpoint.period_start)
+    assert future[0]["used"] == 0
+    assert future[0]["remaining"] == 3

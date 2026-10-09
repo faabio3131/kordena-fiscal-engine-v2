@@ -332,3 +332,29 @@ def test_pause_blocks_pending_activation_and_reset_retry(settings):
         assert len(delivery.calls) == 1
         assert count(app, "fm_password_resets") == 1
         assert post(client, event(payload, "subscription_activated", 3)).status_code == 409
+
+
+def test_legacy_committed_event_recovers_pending_inbox_without_new_credit(settings):
+    app, _, _, delivery = setup(settings)
+    with TestClient(app, base_url="https://testserver") as client:
+        payload = begin(client)
+        purchase_id = activate(client, app, payload)
+        before = snapshot(app, purchase_id)
+        database = app.state.nfcore_runtime.database
+        with database.connection() as connection:
+            connection.execute(
+                "UPDATE fm_command_commercial_inbox SET processed_at = NULL WHERE event_id = ?",
+                (payload["event_id"],),
+            )
+            connection.execute(
+                "UPDATE fm_commercial_event_receipts SET payment_reference = NULL "
+                "WHERE event_type = ?",
+                ("sale_confirmed",),
+            )
+            connection.commit()
+        bad = {**payload, "command_invoice_id": "invoice-tampered"}
+        assert post(client, bad).status_code == 409
+        assert post(client, payload).status_code == 200
+        assert snapshot(app, purchase_id) == before
+        assert len(delivery.calls) == 1
+        assert count(app, "fm_human_accounts") == 1

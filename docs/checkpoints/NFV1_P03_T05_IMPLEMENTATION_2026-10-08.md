@@ -36,7 +36,7 @@ CI #701 e Governance #122 SUCCESS. Entrega na PR #141.
 
 ## Verificação e limites
 
-32 casos novos:19 canônicos duráveis SQLite +13 HTTP/PostgreSQL (CI).
+34 casos novos:20 canônicos duráveis SQLite +14 HTTP/PostgreSQL (CI).
 Matriz: nove eventos, antes/depois de claim/activation; fim de mês/bissexto;
 carência0/configurada e quotas; expired/recovery; early/late; ONE_TIME;
 pricing posterior; invoice com IDs novos/conflito; concorrência/restart;
@@ -59,3 +59,8 @@ Não prova Secret Manager/Command emissor/checkout/delivery reais (P6/P8), stagi
 CURRENT, homologação ou produção. Warning TestClient existente não suprimido.
 T05 não concluída; P4 não iniciada. Merge/deploy/operação real não autorizados.
 PRODUCTION_APPROVED=NO; COMMERCIAL_LIVE=NO.
+
+Revisão: Portal Uso projeta o período efetivo, preservando contadores após pagamento
+antecipado. Upgrade também recupera receipt NULL legado somente após validar o
+fingerprint autenticado do inbox; replay antigo não repete delivery de ativação mais
+nova. Snapshot legado preserva plano/quotas já duráveis.23 testes canônicos/Portal PASS.

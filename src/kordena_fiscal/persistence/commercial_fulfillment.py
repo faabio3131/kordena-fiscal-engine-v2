@@ -155,6 +155,19 @@ class CommercialSqlStore(CanonicalCommercialStore):
     def __init__(self, connection: _Connection) -> None:
         self._connection = connection
 
+    def recover_legacy_payment_reference(self, event_id: str, payment_reference: str) -> None:
+        """Called only after exact authenticated Command inbox fingerprint recovery.
+
+        Migration16 preserves nullable legacy receipts. An already committed
+        fulfillment must replay without granting another period after upgrade.
+        The durable authenticated inbox supplies the previously omitted invoice.
+        """
+        self._connection.execute(
+            "UPDATE fm_commercial_event_receipts SET payment_reference = ? "
+            "WHERE provider_id = 'command' AND event_id = ? AND payment_reference IS NULL",
+            (payment_reference, event_id),
+        )
+
     def get_first_event(self, purchase_id: str) -> CommercialEventReceipt | None:
         row = self._connection.execute(
             "SELECT provider_id, event_id FROM fm_commercial_event_receipts WHERE purchase_id = ? "

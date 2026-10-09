@@ -66,7 +66,7 @@ class CommercialPortalReadService:
         if surface_id == "billing":
             return self._billing_rows(subscription)
         if surface_id == "usage":
-            return self._usage_rows(subscription)
+            return self._usage_rows(subscription, at=self._now())
         return self._plan_rows(normalized_tenant, subscription)
 
     @staticmethod
@@ -91,11 +91,23 @@ class CommercialPortalReadService:
     @staticmethod
     def _usage_rows(
         subscription: DurableCommercialSubscription | None,
+        *, at: datetime | None = None,
     ) -> tuple[Mapping[str, object], ...]:
         if subscription is None:
             return ()
         checkpoint = subscription.checkpoint
-        usage = dict(checkpoint.usage)
+        period_start, period_end = checkpoint.period_start, checkpoint.period_end
+        counters = checkpoint.usage
+        if at is not None:
+            if at.tzinfo is None or at.utcoffset() is None:
+                raise CommercialPortalReadError(
+                    "commercial projection clock must be timezone-aware"
+                )
+            for period in checkpoint.previous_periods:
+                if period.start <= at < period.end:
+                    period_start, period_end, counters = period.start, period.end, period.usage
+                    break
+        usage = dict(counters)
         quotas = {quota.metric_id: quota.limit for quota in checkpoint.plan.quotas}
         metric_ids = sorted(set(usage) | set(quotas))
         rows: list[Mapping[str, object]] = []
@@ -116,8 +128,8 @@ class CommercialPortalReadService:
                         if used >= limit
                         else "within_quota"
                     ),
-                    "period_start": checkpoint.period_start.isoformat(),
-                    "period_end": checkpoint.period_end.isoformat(),
+                    "period_start": period_start.isoformat(),
+                    "period_end": period_end.isoformat(),
                 }
             )
         return tuple(rows)

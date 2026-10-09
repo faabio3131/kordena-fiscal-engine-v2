@@ -192,6 +192,7 @@ class CommercialFulfillmentService:
         if durable is not None:
             contract = replace(
                 contract,
+                plan=durable.checkpoint.plan,
                 periods=(
                     replace(
                         contract.periods[0],

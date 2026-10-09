@@ -39,8 +39,14 @@ class PaidCommercialPeriod:
     usage: tuple[tuple[str, int], ...] = ()
 
     def __post_init__(self) -> None:
-        if not self.invoice_id or len(self.invoice_id) > 320:
+        if (
+            not isinstance(self.invoice_id, str)
+            or not self.invoice_id
+            or len(self.invoice_id) > 320
+        ):
             raise CommercialFulfillmentError("paid invoice identity is invalid")
+        if not isinstance(self.renewal, bool):
+            raise CommercialFulfillmentError("paid period renewal flag must be boolean")
         for value in (self.paid_at, self.start, self.end):
             if value.tzinfo is None or value.utcoffset() is None:
                 raise CommercialFulfillmentError("paid period must be timezone-aware")
@@ -65,10 +71,21 @@ class CommercialContract:
 
     def __post_init__(self) -> None:
         if (
+            not isinstance(self.purchase_id, str)
+            or not self.purchase_id
+            or not isinstance(self.plan, CommercialPlan)
+            or not isinstance(self.cadence, BillingCadence)
+            or not isinstance(self.pricing_configuration_id, str)
+            or not self.pricing_configuration_id
+            or not isinstance(self.pricing_version, int)
+            or isinstance(self.pricing_version, bool)
+            or self.pricing_version < 1
+        ):
+            raise CommercialFulfillmentError("contracted snapshot metadata is invalid")
+        if (
             not isinstance(self.grace_days, int)
             or isinstance(self.grace_days, bool)
             or self.grace_days < 0
-            
         ):
             raise CommercialFulfillmentError("contract grace_days must be >= 0")
         if not self.periods or len({p.invoice_id for p in self.periods}) != len(self.periods):

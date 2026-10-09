@@ -70,11 +70,13 @@ class CommandCommercialReceiver:
             if now.tzinfo is None or now.utcoffset() is None:
                 return False
             candidates = self.store.readiness_bindings(
-                product_id=self._product_id, environment=self._environment,
+                product_id=self._product_id,
+                environment=self._environment,
             )
             for binding in candidates:
                 if (
-                    not binding.enabled or now >= binding.not_after
+                    not binding.enabled
+                    or now >= binding.not_after
                     or binding.product_id != self._product_id
                     or binding.environment != self._environment
                     or binding.contract_version != 1
@@ -277,14 +279,36 @@ class CommandCommercialReceiver:
                     external_customer_id=validated.external_customer_id,
                     acquisition_id=event.acquisition_id,
                 )
+            if existing:
+                # reserve() already checked the complete authenticated inbox
+                # fingerprint; only this recovery path may fill legacy NULL.
+                with self._uow() as uow:
+                    uow.commercial.recover_legacy_payment_reference(
+                        validated.event_id,
+                        payment_reference,
+                    )
+                    uow.commit()
             result = self._fulfillment.process(event=validated, received_at=received_at)
-            if event.event_type in {
-                CommercialEventType.SALE_CONFIRMED,
-                CommercialEventType.SUBSCRIPTION_ACTIVATED,
-            } and result.purchase.state in {
-                CommercialPurchaseState.READY_TO_PROVISION,
-                CommercialPurchaseState.ACTIVATION_PENDING,
-            }:
+            delivery_pending = purchase is not None and (
+                purchase.state is CommercialPurchaseState.READY_TO_PROVISION
+                or (
+                    purchase.state is CommercialPurchaseState.ACTIVATION_PENDING
+                    and purchase.last_event_id == validated.event_id
+                )
+            )
+            if (
+                event.event_type
+                in {
+                    CommercialEventType.SALE_CONFIRMED,
+                    CommercialEventType.SUBSCRIPTION_ACTIVATED,
+                }
+                and delivery_pending
+                and result.purchase.state
+                in {
+                    CommercialPurchaseState.READY_TO_PROVISION,
+                    CommercialPurchaseState.ACTIVATION_PENDING,
+                }
+            ):
                 if self._delivery is None:
                     raise CommercialFulfillmentError("Command activation delivery unavailable")
                 activated = self._activation.provision(purchase_id=purchase_id, now=now)
