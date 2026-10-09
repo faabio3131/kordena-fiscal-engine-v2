@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from collections import defaultdict
 from collections.abc import Callable, Mapping
@@ -11,6 +12,8 @@ from datetime import UTC, datetime
 from threading import RLock
 from time import monotonic
 from typing import Any, Protocol
+
+from kordena_fiscal.contingency import FiscalOutboxStatus
 
 _SENSITIVE_KEY = re.compile(
     r"(authorization|password|passwd|secret|token|cookie|private[_-]?key|certificate|pfx|p12|pem|csc|email|legal[_-]?name|buyer|customer[_-]?id)",
@@ -76,6 +79,7 @@ class MetricsRegistry:
     def __init__(self) -> None:
         self._values: dict[tuple[str, tuple[tuple[str, str], ...]], float] = defaultdict(float)
         self._lock = RLock()
+        self._collectors: list[Callable[[], None]] = []
 
     def increment(self, name: str, value: float = 1.0, **labels: str) -> None:
         if value < 0:
@@ -87,11 +91,33 @@ class MetricsRegistry:
         with self._lock:
             self._values[key] += float(value)
 
+    def set_gauge(self, name: str, value: float, **labels: str) -> None:
+        if not math.isfinite(value) or value < 0:
+            raise ValueError("gauge must be finite and non-negative")
+        if set(labels) - self._ALLOWED_LABELS:
+            raise ValueError("high-cardinality/unsupported metric labels")
+        key = (name, tuple(sorted((k, str(v)) for k, v in labels.items())))
+        with self._lock:
+            self._values[key] = float(value)
+
+    def register_collector(self, collector: Callable[[], None]) -> None:
+        """Refresh process-local gauges at collection; collectors must not do I/O."""
+        with self._lock:
+            self._collectors.append(collector)
+
     def observe_seconds(self, name: str, seconds: float, **labels: str) -> None:
         self.increment(f"{name}_count", 1.0, **labels)
         self.increment(f"{name}_seconds_total", max(0.0, seconds), **labels)
 
     def snapshot(self) -> tuple[MetricSample, ...]:
+        with self._lock:
+            collectors = tuple(self._collectors)
+        for collector in collectors:
+            try:
+                collector()
+            except Exception:
+                # A telemetry exporter must not terminate application execution.
+                continue
         with self._lock:
             return tuple(
                 MetricSample(name=name, value=value, labels=labels)
@@ -164,17 +190,138 @@ class SafeTracer:
             return
 
 
+@dataclass(frozen=True, slots=True)
+class WorkerHealth:
+    """Internal poll health, never fiscal/provider/production approval."""
+
+    ready: bool
+    stopped: bool
+    queue_snapshot_valid: bool
+    last_success_age_seconds: float | None
+
+
 class WorkerObservability:
-    def __init__(self, *, metrics: MetricsRegistry, logger: StructuredLogger) -> None:
+    def __init__(
+        self,
+        *,
+        metrics: MetricsRegistry,
+        logger: StructuredLogger,
+        queue_counts: Callable[[], Mapping[FiscalOutboxStatus, int]] | None = None,
+        heartbeat_timeout_seconds: float = 60.0,
+        clock: Callable[[], float] = monotonic,
+    ) -> None:
+        if not math.isfinite(heartbeat_timeout_seconds) or heartbeat_timeout_seconds <= 0:
+            raise ValueError("heartbeat timeout must be finite and positive")
         self._metrics = metrics
         self._logger = logger
+        self._queue_counts = queue_counts
+        self._timeout = heartbeat_timeout_seconds
+        self._clock = clock
+        self._lock = RLock()
+        self._last_success: float | None = None
+        self._poll_ok = False
+        self._stopped = False
+        self._snapshot_valid = False
+        metrics.set_gauge("nfcore_worker_last_success_timestamp_seconds", 0)
+        metrics.register_collector(self._refresh_health_metrics)
+
+    def health(self) -> WorkerHealth:
+        with self._lock:
+            age = (
+                None if self._last_success is None else max(0.0, self._clock() - self._last_success)
+            )
+            return WorkerHealth(
+                ready=(
+                    not self._stopped
+                    and self._poll_ok
+                    and self._snapshot_valid
+                    and age is not None
+                    and age < self._timeout
+                ),
+                stopped=self._stopped,
+                queue_snapshot_valid=self._snapshot_valid,
+                last_success_age_seconds=age,
+            )
+
+    def _refresh_health_metrics(self) -> None:
+        health = self.health()
+        self._metrics.set_gauge("nfcore_worker_ready", int(health.ready))
+        self._metrics.set_gauge("nfcore_worker_stopped", int(health.stopped))
+        self._metrics.set_gauge(
+            "nfcore_worker_queue_snapshot_valid", int(health.queue_snapshot_valid)
+        )
+        # No heartbeat has a separate validity signal, rather than an invented age.
+        self._metrics.set_gauge(
+            "nfcore_worker_heartbeat_observed", int(health.last_success_age_seconds is not None)
+        )
+        self._metrics.set_gauge(
+            "nfcore_worker_heartbeat_age_seconds", health.last_success_age_seconds or 0.0
+        )
+
+    def _emit(self, level: str, event: str, **fields: Any) -> None:
+        try:
+            self._logger.emit(level, event, **fields)
+        except Exception:
+            self._metrics.increment("nfcore_worker_telemetry_failures_total", outcome="log")
+
+    def worker_started(self) -> None:
+        with self._lock:
+            self._last_success = None
+            self._poll_ok = False
+            self._snapshot_valid = False
+            self._stopped = False
+        self._metrics.set_gauge("nfcore_worker_last_success_timestamp_seconds", 0)
+        self._emit("INFO", "worker_started")
+
+    def worker_stopped(self) -> None:
+        with self._lock:
+            self._stopped = True
+        self._emit("INFO", "worker_stopped")
 
     def cycle_completed(self, result: Any) -> None:
         for outcome in ("claimed", "succeeded", "retry_wait", "dead_letter"):
-            value = int(getattr(result, outcome))
-            self._metrics.increment("nfcore_worker_jobs_total", value, outcome=outcome)
+            self._metrics.increment(
+                "nfcore_worker_jobs_total", int(getattr(result, outcome)), outcome=outcome
+            )
+        self._metrics.increment(
+            "nfcore_worker_job_failures_total", result.retry_wait + result.dead_letter
+        )
         self._metrics.observe_seconds("nfcore_worker_cycle", float(result.elapsed_seconds))
-        self._logger.emit(
+        with self._lock:
+            self._last_success = self._clock()
+            self._poll_ok = True
+        self._metrics.set_gauge(
+            "nfcore_worker_last_success_timestamp_seconds", datetime.now(UTC).timestamp()
+        )
+        try:
+            if self._queue_counts is None:
+                raise RuntimeError("queue snapshot source absent")
+            counts = self._queue_counts()
+            # Fixed enum keys only; never emit tenant IDs, payloads or raw SQL errors.
+            values = {status: counts[status] for status in FiscalOutboxStatus}
+            if any(isinstance(v, bool) or not isinstance(v, int) or v < 0 for v in values.values()):
+                raise ValueError("invalid queue snapshot")
+            for status, value in values.items():
+                self._metrics.set_gauge("nfcore_worker_queue_jobs", value, outcome=status.value)
+            self._metrics.set_gauge(
+                "nfcore_worker_backlog_jobs",
+                sum(
+                    values[s]
+                    for s in (
+                        FiscalOutboxStatus.PENDING,
+                        FiscalOutboxStatus.RETRY_WAIT,
+                        FiscalOutboxStatus.IN_FLIGHT,
+                    )
+                ),
+            )
+            with self._lock:
+                self._snapshot_valid = True
+        except Exception as exc:
+            with self._lock:
+                self._snapshot_valid = False
+            self._metrics.increment("nfcore_worker_telemetry_failures_total", outcome="queue")
+            self._emit("ERROR", "worker_queue_snapshot_failed", error_type=type(exc).__name__)
+        self._emit(
             "INFO",
             "worker_cycle_completed",
             claimed=result.claimed,
@@ -185,9 +332,12 @@ class WorkerObservability:
         )
 
     def cycle_failed(self, *, error_type: str, elapsed_seconds: float) -> None:
+        with self._lock:
+            self._poll_ok = False
+            self._snapshot_valid = False
         self._metrics.increment("nfcore_worker_cycle_failures_total", outcome="failed")
         self._metrics.observe_seconds("nfcore_worker_cycle", elapsed_seconds, outcome="failed")
-        self._logger.emit(
+        self._emit(
             "ERROR",
             "worker_cycle_failed",
             error_type=error_type,

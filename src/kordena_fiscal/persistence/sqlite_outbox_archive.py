@@ -41,6 +41,15 @@ class SqliteFiscalOutboxStore:
     def __init__(self, connection: sqlite3.Connection) -> None:
         self._connection = connection
 
+    def counts_by_status(self) -> dict[FiscalOutboxStatus, int]:
+        """Aggregate in the database without payloads, scope IDs or pagination."""
+        counts = dict.fromkeys(FiscalOutboxStatus, 0)
+        for status, count in self._connection.execute(
+            "SELECT status, COUNT(*) FROM fm_fiscal_outbox GROUP BY status"
+        ).fetchall():
+            counts[FiscalOutboxStatus(text(status, "status"))] = integer(count, "count")
+        return counts
+
     def list_for_scope(
         self,
         scope: ExecutionScope,

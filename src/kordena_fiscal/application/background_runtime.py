@@ -135,22 +135,39 @@ class BackgroundWorkerRuntime:
         self._failure_wait = failure_wait_seconds
         self._wait = wait or (lambda stop, seconds: stop.wait(seconds))
 
+    def _notify(self, method: str, *args: object, **kwargs: object) -> None:
+        # Telemetry cannot retry a completed job or terminate the durable poll loop.
+        try:
+            callback = getattr(self._observer, method, None)
+            if callback is not None:
+                callback(*args, **kwargs)
+        except Exception:
+            return
+
     def run_cycle(self) -> BackgroundCycleResult:
         started = monotonic()
-        outcomes = self._worker.run_once(
-            now=self._clock.now(),
-            limit=self._batch_size,
-            lease_duration=self._lease_duration,
-        )
-        status_values = [entry.status.value for entry in outcomes]
-        result = BackgroundCycleResult(
-            claimed=len(outcomes),
-            succeeded=status_values.count("succeeded"),
-            retry_wait=status_values.count("retry_wait"),
-            dead_letter=status_values.count("dead_letter"),
-            elapsed_seconds=max(0.0, monotonic() - started),
-        )
-        self._observer.cycle_completed(result)
+        try:
+            outcomes = self._worker.run_once(
+                now=self._clock.now(),
+                limit=self._batch_size,
+                lease_duration=self._lease_duration,
+            )
+            status_values = [entry.status.value for entry in outcomes]
+            result = BackgroundCycleResult(
+                claimed=len(outcomes),
+                succeeded=status_values.count("succeeded"),
+                retry_wait=status_values.count("retry_wait"),
+                dead_letter=status_values.count("dead_letter"),
+                elapsed_seconds=max(0.0, monotonic() - started),
+            )
+        except Exception as exc:
+            self._notify(
+                "cycle_failed",
+                error_type=type(exc).__name__,
+                elapsed_seconds=max(0.0, monotonic() - started),
+            )
+            raise
+        self._notify("cycle_completed", result)
         return result
 
     def run_forever(self, stop: Event) -> None:
@@ -158,17 +175,16 @@ class BackgroundWorkerRuntime:
 
         if not isinstance(stop, Event):
             raise FiscalValidationError("stop must be threading.Event")
-        while not stop.is_set():
-            started = monotonic()
-            try:
-                result = self.run_cycle()
-            except Exception as exc:
-                self._observer.cycle_failed(
-                    error_type=type(exc).__name__,
-                    elapsed_seconds=max(0.0, monotonic() - started),
-                )
-                if self._wait(stop, self._failure_wait):
+        self._notify("worker_started")
+        try:
+            while not stop.is_set():
+                try:
+                    result = self.run_cycle()
+                except Exception:
+                    if self._wait(stop, self._failure_wait):
+                        break
+                    continue
+                if result.claimed == 0 and self._wait(stop, self._idle_wait):
                     break
-                continue
-            if result.claimed == 0 and self._wait(stop, self._idle_wait):
-                break
+        finally:
+            self._notify("worker_stopped")
