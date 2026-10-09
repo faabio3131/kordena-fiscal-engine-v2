@@ -8,6 +8,34 @@
 
 This file is the persistent CURRENT checkpoint for FM NFCORE V1 Commercial Launch. GitHub remains the first technical source of truth and must be revalidated on every resume.
 
+## CURRENT superior — 2026-10-08 — Lifecycle comercial integrado e certificado
+
+- PR #141 MERGED por autorização específica do dono (“Aprovado”);
+- HEAD `32755fd1e3b7563561017c82cdb2f1871ccb7bca`;
+- main implementação `b8b25fda37a6682bc57eb2349f132770e46b0362`;
+- árvore PR/main idêntica `9f6eeed928faa5ab020570ce16491eecc0fc0d35`;
+- CI #708/run37872723397 (PR) e #709/run37875267814 (main) SUCCESS;
+- Governance #129/run37872723403 e #130/run37875267800 SUCCESS;
+- PR/main:41/41 etapas;1571 Python/PostgreSQL,14 frontend,28 Playwright PASS;
+  zero FAIL, zero SKIP;35 casos novos; warning TestClient existente;
+- lifecycle de nove eventos, período/uso canônicos, invoice deduplicada,
+  termos originais, validade/carência, terminalidade/identidade/histórico,
+  replay/restart/concorrência e upgrade aditivo16 certificados internamente;
+- T05/P3 internos certificados condicionados à integração/gates deste fechamento;
+- próxima tarefa NFV1-P04-T01 — Handler registry canônico, não iniciada;
+- checkpoint `checkpoints/NFV1_P03_T05_IMPLEMENTATION_2026-10-08.md`;
+- staging reconfirmado somente leitura: API/Portal/PostgreSQL1/1, Worker0/1;
+  deployments históricos inalterados, VERSION_DRIFT_PRESENT;
+- Secret Manager, emissor Command, checkout/delivery reais P6/P8 não certificados;
+  worker contínuo P4, staging P5/P9/P11 e homologação/produção seguem pendentes;
+- fechamento documental requer merge específico; nenhum deploy autorizado.
+
+PRODUCTION_APPROVED=NO;COMMERCIAL_LIVE=NO.
+
+---
+
+## Snapshot histórico — Command
+
 ## CURRENT superior — 2026-10-08 — Command integrado e pós-merge certificado
 
 - PR #137 MERGED por autorização explícita;HEAD `1404cdc5f12525e15c5e887c0b8a4579e3e75793`;

@@ -1,6 +1,8 @@
 # NFV1-P03-T05 — implementação interna de lifecycle comercial
 
-Data: 2026-10-08 (America/Sao_Paulo). Estado: IN_PROGRESS, CI/merge pendentes.
+Data: 2026-10-08 (America/Sao_Paulo). Estado atual: certificação interna
+integrada; fechamento documental aguarda integração/gates próprios.
+O registro final abaixo prevalece sobre pendências históricas da implementação.
 Política: T05-B01 integralmente aprovada pelo dono (“Aprovo”).
 Base: main c0e42fbb7ecfb1558c4aace664f971fb93eeeaba; PR #140 MERGED;
 CI #701 e Governance #122 SUCCESS. Entrega na PR #141.
@@ -78,3 +80,39 @@ max(ingresso,created_at da reserva), sem mudar início/fim, plano, quota ou
 identidade; não usa início de período pago futuro. Matriz existente preservada
 e um novo teste garante o piso temporal e ausência de extensão do trial.
 Nova CI integral exigida. Dependência mínima de T05; não reabre/antecipa fase.
+
+## Certificação final interna e fechamento — 2026-10-08
+
+O dono autorizou especificamente o merge #141 (“Aprovado”). PR MERGED;
+HEAD certificado `32755fd1e3b7563561017c82cdb2f1871ccb7bca`;
+merge/main `b8b25fda37a6682bc57eb2349f132770e46b0362`;
+árvore idêntica PR/main `9f6eeed928faa5ab020570ce16491eecc0fc0d35`.
+
+- CI #708/run37872723397, job113634399443 (PR) SUCCESS.
+- CI #709/run37875267814, job113642298519 (main) SUCCESS.
+- Governance #129/run37872723403 e #130/run37875267800 SUCCESS.
+- PR/main:41/41 etapas;1571 Python/PostgreSQL,14 frontend,28 Playwright PASS;
+  zero FAIL, zero SKIP.35 novos casos; warning TestClient existente.
+- Ruff/Mypy strict195, plano59, migration16, secret scan, audits,
+  frontend lint/type/build/E2E, containers/non-root/smokes/security/SBOM,
+  PostgreSQL backup/restore/readiness PASS.
+
+Nove eventos comerciais cobertos. Renovação avança período uma vez por invoice;
+calendário e termos originais preservados. Early renewal mantém quota no período
+efetivo; novo período começa em0. Cobertura temporal/carência/terminalidade,
+identidade, replay/restart/concorrência, upgrade aditivo e recuperação de falhas
+provados internamente. Histórico de falhas acima preserva suas causas/correções;
+a CI final integral substitui qualquer pendência histórica de teste/merge #141.
+
+Varredura: nenhum TODO/FIXME/HACK nos arquivos centrais novos/revisados;
+sem autoridade paralela ou nova rota de cobrança. Dependências externas ausentes
+continuam fail-closed e com ownership P6/P8. Worker contínuo P4, drift/ambiente
+P5/P9/P11, providers/homologação P7/P10 e lançamento P12 permanecem pendentes.
+Staging somente leitura, deployments inalterados: Portal/API/PostgreSQL1/1,
+Worker0/1. Nenhum deploy, credencial, cobrança ou migration produtiva executado.
+
+T05 DONE_CERTIFIED interno condicionado à integração/gates deste fechamento;
+P3 COMMERCIAL_RUNTIME_COMPOSED_INTERNAL sob a mesma condição. Próxima tarefa:
+NFV1-P04-T01 — Handler registry canônico, não iniciada nesta entrega.
+Nova PR documental não recebe aprovação de merge por inferência.
+PRODUCTION_APPROVED=NO; COMMERCIAL_LIVE=NO.
