@@ -232,8 +232,10 @@ class SqliteFiscalOutboxStore:
                 lease_until=now + lease_duration,
                 last_error=None,
             )
-            self._replace(updated)
-            claimed.append(updated)
+            if self._replace(
+                updated, expected_status=entry.status, expected_attempt=entry.attempt_count
+            ):
+                claimed.append(updated)
         return tuple(claimed)
 
     def mark_succeeded(
@@ -254,7 +256,7 @@ class SqliteFiscalOutboxStore:
             last_error=None,
             completion_reference=reference,
         )
-        self._replace(updated)
+        self._replace_in_flight(updated, expected_attempt)
         return updated
 
     def reschedule(
@@ -278,7 +280,7 @@ class SqliteFiscalOutboxStore:
             last_error=normalized_error,
             completion_reference=None,
         )
-        self._replace(updated)
+        self._replace_in_flight(updated, expected_attempt)
         return updated
 
     def dead_letter(
@@ -299,7 +301,7 @@ class SqliteFiscalOutboxStore:
             last_error=normalized_error,
             completion_reference=None,
         )
-        self._replace(updated)
+        self._replace_in_flight(updated, expected_attempt)
         return updated
 
     def get(self, entry_id: str) -> FiscalOutboxEntry | None:
@@ -317,19 +319,36 @@ class SqliteFiscalOutboxStore:
             raise OutboxStateError("outbox attempt version does not match")
         return current
 
-    def _replace(self, entry: FiscalOutboxEntry) -> None:
+    def _replace_in_flight(self, entry: FiscalOutboxEntry, expected_attempt: int) -> None:
+        if not self._replace(
+            entry,
+            expected_status=FiscalOutboxStatus.IN_FLIGHT,
+            expected_attempt=expected_attempt,
+        ):
+            raise OutboxStateError("outbox attempt version or state changed during transition")
+
+    def _replace(
+        self,
+        entry: FiscalOutboxEntry,
+        *,
+        expected_status: FiscalOutboxStatus,
+        expected_attempt: int,
+    ) -> bool:
+        # A read is not a fence: another PostgreSQL transaction can finish/reclaim
+        # between SELECT and UPDATE. Compare both state and attempt in the write.
         values = self._values(entry)
-        self._connection.execute(
+        cursor = self._connection.execute(
             """
             UPDATE fm_fiscal_outbox SET
                 host_namespace = ?, tenant_id = ?, unit_id = ?, environment = ?,
                 correlation_id = ?, operation = ?, deduplication_key = ?, payload = ?,
                 payload_sha256 = ?, created_at = ?, available_at = ?, status = ?,
                 attempt_count = ?, lease_until = ?, last_error = ?, completion_reference = ?
-            WHERE entry_id = ?
+            WHERE entry_id = ? AND status = ? AND attempt_count = ?
             """,
-            (*values[1:], values[0]),
+            (*values[1:], values[0], expected_status.value, expected_attempt),
         )
+        return cursor.rowcount == 1
 
 
 class SqliteFiscalArchiveStore:
