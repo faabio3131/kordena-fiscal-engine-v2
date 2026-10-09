@@ -462,6 +462,8 @@ Auditoria T05 em 2026-10-08: transições existem, mas renovação não avança 
 **Status inicial:** NOT_STARTED  
 **Dependência:** P3
 
+**Certificação interna em 2026-10-09:** DONE_CERTIFIED condicionada à integração/gates do fechamento T04. PR #149 MERGED, CI #725/#726 e Governance #146/#147 SUCCESS; checkpoint `checkpoints/NFV1_P04_T04_WORKER_CONTAINER_2026-10-09.md`. Processo/container real de CI certificado; assinatura/secret backend/delivery reais e staging permanecem P6/P5/P9/P11.
+
 ## Objetivo
 
 Transformar Worker de probe em processo operacional contínuo governado.
@@ -498,14 +500,18 @@ Provar processo contínuo, SIGTERM, non-root e health/runtime contract.
 
 Retomada T04 em 2026-10-09: main `f1b8503cb8dd09325457907469ec5f049d9d5579`, PR #148 MERGED, CI #724/Governance #145 SUCCESS. T04 em execução por “Pode fazer”. Corrigir parada durante bootstrap; probe privado usa saúde canônica T03; provar PID1/non-root/continuidade/SIGTERM/drain/restart no container CI, preservando ONESHOT e falha sem handlers. Checkpoint `checkpoints/NFV1_P04_T04_WORKER_CONTAINER_2026-10-09.md`; sem deploy/segredo/handler sintético em produção. P5/P6/P9 não antecipadas.
 
+Certificação interna T04 em 2026-10-09: PR #149 MERGED; HEAD `732265ed0e7bab21b48e735ea296a2e8a3af7576`; main `d9f4d1d8c7fd60f927b2f3d3ba8f421a72c9bf82`; árvore PR/main idêntica `d7cbdf8baf65013c4f8542ac390c9c581b01ef7b`. CI #725/run37935705861 (PR) e #726/run37938638870 (main), Governance #146/run37935705764 e #147/run37938638865 SUCCESS. PR/main:41/41 etapas;1666 Python/PostgreSQL,14 frontend,28 Playwright PASS,zero FAIL/zero SKIP;29 novos casos incluídos;um warning TestClient preexistente. Container real:SIGTERM exit0,readiness inválida durante drain,10 claimed concluídos+3 pending,restart13/13,um attempt/audit sem replay terminal. Este registro prevalece sobre T04 em execução acima; fechamento documental aguarda integração/gates próprios.23/59 concluídas; próxima P05-T01 não iniciada. Sem deploy ou operação externa.
+
 ## Gate
 
-- [ ] Worker permanece executando sem modo oneshot;
-- [ ] handler registry explícito;
-- [ ] retry/dead-letter certificado;
-- [ ] crash/restart testado;
-- [ ] side effects idempotentes;
-- [ ] CI verde.
+- [x] Worker permanece executando sem modo oneshot;
+- [x] handler registry explícito;
+- [x] retry/dead-letter certificado;
+- [x] crash/restart testado;
+- [x] side effects idempotentes;
+- [x] CI verde.
+
+Provas por critério no checkpoint T04: T01 registry; T02 recovery/CAS/inbox; T03 saúde/observabilidade; T04 processo/container. Idempotência certificada no estado interno; transporte at-least-once exige deduplicação do destinatário externo, não presumida. Gate interno condicionado à integração/gates deste fechamento; não certifica Worker staging0/1.
 
 **Gate de saída:** CONTINUOUS_WORKER_CERTIFIED_INTERNAL
 
