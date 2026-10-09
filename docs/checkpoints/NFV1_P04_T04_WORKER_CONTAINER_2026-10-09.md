@@ -1,5 +1,54 @@
 # CHECKPOINT — NFV1-P04-T04 — Container
 
+## Certificação final — prevalece sobre o histórico abaixo
+
+PR #149 MERGED; HEAD `732265ed0e7bab21b48e735ea296a2e8a3af7576`; main `d9f4d1d8c7fd60f927b2f3d3ba8f421a72c9bf82`; árvore PR/main idêntica `d7cbdf8baf65013c4f8542ac390c9c581b01ef7b`. CI #725/run37935705861 (PR) e #726/run37938638870 (main), Governance #146/run37935705764 e #147/run37938638865 SUCCESS. PR/main:41/41 etapas;1666 Python/PostgreSQL,14 frontend,28 Playwright PASS,zero FAIL/zero SKIP;29 novos casos incluídos;um warning TestClient preexistente.
+
+Estado: INTERNALLY_CERTIFIED; fechamento documental aguardando integração/gates.
+Merge #149 autorizado explicitamente pelo dono em 2026-10-09:
+“Autorizo integrar a PR #149”.
+Critério: “Provar processo contínuo, SIGTERM, non-root e health/runtime contract.”
+
+CI main job113847021184; Pytest364.19s (PR323.61s).
+
+Container real da CI: USER10001/PID1, execução contínua idle, Docker HEALTHCHECK
+healthy, SIGTERM exit0; durante drain readiness invalida sem interromper o lote.
+13 jobs PostgreSQL:10 claimed/succeeded,3 pending;restart termina13/13,
+um attempt/audit por job e nenhum replay terminal. SIGTERM/SIGINT durante
+bootstrap preservados; ONESHOT não promove continuous readiness; CMD sem
+dependências continua fail-closed pelo motivo esperado.
+Fixture sintética somente de CI, montada read-only e ausente da imagem.
+PostgreSQL e processo/container são reais; dispatch sintético não prova
+assinatura, resolver de secrets, destinatário ou efeito externo reais.
+Gates integrais:lint/types/plan59/migrations1..16/secret scan/frontend/E2E,
+containers/non-root/secure profile/smokes/CVE/SBOM/backup-restore/readiness PASS.
+Nenhum teste existente removido, pulado ou enfraquecido.
+
+### Gate P4 interno — matriz de evidência
+
+| Critério | Prova |
+|---|---|
+| Execução sem ONESHOT | T04: processo contínuo PID1/non-root e health real no container CI |
+| Registry explícito | T01/#143/#144: composição governada, mesma outbox/UOW; assinatura ausente falha antes do poll |
+| Retry/dead-letter | T02/#145/#146: backoff, fatal, CAS status/attempt e persistência SQLite/PostgreSQL |
+| Crash/restart | T02: recuperação por lease; T04: drain/restart de subprocesso e container PostgreSQL |
+| Side effects idempotentes internos | Inbox/idempotência/terminal replay/CAS certificados; at-least-once não garante deduplicação externa |
+| CI verde | PR #149 e main certificadas em todos os41 gates |
+
+Gate CONTINUOUS_WORKER_CERTIFIED_INTERNAL: PASS condicionado à integração
+e gates deste fechamento documental. P4 interno concluído;23/59 tarefas.
+Próxima NFV1-P05-T01 — Pré-deploy, não iniciada até esse fechamento.
+
+Read-only pós-merge: API/Portal/PostgreSQL1/1,Worker0/1;deployments históricos
+inalterados;patch staged vazio. Nenhum deploy executado. P5/P9/P11 conservam
+drift/operação como pendência; P6 conserva assinatura/backend de secrets real.
+Readiness comprova poll/snapshot/freshness/lifecycle, não homologação externa.
+Grace15s deve comportar lote/timeouts reais antes de implantação. Inventário
+TODO/FIXME/HACK dos arquivos T04:nenhum marcador;sem migration/dependência nova.
+PRODUCTION_APPROVED=NO;COMMERCIAL_LIVE=NO.
+
+## Histórico de execução
+
 Data:2026-10-09 (America/Sao_Paulo).
 Produto:FM NFCORE V1.
 Repository:faabio3131/kordena-fiscal-engine-v2.

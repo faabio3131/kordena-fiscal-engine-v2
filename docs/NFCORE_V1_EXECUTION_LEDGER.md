@@ -304,7 +304,7 @@
 
 ### 23. NFV1-P04-T04 — Container
 
-- [ ] **Estado:** em execução
+- [x] **Estado:** concluído
 - **Objetivo:** executar exatamente a tarefa NFV1-P04-T04 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P04-T03 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** tudo que o cronograma exige para NFV1-P04-T04, mais os testes/evidências diretamente necessários.
@@ -313,7 +313,7 @@
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
 - **Riscos / não confirmado:** prova interna de processo/container não certifica assinatura/secret backend real P6 nem staging P5/P9/P11; Worker0/1 histórico. CMD sem dependência permanece fail-closed. Grace real deve comportar lote/timeouts; at-least-once não promete deduplicação externa. Sem deploy.
 - **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** entrada main `f1b8503cb8dd09325457907469ec5f049d9d5579`, PR #148 MERGED, CI #724/Governance #145 SUCCESS. T04 em execução por “Pode fazer”;29 novos testes e prova container PID1/non-root/SIGTERM/HEALTHCHECK/drain/restart. Dirigidos63 PASS/19 PostgreSQL SKIP local;Ruff/Mypy196/plan59/migration16/secret PASS. Checkpoint `docs/checkpoints/NFV1_P04_T04_WORKER_CONTAINER_2026-10-09.md`; CI/merge/main pendentes;P5 não iniciada.
+- **Prova:** PR #149 MERGED; HEAD `732265ed0e7bab21b48e735ea296a2e8a3af7576`; main `d9f4d1d8c7fd60f927b2f3d3ba8f421a72c9bf82`; árvore PR/main idêntica `d7cbdf8baf65013c4f8542ac390c9c581b01ef7b`. CI #725/run37935705861 (PR) e #726/run37938638870 (main), Governance #146/run37935705764 e #147/run37938638865 SUCCESS. PR/main:41/41 etapas;1666 Python/PostgreSQL,14 frontend,28 Playwright PASS,zero FAIL/zero SKIP;29 novos casos incluídos;um warning TestClient preexistente. Container real PID1/non-root/continuidade/HEALTHCHECK/SIGTERM exit0/drain10+pending3/restart13/13,um attempt/audit sem replay terminal PASS. Checkpoint `docs/checkpoints/NFV1_P04_T04_WORKER_CONTAINER_2026-10-09.md`; gate P4 interno e fechamento documental condicionados à integração/gates deste registro.23/59 concluídas;P5 não iniciada. Merge documental exige autorização específica.
 
 ### 24. NFV1-P05-T01 — Pré-deploy
 
