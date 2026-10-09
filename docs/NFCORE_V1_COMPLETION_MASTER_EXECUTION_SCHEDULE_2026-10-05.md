@@ -430,6 +430,8 @@ Reconciliar com a decisão vigente do dono: pagamentos da FM centralizados no Co
 
 purchase_enabled deve permanecer falso se faltar pricing, release, checkout, receiver, canonical persistence, fulfillment, provisioning ou activation delivery.
 
+Auditoria de retomada em 2026-10-08 confirmou gap de receiver/binding na oferta. T04-B01 registrado em `NFV1_P03_T04_PURCHASE_READINESS_POLICY_PROPOSAL_2026-10-08.md`: política proposta de revalidação governada e fail-closed, incluindo nova origem de acesso ao resolver de segredos. Política integral aprovada pelo dono em 2026-10-08 (POLICY_APPROVED_FOR_INTERNAL_IMPLEMENTATION); publicação dos três documentos e PR Draft autorizadas. Implementação/testes internos permitidos; merge/deploy/operação real não autorizados; certificação T04 pendente. IDs, ordem e critério original preservados.
+
 ### NFV1-P03-T05 — Lifecycle comercial
 
 Cobrir sale, activation, renewal, late payment, pause, recovery, cancel, refund e chargeback.

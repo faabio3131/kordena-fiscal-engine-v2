@@ -238,16 +238,16 @@
 
 ### 18. NFV1-P03-T04 — Purchase readiness
 
-- [ ] **Estado:** pendente
+- [ ] **Estado:** em execução
 - **Objetivo:** executar exatamente a tarefa NFV1-P03-T04 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P03-T03 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** tudo que o cronograma exige para NFV1-P03-T04, mais os testes/evidências diretamente necessários.
 - **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
 - **Critério de aceite:** critérios específicos de NFV1-P03-T04 no cronograma satisfeitos e nenhum gate transversal violado.
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
-- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** PENDENTE
+- **Riscos / não confirmado:** T04-B01: oferta pode indicar compra com receiver Command sem binding utilizável; probe HTTP sintético reproduziu purchase_enabled=true com binding ausente. Implementação/canal externo ainda não certificados; staging histórico/Worker0/1 reconfirmados somente leitura.
+- **Decisões do dono pendentes:** T04-B01 RESOLVIDO: política aprovada como conjunto em `docs/NFV1_P03_T04_PURCHASE_READINESS_POLICY_PROPOSAL_2026-10-08.md`: nova avaliação pública pode iniciar resolução governada de credencial; AGENTS.md exige autorização antes de mudança de segurança sensível. POLICY_APPROVED_FOR_INTERNAL_IMPLEMENTATION pelo dono em 2026-10-08 (“Autorizo”); publicação dos três documentos e PR Draft autorizadas; implementação interna em andamento. Merge/deploy/operação real não autorizados.
+- **Prova:** auditoria CURRENT main `5888efb7eba206bb348b54da6881afb64a4f2c38` (PR #138 MERGED); testes dirigidos locais 56 PASS/32 PostgreSQL SKIP/zero FAIL, não certificam PostgreSQL. Probe reproduzível no documento da política; CI/HEAD da PR de proposta registrados no corpo da PR. T04 NÃO CONCLUÍDA.
 
 ### 19. NFV1-P03-T05 — Lifecycle comercial
 
