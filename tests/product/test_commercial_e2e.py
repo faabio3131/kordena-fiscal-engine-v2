@@ -85,9 +85,9 @@ def test_complete_synthetic_commercial_journey() -> None:
     assert onboarding.progress_percent == 100
 
     subscription = _subscription()
-    subscription.require_entitlement("documents.issue")
-    subscription.require_entitlement("documents.query")
-    subscription.require_entitlement("webhooks.delivery")
+    subscription.require_entitlement("documents.issue", at=datetime(2026, 9, 14, tzinfo=UTC))
+    subscription.require_entitlement("documents.query", at=datetime(2026, 9, 14, tzinfo=UTC))
+    subscription.require_entitlement("webhooks.delivery", at=datetime(2026, 9, 14, tzinfo=UTC))
 
     transport = RecordingTransport()
     client = _client(transport)
@@ -114,7 +114,7 @@ def test_complete_synthetic_commercial_journey() -> None:
         reconciliation.status_code,
     ]
     assert status_codes == [200, 202, 200, 202]
-    assert subscription.record_usage("documents.issue") == 1
+    assert subscription.record_usage("documents.issue", at=datetime(2026, 9, 14, tzinfo=UTC)) == 1
     assert transport.requests[1].headers["Idempotency-Key"] == "idem-syn-1"
     assert transport.requests[1].headers["X-Correlation-Id"] == "corr-syn-2"
     assert transport.requests[1].headers["X-Causation-Id"] == "cause-syn-1"
@@ -149,19 +149,19 @@ def test_suspension_blocks_new_commercial_operations_but_preserves_fiscal_state(
     subscription.transition(SubscriptionStatus.SUSPENDED)
     assert subscription.preserves_existing_fiscal_state is True
     with pytest.raises(CommercialBillingError, match="blocks new commercial operation"):
-        subscription.require_entitlement("documents.issue")
+        subscription.require_entitlement("documents.issue", at=datetime(2026, 9, 14, tzinfo=UTC))
     with pytest.raises(CommercialBillingError, match="does not accept new metered usage"):
-        subscription.record_usage("documents.issue")
+        subscription.record_usage("documents.issue", at=datetime(2026, 9, 14, tzinfo=UTC))
 
 
 def test_missing_entitlement_and_quota_are_fail_closed() -> None:
     subscription = _subscription()
     with pytest.raises(CommercialBillingError, match="entitlement is not granted"):
-        subscription.require_entitlement("support.premium")
-    assert subscription.record_usage("documents.issue") == 1
-    assert subscription.record_usage("documents.issue") == 2
+        subscription.require_entitlement("support.premium", at=datetime(2026, 9, 14, tzinfo=UTC))
+    assert subscription.record_usage("documents.issue", at=datetime(2026, 9, 14, tzinfo=UTC)) == 1
+    assert subscription.record_usage("documents.issue", at=datetime(2026, 9, 14, tzinfo=UTC)) == 2
     with pytest.raises(CommercialBillingError, match="quota exceeded"):
-        subscription.record_usage("documents.issue")
+        subscription.record_usage("documents.issue", at=datetime(2026, 9, 14, tzinfo=UTC))
 
 
 def test_duplicate_synthetic_issue_keeps_same_idempotency_identity() -> None:

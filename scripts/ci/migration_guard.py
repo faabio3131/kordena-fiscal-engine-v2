@@ -17,6 +17,11 @@ from kordena_fiscal.persistence.command_commercial_schema import (
     COMMAND_COMMERCIAL_SCHEMA,
     COMMAND_COMMERCIAL_VERSION,
 )
+from kordena_fiscal.persistence.commercial_period_schema import (
+    COMMERCIAL_PERIOD_NAME,
+    COMMERCIAL_PERIOD_SCHEMA,
+    COMMERCIAL_PERIOD_VERSION,
+)
 from kordena_fiscal.persistence.customer_configuration_schema import (
     CUSTOMER_CONFIGURATION_NAME,
     CUSTOMER_CONFIGURATION_SCHEMA,
@@ -83,6 +88,7 @@ def validate_policy() -> tuple[int, ...]:
         FISCAL_SCOPE_VERSION,
         CUSTOMER_CONFIGURATION_VERSION,
         COMMAND_COMMERCIAL_VERSION,
+        COMMERCIAL_PERIOD_VERSION,
     )
     if versions != tuple(range(1, max(versions) + 1)):
         raise RuntimeError(f"migration versions must be contiguous from 1: {versions!r}")
@@ -141,6 +147,10 @@ def validate_policy() -> tuple[int, ...]:
     _reject_unapproved_destructive(
         version=COMMAND_COMMERCIAL_VERSION, name=COMMAND_COMMERCIAL_NAME,
         statements=COMMAND_COMMERCIAL_SCHEMA,
+    )
+    _reject_unapproved_destructive(
+        version=COMMERCIAL_PERIOD_VERSION, name=COMMERCIAL_PERIOD_NAME,
+        statements=COMMERCIAL_PERIOD_SCHEMA,
     )
     print(
         "migration policy: PASS "

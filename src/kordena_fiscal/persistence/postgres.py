@@ -52,6 +52,11 @@ from .command_commercial_schema import (
     COMMAND_COMMERCIAL_SCHEMA,
     COMMAND_COMMERCIAL_VERSION,
 )
+from .commercial_period_schema import (
+    COMMERCIAL_PERIOD_NAME,
+    COMMERCIAL_PERIOD_SCHEMA,
+    COMMERCIAL_PERIOD_VERSION,
+)
 from .commercial_release import PostgresCommercialReleaseRepository
 from .customer_configuration_schema import (
     CUSTOMER_CONFIGURATION_NAME,
@@ -766,10 +771,26 @@ class PostgresFiscalDatabase:
                     raw.execute(
                         "INSERT INTO fm_schema_migrations (version, name, applied_at) "
                         "VALUES (%s, %s, %s)",
-                        (COMMAND_COMMERCIAL_VERSION, COMMAND_COMMERCIAL_NAME,
-                         datetime.now().astimezone().isoformat()),
+                        (
+                            COMMAND_COMMERCIAL_VERSION,
+                            COMMAND_COMMERCIAL_NAME,
+                            datetime.now().astimezone().isoformat(),
+                        ),
                     )
                     new_versions.append(COMMAND_COMMERCIAL_VERSION)
+                if COMMERCIAL_PERIOD_VERSION not in applied:
+                    for statement in COMMERCIAL_PERIOD_SCHEMA:
+                        raw.execute(statement)
+                    raw.execute(
+                        "INSERT INTO fm_schema_migrations (version, name, applied_at) "
+                        "VALUES (%s, %s, %s)",
+                        (
+                            COMMERCIAL_PERIOD_VERSION,
+                            COMMERCIAL_PERIOD_NAME,
+                            datetime.now().astimezone().isoformat(),
+                        ),
+                    )
+                    new_versions.append(COMMERCIAL_PERIOD_VERSION)
                 raw.commit()
                 return tuple(new_versions)
             except Exception:

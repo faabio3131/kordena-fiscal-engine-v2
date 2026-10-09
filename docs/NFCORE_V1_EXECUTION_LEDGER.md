@@ -251,16 +251,16 @@
 
 ### 19. NFV1-P03-T05 — Lifecycle comercial
 
-- [ ] **Estado:** pendente
+- [ ] **Estado:** em execução
 - **Objetivo:** executar exatamente a tarefa NFV1-P03-T05 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P03-T04 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** tudo que o cronograma exige para NFV1-P03-T05, mais os testes/evidências diretamente necessários.
 - **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
 - **Critério de aceite:** critérios específicos de NFV1-P03-T05 no cronograma satisfeitos e nenhum gate transversal violado.
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
-- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** PENDENTE
+- **Riscos / não confirmado:** auditoria confirmou renovação sem avanço de period_end no serviço canônico; validade temporal e deduplicação de crédito por invoice ainda não certificadas. Staging drift/Worker0/1 permanecem P4/P5/P9/P11. Sem operação externa.
+- **Decisões do dono pendentes:** T05-B01 RESOLVIDO: política integral POLICY_APPROVED_FOR_INTERNAL_IMPLEMENTATION aprovada explicitamente pelo dono (“Aprovo”) em 2026-10-08. Implementação/testes internos autorizados conforme documento de política; merge/deploy/operação real não autorizados.
+- **Prova:** CURRENT main `c0e42fbb7ecfb1558c4aace664f971fb93eeeaba`, PR #140 MERGED; CI #701/Governance #122 SUCCESS. Auditoria/probe sintético do serviço e39 testes PASS/22 PostgreSQL SKIP/zero FAIL. Checkpoint/política T05 acima. Implementação interna na PR #141;35 casos novos;Ruff/Mypy strict195/plan59/migration16/secret/diff PASS. Checkpoint `docs/checkpoints/NFV1_P03_T05_IMPLEMENTATION_2026-10-08.md`. CI completa/merge pendentes; T05 NÃO CONCLUÍDA.
 
 ### 20. NFV1-P04-T01 — Handler registry canônico
 

@@ -6,10 +6,15 @@ purchase transition and deliberately cannot create tenant, user, RBAC or fiscal 
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import datetime
 
-from kordena_fiscal.product.billing import CommercialSubscription, SubscriptionStatus
+from kordena_fiscal.product.billing import (
+    CommercialSubscription,
+    SubscriptionStatus,
+    UsagePeriodCheckpoint,
+)
 from kordena_fiscal.product.commercial_fulfillment import (
     CanonicalCommercialUnitOfWorkFactory,
     CommercialAcquisitionRecord,
@@ -20,6 +25,7 @@ from kordena_fiscal.product.commercial_fulfillment import (
     CommercialPurchaseState,
     ValidatedCommercialEvent,
 )
+from kordena_fiscal.product.commercial_lifecycle import CommercialContract
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,8 +54,15 @@ class CommercialFulfillmentService:
         }
     )
 
-    def __init__(self, unit_of_work_factory: CanonicalCommercialUnitOfWorkFactory) -> None:
+    def __init__(
+        self,
+        unit_of_work_factory: CanonicalCommercialUnitOfWorkFactory,
+        *,
+        contract_factory: Callable[[CommercialPurchaseRecord, datetime, str], CommercialContract]
+        | None = None,
+    ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
+        self._contract_factory = contract_factory
 
     def process(
         self,
@@ -70,6 +83,7 @@ class CommercialFulfillmentService:
             purchase_id=event.purchase_id,
             occurred_at=event.occurred_at,
             received_at=received_at,
+            payment_reference=event.payment_reference,
         )
 
         with self._unit_of_work_factory() as uow:
@@ -88,6 +102,20 @@ class CommercialFulfillmentService:
                 received_at=received_at,
             )
             current = uow.commercial.get_purchase(event.purchase_id)
+            if current is not None:
+                self._require_same_identity(current, event)
+            contract = self._contract_for_event(uow.commercial, current, event)
+            if (
+                contract is not None
+                and event.event_type is CommercialEventType.SUBSCRIPTION_RENEWED
+            ):
+                if event.payment_reference is None:
+                    raise CommercialFulfillmentError("renewal requires authenticated paid invoice")
+                _, credited = contract.renew(event.payment_reference, event.occurred_at)
+                if credited:
+                    assert current is not None
+                    uow.commit()
+                    return CommercialFulfillmentResult(purchase=current, replay=True)
             if current is None:
                 purchase = self._create_purchase(
                     event,
@@ -97,11 +125,38 @@ class CommercialFulfillmentService:
             else:
                 purchase = self._transition_purchase(current, event, received_at)
 
+            if contract is None and self._contract_factory is not None:
+                contract = self._contract_factory(
+                    purchase, event.occurred_at, event.payment_reference or event.external_order_id
+                )
+            if (
+                contract is not None
+                and event.event_type is CommercialEventType.SUBSCRIPTION_RENEWED
+            ):
+                assert event.payment_reference is not None
+                durable = uow.commercial.get_subscription_for_purchase(purchase.purchase_id)
+                if durable is not None:
+                    contract = replace(
+                        contract,
+                        periods=tuple(
+                            replace(p, usage=h.usage)
+                            for p, h in zip(
+                                contract.periods[:-1],
+                                durable.checkpoint.previous_periods,
+                                strict=True,
+                            )
+                        )
+                        + (replace(contract.periods[-1], usage=durable.checkpoint.usage),),
+                    )
+                contract, _ = contract.renew(event.payment_reference, event.occurred_at)
             uow.commercial.put_purchase(purchase)
+            if contract is not None:
+                uow.commercial.put_contract(contract)
             self._sync_subscription_status(
                 uow.commercial,
                 purchase=purchase,
                 event=event,
+                contract=contract,
             )
             if acquisition is not None:
                 uow.commercial.put_acquisition(
@@ -109,6 +164,45 @@ class CommercialFulfillmentService:
                 )
             uow.commit()
             return CommercialFulfillmentResult(purchase=purchase, replay=False)
+
+    def _contract_for_event(
+        self,
+        store: object,
+        current: CommercialPurchaseRecord | None,
+        event: ValidatedCommercialEvent,
+    ) -> CommercialContract | None:
+        get_contract = getattr(store, "get_contract", None)
+        contract = get_contract(event.purchase_id) if callable(get_contract) else None
+        if isinstance(contract, CommercialContract):
+            return contract
+        if current is None:
+            return None
+        if self._contract_factory is None:
+            if event.event_type is CommercialEventType.SUBSCRIPTION_RENEWED:
+                self._transition_purchase(current, event, event.occurred_at)
+                raise CommercialFulfillmentError("contracted cadence snapshot is unavailable")
+            return None
+        get_first = getattr(store, "get_first_event", None)
+        first = get_first(current.purchase_id) if callable(get_first) else None
+        if first is None:
+            raise CommercialFulfillmentError("original paid event is unavailable")
+        contract = self._contract_factory(current, first.occurred_at, current.external_order_id)
+        get_sub = getattr(store, "get_subscription_for_purchase", None)
+        durable = get_sub(current.purchase_id) if callable(get_sub) else None
+        if durable is not None:
+            contract = replace(
+                contract,
+                plan=durable.checkpoint.plan,
+                periods=(
+                    replace(
+                        contract.periods[0],
+                        start=durable.checkpoint.period_start,
+                        end=durable.checkpoint.period_end,
+                        usage=durable.checkpoint.usage,
+                    ),
+                ),
+            )
+        return contract
 
     @classmethod
     def _create_purchase(
@@ -160,12 +254,14 @@ class CommercialFulfillmentService:
         cls._require_same_identity(current, event)
         if event.occurred_at < current.last_event_at:
             raise CommercialFulfillmentError("stale commercial event rejected")
-        if (
-            event.occurred_at == current.last_event_at
-            and event.event_id != current.last_event_id
-        ):
+        if event.occurred_at == current.last_event_at and event.event_id != current.last_event_id:
             raise CommercialFulfillmentError("ambiguous same-time commercial event rejected")
 
+        if event.event_type in cls._OPENING_EVENTS and current.billing_status in {
+            SubscriptionStatus.SUSPENDED,
+            SubscriptionStatus.CANCELED,
+        }:
+            raise CommercialFulfillmentError("opening event cannot resume blocked subscription")
         state = current.state
         if event.event_type in cls._NON_TERMINAL_EVENTS:
             if current.state in {
@@ -227,6 +323,7 @@ class CommercialFulfillmentService:
         *,
         purchase: CommercialPurchaseRecord,
         event: ValidatedCommercialEvent,
+        contract: CommercialContract | None = None,
     ) -> None:
         get_subscription = getattr(store, "get_subscription_for_purchase", None)
         put_subscription = getattr(store, "put_subscription", None)
@@ -238,7 +335,21 @@ class CommercialFulfillmentService:
         target = purchase.billing_status
         if target is None:
             return
-        subscription = CommercialSubscription.restore(durable.checkpoint)
+        checkpoint = durable.checkpoint
+        if contract is not None:
+            last = contract.periods[-1]
+            checkpoint = replace(
+                checkpoint,
+                plan=contract.plan,
+                period_start=last.start,
+                period_end=last.end,
+                usage=last.usage,
+                grace_days=contract.grace_days,
+                previous_periods=tuple(
+                    UsagePeriodCheckpoint(p.start, p.end, p.usage) for p in contract.periods[:-1]
+                ),
+            )
+        subscription = CommercialSubscription.restore(checkpoint)
         try:
             subscription.transition(target)
         except ValueError as exc:
@@ -250,8 +361,7 @@ class CommercialFulfillmentService:
                 durable,
                 checkpoint=subscription.checkpoint(),
                 external_subscription_id=(
-                    durable.external_subscription_id
-                    or event.external_subscription_id
+                    durable.external_subscription_id or event.external_subscription_id
                 ),
                 last_event_id=event.event_id,
                 last_event_at=event.occurred_at,

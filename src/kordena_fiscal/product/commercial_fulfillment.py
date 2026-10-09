@@ -13,7 +13,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 from types import TracebackType
-from typing import Protocol, Self
+from typing import TYPE_CHECKING, Protocol, Self
+
+if TYPE_CHECKING:
+    from kordena_fiscal.product.commercial_lifecycle import CommercialContract
 
 from kordena_fiscal.product.billing import SubscriptionCheckpoint, SubscriptionStatus
 
@@ -209,6 +212,7 @@ class ValidatedCommercialEvent:
     external_customer_id: str | None = None
     buyer_email: str | None = None
     acquisition_id: str | None = None
+    payment_reference: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "provider_id", _provider(self.provider_id))
@@ -243,6 +247,11 @@ class ValidatedCommercialEvent:
                 "acquisition_id",
                 _token(self.acquisition_id, "acquisition_id"),
             )
+        object.__setattr__(
+            self,
+            "payment_reference",
+            _optional_external(self.payment_reference, "payment_reference"),
+        )
         _aware(self.occurred_at, "occurred_at")
 
     @property
@@ -261,6 +270,7 @@ class CommercialEventReceipt:
     purchase_id: str
     occurred_at: datetime
     received_at: datetime
+    payment_reference: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "provider_id", _provider(self.provider_id))
@@ -420,6 +430,12 @@ class DurableCommercialSubscription:
 
 
 class CanonicalCommercialStore(Protocol):
+    def recover_legacy_payment_reference(self, event_id: str, payment_reference: str) -> None: ...
+
+    def get_contract(self, purchase_id: str) -> CommercialContract | None: ...
+
+    def put_contract(self, contract: CommercialContract) -> None: ...
+
     def get_acquisition(
         self,
         acquisition_id: str,

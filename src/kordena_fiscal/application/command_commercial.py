@@ -70,11 +70,13 @@ class CommandCommercialReceiver:
             if now.tzinfo is None or now.utcoffset() is None:
                 return False
             candidates = self.store.readiness_bindings(
-                product_id=self._product_id, environment=self._environment,
+                product_id=self._product_id,
+                environment=self._environment,
             )
             for binding in candidates:
                 if (
-                    not binding.enabled or now >= binding.not_after
+                    not binding.enabled
+                    or now >= binding.not_after
                     or binding.product_id != self._product_id
                     or binding.environment != self._environment
                     or binding.contract_version != 1
@@ -203,7 +205,14 @@ class CommandCommercialReceiver:
                 external_order = command_identity(
                     "invoice", event.product_id, event.environment, invoice
                 )
+            payment_reference = command_identity(
+                "invoice",
+                event.product_id,
+                event.environment,
+                event.command_invoice_id,
+            )
             validated = ValidatedCommercialEvent(
+                payment_reference=payment_reference,
                 provider_id="command",
                 event_id=command_identity(
                     "event", event.product_id, event.environment, event.event_id
@@ -258,6 +267,7 @@ class CommandCommercialReceiver:
                 # Original authenticated receipt is durable, so processing delay
                 # does not turn an already accepted acquisition into expired data.
                 validated = ValidatedCommercialEvent(
+                    payment_reference=validated.payment_reference,
                     provider_id=validated.provider_id,
                     event_id=validated.event_id,
                     event_type=validated.event_type,
@@ -269,11 +279,36 @@ class CommandCommercialReceiver:
                     external_customer_id=validated.external_customer_id,
                     acquisition_id=event.acquisition_id,
                 )
+            if existing:
+                # reserve() already checked the complete authenticated inbox
+                # fingerprint; only this recovery path may fill legacy NULL.
+                with self._uow() as uow:
+                    uow.commercial.recover_legacy_payment_reference(
+                        validated.event_id,
+                        payment_reference,
+                    )
+                    uow.commit()
             result = self._fulfillment.process(event=validated, received_at=received_at)
-            if result.purchase.state in {
-                CommercialPurchaseState.READY_TO_PROVISION,
-                CommercialPurchaseState.ACTIVATION_PENDING,
-            }:
+            delivery_pending = purchase is not None and (
+                purchase.state is CommercialPurchaseState.READY_TO_PROVISION
+                or (
+                    purchase.state is CommercialPurchaseState.ACTIVATION_PENDING
+                    and purchase.last_event_id == validated.event_id
+                )
+            )
+            if (
+                event.event_type
+                in {
+                    CommercialEventType.SALE_CONFIRMED,
+                    CommercialEventType.SUBSCRIPTION_ACTIVATED,
+                }
+                and delivery_pending
+                and result.purchase.state
+                in {
+                    CommercialPurchaseState.READY_TO_PROVISION,
+                    CommercialPurchaseState.ACTIVATION_PENDING,
+                }
+            ):
                 if self._delivery is None:
                     raise CommercialFulfillmentError("Command activation delivery unavailable")
                 activated = self._activation.provision(purchase_id=purchase_id, now=now)

@@ -164,7 +164,7 @@ def _seed_commercial_state(database: PostgresFiscalDatabase) -> None:
         period_start=NOW,
         period_end=NOW + timedelta(days=30),
     )
-    subscription.record_usage("documents", amount=42)
+    subscription.record_usage("documents", amount=42, at=NOW)
     durable = DurableCommercialSubscription(
         subscription_id="subscription-t05",
         purchase_id=purchase.purchase_id,

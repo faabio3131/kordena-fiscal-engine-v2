@@ -72,7 +72,7 @@ def durable_subscription() -> DurableCommercialSubscription:
         period_start=NOW,
         period_end=NOW + timedelta(days=30),
     )
-    subscription.record_usage("documents", amount=125)
+    subscription.record_usage("documents", amount=125, at=NOW)
     return DurableCommercialSubscription(
         subscription_id="subscription-a",
         purchase_id="purchase-a",

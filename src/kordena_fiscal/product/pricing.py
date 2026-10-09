@@ -12,6 +12,8 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 
+from kordena_fiscal.product.billing import UsageQuota
+
 
 class CommercialPricingError(ValueError):
     """Raised when commercial pricing configuration is invalid."""
@@ -142,8 +144,18 @@ class PlanDefinition:
     trial_days: int = 0
     tags: tuple[str, ...] = ()
     enabled: bool = True
+    grace_days: int = 0
+    periodic_quotas: tuple[UsageQuota, ...] = ()
 
     def __post_init__(self) -> None:
+        if len({q.metric_id for q in self.periodic_quotas}) != len(self.periodic_quotas):
+            raise CommercialPricingError("periodic quotas must have unique metrics")
+        if (
+            not isinstance(self.grace_days, int)
+            or isinstance(self.grace_days, bool)
+            or self.grace_days < 0
+        ):
+            raise CommercialPricingError("grace_days must be integer >= 0")
         object.__setattr__(
             self,
             "plan_id",
@@ -159,13 +171,9 @@ class PlanDefinition:
             "edition_id",
             _required_text(self.edition_id, "edition_id", 128),
         )
-        prices = tuple(
-            _required_text(item, "price_id", 128) for item in self.price_ids
-        )
+        prices = tuple(_required_text(item, "price_id", 128) for item in self.price_ids)
         if not prices or len(prices) != len(set(prices)):
-            raise CommercialPricingError(
-                "plan price_ids must be non-empty and unique"
-            )
+            raise CommercialPricingError("plan price_ids must be non-empty and unique")
         if (
             not isinstance(self.trial_days, int)
             or isinstance(self.trial_days, bool)
@@ -811,13 +819,16 @@ def _plan_from_mapping(
                 "price_ids",
             )
         ),
+        periodic_quotas=tuple(
+            UsageQuota(_string(q.get("metric_id"), "metric_id"), _integer(q.get("limit"), "limit"))
+            for q in _mapping_sequence(payload.get("periodic_quotas", ()), "periodic_quotas")
+        ),
+        grace_days=_integer(payload.get("grace_days", 0), "grace_days"),
         trial_days=_integer(
             payload.get("trial_days", 0),
             "trial_days",
         ),
-        tags=tuple(
-            _string_sequence(payload.get("tags", ()), "tags")
-        ),
+        tags=tuple(_string_sequence(payload.get("tags", ()), "tags")),
         enabled=_boolean(payload.get("enabled", True), "enabled"),
     )
 

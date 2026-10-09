@@ -14,10 +14,10 @@ from kordena_fiscal.application.command_commercial import CommandCommercialRecei
 from kordena_fiscal.application.commercial_acquisition import CommercialAcquisitionService
 from kordena_fiscal.gateway.production_activation import ProductionExecutionAuthority
 from kordena_fiscal.persistence.command_commercial import CommandCommercialStore
-from kordena_fiscal.persistence.command_commercial_schema import COMMAND_COMMERCIAL_VERSION
 from kordena_fiscal.persistence.commercial_fulfillment import (
     postgres_canonical_commercial_database,
 )
+from kordena_fiscal.persistence.commercial_period_schema import COMMERCIAL_PERIOD_VERSION
 from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
 from kordena_fiscal.product.cakto import CaktoWebhookReceiver
 from kordena_fiscal.product.checkout import (
@@ -209,7 +209,7 @@ def create_runtime_app(
         try:
             if not runtime.ready()[0] or runtime.database is None or composition is None:
                 return False
-            if not set(range(1, COMMAND_COMMERCIAL_VERSION + 1)).issubset(
+            if not set(range(1, COMMERCIAL_PERIOD_VERSION + 1)).issubset(
                 runtime.database.applied_migrations()
             ):
                 return False
