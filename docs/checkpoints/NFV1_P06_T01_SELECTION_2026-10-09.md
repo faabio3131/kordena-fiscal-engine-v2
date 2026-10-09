@@ -1,5 +1,23 @@
 # CHECKPOINT — NFV1-P06-T01 — Selecionar provider
 
+## Aprovação, integração e fechamento — 2026-10-09
+
+O dono respondeu “Autorizo” em 2026-10-09 à escolha Google Secret Manager, à política proposta como conjunto (incluindo bootstrap restrito ao staging para implementação interna) e à integração da PR #153. P6-T01-B01 RESOLVIDO: POLICY_APPROVED_FOR_INTERNAL_IMPLEMENTATION.
+
+PR #153 MERGED;HEAD `dec468e28fc7596d98f702224bb96e822ad5be1d`;main `0ad89d68ac7bb7975d8af1422ce07796eaf625ed`, árvore `b1e1ae3b692e2c325cdd9a2536ad84227ec5ee7e` idêntica. CI PR #735/run37958319939 e Governance #156/run37958319968 SUCCESS:41/41 etapas,1673 Python/PostgreSQL,14 frontend,28 Playwright PASS/zero FAIL/zero SKIP;um warning TestClient preexistente. Main CI #736/run37961104490/job113923850663 e Governance #157/run37961104464 SUCCESS;41/41 etapas,1673 Python/PostgreSQL,14 frontend,28 Playwright PASS/zero FAIL/zero SKIP;um warning TestClient preexistente. Backup/restore canônico PostgreSQL16 sintético e readiness PASS.
+
+31 testes dirigidos de vault/secrets/configuração PASS, Ruff PASS, Mypy strict PASS196arquivos, planvalidator59itens PASS, secret scan/diffcheck PASS. CI integral cobre containers/non-root/audits/SBOM/backup-restore PostgreSQL16 sintético/readiness. Isso não certifica secretsprovider real.
+
+Estado T01: DONE_CERTIFIED internamente, condicionado à integração/gates deste fechamento documental;24/59 concluídas. Escolha/política aprovada. Critérios IAM,rotação,disponibilidade,auditoria,custo,recovery satisfeitos no estudo aceito;B01 resolvido. B02 conta/região/orçamento/identidade/IAM/canal externo ainda não confirmado. Gate P6 não satisfeito;T02 não iniciada. Fechamento documental exige integração/gates próprios.
+
+Runtime reconfirmado somente leitura após aprovação: mesmos quatro deploymentIDs da tabela histórica abaixo;API/Portal/PostgreSQL1/1,Worker0/1. Nenhuma configuração/credencial/conta/IAM alterada.
+
+Este registro prevalece sobre B01/seleção/merge pendentes no histórico abaixo. Aprovação da política não autoriza conta/gasto/segredo real/deploy/produção. Próxima ação depois de integrar/certificar fechamento: NFV1-P06-T02 — Implementar adapter de infraestrutura, sem operação externa por inferência.
+
+---
+
+## Histórico — estudo e proposta antes da decisão
+
 Data: 2026-10-09. Produto: FM NFCORE V1.
 Repository: faabio3131/kordena-fiscal-engine-v2. Main: main.
 Main HEAD: b87b64567b91b775a6b6a26b06724c33faf82645.
