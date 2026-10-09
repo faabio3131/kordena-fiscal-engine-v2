@@ -28,3 +28,13 @@ P6-T02-B01 PUBLICATION_APPROVAL_REQUIRED: revisão automática rejeitougitpush. 
 ## Decisão superior — publicação autorizada
 
 Em2026-10-09 às15:18 America/Sao_Paulo, após revisar o pedido explícito de divulgação no repositório público faabio3131/kordena-fiscal-engine-v2, abertura de PR Draft e CI completa, dono respondeu “Autorizado”. P6-T02-B01 RESOLVIDO; este registro supera o bloqueio histórico acima. Publicação/PR/CI autorizadas; merge exige autorização própria, operação externa/deploy não autorizados. Main reconfirmada a328, zero PRs abertas, CI738/Governance159 SUCCESS. Staging read-only: mesmos deployments, API/Portal/PostgreSQL1/1, Worker0/1. Auditoria local pip-audit: nenhuma vulnerabilidade conhecida.
+
+## Certificação pós-merge e fechamento — registro superior
+
+PR #155 MERGED; HEAD `5eb98614f4dfdc092871bb6e06c1efef7825e6ba`; main `8ad5a20e8ec954ef91f5e2c8f77a17ad09e8e62b`; árvore idêntica `5531ec7f0d7da61c59f92117b08f56807fae8715`. CI #739/run37973027312/job113964215052 (PR), #740/run37978308311/job113982097370 (main), Governance #160/run37973027313 e #161/run37978308448 SUCCESS. PR/main:41/41 etapas;1741 Python/PostgreSQL,14 frontend,28 Playwright PASS/zero FAIL/zero SKIP;um warning TestClient preexistente. Backup/restore PostgreSQL16 sintético, checksum e readiness PASS.
+
+Autorização específica merge155: “Autorizo”,2026-10-09 às16:09 America/Sao_Paulo. MainPytest1741PASS/0FAIL/0SKIP,1warning em331.94s;Playwright28PASS em19.9s;frontend14PASS/0FAIL/0SKIP. Gates de segurança/migrations/auditorias/containers/SBOM/backup/restore/readiness PASS. Nenhum caso PostgreSQL ficou pulado naCI.
+
+P6-T02-B01 RESOLVIDO;doccampos antigos deCI/mergependentes acima são históricos e superados. T02 DONE_CERTIFIED interno, condicionado à integração/gates deste fechamento documental. Ledger25/59 concluídas após fechamento;primeira pendenteT03,não iniciada. Esta revisão só atualiza plano/ledger/CURRENT/checkpoint;sem mudança de código/teste/migration/workflow. A evidência final de suaPR/CI será registrada naPR.
+
+Read-only apósmerge confirmou mesmos deploymentsAPI/Portal/Worker/Postgres e réplicas1/1,1/1,0/1,1/1. B02 continua bloqueio de operação externa real; composição explícita não instala bootstrapRailway ouregistry dinâmico multitenant. T03/T04/P5 não certificados;gateP6não satisfeito;PRODUCTION_APPROVED=NO;COMMERCIAL_LIVE=NO. Semconta/IAM/gasto/keyreal/cloudI/O/deploy/SQLreal/DNS/emissãofiscal.
