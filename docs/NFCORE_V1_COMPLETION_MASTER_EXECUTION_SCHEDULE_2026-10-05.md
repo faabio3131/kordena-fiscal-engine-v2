@@ -176,21 +176,7 @@ capacidades já implementadas ou homologadas.
 
 ## 5.1 Dependência obrigatória
 
-~~~text
-P0
- ↓
-P1 -> P2 -> P3 -> P4
-              ↓
-              P5
-              ↓
-      P6 + P7 + P8 + P9
-              ↓
-             P10
-              ↓
-             P11
-              ↓
-             P12
-~~~
+Ordem canônica aprovada em 2026-10-09: P0, P1, P2, P3, P4, P6, P5, P7, P8, P9, P10, P11, P12. P6 usa a infraestrutura staging existente para certificar o backend concreto; P5 só retoma depois do gate P6. Cada tarefa segue o ledger, com seus gates e autorizações próprias. A mudança remove o ciclo de dependência P5/P6 e não dispensa pendências de P5.
 
 Fases paralelas somente podem ocorrer quando não mascaram blocker anterior.
 
@@ -517,58 +503,12 @@ Provas por critério no checkpoint T04: T01 registry; T02 recovery/CAS/inbox; T0
 
 ---
 
-# P5 — RECONCILIAÇÃO E CERTIFICAÇÃO DO STAGING
-
-**Status inicial:** NOT_STARTED  
-**Dependências:** P1 + P2 + P3 + P4  
-**Ação externa controlada:** deploy
-
-## Objetivo
-
-Colocar API, Portal e Worker na mesma revisão imutável e certificar o ambiente real.
-
-## Tarefas
-
-### NFV1-P05-T01 — Pré-deploy
-
-Main CI verde, SHA imutável, backup, migrations governadas, rollback baseline, secrets fora de Git e Postgres saudável.
-
-Execução T01 autorizada em 2026-10-09 (“Executar”), após PR #150 MERGED e CI main #728/Governance #149 SUCCESS. Escopo: auditoria somente leitura, plano de migration/rollback e correções mínimas dos scripts de restauração e captura do baseline antes da migration. Sem deploy T02, acesso novo a credenciais reais ou implementação P6.
-
-Blockers T01: B01 backup concluído com recibo verificável não confirmado; B02 versões atuais/saúde SQL e compatibilidade de rollback não confirmadas; B03 comando de restauração e ordem de captura do baseline requerem correção interna; B04 bootstrap real do Worker requer decisão de dependência P5/P6; B05 driver ainda confunde deployment SUCCESS com processo saudável/revisão exata (correção obrigatória antes de T02, com verificação em T03). Todos pertencem a T01 como pré-requisitos; não criam tarefa concorrente. Checkpoint `docs/checkpoints/NFV1_P05_T01_PREDEPLOY_2026-10-09.md`. Gate permanece bloqueado e 23/59 concluídas.
-
-### NFV1-P05-T02 — Deploy reconciliado
-
-Implantar o mesmo SHA em API, Portal e Worker.
-
-### NFV1-P05-T03 — Smoke
-
-Liveness, readiness, login, recovery, portal bootstrap, onboarding, worker e DB.
-
-### NFV1-P05-T04 — E2E real
-
-Login, unidade, configuração, jornada fiscal controlada, jornadas comerciais, RBAC, isolamento e recuperação.
-
-### NFV1-P05-T05 — Rollback rehearsal
-
-Provar rollback sem destruir estado canônico.
-
-## Gate
-
-- [ ] API SHA == Portal SHA == Worker SHA == SHA certificado;
-- [ ] Worker running > 0;
-- [ ] E2E verde;
-- [ ] rollback provado;
-- [ ] evidência persistida.
-
-**Gate de saída:** STAGING_CURRENT_SHA_E2E_CERTIFIED
-
----
-
 # P6 — EXTERNAL SECRET MANAGER ADAPTER
 
-**Status inicial:** NOT_STARTED  
-**Dependência operacional:** P5
+**Status inicial:** NOT_STARTED
+**Dependências:** P1 + P2 + P3 + P4 certificados internamente; infraestrutura staging existente; autorizações específicas de provider/IAM e operação externa. P5 certificado não é predecessor.
+
+Decisão de ordem aprovada pelo dono em 2026-10-09 (“Autorizado”): antecipar os quatro itens P6 antes de retomar P5. Seleção/conta/custo/IAM/credencial/provider real continuam sujeitos aos gates próprios. P6 não está iniciada ou certificada por este ajuste.
 
 ## Objetivo
 
@@ -600,6 +540,54 @@ Testar missing, revoked, expired, permission denied, backend unavailable e rotat
 - [ ] provider real testado.
 
 **Gate de saída:** EXTERNAL_SECRET_BACKEND_CERTIFIED
+
+---
+
+# P5 — RECONCILIAÇÃO E CERTIFICAÇÃO DO STAGING
+
+**Status inicial:** NOT_STARTED
+**Dependências:** P1 + P2 + P3 + P4 + P6
+**Ação externa controlada:** deploy
+
+## Objetivo
+
+Colocar API, Portal e Worker na mesma revisão imutável e certificar o ambiente real.
+
+## Tarefas
+
+### NFV1-P05-T01 — Pré-deploy
+
+Main CI verde, SHA imutável, backup, migrations governadas, rollback baseline, secrets fora de Git e Postgres saudável.
+
+Execução T01 autorizada em 2026-10-09 (“Executar”), após PR #150 MERGED e CI main #728/Governance #149 SUCCESS. Escopo: auditoria somente leitura, plano de migration/rollback e correções mínimas dos scripts de restauração e captura do baseline antes da migration. Sem deploy T02, acesso novo a credenciais reais ou implementação P6.
+
+Blockers T01: B01 backup concluído com recibo verificável não confirmado; B02 versões atuais/saúde SQL e compatibilidade de rollback não confirmadas; B03 correções de restore/checksum/SHA/baseline integradas na PR #151, com gates pós-merge em validação; B04 bootstrap real do Worker depende do adapter P6 e da composição canônica; decisão de ordem aprovada em 2026-10-09; B05 driver ainda confunde deployment SUCCESS com processo saudável/revisão exata (correção obrigatória antes de T02, com verificação em T03). Todos pertencem a T01 como pré-requisitos; não criam tarefa concorrente. Checkpoint `docs/checkpoints/NFV1_P05_T01_PREDEPLOY_2026-10-09.md`. Gate permanece bloqueado e 23/59 concluídas.
+
+### NFV1-P05-T02 — Deploy reconciliado
+
+Implantar o mesmo SHA em API, Portal e Worker.
+
+### NFV1-P05-T03 — Smoke
+
+Liveness, readiness, login, recovery, portal bootstrap, onboarding, worker e DB.
+
+### NFV1-P05-T04 — E2E real
+
+Login, unidade, configuração, jornada fiscal controlada, jornadas comerciais, RBAC, isolamento e recuperação.
+
+### NFV1-P05-T05 — Rollback rehearsal
+
+Provar rollback sem destruir estado canônico.
+
+## Gate
+
+- [ ] API SHA == Portal SHA == Worker SHA == SHA certificado;
+- [ ] Worker running > 0;
+- [ ] E2E verde;
+- [ ] rollback provado;
+- [ ] evidência persistida.
+
+**Gate de saída:** STAGING_CURRENT_SHA_E2E_CERTIFIED
 
 ---
 
@@ -698,7 +686,7 @@ Detectar e corrigir drift provider x canonical state.
 
 **Status inicial:** NOT_STARTED  
 **Dependência:** P5  
-**Pode avançar em paralelo com P6-P8.**
+**Pode avançar em paralelo com P7-P8, sem mascarar blockers; P6 agora é predecessor de P5.**
 
 ## Objetivo
 
@@ -1075,8 +1063,8 @@ Sem checkpoint persistente, a fase não é considerada certificada.
 | P2 | PORTAL_COMMERCIAL_PARITY_CERTIFIED | NOT_STARTED | Web/API/RBAC/E2E |
 | P3 | COMMERCIAL_RUNTIME_COMPOSED_INTERNAL | NOT_STARTED | acquisition/trial/webhook |
 | P4 | CONTINUOUS_WORKER_CERTIFIED_INTERNAL | NOT_STARTED | running worker + retry/DLQ |
-| P5 | STAGING_CURRENT_SHA_E2E_CERTIFIED | NOT_STARTED | same SHA + real E2E |
 | P6 | EXTERNAL_SECRET_BACKEND_CERTIFIED | NOT_STARTED | provider real |
+| P5 | STAGING_CURRENT_SHA_E2E_CERTIFIED | NOT_STARTED | same SHA + real E2E |
 | P7 | REAL_FISCAL_PROVIDER_ADAPTER_READY_FOR_HOMOLOGATION | NOT_STARTED | adapter real |
 | P8 | COMMERCIAL_CHANNEL_READY | NOT_STARTED | transaction real |
 | P9 | OPERATIONAL_READINESS_CERTIFIED | NOT_STARTED | tracing/alerts/backup/runbooks |
@@ -1147,10 +1135,12 @@ P2/P3 — Portal Parity + Commercial Runtime
  -> certificar
 P4 — Continuous Worker
  -> certificar
+P6 — External Secret Manager Adapter (antecipação aprovada em 2026-10-09)
+ -> certificar
 P5 — reconciliar staging no mesmo SHA
 ~~~
 
-Nenhuma fase posterior deve ser usada para escapar de pendências de P0-P5.
+Nenhuma fase posterior deve ser usada para escapar de pendências de P0-P5. A antecipação P6 aprovada resolve a dependência de assinatura real do Worker e preserva todos os blockers de P5.
 
 ---
 
@@ -1215,3 +1205,8 @@ T01 interno certificado condicionado à integração/gates deste closeout;
 próxima NFV1-P03-T02,não iniciada. Gate de fase P3 ainda não concluído.
 Provider/secret/delivery operacionais,deploy e transação real não certificados.
 Registro:docs/checkpoints/NFV1_P03_T01_CLOSEOUT_2026-10-08.md.
+
+
+## Decisão de ordem P5/P6 — 2026-10-09
+
+O dono autorizou integrar PR #151 e antecipar P6 antes de P5, respondendo “Autorizado” à proposta persistida em `docs/checkpoints/NFV1_P05_T01_PREDEPLOY_2026-10-09.md`. Os59 IDs foram preservados e apenas os quatro itens P6 foram movidos antes dos cinco itens P5. Cronograma/ledger mantêm a mesma ordem e o validador permanece inalterado. Dependências P6=P1..P4+infra existente+autorizações próprias;P5 acrescenta gate P6. Nenhuma checkbox foi promovida:23/59 concluídas. Próxima tarefa após integrar/certificar este registro: NFV1-P06-T01 — Selecionar provider. P5-T01 continua bloqueada por backup/SQL/compatibilidade/bootstrap/driver; somente a decisão de ordem foi resolvida. A autorização não inclui seleção de provider, gasto/conta, material real de credencial, deploy, migration externa, DNS, emissão ou produção. Checkpoint existente atualizado, sem plano concorrente.

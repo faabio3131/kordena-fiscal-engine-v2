@@ -13,6 +13,8 @@
 
 ## Itens — ordem obrigatória, um por vez
 
+Antecipação P6 antes de P5 aprovada em 2026-10-09 (“Autorizado”), conforme checkpoint P05-T01. Mesmos59 IDs, índices renumerados,23 concluídos,zero checkbox promovida. Validador inalterado. Próxima tarefa depois de integrar/certificar o registro: NFV1-P06-T01. P05-T01 permanece bloqueada.
+
 ### 1. NFV1-P00-T01 — Reconciliar documentação CURRENT
 
 - [x] **Estado:** concluído
@@ -315,76 +317,11 @@
 - **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
 - **Prova:** PR #149 MERGED; HEAD `732265ed0e7bab21b48e735ea296a2e8a3af7576`; main `d9f4d1d8c7fd60f927b2f3d3ba8f421a72c9bf82`; árvore PR/main idêntica `d7cbdf8baf65013c4f8542ac390c9c581b01ef7b`. CI #725/run37935705861 (PR) e #726/run37938638870 (main), Governance #146/run37935705764 e #147/run37938638865 SUCCESS. PR/main:41/41 etapas;1666 Python/PostgreSQL,14 frontend,28 Playwright PASS,zero FAIL/zero SKIP;29 novos casos incluídos;um warning TestClient preexistente. Container real PID1/non-root/continuidade/HEALTHCHECK/SIGTERM exit0/drain10+pending3/restart13/13,um attempt/audit sem replay terminal PASS. Checkpoint `docs/checkpoints/NFV1_P04_T04_WORKER_CONTAINER_2026-10-09.md`; gate P4 interno e fechamento documental condicionados à integração/gates deste registro.23/59 concluídas;P5 não iniciada. Merge documental exige autorização específica.
 
-### 24. NFV1-P05-T01 — Pré-deploy
-
-- [ ] **Estado:** bloqueado externo
-- **Objetivo:** executar exatamente a tarefa NFV1-P05-T01 do cronograma mestre, sem ampliar escopo.
-- **Depende de:** NFV1-P04-T04 concluído e certificado; mais as dependências formais do cronograma
-- **Entregar:** tudo que o cronograma exige para NFV1-P05-T01, mais os testes/evidências diretamente necessários.
-- **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
-- **Critério de aceite:** critérios específicos de NFV1-P05-T01 no cronograma satisfeitos e nenhum gate transversal violado.
-- **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** T01-B01 backup concluído/recibo, B02 saúde SQL/migrations/compatibilidade, B04 bootstrap Worker e dependência P5/P6 não confirmados. B03 correções internas de restore/baseline nesta PR; B05 driver SUCCESS sem processo/SHA exato continua bloqueio interno antes de deploy. 23/59 concluídas; T02 não iniciada.
-- **Decisões do dono pendentes:** resolver dependência P5/P6 e aprovar canal operacional para prova de backup/SQL sem expor segredos; proposta concreta no checkpoint. Executar autoriza T01; não autoriza deploy/merge/credencial real.
-- **Prova:** parcial: entrada main `5b63449d9ef3bbe7fdf7023e1d9bdfd96235f00c`, PR #150 MERGED, CI #728/run37942395431 e Governance #149/run37942395342 SUCCESS; 41/41 etapas,1666 Python/PostgreSQL,14 frontend,28 Playwright,zero FAIL/SKIP. Auditoria Railway somente leitura 2026-10-09: API/Portal/PostgreSQL1/1,Worker0/1; versões divergentes. Checkpoint `docs/checkpoints/NFV1_P05_T01_PREDEPLOY_2026-10-09.md`. Prova externa insuficiente; checkbox permanece vazio.
-
-### 25. NFV1-P05-T02 — Deploy reconciliado
-
-- [ ] **Estado:** pendente
-- **Objetivo:** executar exatamente a tarefa NFV1-P05-T02 do cronograma mestre, sem ampliar escopo.
-- **Depende de:** NFV1-P05-T01 concluído e certificado; mais as dependências formais do cronograma
-- **Entregar:** tudo que o cronograma exige para NFV1-P05-T02, mais os testes/evidências diretamente necessários.
-- **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
-- **Critério de aceite:** critérios específicos de NFV1-P05-T02 no cronograma satisfeitos e nenhum gate transversal violado.
-- **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
-- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** PENDENTE
-
-### 26. NFV1-P05-T03 — Smoke
-
-- [ ] **Estado:** pendente
-- **Objetivo:** executar exatamente a tarefa NFV1-P05-T03 do cronograma mestre, sem ampliar escopo.
-- **Depende de:** NFV1-P05-T02 concluído e certificado; mais as dependências formais do cronograma
-- **Entregar:** tudo que o cronograma exige para NFV1-P05-T03, mais os testes/evidências diretamente necessários.
-- **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
-- **Critério de aceite:** critérios específicos de NFV1-P05-T03 no cronograma satisfeitos e nenhum gate transversal violado.
-- **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
-- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** PENDENTE
-
-### 27. NFV1-P05-T04 — E2E real
-
-- [ ] **Estado:** pendente
-- **Objetivo:** executar exatamente a tarefa NFV1-P05-T04 do cronograma mestre, sem ampliar escopo.
-- **Depende de:** NFV1-P05-T03 concluído e certificado; mais as dependências formais do cronograma
-- **Entregar:** tudo que o cronograma exige para NFV1-P05-T04, mais os testes/evidências diretamente necessários.
-- **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
-- **Critério de aceite:** critérios específicos de NFV1-P05-T04 no cronograma satisfeitos e nenhum gate transversal violado.
-- **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
-- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** PENDENTE
-
-### 28. NFV1-P05-T05 — Rollback rehearsal
-
-- [ ] **Estado:** pendente
-- **Objetivo:** executar exatamente a tarefa NFV1-P05-T05 do cronograma mestre, sem ampliar escopo.
-- **Depende de:** NFV1-P05-T04 concluído e certificado; mais as dependências formais do cronograma
-- **Entregar:** tudo que o cronograma exige para NFV1-P05-T05, mais os testes/evidências diretamente necessários.
-- **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
-- **Critério de aceite:** critérios específicos de NFV1-P05-T05 no cronograma satisfeitos e nenhum gate transversal violado.
-- **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
-- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** PENDENTE
-
-### 29. NFV1-P06-T01 — Selecionar provider
+### 24. NFV1-P06-T01 — Selecionar provider
 
 - [ ] **Estado:** pendente
 - **Objetivo:** executar exatamente a tarefa NFV1-P06-T01 do cronograma mestre, sem ampliar escopo.
-- **Depende de:** NFV1-P05-T05 concluído e certificado; mais as dependências formais do cronograma
+- **Depende de:** NFV1-P04-T04 concluído e certificado; infraestrutura staging existente e gates/autorização P6; antecipação aprovada pelo dono em 2026-10-09
 - **Entregar:** tudo que o cronograma exige para NFV1-P06-T01, mais os testes/evidências diretamente necessários.
 - **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
 - **Critério de aceite:** critérios específicos de NFV1-P06-T01 no cronograma satisfeitos e nenhum gate transversal violado.
@@ -393,7 +330,7 @@
 - **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
 - **Prova:** PENDENTE
 
-### 30. NFV1-P06-T02 — Implementar adapter de infraestrutura
+### 25. NFV1-P06-T02 — Implementar adapter de infraestrutura
 
 - [ ] **Estado:** pendente
 - **Objetivo:** executar exatamente a tarefa NFV1-P06-T02 do cronograma mestre, sem ampliar escopo.
@@ -406,7 +343,7 @@
 - **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
 - **Prova:** PENDENTE
 
-### 31. NFV1-P06-T03 — Certificar escopo
+### 26. NFV1-P06-T03 — Certificar escopo
 
 - [ ] **Estado:** pendente
 - **Objetivo:** executar exatamente a tarefa NFV1-P06-T03 do cronograma mestre, sem ampliar escopo.
@@ -419,7 +356,7 @@
 - **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
 - **Prova:** PENDENTE
 
-### 32. NFV1-P06-T04 — Rotação e falha
+### 27. NFV1-P06-T04 — Rotação e falha
 
 - [ ] **Estado:** pendente
 - **Objetivo:** executar exatamente a tarefa NFV1-P06-T04 do cronograma mestre, sem ampliar escopo.
@@ -432,11 +369,76 @@
 - **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
 - **Prova:** PENDENTE
 
+### 28. NFV1-P05-T01 — Pré-deploy
+
+- [ ] **Estado:** bloqueado externo
+- **Objetivo:** executar exatamente a tarefa NFV1-P05-T01 do cronograma mestre, sem ampliar escopo.
+- **Depende de:** NFV1-P06-T04 concluído e certificado, além de P1..P4; retomar após gate P6, conforme decisão aprovada em 2026-10-09
+- **Entregar:** tudo que o cronograma exige para NFV1-P05-T01, mais os testes/evidências diretamente necessários.
+- **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
+- **Critério de aceite:** critérios específicos de NFV1-P05-T01 no cronograma satisfeitos e nenhum gate transversal violado.
+- **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
+- **Riscos / não confirmado:** T01-B01 backup concluído/recibo, B02 saúde SQL/migrations/compatibilidade, B04 assinatura/bootstrap reais ainda não confirmados, ordem P6 antes de P5 aprovada. B03 correções restore/checksum/SHA/baseline integradas na PR #151; B05 driver SUCCESS sem processo/SHA exato continua bloqueio interno antes de deploy. 23/59 concluídas; T02 não iniciada.
+- **Decisões do dono pendentes:** ordem P6 antes de P5 e merge #151 aprovados em 2026-10-09 (“Autorizado”); resta aprovar canal operacional para prova backup/SQL, provider/IAM e composição de assinatura real. Deploy/credencial/produção não autorizados.
+- **Prova:** parcial: PR #151 MERGED, HEAD `8bfa783180c99a8e0532822142ba128375f399bb`, main `250afa737fa970411d13fe1f48735b6147f9e13d`, árvore idêntica `7ff6b29b182e499ca5d1710d84ad43e93c6a4fb8`;CI #730/run37947093378 e Governance #151/run37947093342 SUCCESS,41/41 etapas,1673 Python/PostgreSQL,14 frontend,28 Playwright,zero FAIL/SKIP,backup/restore canônico em PostgreSQL16 sintético PASS. Pós-merge CI #731/run37950345107 e Governance #152/run37950345322 em certificação na criação deste registro. Ordem P6/P5 aprovada;23/59 concluídas. Histórico de entrada: entrada main `5b63449d9ef3bbe7fdf7023e1d9bdfd96235f00c`, PR #150 MERGED, CI #728/run37942395431 e Governance #149/run37942395342 SUCCESS; 41/41 etapas,1666 Python/PostgreSQL,14 frontend,28 Playwright,zero FAIL/SKIP. Auditoria Railway somente leitura 2026-10-09: API/Portal/PostgreSQL1/1,Worker0/1; versões divergentes. Checkpoint `docs/checkpoints/NFV1_P05_T01_PREDEPLOY_2026-10-09.md`. Prova externa insuficiente; checkbox permanece vazio.
+
+### 29. NFV1-P05-T02 — Deploy reconciliado
+
+- [ ] **Estado:** pendente
+- **Objetivo:** executar exatamente a tarefa NFV1-P05-T02 do cronograma mestre, sem ampliar escopo.
+- **Depende de:** NFV1-P05-T01 concluído e certificado; mais as dependências formais do cronograma
+- **Entregar:** tudo que o cronograma exige para NFV1-P05-T02, mais os testes/evidências diretamente necessários.
+- **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
+- **Critério de aceite:** critérios específicos de NFV1-P05-T02 no cronograma satisfeitos e nenhum gate transversal violado.
+- **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
+- **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
+- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
+- **Prova:** PENDENTE
+
+### 30. NFV1-P05-T03 — Smoke
+
+- [ ] **Estado:** pendente
+- **Objetivo:** executar exatamente a tarefa NFV1-P05-T03 do cronograma mestre, sem ampliar escopo.
+- **Depende de:** NFV1-P05-T02 concluído e certificado; mais as dependências formais do cronograma
+- **Entregar:** tudo que o cronograma exige para NFV1-P05-T03, mais os testes/evidências diretamente necessários.
+- **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
+- **Critério de aceite:** critérios específicos de NFV1-P05-T03 no cronograma satisfeitos e nenhum gate transversal violado.
+- **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
+- **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
+- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
+- **Prova:** PENDENTE
+
+### 31. NFV1-P05-T04 — E2E real
+
+- [ ] **Estado:** pendente
+- **Objetivo:** executar exatamente a tarefa NFV1-P05-T04 do cronograma mestre, sem ampliar escopo.
+- **Depende de:** NFV1-P05-T03 concluído e certificado; mais as dependências formais do cronograma
+- **Entregar:** tudo que o cronograma exige para NFV1-P05-T04, mais os testes/evidências diretamente necessários.
+- **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
+- **Critério de aceite:** critérios específicos de NFV1-P05-T04 no cronograma satisfeitos e nenhum gate transversal violado.
+- **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
+- **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
+- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
+- **Prova:** PENDENTE
+
+### 32. NFV1-P05-T05 — Rollback rehearsal
+
+- [ ] **Estado:** pendente
+- **Objetivo:** executar exatamente a tarefa NFV1-P05-T05 do cronograma mestre, sem ampliar escopo.
+- **Depende de:** NFV1-P05-T04 concluído e certificado; mais as dependências formais do cronograma
+- **Entregar:** tudo que o cronograma exige para NFV1-P05-T05, mais os testes/evidências diretamente necessários.
+- **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
+- **Critério de aceite:** critérios específicos de NFV1-P05-T05 no cronograma satisfeitos e nenhum gate transversal violado.
+- **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
+- **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
+- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
+- **Prova:** PENDENTE
+
 ### 33. NFV1-P07-T01 — Definir launch matrix
 
 - [ ] **Estado:** pendente
 - **Objetivo:** executar exatamente a tarefa NFV1-P07-T01 do cronograma mestre, sem ampliar escopo.
-- **Depende de:** NFV1-P06-T04 concluído e certificado; mais as dependências formais do cronograma
+- **Depende de:** NFV1-P05-T05 concluído e certificado; P1/P6 e demais dependências formais do cronograma
 - **Entregar:** tudo que o cronograma exige para NFV1-P07-T01, mais os testes/evidências diretamente necessários.
 - **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
 - **Critério de aceite:** critérios específicos de NFV1-P07-T01 no cronograma satisfeitos e nenhum gate transversal violado.

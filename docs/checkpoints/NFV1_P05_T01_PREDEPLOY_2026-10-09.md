@@ -2,6 +2,14 @@
 
 Estado: BLOQUEADO EXTERNO, com pré-requisitos internos remanescentes. 23/59 tarefas concluídas. T02 não iniciada. O dono autorizou iniciar T01 (“Executar”); não houve deploy, alteração Railway, migration externa, criação/restauração de backup real ou acesso a material de credencial.
 
+## Decisão posterior — 2026-10-09 — aprovada e merge #151 realizado
+
+O dono respondeu “Autorizado” ao pedido explícito de integrar PR #151 e antecipar P6 antes de P5. PR #151 MERGED; HEAD `8bfa783180c99a8e0532822142ba128375f399bb`, main `250afa737fa970411d13fe1f48735b6147f9e13d`, árvore PR/main idêntica `7ff6b29b182e499ca5d1710d84ad43e93c6a4fb8`. CI PR #730/run37947093378 e Governance #151/run37947093342 SUCCESS:41/41 etapas,1673 Python/PostgreSQL,14 frontend,28 Playwright,zero FAIL/SKIP;um warning TestClient existente. Rehearsal PostgreSQL16 sintético pelo script canônico: backup,checksum -c,restore,sentinel,migrations e readiness PASS. Pós-merge CI #731/run37950345107 e Governance #152/run37950345322 ainda em validação na criação deste registro.
+
+A ordem aprovada está aplicada neste diff documental: P6-T01..T04 antes de P5-T01..T05, mesmos59 IDs e todos os gates;23/59 concluídas. P6 depende de P1..P4 certificados e infraestrutura staging existente com autorizações próprias;P5 depende também de gate P6. Nenhum teste/validador foi alterado para permitir a nova ordem. P6-T01 só inicia após integração/certificação deste registro. B03 correções integradas;B04 decisão de ordem resolvida,adapter/assinatura/bootstrap reais pendentes;B01/B02/B05 continuam blockers. Reconfirmação read-only: deployments históricos inalterados,API/Portal/PostgreSQL1/1,Worker0/1. Nenhum deploy/migration externa/secret real.
+
+O texto abaixo preserva o histórico da auditoria e da proposta anterior à aprovação. As frases “não aplicada”/“necessária decisão” abaixo são históricas e superadas pela decisão acima. Autorização de ordem/merge não seleciona provider nem autoriza conta/custo/IAM/credencial ou operação externa. Continuidade atual: integrar/certificar o registro de ordem aprovado e então NFV1-P06-T01 — Selecionar provider;P5 permanece não concluída.
+
 ## Revisão de entrada certificada
 
 PR #150 MERGED, main `5b63449d9ef3bbe7fdf7023e1d9bdfd96235f00c`, árvore `ac9adaf6d763e00c1fd0c6aa030b3e49a6eafa68`, idêntica ao HEAD documental `8de87802792fcc97943026dfdc3106f256bfd164`. CI #728/run37942395431/job113859830414 e Governance #149/run37942395342 SUCCESS. 41/41 etapas;1666 Python/PostgreSQL,14 frontend,28 Playwright PASS,zero FAIL/zero SKIP. Gate P4 interno certificado; nenhuma PR aberta na entrada.
