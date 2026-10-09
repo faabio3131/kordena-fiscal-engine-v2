@@ -31,6 +31,14 @@ def test_restore_checks_integrity_and_passes_connection_as_dbname(
         "raise SystemExit(int(os.environ['RESTORE_EXIT']))\n"
     )
     binary.chmod(0o755)
+    # Alpine's BusyBox accepts -c but rejects GNU's --check spelling.
+    checksum_binary = tmp_path / "sha256sum"
+    checksum_binary.write_text(
+        "#!/bin/sh\n"
+        "[ \"$1\" = -c ] || exit 64\n"
+        f"exec '{shutil.which('sha256sum')}' \"$@\"\n"
+    )
+    checksum_binary.chmod(0o755)
     args_path = tmp_path / "args.json"
     dsn = "postgresql://synthetic@localhost/synthetic"
     env = os.environ.copy()

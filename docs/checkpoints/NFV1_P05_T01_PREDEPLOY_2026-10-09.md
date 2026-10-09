@@ -42,13 +42,13 @@ T01 permanece não concluída. CI sintética não fecha B01/B02/B04/B05. T02 nã
 
 ## Correções internas mínimas
 
-1. pg_restore recebe a conexão por --dbname, mantendo checksum e --exit-on-error. Antes recebia dois argumentos posicionais (URI e dump), que o cliente não aceita.
+1. pg_restore recebe a conexão por --dbname, mantendo checksum e --exit-on-error. Checksum usa -c, compatível GNU/BusyBox do Alpine. Antes recebia dois argumentos posicionais (URI e dump), que o cliente não aceita.
 2. Validação de revisão usa comprimento40 e caracteres hex; o padrão anterior tinha39 posições e rejeitava SHA40 válido.
 3. Novo prepare-rollback captura os três targets antes de backup/migration. Deploy exige arquivo preexistente e três entradas; não recaptura targets durante deploy parcial. Capturar IDs ainda não certifica sua saúde ou compatibilidade.
 4. CI usa os scripts canônicos postgres_backup.sh/postgres_restore.sh no rehearsal PostgreSQL16 existente, mantendo sentinel, migration ledger e readiness após restore. Dados apenas sintéticos.
 5. Testes de subprocesso: checksum corrompido não chama restore; falha de restore não anuncia sucesso; argumentos preservam caminho com espaços; falha em baseline/backup/migration impede fases seguintes; deploy sem baseline não inicia uploads.
 
-Verificação local: 20 testes dirigidos PASS/zero SKIP, Ruff PASS, Mypy strict PASS(196 arquivos), migration policy PASS(1..16/Cakto2). CI integral da PR ainda pendente neste commit. Não há PostgreSQL/CLI Railway locais para certificar integração externa.
+Verificação local: 20 testes dirigidos PASS/zero SKIP, Ruff PASS, Mypy strict PASS(196 arquivos), migration policy PASS(1..16/Cakto2). CI inicial #729/run37945593582 (HEAD4adfd6ff6ea3bb2a615ce8028558868fe2eaf78d) passou testes/frontend/Playwright/containers, mas falhou no restore: BusyBox rejeita --check. Causa corrigida por -c; regressão exige opção portátil e checksum real. CI final da revisão corrigida ainda pendente neste commit. Não há PostgreSQL/CLI Railway locais para certificar integração externa.
 
 ## Plano concreto de migration e recuperação, ainda não autorizado
 

@@ -10,6 +10,6 @@ if [ ! -f "$BACKUP_PATH" ] || [ ! -f "$CHECKSUM_PATH" ]; then
   exit 2
 fi
 
-sha256sum --check "$CHECKSUM_PATH"
+sha256sum -c "$CHECKSUM_PATH"
 pg_restore --dbname="$DATABASE_URL" --no-owner --no-acl --exit-on-error "$BACKUP_PATH"
 printf 'restore_completed=%s\n' "$BACKUP_PATH"
