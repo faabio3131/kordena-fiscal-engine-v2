@@ -8,6 +8,21 @@
 
 This file is the persistent CURRENT checkpoint for FM NFCORE V1 Commercial Launch. GitHub remains the first technical source of truth and must be revalidated on every resume.
 
+## CURRENT superior — 2026-10-09 — PR151 integrada, ordem P6 antes de P5 aprovada
+
+- PR #151 MERGED; main `250afa737fa970411d13fe1f48735b6147f9e13d`, árvore igual ao HEAD8bfa783: `7ff6b29b182e499ca5d1710d84ad43e93c6a4fb8`.
+- CI PR #730/run37947093378 e Governance #151/run37947093342 SUCCESS:41/41 etapas,1673 Python/PostgreSQL,14 frontend,28 Playwright,zero FAIL/SKIP;backup/restore canônico em PostgreSQL16 sintético PASS.
+- Main CI #731/run37950345107 e Governance #152/run37950345322 em validação na criação deste registro;integração documental da ordem também requer gates próprios.
+- “Autorizado” aprova merge151 e antecipação P6. Cronograma/ledger movem os quatro itens P6 antes dos cinco P5;59 IDs preservados,validador inalterado,23/59 concluídos.
+- Próxima tarefa após integração/gates do registro: NFV1-P06-T01 — Selecionar provider. P6 ainda não implementada;seleção de conta/provider/IAM/gasto/credencial e operação real exigem decisão específica.
+- P05-T01 segue bloqueada: backup/SQL/compatibilidade/bootstrap/driver. Decisão de ordem resolvida;T02 não iniciada.
+- Staging read-only inalterado:API/Portal/PostgreSQL1/1,Worker0/1. Sem deploy/migration externa/secret real. PRODUCTION_APPROVED=NO;COMMERCIAL_LIVE=NO.
+- Checkpoint `checkpoints/NFV1_P05_T01_PREDEPLOY_2026-10-09.md` atualizado;histórico preservado.
+
+---
+
+## Snapshot histórico — auditoria P5-T01 antes da aprovação
+
 ## CURRENT superior — 2026-10-09 — P05-T01 auditado e bloqueado
 
 - PR #150 MERGED; entrada main `5b63449d9ef3bbe7fdf7023e1d9bdfd96235f00c`, CI #728/run37942395431 e Governance #149/run37942395342 SUCCESS;41/41 etapas,1666 Python/PostgreSQL,14 frontend,28 Playwright PASS/zero FAIL/zero SKIP.
