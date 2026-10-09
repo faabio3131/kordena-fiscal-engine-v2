@@ -456,23 +456,7 @@ def test_migration_11_upgrades_existing_version_10_state() -> None:
     database = PostgresFiscalDatabase(dsn)
     try:
         assert database.initialize() == (11,)
-        assert database.applied_migrations() == (
-            1,
-            2,
-            3,
-            4,
-            5,
-            6,
-            7,
-            8,
-            9,
-            10,
-            11,
-            12,
-            13,
-            14,
-            15,
-        )
+        assert database.applied_migrations() == tuple(range(1, 17))
         with database.connection() as connection:
             assert connection.execute(
                 "SELECT COUNT(*) FROM fm_commercial_acquisitions"
@@ -501,9 +485,7 @@ def test_migration_12_upgrades_existing_version_11_state() -> None:
     database = PostgresFiscalDatabase(dsn)
     try:
         assert database.initialize() == (12,)
-        assert database.applied_migrations() == (
-            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
-        )
+        assert database.applied_migrations() == tuple(range(1, 17))
         with database.connection() as connection:
             columns = connection.execute(
                 """

@@ -64,3 +64,9 @@ Revisão: Portal Uso projeta o período efetivo, preservando contadores após pa
 antecipado. Upgrade também recupera receipt NULL legado somente após validar o
 fingerprint autenticado do inbox; replay antigo não repete delivery de ativação mais
 nova. Snapshot legado preserva plano/quotas já duráveis.23 testes canônicos/Portal PASS.
+
+CI #704/run37871230173 no HEAD04dfde1 falhou:1557 PASS/13 FAIL/zero SKIP.
+Causas:11 novos casos usavam nome legal diferente do snapshot da aquisição;
+a autoridade existente rejeitou a troca. Fixture agora usa o nome canônico.
+Dois asserts legados multiline ainda listavam migrations até15; ampliados até16.
+Guards/testes preservados. Nova CI completa obrigatória no HEAD corrigido.
