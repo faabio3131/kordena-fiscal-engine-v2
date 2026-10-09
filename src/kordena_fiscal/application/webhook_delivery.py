@@ -218,6 +218,7 @@ class SignedWebhookOutboxHandler:
             return FiscalDispatchResult(
                 FiscalDispatchStatus.FATAL_FAILURE, error="WEBHOOK_POLICY_DENIED"
             )
+        self._security.assert_dispatch_scope(entry.scope)
         signature = self._security.sign(entry.payload, now=now)
         request = WebhookDeliveryRequest(
             destination=destination,

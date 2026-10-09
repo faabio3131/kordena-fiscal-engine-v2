@@ -1,3 +1,15 @@
+# CURRENT superior — NFV1-P06-T02 em execução — 2026-10-09
+
+Main de entrada `a32891ca74616e4a435c9c11055e6b4f8ba3bb64`;PR154 MERGED;CI738/run37966054249 e Governance159/run37966054229 SUCCESS;41/41 etapas,1673 Python/PostgreSQL,14frontend,28Playwright,zeroFAIL/SKIP. FechamentoT01 certificado,24/59 concluídas. Dono autorizouT02 (“Executar”);políticaGSM já aprovada integralmente para implementação interna.
+
+PublicaçãoP6-T02-B01 RESOLVIDA: dono autorizou explicitamente divulgar o código no repo público, abrir PR Draft e executar CI (“Autorizado”), em2026-10-09 às15:18 America/Sao_Paulo. PRnãoaberta/CIremota pendente. Resultado local1455PASS/0FAIL/286SKIP porpré-requisitosausentes,1warning;Ruff/Mypy201/planvalidator/secrets/diffPASS. Não certificaPostgreSQL/providerreal.
+
+AdapterGSM interno implementado localmente, ainda não integrado:SDKoficial com identidade explícita e endpointfixo,timeout/retrycontrolado,CRC32C/envelope estrito,versão pinada;bindings duráveis metadata-only na mesmaUOW/SQLite/PostgreSQL,migration17 aditiva;projeçõesref:/sec_preservadas. Composição de assinaturaWorker explícita por escopo,sem bootstrapRailway inferido. PR/HEAD/CI desta entrega serão registrados na própriaPR. T02 não concluída;checkpoint `checkpoints/NFV1_P06_T02_GSM_ADAPTER_2026-10-09.md`.
+
+Providercloud real não testado;semIAM/credencial/conta/custo/deploy. B02externo preservado. Staging históricoAPI/Portal/Postgres1/1,Worker0/1. FaseP6/P5/produção não certificadas. Campos históricos abaixo são superados por este registro e evidênciafinalPR154.
+
+---
+
 # FM NFCORE V1 — Commercial Launch CURRENT
 
 **Canonical status date:** 2026-10-05  

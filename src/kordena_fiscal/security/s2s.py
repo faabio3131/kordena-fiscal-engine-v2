@@ -596,6 +596,10 @@ class WebhookSecurity:
         self._max_age_seconds = max_age_seconds
         self._max_future_skew_seconds = max_future_skew_seconds
 
+    def assert_dispatch_scope(self, scope: ExecutionScope) -> None:
+        """Optional scope guard for explicit external signing dependencies."""
+        del scope
+
     @staticmethod
     def _material(timestamp: int, body: bytes) -> bytes:
         if not isinstance(body, bytes):

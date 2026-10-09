@@ -7,6 +7,8 @@ from kordena_fiscal.persistence import SqliteFiscalDatabase
 
 def _remove_v5(connection: sqlite3.Connection) -> None:
     # Reconstruct the earlier schema, not just its migration ledger.
+    connection.execute("DROP TABLE fm_secret_bindings")
+    connection.execute("DELETE FROM fm_schema_migrations WHERE version = 17")
     connection.execute("DROP TABLE fm_configuration_commands")
     connection.execute("DROP TABLE fm_configuration_revisions")
     connection.execute("DELETE FROM fm_schema_migrations WHERE version = 14")
@@ -70,7 +72,7 @@ def test_v2_07_database_upgrades_through_all_later_migrations_without_reapplying
     tmp_path,
 ) -> None:
     database = SqliteFiscalDatabase(tmp_path / "fm-fiscal-upgrade.sqlite3")
-    assert database.initialize() == (1, 2, 3, 4, 5, 13, 14)
+    assert database.initialize() == (1, 2, 3, 4, 5, 13, 14, 17)
 
     # Reconstruct the exact migration-ledger state of a certified V2-07 database:
     # migration 1 remains; V2-08 and V2-11 migrations are absent.
@@ -84,8 +86,8 @@ def test_v2_07_database_upgrades_through_all_later_migrations_without_reapplying
         connection.commit()
 
     assert database.applied_migrations() == (1,)
-    assert database.initialize() == (2, 3, 4, 5, 13, 14)
-    assert database.applied_migrations() == (1, 2, 3, 4, 5, 13, 14)
+    assert database.initialize() == (2, 3, 4, 5, 13, 14, 17)
+    assert database.applied_migrations() == (1, 2, 3, 4, 5, 13, 14, 17)
 
     with sqlite3.connect(database.path) as connection:
         tables = {
@@ -103,7 +105,7 @@ def test_v2_07_database_upgrades_through_all_later_migrations_without_reapplying
 
 def test_v2_08_inbox_checkpoint_upgrades_delivery_audit_and_control_plane(tmp_path) -> None:
     database = SqliteFiscalDatabase(tmp_path / "fm-fiscal-v2-08-upgrade.sqlite3")
-    assert database.initialize() == (1, 2, 3, 4, 5, 13, 14)
+    assert database.initialize() == (1, 2, 3, 4, 5, 13, 14, 17)
 
     with sqlite3.connect(database.path) as connection:
         _remove_v5(connection)
@@ -112,8 +114,8 @@ def test_v2_08_inbox_checkpoint_upgrades_delivery_audit_and_control_plane(tmp_pa
         connection.commit()
 
     assert database.applied_migrations() == (1, 2)
-    assert database.initialize() == (3, 4, 5, 13, 14)
-    assert database.applied_migrations() == (1, 2, 3, 4, 5, 13, 14)
+    assert database.initialize() == (3, 4, 5, 13, 14, 17)
+    assert database.applied_migrations() == (1, 2, 3, 4, 5, 13, 14, 17)
 
     with sqlite3.connect(database.path) as connection:
         tables = {
@@ -131,7 +133,7 @@ def test_v2_08_inbox_checkpoint_upgrades_delivery_audit_and_control_plane(tmp_pa
 
 def test_v2_08_final_checkpoint_applies_only_control_plane_v4(tmp_path) -> None:
     database = SqliteFiscalDatabase(tmp_path / "fm-fiscal-v2-08-final-upgrade.sqlite3")
-    assert database.initialize() == (1, 2, 3, 4, 5, 13, 14)
+    assert database.initialize() == (1, 2, 3, 4, 5, 13, 14, 17)
 
     with sqlite3.connect(database.path) as connection:
         _remove_v5(connection)
@@ -139,5 +141,5 @@ def test_v2_08_final_checkpoint_applies_only_control_plane_v4(tmp_path) -> None:
         connection.commit()
 
     assert database.applied_migrations() == (1, 2, 3)
-    assert database.initialize() == (4, 5, 13, 14)
-    assert database.applied_migrations() == (1, 2, 3, 4, 5, 13, 14)
+    assert database.initialize() == (4, 5, 13, 14, 17)
+    assert database.applied_migrations() == (1, 2, 3, 4, 5, 13, 14, 17)

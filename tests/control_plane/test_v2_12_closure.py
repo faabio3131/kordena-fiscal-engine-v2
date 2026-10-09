@@ -148,7 +148,7 @@ def _tenant_admin() -> AdminPrincipal:
 
 def _database(tmp_path) -> SqliteFiscalDatabase:
     database = SqliteFiscalDatabase(tmp_path / "v2-12-closure.sqlite3")
-    assert database.initialize() == (1, 2, 3, 4, 5, 13, 14)
+    assert database.initialize() == (1, 2, 3, 4, 5, 13, 14, 17)
     return database
 
 
@@ -726,4 +726,6 @@ def test_v2_12_structural_secret_dependency_architecture_and_product_neutrality(
     assert set(project["dependencies"]) == {
         "cryptography>=50,<51",
         "lxml>=5.3,<7",
+        "google-cloud-secret-manager>=2.31,<3",
+        "google-crc32c>=1.8,<2",
     }

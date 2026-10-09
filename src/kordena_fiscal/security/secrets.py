@@ -133,6 +133,11 @@ class SecretBackend(Protocol):
     def resolve(self, reference: SecretReference) -> StoredSecret: ...
 
 
+@runtime_checkable
+class ScopedSecretBackend(Protocol):
+    def resolve_for_scope(self, reference: SecretReference, scope: SecretScope) -> StoredSecret: ...
+
+
 @dataclass(frozen=True, slots=True)
 class SecretAuditEvent:
     reference_id: str
@@ -254,7 +259,9 @@ class SecretResolver:
         now = self._clock()
         outcome = "denied"
         try:
-            stored = self._backend.resolve(reference)
+            stored = (self._backend.resolve_for_scope(reference, scope)
+                      if isinstance(self._backend, ScopedSecretBackend)
+                      else self._backend.resolve(reference))
             if stored.scope != scope:
                 raise SecretResolutionError("secret access is not authorized for this scope")
             if stored.state is SecretState.REVOKED:

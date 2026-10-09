@@ -66,6 +66,11 @@ from .customer_configuration_schema import (
 from .fiscal_scope_schema import FISCAL_SCOPE_NAME, FISCAL_SCOPE_SCHEMA, FISCAL_SCOPE_VERSION
 from .ports import PersistenceStateError
 from .pricing_catalog import PostgresPricingCatalogRepository
+from .secret_binding_schema import (
+    SECRET_BINDING_NAME,
+    SECRET_BINDING_SCHEMA,
+    SECRET_BINDING_VERSION,
+)
 from .sqlite import _MIGRATIONS
 from .sqlite_commercial import SqliteCommercialConfigurationStore
 from .sqlite_control_plane import SqliteControlPlaneStore
@@ -79,6 +84,7 @@ from .sqlite_idempotency import SqliteIdempotencyStore
 from .sqlite_inbox import SqliteFiscalInboxStore
 from .sqlite_outbox_archive import SqliteFiscalArchiveStore, SqliteFiscalOutboxStore
 from .sqlite_reconciliation import SqliteReconciliationRepository
+from .sqlite_secret_binding import SqliteSecretBindingStore
 
 _T = TypeVar("_T")
 
@@ -204,6 +210,7 @@ class PostgresFiscalUnitOfWork:
         self._reconciliations: SqliteReconciliationRepository | None = None
         self._control_plane: SqliteControlPlaneStore | None = None
         self._commercial: SqliteCommercialConfigurationStore | None = None
+        self._secret_bindings: SqliteSecretBindingStore | None = None
 
     def __enter__(self) -> PostgresFiscalUnitOfWork:
         if self._raw_connection is not None:
@@ -227,6 +234,7 @@ class PostgresFiscalUnitOfWork:
         self._reconciliations = SqliteReconciliationRepository(sqlite_compat)
         self._control_plane = SqliteControlPlaneStore(sqlite_compat)
         self._commercial = SqliteCommercialConfigurationStore(sqlite_compat)
+        self._secret_bindings = SqliteSecretBindingStore(sqlite_compat)
         return self
 
     def __exit__(
@@ -300,6 +308,10 @@ class PostgresFiscalUnitOfWork:
     @property
     def commercial(self) -> SqliteCommercialConfigurationStore:
         return self._require(self._commercial, "commercial")
+
+    @property
+    def secret_bindings(self) -> SqliteSecretBindingStore:
+        return self._require(self._secret_bindings, "secret_bindings")
 
     def commit(self) -> None:
         if self._raw_connection is None:
@@ -791,6 +803,16 @@ class PostgresFiscalDatabase:
                         ),
                     )
                     new_versions.append(COMMERCIAL_PERIOD_VERSION)
+                if SECRET_BINDING_VERSION not in applied:
+                    for statement in SECRET_BINDING_SCHEMA:
+                        raw.execute(statement)
+                    raw.execute(
+                        "INSERT INTO fm_schema_migrations (version, name, applied_at) "
+                        "VALUES (%s, %s, %s)",
+                        (SECRET_BINDING_VERSION, SECRET_BINDING_NAME,
+                         datetime.now().astimezone().isoformat()),
+                    )
+                    new_versions.append(SECRET_BINDING_VERSION)
                 raw.commit()
                 return tuple(new_versions)
             except Exception:
