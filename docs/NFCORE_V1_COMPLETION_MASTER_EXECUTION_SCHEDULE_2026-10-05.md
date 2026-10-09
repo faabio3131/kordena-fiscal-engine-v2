@@ -533,6 +533,10 @@ Colocar API, Portal e Worker na mesma revisão imutável e certificar o ambiente
 
 Main CI verde, SHA imutável, backup, migrations governadas, rollback baseline, secrets fora de Git e Postgres saudável.
 
+Execução T01 autorizada em 2026-10-09 (“Executar”), após PR #150 MERGED e CI main #728/Governance #149 SUCCESS. Escopo: auditoria somente leitura, plano de migration/rollback e correções mínimas dos scripts de restauração e captura do baseline antes da migration. Sem deploy T02, acesso novo a credenciais reais ou implementação P6.
+
+Blockers T01: B01 backup concluído com recibo verificável não confirmado; B02 versões atuais/saúde SQL e compatibilidade de rollback não confirmadas; B03 comando de restauração e ordem de captura do baseline requerem correção interna; B04 bootstrap real do Worker requer decisão de dependência P5/P6; B05 driver ainda confunde deployment SUCCESS com processo saudável/revisão exata (correção obrigatória antes de T02, com verificação em T03). Todos pertencem a T01 como pré-requisitos; não criam tarefa concorrente. Checkpoint `docs/checkpoints/NFV1_P05_T01_PREDEPLOY_2026-10-09.md`. Gate permanece bloqueado e 23/59 concluídas.
+
 ### NFV1-P05-T02 — Deploy reconciliado
 
 Implantar o mesmo SHA em API, Portal e Worker.

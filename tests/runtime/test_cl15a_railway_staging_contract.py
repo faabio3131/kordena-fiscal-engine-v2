@@ -175,10 +175,14 @@ def test_railway_driver_prepares_immutable_three_service_deploy(
     log = _fake_railway(tmp_path, env)
     revision = _git_head()
 
+    prepared = _run("prepare-rollback", revision, env=env)
+    baseline_before = Path(env["NFCORE_RAILWAY_ROLLBACK_BASELINE_FILE"]).read_text()
     result = _run("deploy", revision, env=env)
 
+    assert prepared.returncode == 0
+    assert "ROLLBACK_BASELINE_CAPTURED" in prepared.stdout
     assert result.returncode == 0
-    assert "ROLLBACK_BASELINE_CAPTURED" in result.stdout
+    assert Path(env["NFCORE_RAILWAY_ROLLBACK_BASELINE_FILE"]).read_text() == baseline_before
     assert f"DEPLOY_READY revision={revision}" in result.stdout
     baseline = Path(env["NFCORE_RAILWAY_ROLLBACK_BASELINE_FILE"]).read_text()
     for service in ("api", "worker", "portal"):
@@ -212,7 +216,7 @@ def test_railway_driver_refuses_deploy_without_successful_rollback_baseline(
     )
     log = _fake_railway(tmp_path, env, deployment_status="CRASHED")
 
-    result = _run("deploy", _git_head(), env=env)
+    result = _run("prepare-rollback", _git_head(), env=env)
 
     assert result.returncode == 1
     assert "has no successful rollback baseline" in result.stdout
@@ -273,3 +277,21 @@ def test_railway_driver_rolls_back_to_captured_deployments(
         "rollback worker-deployment",
         "rollback portal-deployment",
     ]
+
+
+def test_railway_driver_refuses_deploy_without_pre_migration_baseline(tmp_path: Path) -> None:
+    env = _base_env()
+    env.update(
+        {
+            "NFCORE_RAILWAY_REAL_EXECUTION_ENABLED": "true",
+            "RAILWAY_API_TOKEN": "synthetic-token",
+            "NFCORE_RAILWAY_ROLLBACK_BASELINE_FILE": str(tmp_path / "missing.tsv"),
+        }
+    )
+    log = _fake_railway(tmp_path, env)
+
+    result = _run("deploy", _git_head(), env=env)
+
+    assert result.returncode == 1
+    assert "rollback baseline file is missing" in result.stdout
+    assert "up --ci" not in log.read_text()

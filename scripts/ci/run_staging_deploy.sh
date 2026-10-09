@@ -4,13 +4,20 @@ set -eu
 sh scripts/ci/staging_preflight.sh
 
 revision="${NFCORE_DEPLOY_REVISION:-${GITHUB_SHA:-}}"
+if [ "${#revision}" -ne 40 ]; then
+  echo "staging deploy: FAIL immutable 40-hex revision is required"
+  exit 1
+fi
 case "$revision" in
-  [0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F][0-9a-fA-F]) ;;
-  *)
+  *[!0-9a-fA-F]*)
     echo "staging deploy: FAIL immutable 40-hex revision is required"
     exit 1
     ;;
+  *) ;;
 esac
+
+# Capture application rollback targets before any schema or application mutation.
+sh "$NFCORE_STAGING_DEPLOY_DRIVER" prepare-rollback "$revision"
 
 # Back up the provisioned staging database through the provider driver before any
 # schema mutation. The driver owns external storage; no backup material enters Git.
@@ -21,6 +28,7 @@ python scripts/ci/migration_guard.py --apply
 
 # Provider-specific driver contract v1:
 #   contract                       -> prints nfcore-staging-driver-v1
+#   prepare-rollback <revision>     -> capture all previous application deployments
 #   backup <revision>              -> durable pre-deploy backup
 #   deploy <revision>              -> deploy API + worker + portal at immutable revision
 #   verify-worker <revision>       -> verify the worker process is healthy/running
