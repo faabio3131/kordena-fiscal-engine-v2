@@ -482,6 +482,8 @@ Provar poll/dispatch, retry, backoff, idempotência, dead-letter, shutdown, rest
 
 Retomada T02 em 2026-10-09: main `8385be0ee80e434a922e9ad10b11a4f15c2188db`, PR #144 MERGED, CI #716/Governance #137 SUCCESS. T02 em execução por “Executar”. Matriz SQLite/PostgreSQL e comparação atômica de status/attempt na escrita da outbox; reutiliza inbox/auditoria/UOW/worker. Transporte at-least-once, deduplicação externa não presumida. Checkpoint `checkpoints/NFV1_P04_T02_WORKER_RECOVERY_2026-10-09.md`. T03/T04 não antecipadas; sem deploy.
 
+Certificação interna T02 em 2026-10-09: PR #145 MERGED; HEAD `49201706c1b6ad80d128aaa788827b64ab1d63e7`; main `4e5657cfda9cd89d03fec1d3e2b1471f79b36b2b`; árvore PR/main idêntica `41f72f38660ac1c1d6611c7c99251d265deff0d3`. CI #717/run37883903575 (PR) e #718/run37885060792 (main), Governance #138/run37883903581 e #139/run37885060691 SUCCESS. PR/main:41/41 etapas;1605 Python/PostgreSQL,14 frontend,28 Playwright PASS,zero FAIL/zero SKIP;18 novos casos incluídos; um warning TestClient existente. Comparação atômica no UPDATE e matriz de recuperação aprovadas pelos gates. Este registro prevalece sobre T02 em execução acima; fechamento documental aguarda integração/gates próprios. Próxima T03 não iniciada. P4 não concluída; T03/T04, assinatura real P6 e staging P5/P9/P11 permanecem pendentes.
+
 ### NFV1-P04-T03 — Observabilidade do Worker
 
 Medir backlog, jobs processados, falhas, retry, dead-letter e heartbeat/readiness.
