@@ -152,6 +152,12 @@ class GovernedTrialService:
                 )
                 replay = True
                 purchase = current
+                # A request can reach the lock first but acquire it second.
+                # Its captured ingress time may precede the committed reservation.
+                # The held guard proves that reservation already exists at this
+                # decision; floor the replay clock to creation, never to a future
+                # paid period or a new expiry. The original trial dates remain fixed.
+                now = max(now, current.created_at)
             else:
                 if (
                     existing_account is not None

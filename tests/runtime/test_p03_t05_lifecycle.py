@@ -48,7 +48,8 @@ def claim(app, purchase_id, at=None):
     issued = service.issue(purchase_id=purchase_id, now=now)
     service.complete(
         claim_token=issued.claim_token,
-        legal_name=snapshot(app, purchase_id)[0].legal_name, now=now,
+        legal_name=snapshot(app, purchase_id)[0].legal_name,
+        now=now,
     )
 
 
@@ -361,3 +362,32 @@ def test_legacy_committed_event_recovers_pending_inbox_without_new_credit(settin
         assert snapshot(app, purchase_id) == before
         assert len(delivery.calls) == 1
         assert count(app, "fm_human_accounts") == 1
+
+
+def test_trial_replay_after_guard_uses_committed_reservation_time_without_extension(settings):
+    app, _, _, _ = setup(settings)
+    with TestClient(app, base_url="https://testserver"):
+        services = app.state.nfcore_runtime_composition
+        now = datetime.now(UTC)
+        request = dict(
+            plan_id="growth",
+            price_id="growth-monthly",
+            buyer_email="synthetic-trial-clock@example.com",
+            legal_name="Synthetic Trial Clock Ltd",
+            idempotency_key="trial-clock-fixture",
+        )
+        first = services.commercial_trial.begin(**request, now=now)
+        repeated = services.commercial_trial.begin(**request, now=now - timedelta(seconds=1))
+        assert repeated.replay
+        assert repeated.purchase.purchase_id == first.purchase.purchase_id
+        assert repeated.subscription.checkpoint.period_start == now
+        assert (
+            repeated.subscription.checkpoint.period_end == first.subscription.checkpoint.period_end
+        )
+        assert repeated.subscription.subscription_id == first.subscription.subscription_id
+        assert count(app, "fm_human_accounts") == 1
+        # Generic activation still rejects time before contracted coverage.
+        with pytest.raises(CommercialFulfillmentError, match="coverage"):
+            services.commercial_activation.provision(
+                purchase_id=first.purchase.purchase_id, now=now - timedelta(seconds=1)
+            )

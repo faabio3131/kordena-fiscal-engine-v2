@@ -36,7 +36,7 @@ CI #701 e Governance #122 SUCCESS. Entrega na PR #141.
 
 ## Verificação e limites
 
-34 casos novos:20 canônicos duráveis SQLite +14 HTTP/PostgreSQL (CI).
+35 casos novos:20 canônicos duráveis SQLite +15 HTTP/PostgreSQL (CI).
 Matriz: nove eventos, antes/depois de claim/activation; fim de mês/bissexto;
 carência0/configurada e quotas; expired/recovery; early/late; ONE_TIME;
 pricing posterior; invoice com IDs novos/conflito; concorrência/restart;
@@ -70,3 +70,11 @@ Causas:11 novos casos usavam nome legal diferente do snapshot da aquisição;
 a autoridade existente rejeitou a troca. Fixture agora usa o nome canônico.
 Dois asserts legados multiline ainda listavam migrations até15; ampliados até16.
 Guards/testes preservados. Nova CI completa obrigatória no HEAD corrigido.
+
+CI #706/run37871912756:1569 PASS/1 FAIL/zero SKIP. Todos34 novos casos passaram.
+Regressão de trial same_key concorrente: réplica capturou horário antes da
+reserva criada pela outra e aguardou lock. Sob o guard existente, replay usa
+max(ingresso,created_at da reserva), sem mudar início/fim, plano, quota ou
+identidade; não usa início de período pago futuro. Matriz existente preservada
+e um novo teste garante o piso temporal e ausência de extensão do trial.
+Nova CI integral exigida. Dependência mínima de T05; não reabre/antecipa fase.
