@@ -480,6 +480,8 @@ Certificação interna T01 em 2026-10-09: PR #143 MERGED; HEAD `1d0dcc17b7d18016
 
 Provar poll/dispatch, retry, backoff, idempotência, dead-letter, shutdown, restart e replay seguro.
 
+Retomada T02 em 2026-10-09: main `8385be0ee80e434a922e9ad10b11a4f15c2188db`, PR #144 MERGED, CI #716/Governance #137 SUCCESS. T02 em execução por “Executar”. Matriz SQLite/PostgreSQL e comparação atômica de status/attempt na escrita da outbox; reutiliza inbox/auditoria/UOW/worker. Transporte at-least-once, deduplicação externa não presumida. Checkpoint `checkpoints/NFV1_P04_T02_WORKER_RECOVERY_2026-10-09.md`. T03/T04 não antecipadas; sem deploy.
+
 ### NFV1-P04-T03 — Observabilidade do Worker
 
 Medir backlog, jobs processados, falhas, retry, dead-letter e heartbeat/readiness.
