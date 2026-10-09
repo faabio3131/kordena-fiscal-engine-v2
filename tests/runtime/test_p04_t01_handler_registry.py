@@ -1,5 +1,6 @@
 """Internal registry certification; synthetic signing/transport never proves egress."""
 
+import os
 from datetime import UTC, datetime
 from types import MappingProxyType
 
@@ -18,9 +19,19 @@ from kordena_fiscal.runtime.worker_composition import (
 )
 from kordena_fiscal.runtime.worker_main import run
 from kordena_fiscal.security import InMemoryWebhookKeyRing, WebhookSecurity
-from tests.runtime.test_cl02_production_worker_runtime import _configure_staging_worker
 
 NOW = datetime(2026, 10, 9, tzinfo=UTC)
+
+
+def _configure_staging_worker(monkeypatch):
+    dsn = os.environ.get("NFCORE_TEST_POSTGRES_DSN", "").strip()
+    if not dsn:
+        pytest.skip("NFCORE_TEST_POSTGRES_DSN is required for entrypoint certification")
+    monkeypatch.setenv("NFCORE_ENVIRONMENT", "staging")
+    monkeypatch.setenv("NFCORE_PERSISTENCE_BACKEND", "postgres")
+    monkeypatch.setenv("DATABASE_URL", dsn)
+    monkeypatch.setenv("NFCORE_SECRET_BACKEND", "external")
+    monkeypatch.setenv("NFCORE_REQUIRE_HTTPS", "true")
 
 
 def dependencies():

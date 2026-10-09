@@ -62,3 +62,10 @@ API/Portal/PostgreSQL1/1, Worker0/1. Drift P5/P9/P11. T02/T03/T04 não iniciadas
 Não certifica worker contínuo implantado, integração externa, homologação ou produção.
 T01 não concluída antes de PR/CI/merge/main/evidência. Merge requer autorização;
 deploy/produção não autorizados. PRODUCTION_APPROVED=NO; COMMERCIAL_LIVE=NO.
+
+
+CI #712/run37879045309, HEAD cc3bfe31bb9e180d30037fc1dbc0f081ab5c038f,
+falhou na coleta: import de helper de outro módulo tests não portátil no runner
+(Python3.11/pytest entrypoint). Ruff/Mypy/plan/migration passaram. Fixture agora
+independente, com mesmos DSN/profile/skip local; nenhum caso/assert removido.
+Nova CI completa obrigatória no HEAD corrigido; falha não é certificação.
