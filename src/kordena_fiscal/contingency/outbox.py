@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from enum import StrEnum
@@ -213,6 +214,10 @@ class FiscalDispatchResult:
 
 
 class FiscalOutboxStore(Protocol):
+    def counts_by_status(self) -> Mapping[FiscalOutboxStatus, int]:
+        """Process-wide operational aggregate; never a tenant-facing projection."""
+        ...
+
     def list_for_scope(
         self,
         scope: ExecutionScope,
@@ -271,6 +276,13 @@ class InMemoryFiscalOutboxStore:
     def __init__(self) -> None:
         self._lock = Lock()
         self._entries: dict[str, FiscalOutboxEntry] = {}
+
+    def counts_by_status(self) -> Mapping[FiscalOutboxStatus, int]:
+        with self._lock:
+            return {
+                status: sum(entry.status is status for entry in self._entries.values())
+                for status in FiscalOutboxStatus
+            }
 
     def list_for_scope(
         self,

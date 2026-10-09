@@ -23,11 +23,11 @@ from kordena_fiscal.application import (
     DurableFiscalOutboxWorker,
     RoutedOutboxHandler,
 )
-from kordena_fiscal.contingency import FiscalOutboxHandler, FiscalRetryPolicy
+from kordena_fiscal.contingency import FiscalOutboxHandler, FiscalOutboxStatus, FiscalRetryPolicy
 from kordena_fiscal.persistence.ports import FiscalUnitOfWorkFactory
 
 from .config import RuntimeConfigurationError
-from .observability import MetricsRegistry, StructuredLogger, WorkerObservability
+from .observability import MetricsRegistry, StructuredLogger, WorkerHealth, WorkerObservability
 
 DELIVER_WEBHOOK_OPERATION = "deliver_webhook"
 
@@ -93,6 +93,10 @@ class ProductionWorkerComposition:
     runtime: BackgroundWorkerRuntime
     operations: frozenset[str]
     metrics: MetricsRegistry
+    observer: WorkerObservability
+
+    def health(self) -> WorkerHealth:
+        return self.observer.health()
 
 
 def build_production_worker_runtime(
@@ -105,6 +109,7 @@ def build_production_worker_runtime(
     lease_duration: timedelta = timedelta(seconds=60),
     idle_wait_seconds: float = 1.0,
     failure_wait_seconds: float = 2.0,
+    heartbeat_timeout_seconds: float = 60.0,
 ) -> ProductionWorkerComposition:
     """Compose one durable worker over the canonical outbox and observer boundaries.
 
@@ -115,8 +120,15 @@ def build_production_worker_runtime(
 
     routed = RoutedOutboxHandler(handlers)
     metrics = MetricsRegistry()
+
+    def queue_counts() -> Mapping[FiscalOutboxStatus, int]:
+        with uow_factory() as uow:
+            return uow.outbox.counts_by_status()
+
     observer = WorkerObservability(
         metrics=metrics,
+        queue_counts=queue_counts,
+        heartbeat_timeout_seconds=heartbeat_timeout_seconds,
         logger=StructuredLogger(service="nfcore-worker", environment=environment),
     )
     worker = DurableFiscalOutboxWorker(
@@ -136,6 +148,7 @@ def build_production_worker_runtime(
         runtime=runtime,
         operations=routed.operations,
         metrics=metrics,
+        observer=observer,
     )
 
 

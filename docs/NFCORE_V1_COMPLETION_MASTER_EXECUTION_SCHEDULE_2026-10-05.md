@@ -488,6 +488,8 @@ Certificação interna T02 em 2026-10-09: PR #145 MERGED; HEAD `49201706c1b6ad80
 
 Medir backlog, jobs processados, falhas, retry, dead-letter e heartbeat/readiness.
 
+Retomada T03 em 2026-10-09: main `ee0c14cf0979561bc20f655fd71819552f67bbdf`, PR #146 MERGED, CI #720/Governance #141 SUCCESS. T03 em execução por “Pode iniciar”. Reader agregado da outbox, gauges/contadores, heartbeat monotônico/readiness fresco e isolamento de callback do observer, reutilizando loop/UOW/metrics/logger. Checkpoint `checkpoints/NFV1_P04_T03_WORKER_OBSERVABILITY_2026-10-09.md`; sem exporter/endpoint novo ou deploy. T04/P9 não antecipadas.
+
 ### NFV1-P04-T04 — Container
 
 Provar processo contínuo, SIGTERM, non-root e health/runtime contract.
