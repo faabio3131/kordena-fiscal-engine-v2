@@ -5,12 +5,14 @@ from __future__ import annotations
 import hashlib
 import json
 import secrets
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Protocol
 
 from kordena_fiscal.product.checkout import (
     CommercialCheckoutItem,
+    CommercialCheckoutProjection,
     CommercialCheckoutProjector,
     CommercialCheckoutStarter,
     validate_checkout_url,
@@ -60,6 +62,7 @@ class CommercialAcquisitionService:
         checkout_starter: CommercialCheckoutStarter,
         checkout_processing_configured: bool,
         delivery_readiness: CommercialDeliveryPathReadiness,
+        operational_readiness: Callable[[], bool] | None = None,
         ttl: timedelta = timedelta(minutes=30),
     ) -> None:
         if ttl < timedelta(minutes=5) or ttl > timedelta(hours=24):
@@ -73,6 +76,7 @@ class CommercialAcquisitionService:
         self._checkout_starter = checkout_starter
         self._checkout_processing_configured = checkout_processing_configured
         self._delivery_readiness = delivery_readiness
+        self._operational_readiness = operational_readiness
         self._ttl = ttl
 
     def begin(
@@ -92,19 +96,7 @@ class CommercialAcquisitionService:
         normalized_name = self._legal_name(legal_name)
         idempotency_digest = self._idempotency_digest(idempotency_key)
 
-        pricing = self._pricing.current
-        release = self._release.current
-        projection = self._checkout.project(pricing)
-        if not commercial_purchase_ready(
-            release=release,
-            pricing=pricing,
-            checkout=projection,
-            checkout_processing_configured=self._checkout_processing_configured,
-            delivery=self._delivery_readiness,
-        ):
-            raise CommercialFulfillmentError(
-                "commercial purchase path is not operationally ready"
-            )
+        projection = self._purchase_projection()
 
         item = self._selected_item(
             projection.items,
@@ -154,6 +146,15 @@ class CommercialAcquisitionService:
                 uow.commercial.put_acquisition(acquisition)
                 uow.commit()
 
+        if self._operational_readiness is not None:
+            # Revalidate after the durable reference commit and immediately before
+            # redirect initiation. A blocked retry retains that original reference.
+            item = self._selected_item(
+                self._purchase_projection().items,
+                plan_id=normalized_plan, price_id=normalized_price,
+            )
+            if item.provider != self._checkout_starter.provider_id:
+                raise CommercialFulfillmentError("checkout provider identity mismatch")
         checkout_url = validate_checkout_url(
             self._checkout_starter.start_checkout(
                 item=item,
@@ -167,6 +168,27 @@ class CommercialAcquisitionService:
             expires_at=acquisition.expires_at,
             replay=replay,
         )
+
+    def _purchase_projection(self) -> CommercialCheckoutProjection:
+        try:
+            pricing = self._pricing.current
+            release = self._release.current
+            projection = self._checkout.project(pricing)
+            ready = commercial_purchase_ready(
+                release=release, pricing=pricing, checkout=projection,
+                checkout_processing_configured=self._checkout_processing_configured,
+                delivery=self._delivery_readiness,
+                operational_readiness=self._operational_readiness,
+            ) and projection.provider == self._checkout.provider_id
+        except Exception as exc:
+            raise CommercialFulfillmentError(
+                "commercial purchase path is not operationally ready"
+            ) from exc
+        if not ready:
+            raise CommercialFulfillmentError(
+                "commercial purchase path is not operationally ready"
+            )
+        return projection
 
     @staticmethod
     def _selected_item(

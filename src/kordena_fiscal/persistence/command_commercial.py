@@ -21,6 +21,7 @@ class CommandCommercialStore:
 
     def binding(self, key_id: str) -> tuple[CommandBinding, int] | None:
         with self._acquire() as connection:
+            connection.execute("SET LOCAL statement_timeout = '2s'")
             row = connection.execute(
                 "SELECT binding_json, revision FROM fm_command_bindings WHERE key_id = ?",
                 (key_id,),
@@ -30,6 +31,31 @@ class CommandCommercialStore:
         payload = json.loads(str(row[0]))
         payload["not_after"] = datetime.fromisoformat(payload["not_after"])
         return CommandBinding(**payload), int(str(row[1]))
+
+    def readiness_bindings(
+        self, *, product_id: str, environment: str, limit: int = 8,
+    ) -> tuple[CommandBinding, ...]:
+        """Bounded, read-only candidates from platform-owned configuration."""
+        if not 1 <= limit <= 32:
+            raise CommercialFulfillmentError("invalid Command readiness budget")
+        with self._acquire() as connection:
+            connection.execute("SET LOCAL statement_timeout = '2s'")
+            rows = connection.execute(
+                "SELECT binding_json FROM fm_command_bindings "
+                "WHERE CAST(binding_json AS JSONB)->>'product_id' = ? "
+                "AND CAST(binding_json AS JSONB)->>'environment' = ? "
+                "AND CAST(binding_json AS JSONB)->>'enabled' = 'true' "
+                "ORDER BY key_id LIMIT ?",
+                (product_id, environment, limit + 1),
+            ).fetchall()
+        if len(rows) > limit:
+            raise CommercialFulfillmentError("Command readiness budget exceeded")
+        bindings = []
+        for row in rows:
+            payload = json.loads(str(row[0]))
+            payload["not_after"] = datetime.fromisoformat(payload["not_after"])
+            bindings.append(CommandBinding(**payload))
+        return tuple(bindings)
 
     def configure(
         self,

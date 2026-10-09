@@ -253,6 +253,7 @@ def create_app(
     commercial_checkout: CommercialCheckoutProjector | None = None,
     commercial_checkout_processing_configured: bool = False,
     commercial_delivery_readiness: CommercialDeliveryPathReadiness | None = None,
+    commercial_operational_readiness: Callable[[], bool] | None = None,
     cakto_checkout_administration: CaktoCheckoutAdministrationService | None = None,
 ) -> FastAPI:
     """Create the web adapter without granting fiscal authority by default."""
@@ -317,6 +318,7 @@ def create_app(
                         commercial_checkout_processing_configured
                     ),
                     delivery_readiness=commercial_delivery_readiness,
+                    operational_readiness=commercial_operational_readiness,
                 )
             )
     if password_recovery is not None:
