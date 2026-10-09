@@ -1,5 +1,25 @@
 # CHECKPOINT — NFV1-P04-T02 — Outbox/inbox/background
 
+## Certificação final — prevalece sobre o histórico abaixo
+
+PR #145 MERGED; HEAD `49201706c1b6ad80d128aaa788827b64ab1d63e7`; main `4e5657cfda9cd89d03fec1d3e2b1471f79b36b2b`; árvore PR/main idêntica `41f72f38660ac1c1d6611c7c99251d265deff0d3`. CI #717/run37883903575 (PR) e #718/run37885060792 (main), Governance #138/run37883903581 e #139/run37885060691 SUCCESS. PR/main:41/41 etapas;1605 Python/PostgreSQL,14 frontend,28 Playwright PASS,zero FAIL/zero SKIP;18 novos casos incluídos; um warning TestClient existente.
+
+Estado: INTERNALLY_CERTIFIED; fechamento documental aguardando integração/gates.
+Merge #145 autorizado explicitamente pelo dono. Claims/transições concorrentes,
+retry/backoff, efeito durável via inbox sintético, shutdown/lote e recovery internos
+certificados em SQLite/PostgreSQL; dez novos casos PostgreSQL executados na CI.
+Todos os gates de lint/types/plan59/migrations1..16/secret scan/frontend/E2E,
+containers/non-root/secure profile/smokes/CVE policy/SBOM e PostgreSQL
+backup/restore/readiness passaram na PR e main.
+Staging read-only pós-merge: API/Portal/PostgreSQL1/1, Worker0/1;
+deployments históricos inalterados. Não certifica runtime contínuo implantado,
+assinatura externa, Secret Manager ou deduplicação de um destinatário real.
+Transporte permanece at-least-once; T03/T04/P5/P6/P9/P11 pendentes.
+Próxima NFV1-P04-T03, não iniciada até integração/gates deste fechamento.
+PRODUCTION_APPROVED=NO; COMMERCIAL_LIVE=NO.
+
+## Histórico de execução
+
 Data: 2026-10-09 (America/Sao_Paulo).
 Produto: FM NFCORE V1.
 Repository: faabio3131/kordena-fiscal-engine-v2.

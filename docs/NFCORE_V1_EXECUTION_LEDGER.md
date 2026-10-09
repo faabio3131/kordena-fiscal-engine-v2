@@ -278,7 +278,7 @@
 
 ### 21. NFV1-P04-T02 — Outbox/inbox/background
 
-- [ ] **Estado:** em execução
+- [x] **Estado:** concluído
 - **Objetivo:** executar exatamente a tarefa NFV1-P04-T02 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P04-T01 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** tudo que o cronograma exige para NFV1-P04-T02, mais os testes/evidências diretamente necessários.
@@ -286,8 +286,8 @@
 - **Critério de aceite:** critérios específicos de NFV1-P04-T02 no cronograma satisfeitos e nenhum gate transversal violado.
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
 - **Riscos / não confirmado:** transporte at-least-once; efeito único externo exige inbox/idempotência do destinatário, não certificado por harness sintético. Shutdown drena lote claimed; SIGTERM/container T04. Secret Manager P6/staging P5/P9/P11 pendentes; sem deploy.
-- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** entrada main `8385be0ee80e434a922e9ad10b11a4f15c2188db`, PR #144 MERGED; CI #716/Governance #137 SUCCESS. Auditoria/recovery em execução; 18 casos novos, CAS status/attempt no UPDATE fecha disputa de reclaim/finalização; checkpoint `docs/checkpoints/NFV1_P04_T02_WORKER_RECOVERY_2026-10-09.md`; dirigidos33 PASS/12 PostgreSQL SKIP local (DSN ausente), Ruff/Mypy/plan59/migration16/secret PASS. Sem conclusão antes de CI/merge/main.
+- **Decisões do dono pendentes:** merge #145 autorizado explicitamente (“Autorizo integrar a PR #145”). Nova PR de fechamento documental requer merge específico; deploy/operação real não autorizados.
+- **Prova:** PR #145 MERGED; HEAD `49201706c1b6ad80d128aaa788827b64ab1d63e7`; main `4e5657cfda9cd89d03fec1d3e2b1471f79b36b2b`; árvore PR/main idêntica `41f72f38660ac1c1d6611c7c99251d265deff0d3`. CI #717/run37883903575 (PR) e #718/run37885060792 (main), Governance #138/run37883903581 e #139/run37885060691 SUCCESS. PR/main:41/41 etapas;1605 Python/PostgreSQL,14 frontend,28 Playwright PASS,zero FAIL/zero SKIP;18 novos casos incluídos; um warning TestClient existente. Comparação atômica de status/attempt fecha disputa de claim/finalização; poll/retry/backoff/restart/terminal/replay/inbox/rollback/shutdown certificados internamente. Checkpoint `docs/checkpoints/NFV1_P04_T02_WORKER_RECOVERY_2026-10-09.md`; certificação documental condicionada à integração/gates deste registro. Próxima T03 não iniciada até esse fechamento.
 
 ### 22. NFV1-P04-T03 — Observabilidade do Worker
 
