@@ -16,4 +16,7 @@ COPY src ./src
 RUN python -m pip install --upgrade pip && python -m pip install ".[postgres]"
 
 USER 10001:10001
+STOPSIGNAL SIGTERM
+HEALTHCHECK --interval=5s --timeout=3s --start-period=10s --retries=3 \
+    CMD ["python", "-m", "kordena_fiscal.runtime.worker_health"]
 CMD ["python", "-m", "kordena_fiscal.runtime.worker_main"]

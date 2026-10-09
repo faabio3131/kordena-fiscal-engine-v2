@@ -180,6 +180,7 @@ jobs:
             -e NFCORE_REQUIRE_HTTPS=true \
             -e NFCORE_WORKER_ONESHOT=true \
             nfcore-worker:test
+          python scripts/ci/check_worker_container.py
 
       - name: Portal container smoke
         run: |

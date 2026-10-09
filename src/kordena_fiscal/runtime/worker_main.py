@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import signal
 from collections.abc import Callable, Mapping
+from pathlib import Path
 from threading import Event
 
 from kordena_fiscal.contingency import FiscalOutboxHandler
@@ -22,16 +23,12 @@ from .worker_composition import (
     build_canonical_worker_handlers,
     build_production_worker_runtime,
 )
+from .worker_health import HEALTH_PATH, WorkerHealthPublisher
 
-_STOP = Event()
 WorkerHandlerFactory = Callable[
     [PostgresFiscalDatabase, RuntimeSettings],
     Mapping[str, FiscalOutboxHandler],
 ]
-
-
-def _stop(_signum: int, _frame: object) -> None:
-    _STOP.set()
 
 
 def _oneshot_requested() -> bool:
@@ -42,45 +39,62 @@ def run(
     *,
     handler_factory: WorkerHandlerFactory | None = None,
     webhook: WorkerWebhookDependencies | None = None,
+    health_path: Path = HEALTH_PATH,
 ) -> int:
-    settings = RuntimeSettings.from_environ()
-    if settings.persistence_backend != "postgres":
-        raise RuntimeConfigurationError("durable worker runtime requires PostgreSQL persistence")
-    assert settings.database_url is not None
+    stop = Event()
+    publisher = WorkerHealthPublisher(stop, path=health_path)
+    previous = {}
 
-    database = PostgresFiscalDatabase(settings.database_url)
+    def request_stop(_signum: int, _frame: object) -> None:
+        stop.set()
+
     try:
-        database.initialize()
-        with database.connection() as connection:
-            connection.execute("SELECT 1").fetchone()
-
-        # This is a dependency/readiness probe only. It must never dispatch fiscal or
-        # commercial work and therefore does not require external handler composition.
-        if _oneshot_requested():
-            return 0
-
-        if handler_factory is not None and webhook is not None:
+        # Install before bootstrap and never clear an already received signal.
+        for signum in (signal.SIGTERM, signal.SIGINT):
+            previous[signum] = signal.signal(signum, request_stop)
+        publisher.start()
+        settings = RuntimeSettings.from_environ()
+        if settings.persistence_backend != "postgres":
             raise RuntimeConfigurationError(
-                "worker must use one handler composition source"
+                "durable worker runtime requires PostgreSQL persistence"
             )
-        handlers = (
-            handler_factory(database, settings)
-            if handler_factory is not None
-            else build_canonical_worker_handlers(uow_factory=database, webhook=webhook)
-        )
-        composition = build_production_worker_runtime(
-            uow_factory=database,
-            handlers=handlers,
-            environment=settings.environment.value,
-        )
+        assert settings.database_url is not None
 
-        _STOP.clear()
-        signal.signal(signal.SIGTERM, _stop)
-        signal.signal(signal.SIGINT, _stop)
-        composition.runtime.run_forever(_STOP)
-        return 0
+        database = PostgresFiscalDatabase(settings.database_url)
+        try:
+            database.initialize()
+            with database.connection() as connection:
+                connection.execute("SELECT 1").fetchone()
+
+            # ONESHOT probes dependencies only and never publishes continuous readiness.
+            # A signal received during bootstrap must not be lost or followed by a claim.
+            if _oneshot_requested() or stop.is_set():
+                return 0
+
+            if handler_factory is not None and webhook is not None:
+                raise RuntimeConfigurationError("worker must use one handler composition source")
+            handlers = (
+                handler_factory(database, settings)
+                if handler_factory is not None
+                else build_canonical_worker_handlers(uow_factory=database, webhook=webhook)
+            )
+            composition = build_production_worker_runtime(
+                uow_factory=database,
+                handlers=handlers,
+                environment=settings.environment.value,
+            )
+            publisher.attach(composition.health)
+            composition.runtime.run_forever(stop)
+            return 0
+        finally:
+            database.close()
     finally:
-        database.close()
+        # Restore caller signal dispositions even after configuration/DB failure.
+        try:
+            publisher.close()
+        finally:
+            for signum, handler in previous.items():
+                signal.signal(signum, handler)
 
 
 if __name__ == "__main__":

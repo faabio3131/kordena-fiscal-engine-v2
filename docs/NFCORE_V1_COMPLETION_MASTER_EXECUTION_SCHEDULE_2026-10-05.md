@@ -496,6 +496,8 @@ Certificação interna T03 em 2026-10-09: PR #147 MERGED; HEAD `86d144e02c29a7a7
 
 Provar processo contínuo, SIGTERM, non-root e health/runtime contract.
 
+Retomada T04 em 2026-10-09: main `f1b8503cb8dd09325457907469ec5f049d9d5579`, PR #148 MERGED, CI #724/Governance #145 SUCCESS. T04 em execução por “Pode fazer”. Corrigir parada durante bootstrap; probe privado usa saúde canônica T03; provar PID1/non-root/continuidade/SIGTERM/drain/restart no container CI, preservando ONESHOT e falha sem handlers. Checkpoint `checkpoints/NFV1_P04_T04_WORKER_CONTAINER_2026-10-09.md`; sem deploy/segredo/handler sintético em produção. P5/P6/P9 não antecipadas.
+
 ## Gate
 
 - [ ] Worker permanece executando sem modo oneshot;

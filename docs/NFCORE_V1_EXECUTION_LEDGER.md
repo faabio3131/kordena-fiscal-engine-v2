@@ -304,16 +304,16 @@
 
 ### 23. NFV1-P04-T04 — Container
 
-- [ ] **Estado:** pendente
+- [ ] **Estado:** em execução
 - **Objetivo:** executar exatamente a tarefa NFV1-P04-T04 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P04-T03 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** tudo que o cronograma exige para NFV1-P04-T04, mais os testes/evidências diretamente necessários.
 - **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
 - **Critério de aceite:** critérios específicos de NFV1-P04-T04 no cronograma satisfeitos e nenhum gate transversal violado.
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
+- **Riscos / não confirmado:** prova interna de processo/container não certifica assinatura/secret backend real P6 nem staging P5/P9/P11; Worker0/1 histórico. CMD sem dependência permanece fail-closed. Grace real deve comportar lote/timeouts; at-least-once não promete deduplicação externa. Sem deploy.
 - **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** PENDENTE
+- **Prova:** entrada main `f1b8503cb8dd09325457907469ec5f049d9d5579`, PR #148 MERGED, CI #724/Governance #145 SUCCESS. T04 em execução por “Pode fazer”;29 novos testes e prova container PID1/non-root/SIGTERM/HEALTHCHECK/drain/restart. Dirigidos63 PASS/19 PostgreSQL SKIP local;Ruff/Mypy196/plan59/migration16/secret PASS. Checkpoint `docs/checkpoints/NFV1_P04_T04_WORKER_CONTAINER_2026-10-09.md`; CI/merge/main pendentes;P5 não iniciada.
 
 ### 24. NFV1-P05-T01 — Pré-deploy
 
