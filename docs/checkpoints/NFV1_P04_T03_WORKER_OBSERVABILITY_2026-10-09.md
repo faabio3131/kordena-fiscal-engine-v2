@@ -1,4 +1,35 @@
+
 # CHECKPOINT — NFV1-P04-T03 — Observabilidade do Worker
+
+## Certificação final — prevalece sobre o histórico abaixo
+
+PR #147 MERGED; HEAD `86d144e02c29a7a7881dd1a1afeaaa57b36e08ed`; main `f844aae44bbcc2a240071b269293a1c59f867c36`; árvore PR/main idêntica `561003d239901a6fbae83daa9587c627f89b493e`. CI #721/run37916736004 (PR) e #722/run37918229115 (main), Governance #142/run37916736047 e #143/run37918229137 SUCCESS. PR/main:41/41 etapas;1637 Python/PostgreSQL,14 frontend,28 Playwright PASS,zero FAIL/zero SKIP;32 novos casos incluídos; um warning TestClient preexistente.
+
+Estado: INTERNALLY_CERTIFIED; fechamento documental aguardando integração/gates.
+Merge #147 autorizado explicitamente pelo dono em 2026-10-09.
+Backlog/estados duráveis, resultados/falhas/retry/dead-letter, heartbeat monotônico,
+readiness e isolamento de observer/logger certificados internamente na composição
+canônica. Nove novos casos PostgreSQL executados na CI, além dos casos SQLite e
+process-local. Pytest:323.06s na PR e342.54s na main.
+Todos os gates de lint/types/plan59/migrations1..16/secret scan/frontend/E2E,
+containers/non-root/secure profile/smokes/CVE policy/SBOM e PostgreSQL
+backup/restore/readiness passaram na PR e main.
+
+Contadores process-local e gauges duráveis têm semânticas distintas. Coleta não
+consulta DB; cada ciclo usa agregado somente leitura. Dados globais operacionais
+permanecem internos ao worker, sem payload/tenant/endpoint/exporter novo.
+Readiness atesta poll/snapshot/freshness/lifecycle; não certifica provider,
+assinatura/egress real ou execução contínua implantada. Após falha de snapshot,
+gauges anteriores podem estar antigos: observar validity/readiness/age.
+Exporters/dashboards/alertas/tracing/tuning permanecem P9.
+
+Staging read-only pós-merge: API/Portal/PostgreSQL1/1, Worker0/1;
+deployments históricos inalterados, patch staged histórico sem mudanças.
+P4 ainda em execução; T04, assinatura real P6 e staging P5/P9/P11 pendentes.
+Próxima NFV1-P04-T04, não iniciada até integração/gates deste fechamento.
+PRODUCTION_APPROVED=NO; COMMERCIAL_LIVE=NO.
+
+## Histórico de execução
 
 Data: 2026-10-09 (America/Sao_Paulo).
 Produto: FM NFCORE V1.

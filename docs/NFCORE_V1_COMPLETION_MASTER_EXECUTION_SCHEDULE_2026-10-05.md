@@ -490,6 +490,8 @@ Medir backlog, jobs processados, falhas, retry, dead-letter e heartbeat/readines
 
 Retomada T03 em 2026-10-09: main `ee0c14cf0979561bc20f655fd71819552f67bbdf`, PR #146 MERGED, CI #720/Governance #141 SUCCESS. T03 em execução por “Pode iniciar”. Reader agregado da outbox, gauges/contadores, heartbeat monotônico/readiness fresco e isolamento de callback do observer, reutilizando loop/UOW/metrics/logger. Checkpoint `checkpoints/NFV1_P04_T03_WORKER_OBSERVABILITY_2026-10-09.md`; sem exporter/endpoint novo ou deploy. T04/P9 não antecipadas.
 
+Certificação interna T03 em 2026-10-09: PR #147 MERGED; HEAD `86d144e02c29a7a7881dd1a1afeaaa57b36e08ed`; main `f844aae44bbcc2a240071b269293a1c59f867c36`; árvore PR/main idêntica `561003d239901a6fbae83daa9587c627f89b493e`. CI #721/run37916736004 (PR) e #722/run37918229115 (main), Governance #142/run37916736047 e #143/run37918229137 SUCCESS. PR/main:41/41 etapas;1637 Python/PostgreSQL,14 frontend,28 Playwright PASS,zero FAIL/zero SKIP;32 novos casos incluídos; um warning TestClient preexistente. Backlog/estados/resultados/falhas/retry/dead-letter e heartbeat/readiness medidos na composição canônica; telemetry isolada de commits/processamento. Este registro prevalece sobre T03 em execução acima; fechamento documental aguarda integração/gates próprios. Próxima T04 não iniciada. P4 não concluída; container contínuo T04, assinatura real P6 e staging/monitoramento P5/P9/P11 permanecem pendentes. Sem exporter/endpoint/deploy ou operação real.
+
 ### NFV1-P04-T04 — Container
 
 Provar processo contínuo, SIGTERM, non-root e health/runtime contract.

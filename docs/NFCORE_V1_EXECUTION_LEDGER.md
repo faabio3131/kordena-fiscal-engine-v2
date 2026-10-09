@@ -291,7 +291,7 @@
 
 ### 22. NFV1-P04-T03 — Observabilidade do Worker
 
-- [ ] **Estado:** em execução
+- [x] **Estado:** concluído
 - **Objetivo:** executar exatamente a tarefa NFV1-P04-T03 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P04-T02 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** tudo que o cronograma exige para NFV1-P04-T03, mais os testes/evidências diretamente necessários.
@@ -300,7 +300,7 @@
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
 - **Riscos / não confirmado:** métricas internas process-local/agregadas; exporter/dashboard/alertas/tuning P9 não certificados. Readiness do poll não certifica assinatura/provider/produção. Staging Worker0/1; P5/P6/P9/P11 pendentes; SIGTERM/container T04. Sem deploy.
 - **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** entrada main `ee0c14cf0979561bc20f655fd71819552f67bbdf`, PR #146 MERGED; CI #720/Governance #141 SUCCESS. T03 em execução por “Pode iniciar”;32 casos novos; reader durável de backlog, heartbeat/readiness fresco e isolamento de telemetria no loop canônico. Dirigidos45 PASS/21 PostgreSQL SKIP local; Ruff/Mypy/plan59/migration16/secret PASS. Checkpoint `docs/checkpoints/NFV1_P04_T03_WORKER_OBSERVABILITY_2026-10-09.md`; CI/merge/main pendentes, sem deploy/exporter externo.
+- **Prova:** PR #147 MERGED; HEAD `86d144e02c29a7a7881dd1a1afeaaa57b36e08ed`; main `f844aae44bbcc2a240071b269293a1c59f867c36`; árvore PR/main idêntica `561003d239901a6fbae83daa9587c627f89b493e`. CI #721/run37916736004 (PR) e #722/run37918229115 (main), Governance #142/run37916736047 e #143/run37918229137 SUCCESS. PR/main:41/41 etapas;1637 Python/PostgreSQL,14 frontend,28 Playwright PASS,zero FAIL/zero SKIP;32 novos casos incluídos; um warning TestClient preexistente. Merge autorizado; health/backlog/resultados/falhas/retry/dead-letter na composição canônica, nove novos casos PostgreSQL reais e isolamento de telemetria certificados. Checkpoint `docs/checkpoints/NFV1_P04_T03_WORKER_OBSERVABILITY_2026-10-09.md`; fechamento documental aguarda gates/integração; T04 não iniciada. Sem deploy/exporter externo.
 
 ### 23. NFV1-P04-T04 — Container
 
