@@ -1,7 +1,15 @@
 # NFV1-P06-T01 — Seleção de Secret Manager e política proposta
 
-Data: 2026-10-09. Produto: FM NFCORE V1. Estado: PROPOSTA PARA DECISÃO HUMANA.
+Data: 2026-10-09. Produto: FM NFCORE V1. Estado: POLICY_APPROVED_FOR_INTERNAL_IMPLEMENTATION.
 Autorização recebida: “Pode executar”, para estudar/selecionar o provider e publicar resultado revisável. Nenhuma conta, IAM, credencial, compra ou implantação foi executada. A escolha abaixo é recomendação técnica; não é provider operacional certificado.
+
+## Decisão posterior aprovada — 2026-10-09
+
+O dono respondeu “Autorizo” em 2026-10-09 à escolha Google Secret Manager, à política proposta como conjunto (incluindo bootstrap restrito ao staging para implementação interna) e à integração da PR #153. P6-T01-B01 RESOLVIDO: POLICY_APPROVED_FOR_INTERNAL_IMPLEMENTATION.
+
+PR #153 MERGED; HEAD `dec468e28fc7596d98f702224bb96e822ad5be1d`; main `0ad89d68ac7bb7975d8af1422ce07796eaf625ed`, árvore `b1e1ae3b692e2c325cdd9a2536ad84227ec5ee7e`, idêntica à PR. CI #735/run37958319939 e Governance #156/run37958319968 SUCCESS;41/41 etapas,1673 Python/PostgreSQL,14 frontend,28 Playwright PASS/zero FAIL/zero SKIP;um warning TestClient preexistente. Main CI #736/run37961104490/job113923850663 e Governance #157/run37961104464 SUCCESS;41/41 etapas,1673 Python/PostgreSQL,14 frontend,28 Playwright PASS/zero FAIL/zero SKIP;um warning TestClient preexistente. Backup/restore canônico PostgreSQL16 sintético e readiness PASS.
+
+A decisão resolve a aceitação da seleção/política. O texto abaixo preserva o estudo anterior; frases de aprovação pendente são históricas e superadas por esta decisão. Conta, gasto, IAM/chave real, deploy e produção não são autorizados pela aceitação para implementação interna. P6-T01-B02 permanece gate de operação externa. T02 somente após fechamento T01 integrado/certificado.
 
 ## Recomendação
 

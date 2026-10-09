@@ -8,6 +8,20 @@
 
 This file is the persistent CURRENT checkpoint for FM NFCORE V1 Commercial Launch. GitHub remains the first technical source of truth and must be revalidated on every resume.
 
+## CURRENT superior — 2026-10-09 — seleção/política P06-T01 aprovada e PR153 integrada
+
+O dono respondeu “Autorizo” em 2026-10-09 à escolha Google Secret Manager, à política proposta como conjunto (incluindo bootstrap restrito ao staging para implementação interna) e à integração da PR #153. P6-T01-B01 RESOLVIDO: POLICY_APPROVED_FOR_INTERNAL_IMPLEMENTATION.
+
+- Main `0ad89d68ac7bb7975d8af1422ce07796eaf625ed`, árvore `b1e1ae3b692e2c325cdd9a2536ad84227ec5ee7e`, idêntica à PR153. CI PR #735/run37958319939 e Governance #156/run37958319968 SUCCESS;41/41 etapas,1673 Python/PostgreSQL,14 frontend,28 Playwright PASS/zero FAIL/zero SKIP.
+- Main CI #736/run37961104490/job113923850663 e Governance #157/run37961104464 SUCCESS;41/41 etapas,1673 Python/PostgreSQL,14 frontend,28 Playwright PASS/zero FAIL/zero SKIP;um warning TestClient preexistente. Backup/restore canônico PostgreSQL16 sintético e readiness PASS. T01 selecionada/aprovada e certificada internamente; fechamento documental condicionado à integração/gates próprios.24/59 concluídas neste registro;próxima P06-T02.
+- P6-T01-B02 continua gate de operação externa:conta/região/orçamento/IAM/credencial/canal. T02 não iniciada;provider real não certificado;P5 bloqueada.
+- Staging read-only deployments inalterados:API/Portal/PostgreSQL1/1,Worker0/1. Nenhum deploy/secret real. PRODUCTION_APPROVED=NO;COMMERCIAL_LIVE=NO.
+- Checkpoint `checkpoints/NFV1_P06_T01_SELECTION_2026-10-09.md`; seleção/política nos documentos existentes, sem plano concorrente.
+
+---
+
+## Snapshot histórico — estudo anterior à aprovação
+
 ## CURRENT superior — 2026-10-09 — P06-T01 estudo e política propostos
 
 - Entrada main `b87b64567b91b775a6b6a26b06724c33faf82645`, PR #152 MERGED, CI #734/run37952628383 e Governance #155/run37952628603 SUCCESS. Este resultado supera as pendências históricas de CI/main e registro de ordem abaixo.
