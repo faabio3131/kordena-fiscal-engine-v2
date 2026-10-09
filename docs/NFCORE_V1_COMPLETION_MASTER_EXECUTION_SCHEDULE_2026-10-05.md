@@ -530,6 +530,8 @@ Nenhuma regra de domínio no adapter.
 
 Execução interna autorizada pelo dono (“Executar”) em2026-10-09 após PR154 MERGED e CI738/Governance159 SUCCESS. Implementar SDKGSM e bindings metadata-only na persistência/UOW canônica, preservar projeções ref:/sec_ e validar contexto antes de I/O;políticaT01 já aprovada. Migration17 aditiva/testes locais eCI sem operação externa. T02 emexecução,não concluída;checkpoint `docs/checkpoints/NFV1_P06_T02_GSM_ADAPTER_2026-10-09.md`;conta/IAM/credencial/deploy dependemB02/autorização própria.
 
+**Certificação interna T02 em2026-10-09:** PR #155 MERGED; HEAD `5eb98614f4dfdc092871bb6e06c1efef7825e6ba`; main `8ad5a20e8ec954ef91f5e2c8f77a17ad09e8e62b`; árvore idêntica `5531ec7f0d7da61c59f92117b08f56807fae8715`. CI #739/run37973027312/job113964215052 (PR), #740/run37978308311/job113982097370 (main), Governance #160/run37973027313 e #161/run37978308448 SUCCESS. PR/main:41/41 etapas;1741 Python/PostgreSQL,14 frontend,28 Playwright PASS/zero FAIL/zero SKIP;um warning TestClient preexistente. Backup/restore PostgreSQL16 sintético, checksum e readiness PASS. Merge autorizado especificamente pelo dono; este registro supera a pendência histórica acima. Implementação concreta de infraestrutura sem regra de domínio, durável e fail-closed; testes sintéticos internos não comprovam cloud real. Checkpoint `docs/checkpoints/NFV1_P06_T02_GSM_ADAPTER_2026-10-09.md`. T02 DONE_CERTIFIED internamente, condicionado à integração/gates deste fechamento.25/59 concluídas;T03 não iniciada;B02 externo permanece;gateP6 eP5 bloqueados;sem deploy.
+
 ### NFV1-P06-T03 — Certificar escopo
 
 Tenant, unidade, ambiente, provider, purpose, version e expiration.

@@ -332,16 +332,17 @@ Antecipação P6 antes de P5 aprovada em 2026-10-09 (“Autorizado”), conforme
 
 ### 25. NFV1-P06-T02 — Implementar adapter de infraestrutura
 
-- [ ] **Estado:** em execução
+- [x] **Estado:** concluído
 - **Objetivo:** executar exatamente a tarefa NFV1-P06-T02 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P06-T01 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** tudo que o cronograma exige para NFV1-P06-T02, mais os testes/evidências diretamente necessários.
 - **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
 - **Critério de aceite:** critérios específicos de NFV1-P06-T02 no cronograma satisfeitos e nenhum gate transversal violado.
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** P6-T02-B01 RESOLVIDO: dono autorizou explicitamente publicação no repo público, PR Draft e CI em2026-10-09 às15:18 America/Sao_Paulo (“Autorizado”);CI/PR remotas ainda pendentes. P6-T01-B02 conta/IAM/credencial/operação externos não confirmados. Suíte local1455PASS/0FAIL/286SKIP (DB/pré-requisitos ausentes) não substitui CIintegral/providerreal.
-- **Decisões do dono pendentes:** nenhuma para publicar no repo público, abrir PR Draft e executar CI, autorizados explicitamente em2026-10-09. PolíticaGSMjáaprovada;merge/deploy/operação externa não autorizados.
-- **Prova:** entrada main `a32891ca74616e4a435c9c11055e6b4f8ba3bb64`;PR #154 MERGED;CI #738/run37966054249 e Governance #159/run37966054229 SUCCESS;41/41 etapas,1673 Python/PostgreSQL,14frontend,28Playwright PASS/zeroFAIL/zeroSKIP. Execução interna autorizada pelo dono (“Executar”) em 2026-10-09;checkpoint `docs/checkpoints/NFV1_P06_T02_GSM_ADAPTER_2026-10-09.md`. T02 não concluída;conta/IAM/credencial/deploy externos não autorizados.
+- **Riscos / não confirmado:** adapter interno integrado e certificado; P6-T01-B02 conta/projeto/região/billing/budget/identidade/IAM/canal externos não confirmados. Composição Worker explicitamente limitada ao escopo fornecido; bootstrap Railway e registry dinâmico multitenant não declarados operacionais. Provider cloud real e gate P6 não certificados; sem deploy.
+- **Decisões do dono pendentes:** nenhuma para T02 integrada; merge #155 autorizado especificamente pelo dono (“Autorizo”) em2026-10-09 às16:09 America/Sao_Paulo. Fechamento documental exige seus próprios gates e autorização de merge; deploy/operação externa não autorizados.
+- **Prova:** PR #155 MERGED; HEAD `5eb98614f4dfdc092871bb6e06c1efef7825e6ba`; main `8ad5a20e8ec954ef91f5e2c8f77a17ad09e8e62b`; árvore idêntica `5531ec7f0d7da61c59f92117b08f56807fae8715`. CI #739/run37973027312/job113964215052 (PR), #740/run37978308311/job113982097370 (main), Governance #160/run37973027313 e #161/run37978308448 SUCCESS. PR/main:41/41 etapas;1741 Python/PostgreSQL,14 frontend,28 Playwright PASS/zero FAIL/zero SKIP;um warning TestClient preexistente. Backup/restore PostgreSQL16 sintético, checksum e readiness PASS. Checkpoint `docs/checkpoints/NFV1_P06_T02_GSM_ADAPTER_2026-10-09.md`. DONE_CERTIFIED interno; fechamento documental condicionado à integração/gates deste registro.25/59 concluídas após fechamento;próxima T03 não iniciada.
+
 
 ### 26. NFV1-P06-T03 — Certificar escopo
 
