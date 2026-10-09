@@ -51,6 +51,7 @@ if TYPE_CHECKING:
         NumberingConfiguration,
     )
     from kordena_fiscal.security import WorkloadCredentialRecord
+    from kordena_fiscal.security.secret_binding import SecretBinding
 
 
 class FiscalPersistenceError(FiscalDomainError):
@@ -349,6 +350,12 @@ class CommercialConfigurationStore(Protocol):
     ) -> HomologationEvidenceRecord | None: ...
 
 
+class SecretBindingStore(Protocol):
+    def get(self, reference_id: str) -> SecretBinding | None: ...
+
+    def put(self, binding: SecretBinding, *, expected_revision: int) -> None: ...
+
+
 class FiscalUnitOfWork(Protocol):
     """One atomic local transaction spanning all durable fiscal repositories."""
 
@@ -387,6 +394,9 @@ class FiscalUnitOfWork(Protocol):
 
     @property
     def commercial(self) -> CommercialConfigurationStore: ...
+
+    @property
+    def secret_bindings(self) -> SecretBindingStore: ...
 
     def __enter__(self) -> Self: ...
 

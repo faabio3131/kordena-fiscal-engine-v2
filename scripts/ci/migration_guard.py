@@ -41,6 +41,11 @@ from kordena_fiscal.persistence.postgres import (
     _PRICING_SCHEMA,
     PostgresFiscalDatabase,
 )
+from kordena_fiscal.persistence.secret_binding_schema import (
+    SECRET_BINDING_NAME,
+    SECRET_BINDING_SCHEMA,
+    SECRET_BINDING_VERSION,
+)
 from kordena_fiscal.persistence.sqlite import _MIGRATIONS
 
 _DESTRUCTIVE = re.compile(
@@ -89,6 +94,7 @@ def validate_policy() -> tuple[int, ...]:
         CUSTOMER_CONFIGURATION_VERSION,
         COMMAND_COMMERCIAL_VERSION,
         COMMERCIAL_PERIOD_VERSION,
+        SECRET_BINDING_VERSION,
     )
     if versions != tuple(range(1, max(versions) + 1)):
         raise RuntimeError(f"migration versions must be contiguous from 1: {versions!r}")
@@ -152,6 +158,8 @@ def validate_policy() -> tuple[int, ...]:
         version=COMMERCIAL_PERIOD_VERSION, name=COMMERCIAL_PERIOD_NAME,
         statements=COMMERCIAL_PERIOD_SCHEMA,
     )
+    _reject_unapproved_destructive(version=SECRET_BINDING_VERSION,
+        name=SECRET_BINDING_NAME, statements=SECRET_BINDING_SCHEMA)
     print(
         "migration policy: PASS "
         f"versions={','.join(str(item) for item in versions)} "

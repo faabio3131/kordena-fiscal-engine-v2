@@ -528,6 +528,8 @@ O dono respondeu “Autorizo” em 2026-10-09 à escolha Google Secret Manager, 
 
 Nenhuma regra de domínio no adapter.
 
+Execução interna autorizada pelo dono (“Executar”) em2026-10-09 após PR154 MERGED e CI738/Governance159 SUCCESS. Implementar SDKGSM e bindings metadata-only na persistência/UOW canônica, preservar projeções ref:/sec_ e validar contexto antes de I/O;políticaT01 já aprovada. Migration17 aditiva/testes locais eCI sem operação externa. T02 emexecução,não concluída;checkpoint `docs/checkpoints/NFV1_P06_T02_GSM_ADAPTER_2026-10-09.md`;conta/IAM/credencial/deploy dependemB02/autorização própria.
+
 ### NFV1-P06-T03 — Certificar escopo
 
 Tenant, unidade, ambiente, provider, purpose, version e expiration.

@@ -332,16 +332,16 @@ Antecipação P6 antes de P5 aprovada em 2026-10-09 (“Autorizado”), conforme
 
 ### 25. NFV1-P06-T02 — Implementar adapter de infraestrutura
 
-- [ ] **Estado:** pendente
+- [ ] **Estado:** em execução
 - **Objetivo:** executar exatamente a tarefa NFV1-P06-T02 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P06-T01 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** tudo que o cronograma exige para NFV1-P06-T02, mais os testes/evidências diretamente necessários.
 - **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
 - **Critério de aceite:** critérios específicos de NFV1-P06-T02 no cronograma satisfeitos e nenhum gate transversal violado.
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
-- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** PENDENTE
+- **Riscos / não confirmado:** P6-T02-B01 RESOLVIDO: dono autorizou explicitamente publicação no repo público, PR Draft e CI em2026-10-09 às15:18 America/Sao_Paulo (“Autorizado”);CI/PR remotas ainda pendentes. P6-T01-B02 conta/IAM/credencial/operação externos não confirmados. Suíte local1455PASS/0FAIL/286SKIP (DB/pré-requisitos ausentes) não substitui CIintegral/providerreal.
+- **Decisões do dono pendentes:** nenhuma para publicar no repo público, abrir PR Draft e executar CI, autorizados explicitamente em2026-10-09. PolíticaGSMjáaprovada;merge/deploy/operação externa não autorizados.
+- **Prova:** entrada main `a32891ca74616e4a435c9c11055e6b4f8ba3bb64`;PR #154 MERGED;CI #738/run37966054249 e Governance #159/run37966054229 SUCCESS;41/41 etapas,1673 Python/PostgreSQL,14frontend,28Playwright PASS/zeroFAIL/zeroSKIP. Execução interna autorizada pelo dono (“Executar”) em 2026-10-09;checkpoint `docs/checkpoints/NFV1_P06_T02_GSM_ADAPTER_2026-10-09.md`. T02 não concluída;conta/IAM/credencial/deploy externos não autorizados.
 
 ### 26. NFV1-P06-T03 — Certificar escopo
 

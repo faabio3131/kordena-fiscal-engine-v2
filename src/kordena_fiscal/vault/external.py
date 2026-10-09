@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from kordena_fiscal.control_plane import SecretReference, SecretReferenceKind
 from kordena_fiscal.domain import FiscalValidationError
@@ -80,6 +80,12 @@ class ExternalSecretClient(Protocol):
     def fetch(self, reference_id: str) -> ExternalSecretRecord | None: ...
 
 
+@runtime_checkable
+class ScopedExternalSecretClient(Protocol):
+    def fetch_scoped(self, reference: SecretReference,
+                     context: SecretResolutionContext) -> ExternalSecretRecord | None: ...
+
+
 @dataclass(frozen=True, slots=True)
 class SecretAccessAuditEvent:
     """Metadata-only runtime audit event; it cannot carry secret material."""
@@ -138,7 +144,9 @@ class ExternalFiscalSecretVault:
     ) -> EphemeralSecretMaterial:
         self._validate_scope(reference, context)
         try:
-            record = self._client.fetch(reference.reference_id)
+            record = (self._client.fetch_scoped(reference, context)
+                      if isinstance(self._client, ScopedExternalSecretClient)
+                      else self._client.fetch(reference.reference_id))
         except ExternalSecretPermissionDenied:
             self._record(reference, context, outcome="permission_denied")
             raise SecretAuthorizationError("external secret access denied") from None
