@@ -8,6 +8,21 @@
 
 This file is the persistent CURRENT checkpoint for FM NFCORE V1 Commercial Launch. GitHub remains the first technical source of truth and must be revalidated on every resume.
 
+## CURRENT superior — 2026-10-09 — P04-T04 em execução
+
+- entrada main `f1b8503cb8dd09325457907469ec5f049d9d5579`, PR #148 MERGED;
+- CI #724/run37932404603 e Governance #145/run37932404514 SUCCESS; T03 encerrada,22/59 concluídas;
+- T04 ativa: processo contínuo, SIGTERM/SIGINT, PID1/non-root e health/runtime contract;
+- checkpoint `checkpoints/NFV1_P04_T04_WORKER_CONTAINER_2026-10-09.md`;
+- certificação depende de CI/merge/main; P5 não iniciada;
+- runtime real sem handlers permanece fail-closed; fixture CI não entra na imagem;
+- staging read-only API/Portal/PostgreSQL1/1,Worker0/1;drift conhecido;
+- sem deploy/operação real. PRODUCTION_APPROVED=NO;COMMERCIAL_LIVE=NO.
+
+---
+
+## Snapshot histórico — T03 encerrada
+
 ## CURRENT superior — 2026-10-09 — P04-T03 integrado e certificado internamente
 
 PR #147 MERGED; HEAD `86d144e02c29a7a7881dd1a1afeaaa57b36e08ed`; main `f844aae44bbcc2a240071b269293a1c59f867c36`; árvore PR/main idêntica `561003d239901a6fbae83daa9587c627f89b493e`. CI #721/run37916736004 (PR) e #722/run37918229115 (main), Governance #142/run37916736047 e #143/run37918229137 SUCCESS. PR/main:41/41 etapas;1637 Python/PostgreSQL,14 frontend,28 Playwright PASS,zero FAIL/zero SKIP;32 novos casos incluídos; um warning TestClient preexistente.
