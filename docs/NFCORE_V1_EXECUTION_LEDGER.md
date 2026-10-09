@@ -251,7 +251,7 @@
 
 ### 19. NFV1-P03-T05 — Lifecycle comercial
 
-- [ ] **Estado:** bloqueado interno
+- [ ] **Estado:** em execução
 - **Objetivo:** executar exatamente a tarefa NFV1-P03-T05 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P03-T04 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** tudo que o cronograma exige para NFV1-P03-T05, mais os testes/evidências diretamente necessários.
@@ -259,8 +259,8 @@
 - **Critério de aceite:** critérios específicos de NFV1-P03-T05 no cronograma satisfeitos e nenhum gate transversal violado.
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
 - **Riscos / não confirmado:** auditoria confirmou renovação sem avanço de period_end no serviço canônico; validade temporal e deduplicação de crédito por invoice ainda não certificadas. Staging drift/Worker0/1 permanecem P4/P5/P9/P11. Sem operação externa.
-- **Decisões do dono pendentes:** T05-B01: aprovar/ajustar como conjunto a política de período pago, invoice deduplicada, carência configurável default0, pausa/recuperação, terminalidade e quotas periódicas no documento `docs/NFV1_P03_T05_LIFECYCLE_POLICY_PROPOSAL_2026-10-08.md`. AGENTS.md exige decisão específica de produto/segurança; implementação comercial nova aguarda aprovação.
-- **Prova:** CURRENT main `c0e42fbb7ecfb1558c4aace664f971fb93eeeaba`, PR #140 MERGED; CI #701/Governance #122 SUCCESS. Auditoria/probe sintético do serviço e39 testes PASS/22 PostgreSQL SKIP/zero FAIL. Checkpoint/política T05 acima. Implementação/CI T05 pendentes; T05 NÃO CONCLUÍDA.
+- **Decisões do dono pendentes:** T05-B01 RESOLVIDO: política integral POLICY_APPROVED_FOR_INTERNAL_IMPLEMENTATION aprovada explicitamente pelo dono (“Aprovo”) em 2026-10-08. Implementação/testes internos autorizados conforme documento de política; merge/deploy/operação real não autorizados.
+- **Prova:** CURRENT main `c0e42fbb7ecfb1558c4aace664f971fb93eeeaba`, PR #140 MERGED; CI #701/Governance #122 SUCCESS. Auditoria/probe sintético do serviço e39 testes PASS/22 PostgreSQL SKIP/zero FAIL. Checkpoint/política T05 acima. Implementação interna na PR #141;32 casos novos;Ruff/Mypy strict195/plan59/migration16/secret/diff PASS. Checkpoint `docs/checkpoints/NFV1_P03_T05_IMPLEMENTATION_2026-10-08.md`. CI completa/merge pendentes; T05 NÃO CONCLUÍDA.
 
 ### 20. NFV1-P04-T01 — Handler registry canônico
 

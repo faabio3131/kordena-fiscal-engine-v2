@@ -90,6 +90,7 @@ class CommercialClaimService:
             if purchase is None:
                 raise CommercialFulfillmentError("commercial purchase was not found")
             self._assert_claimable(purchase)
+            self._assert_coverage(uow.commercial, purchase, now)
             if purchase.buyer_email is None:
                 raise CommercialFulfillmentError(
                     "commercial purchase requires verified delivery contact"
@@ -124,19 +125,14 @@ class CommercialClaimService:
 
         with self._unit_of_work_factory() as uow:
             claim = uow.commercial.get_claim_by_digest(token_sha256)
-            if (
-                claim is None
-                or claim.used_at is not None
-                or now >= claim.expires_at
-            ):
+            if claim is None or claim.used_at is not None or now >= claim.expires_at:
                 raise CommercialFulfillmentError("commercial claim token is not usable")
 
             purchase = uow.commercial.get_purchase(claim.purchase_id)
             if purchase is None:
-                raise CommercialFulfillmentError(
-                    "commercial claim has no canonical purchase"
-                )
+                raise CommercialFulfillmentError("commercial claim has no canonical purchase")
             self._assert_claimable(purchase)
+            self._assert_coverage(uow.commercial, purchase, now)
             if purchase.buyer_email is None:
                 raise CommercialFulfillmentError(
                     "commercial purchase requires verified delivery contact"
@@ -172,6 +168,16 @@ class CommercialClaimService:
                 purchase=updated,
                 manual_review=False,
             )
+
+    @staticmethod
+    def _assert_coverage(store: object, purchase: CommercialPurchaseRecord, now: datetime) -> None:
+        get_contract = getattr(store, "get_contract", None)
+        contract = get_contract(purchase.purchase_id) if callable(get_contract) else None
+        if contract is not None:
+            if not contract.covers(purchase.billing_status, now):
+                raise CommercialFulfillmentError("commercial coverage blocks customer claim")
+        elif purchase.provider_id == "command":
+            raise CommercialFulfillmentError("canonical contracted coverage is unavailable")
 
     @staticmethod
     def _assert_claimable(purchase: CommercialPurchaseRecord) -> None:

@@ -129,16 +129,7 @@ def build_postgres_runtime_composition(
         password_recovery=recovery,
     )
     canonical_commercial_database = postgres_canonical_commercial_database(database)
-    commercial_fulfillment = CommercialFulfillmentService(
-        canonical_commercial_database
-    )
-    commercial_claim = CommercialClaimService(
-        unit_of_work_factory=canonical_commercial_database,
-        accounts=accounts,
-    )
-    pricing_administration = CommercialPricingAdministrationService(
-        database.pricing_catalog()
-    )
+    pricing_administration = CommercialPricingAdministrationService(database.pricing_catalog())
     commercial_portal_read = CommercialPortalReadService(
         unit_of_work_factory=canonical_commercial_database,
         pricing=pricing_administration,
@@ -148,6 +139,14 @@ def build_postgres_runtime_composition(
         provisioning=provisioning,
         password_recovery=recovery,
         pricing=pricing_administration,
+    )
+    commercial_fulfillment = CommercialFulfillmentService(
+        canonical_commercial_database,
+        contract_factory=commercial_activation.contract_for,
+    )
+    commercial_claim = CommercialClaimService(
+        unit_of_work_factory=canonical_commercial_database,
+        accounts=accounts,
     )
     commercial_trial = GovernedTrialService(
         unit_of_work_factory=canonical_commercial_database,

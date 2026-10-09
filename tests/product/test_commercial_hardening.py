@@ -106,7 +106,7 @@ def test_webhook_verification_rejects_wrong_signature() -> None:
 
 def test_commercial_state_restores_without_usage_or_status_regression() -> None:
     subscription = _subscription()
-    subscription.record_usage("documents.issue", amount=4)
+    subscription.record_usage("documents.issue", amount=4, at=NOW)
     subscription.transition(SubscriptionStatus.GRACE)
 
     restored = CommercialSubscription.restore(subscription.checkpoint())

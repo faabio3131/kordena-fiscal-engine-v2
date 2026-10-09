@@ -10,14 +10,17 @@ import json
 import sqlite3
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import AbstractContextManager, contextmanager
+from dataclasses import replace
 from datetime import datetime
 from types import TracebackType
 from typing import Protocol, Self, cast
 
+from kordena_fiscal.persistence.commercial_contract import decode_contract, encode_contract
 from kordena_fiscal.product.billing import (
     CommercialPlan,
     SubscriptionCheckpoint,
     SubscriptionStatus,
+    UsagePeriodCheckpoint,
     UsageQuota,
 )
 from kordena_fiscal.product.commercial_fulfillment import (
@@ -31,6 +34,7 @@ from kordena_fiscal.product.commercial_fulfillment import (
     CommercialPurchaseState,
     DurableCommercialSubscription,
 )
+from kordena_fiscal.product.commercial_lifecycle import CommercialContract
 
 
 class _Cursor(Protocol):
@@ -151,6 +155,60 @@ class CommercialSqlStore(CanonicalCommercialStore):
     def __init__(self, connection: _Connection) -> None:
         self._connection = connection
 
+    def get_first_event(self, purchase_id: str) -> CommercialEventReceipt | None:
+        row = self._connection.execute(
+            "SELECT provider_id, event_id FROM fm_commercial_event_receipts WHERE purchase_id = ? "
+            "AND event_type IN ('sale_confirmed', 'subscription_activated') "
+            "ORDER BY occurred_at, event_id LIMIT 1",
+            (purchase_id,),
+        ).fetchone()
+        return None if row is None else self.get_event(str(row[0]), str(row[1]))
+
+    def get_contract(self, purchase_id: str) -> CommercialContract | None:
+        row = self._connection.execute(
+            "SELECT contract_json FROM fm_commercial_contracts WHERE purchase_id = ?",
+            (purchase_id,),
+        ).fetchone()
+        return None if row is None else decode_contract(_text(row[0], "contract_json"))
+
+    def put_contract(self, contract: CommercialContract) -> None:
+        current = self.get_contract(contract.purchase_id)
+        if current is not None:
+            if (
+                current.plan,
+                current.cadence,
+                current.grace_days,
+                current.pricing_configuration_id,
+                current.pricing_version,
+            ) != (
+                contract.plan,
+                contract.cadence,
+                contract.grace_days,
+                contract.pricing_configuration_id,
+                contract.pricing_version,
+            ):
+                raise CommercialFulfillmentError("contracted terms cannot be rewritten")
+            if len(contract.periods) < len(current.periods) or any(
+                replace(old, usage=()) != replace(new, usage=())
+                for old, new in zip(current.periods, contract.periods, strict=False)
+            ):
+                raise CommercialFulfillmentError("credited paid periods cannot be rewritten")
+            if any(
+                dict(new.usage).get(key, 0) < amount
+                for old, new in zip(current.periods, contract.periods, strict=False)
+                for key, amount in old.usage
+            ):
+                raise CommercialFulfillmentError("paid period usage cannot be erased")
+        cursor = self._connection.execute(
+            "INSERT INTO fm_commercial_contracts (purchase_id, contract_json) VALUES (?, ?) "
+            "ON CONFLICT (purchase_id) DO UPDATE SET contract_json = excluded.contract_json "
+            "WHERE fm_commercial_contracts.contract_json = ?",
+            (contract.purchase_id, encode_contract(contract),
+             None if current is None else encode_contract(current)),
+        )
+        if cursor.rowcount != 1:
+            raise CommercialFulfillmentError("concurrent commercial contract write rejected")
+
     def get_acquisition(
         self,
         acquisition_id: str,
@@ -266,8 +324,8 @@ class CommercialSqlStore(CanonicalCommercialStore):
                 """
                 INSERT INTO fm_commercial_event_receipts (
                     provider_id, event_id, event_type, external_order_id, purchase_id,
-                    occurred_at, received_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                    occurred_at, received_at, payment_reference
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     receipt.provider_id,
@@ -277,6 +335,7 @@ class CommercialSqlStore(CanonicalCommercialStore):
                     receipt.purchase_id,
                     _iso(receipt.occurred_at),
                     _iso(receipt.received_at),
+                    receipt.payment_reference,
                 ),
             )
         except sqlite3.IntegrityError:
@@ -295,7 +354,7 @@ class CommercialSqlStore(CanonicalCommercialStore):
         row = self._connection.execute(
             """
             SELECT provider_id, event_id, event_type, external_order_id, purchase_id,
-                   occurred_at, received_at
+                   occurred_at, received_at, payment_reference
             FROM fm_commercial_event_receipts
             WHERE provider_id = ? AND event_id = ?
             """,
@@ -311,6 +370,7 @@ class CommercialSqlStore(CanonicalCommercialStore):
             purchase_id=_text(row[4], "purchase_id"),
             occurred_at=_dt(row[5], "occurred_at"),
             received_at=_dt(row[6], "received_at"),
+            payment_reference=_optional_text(row[7]),
         )
 
     def get_purchase(self, purchase_id: str) -> CommercialPurchaseRecord | None:
@@ -644,11 +704,29 @@ class CommercialSqlStore(CanonicalCommercialStore):
                     "canonical subscription event ordering is ambiguous"
                 )
 
+        contract = self.get_contract(subscription.purchase_id)
+        if contract is not None:
+            checkpoint = subscription.checkpoint
+            last = contract.periods[-1]
+            if (
+                checkpoint.plan != contract.plan
+                or checkpoint.grace_days != contract.grace_days
+                or checkpoint.period_start != last.start
+                or checkpoint.period_end != last.end
+                or len(checkpoint.previous_periods) != len(contract.periods) - 1
+            ):
+                raise CommercialFulfillmentError("subscription must preserve contracted periods")
+            periods = []
+            for paid, historic in zip(
+                contract.periods[:-1], checkpoint.previous_periods, strict=True
+            ):
+                if paid.start != historic.start or paid.end != historic.end:
+                    raise CommercialFulfillmentError("historical paid period cannot change")
+                periods.append(replace(paid, usage=historic.usage))
+            periods.append(replace(last, usage=checkpoint.usage))
+            self.put_contract(replace(contract, periods=tuple(periods)))
         plan = subscription.checkpoint.plan
-        quotas = [
-            {"metric_id": quota.metric_id, "limit": quota.limit}
-            for quota in plan.quotas
-        ]
+        quotas = [{"metric_id": quota.metric_id, "limit": quota.limit} for quota in plan.quotas]
         usage = dict(subscription.checkpoint.usage)
         try:
             self._connection.execute(
@@ -721,6 +799,7 @@ class CommercialSqlStore(CanonicalCommercialStore):
             existing.external_order_id,
             existing.purchase_id,
             existing.occurred_at,
+            existing.payment_reference,
         ) != (
             received.provider_id,
             received.event_id,
@@ -728,6 +807,7 @@ class CommercialSqlStore(CanonicalCommercialStore):
             received.external_order_id,
             received.purchase_id,
             received.occurred_at,
+            received.payment_reference,
         ):
             raise CommercialFulfillmentError(
                 "commercial event identity was replayed with different content"
@@ -770,8 +850,7 @@ class CommercialSqlStore(CanonicalCommercialStore):
             used_at=None if row[5] is None else _dt(row[5], "used_at"),
         )
 
-    @staticmethod
-    def _subscription(row: Sequence[object]) -> DurableCommercialSubscription:
+    def _subscription(self, row: Sequence[object]) -> DurableCommercialSubscription:
         plan = CommercialPlan(
             plan_id=_text(row[3], "plan_id"),
             entitlement_ids=_json_string_tuple(row[4], "entitlement_ids_json"),
@@ -785,6 +864,15 @@ class CommercialSqlStore(CanonicalCommercialStore):
             period_end=_dt(row[8], "period_end"),
             usage=_json_usage(row[9]),
         )
+        contract = self.get_contract(_text(row[1], "purchase_id"))
+        if contract is not None:
+            checkpoint = replace(
+                checkpoint,
+                grace_days=contract.grace_days,
+                previous_periods=tuple(
+                    UsagePeriodCheckpoint(p.start, p.end, p.usage) for p in contract.periods[:-1]
+                ),
+            )
         return DurableCommercialSubscription(
             subscription_id=_text(row[0], "subscription_id"),
             purchase_id=_text(row[1], "purchase_id"),

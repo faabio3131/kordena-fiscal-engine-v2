@@ -203,7 +203,14 @@ class CommandCommercialReceiver:
                 external_order = command_identity(
                     "invoice", event.product_id, event.environment, invoice
                 )
+            payment_reference = command_identity(
+                "invoice",
+                event.product_id,
+                event.environment,
+                event.command_invoice_id,
+            )
             validated = ValidatedCommercialEvent(
+                payment_reference=payment_reference,
                 provider_id="command",
                 event_id=command_identity(
                     "event", event.product_id, event.environment, event.event_id
@@ -258,6 +265,7 @@ class CommandCommercialReceiver:
                 # Original authenticated receipt is durable, so processing delay
                 # does not turn an already accepted acquisition into expired data.
                 validated = ValidatedCommercialEvent(
+                    payment_reference=validated.payment_reference,
                     provider_id=validated.provider_id,
                     event_id=validated.event_id,
                     event_type=validated.event_type,
@@ -270,7 +278,10 @@ class CommandCommercialReceiver:
                     acquisition_id=event.acquisition_id,
                 )
             result = self._fulfillment.process(event=validated, received_at=received_at)
-            if result.purchase.state in {
+            if event.event_type in {
+                CommercialEventType.SALE_CONFIRMED,
+                CommercialEventType.SUBSCRIPTION_ACTIVATED,
+            } and result.purchase.state in {
                 CommercialPurchaseState.READY_TO_PROVISION,
                 CommercialPurchaseState.ACTIVATION_PENDING,
             }:

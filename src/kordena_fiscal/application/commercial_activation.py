@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import calendar
 import hashlib
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
@@ -12,6 +11,7 @@ from kordena_fiscal.product.billing import (
     CommercialPlan,
     CommercialSubscription,
     SubscriptionStatus,
+    UsagePeriodCheckpoint,
 )
 from kordena_fiscal.product.catalog import DEFAULT_COMMERCIAL_CATALOG, CommercialCatalog
 from kordena_fiscal.product.commercial_fulfillment import (
@@ -20,6 +20,11 @@ from kordena_fiscal.product.commercial_fulfillment import (
     CommercialPurchaseRecord,
     CommercialPurchaseState,
     DurableCommercialSubscription,
+)
+from kordena_fiscal.product.commercial_lifecycle import (
+    CommercialContract,
+    PaidCommercialPeriod,
+    period_end,
 )
 from kordena_fiscal.product.pricing import (
     BillingCadence,
@@ -96,19 +101,19 @@ class CommercialCustomerActivationService:
             return self._retry_activation(purchase, now)
 
         if purchase.state is not CommercialPurchaseState.READY_TO_PROVISION:
-            raise CommercialFulfillmentError(
-                "commercial purchase is not ready for provisioning"
-            )
+            raise CommercialFulfillmentError("commercial purchase is not ready for provisioning")
         if (
             purchase.tenant_id is None
             or purchase.legal_name is None
             or purchase.buyer_email is None
         ):
-            raise CommercialFulfillmentError(
-                "commercial purchase canonical identity is incomplete"
-            )
+            raise CommercialFulfillmentError("commercial purchase canonical identity is incomplete")
 
         plan, cadence, trial_days = self._resolve_plan(purchase)
+        subscription = self._subscription(
+            purchase=purchase, plan=plan, cadence=cadence, trial_days=trial_days
+        )
+        self._require_coverage(subscription, now)
         provisioned = self._provisioning.provision(
             tenant_id=purchase.tenant_id,
             legal_name=purchase.legal_name,
@@ -123,16 +128,8 @@ class CommercialCustomerActivationService:
                 now=now,
             )
         if reset is None:
-            raise CommercialFulfillmentError(
-                "commercial owner did not produce an activation reset"
-            )
+            raise CommercialFulfillmentError("commercial owner did not produce an activation reset")
 
-        subscription = self._subscription(
-            purchase=purchase,
-            plan=plan,
-            cadence=cadence,
-            trial_days=trial_days,
-        )
         updated = replace(
             purchase,
             state=CommercialPurchaseState.ACTIVATION_PENDING,
@@ -150,13 +147,14 @@ class CommercialCustomerActivationService:
                 CommercialPurchaseState.READY_TO_PROVISION,
                 CommercialPurchaseState.ACTIVATION_PENDING,
             }:
-                raise CommercialFulfillmentError(
-                    "commercial purchase changed during provisioning"
-                )
+                raise CommercialFulfillmentError("commercial purchase changed during provisioning")
+            if (
+                current.last_event_id != purchase.last_event_id
+                or current.billing_status != purchase.billing_status
+            ):
+                raise CommercialFulfillmentError("commercial lifecycle changed during provisioning")
             if current.tenant_id != purchase.tenant_id:
-                raise CommercialFulfillmentError(
-                    "canonical tenant changed during provisioning"
-                )
+                raise CommercialFulfillmentError("canonical tenant changed during provisioning")
             uow.commercial.put_subscription(subscription)
             uow.commercial.put_purchase(updated)
             uow.commit()
@@ -184,9 +182,11 @@ class CommercialCustomerActivationService:
             if purchase.state is CommercialPurchaseState.ACTIVE:
                 return purchase
             if purchase.state is not CommercialPurchaseState.ACTIVATION_PENDING:
-                raise CommercialFulfillmentError(
-                    "commercial purchase is not awaiting activation"
-                )
+                raise CommercialFulfillmentError("commercial purchase is not awaiting activation")
+            subscription = uow.commercial.get_subscription_for_purchase(purchase.purchase_id)
+            if subscription is None:
+                raise CommercialFulfillmentError("activation requires canonical subscription")
+            self._require_coverage(subscription, now)
             updated = replace(
                 purchase,
                 state=CommercialPurchaseState.ACTIVE,
@@ -206,9 +206,7 @@ class CommercialCustomerActivationService:
             or purchase.account_id is None
             or purchase.buyer_email is None
         ):
-            raise CommercialFulfillmentError(
-                "activation-pending purchase identity is incomplete"
-            )
+            raise CommercialFulfillmentError("activation-pending purchase identity is incomplete")
         subscription_id = self._subscription_id(purchase.purchase_id)
         with self._unit_of_work_factory() as uow:
             subscription = uow.commercial.get_subscription(subscription_id)
@@ -216,14 +214,13 @@ class CommercialCustomerActivationService:
             raise CommercialFulfillmentError(
                 "activation-pending purchase has no canonical subscription"
             )
+        self._require_coverage(subscription, now)
         reset = self._password_recovery.request_reset(
             email=purchase.buyer_email,
             now=now,
         )
         if reset is None:
-            raise CommercialFulfillmentError(
-                "commercial owner did not produce an activation reset"
-            )
+            raise CommercialFulfillmentError("commercial owner did not produce an activation reset")
         return CommercialActivationProvisioningResult(
             purchase=purchase,
             subscription=subscription,
@@ -236,17 +233,11 @@ class CommercialCustomerActivationService:
     ) -> tuple[CommercialPlan, BillingCadence, int]:
         pricing = self._pricing_at_purchase(purchase)
         plan_definition = next(
-            (
-                plan
-                for plan in pricing.plans
-                if plan.plan_id == purchase.plan_id and plan.enabled
-            ),
+            (plan for plan in pricing.plans if plan.plan_id == purchase.plan_id and plan.enabled),
             None,
         )
         if plan_definition is None:
-            raise CommercialFulfillmentError(
-                "commercial plan was not available at purchase time"
-            )
+            raise CommercialFulfillmentError("commercial plan was not available at purchase time")
         if purchase.price_id is None or purchase.price_id not in plan_definition.price_ids:
             raise CommercialFulfillmentError(
                 "commercial purchase price does not belong to its plan"
@@ -259,13 +250,12 @@ class CommercialCustomerActivationService:
                 "commercial plan cannot resolve canonical pricing/catalog"
             ) from exc
         if not price.enabled:
-            raise CommercialFulfillmentError(
-                "commercial price was not enabled at purchase time"
-            )
+            raise CommercialFulfillmentError("commercial price was not enabled at purchase time")
         return (
             CommercialPlan(
                 plan_id=plan_definition.plan_id,
                 entitlement_ids=edition.entitlement_ids,
+                quotas=plan_definition.periodic_quotas,
             ),
             price.cadence,
             plan_definition.trial_days,
@@ -293,6 +283,34 @@ class CommercialCustomerActivationService:
             )
         return publication.configuration
 
+    def contract_for(
+        self, purchase: CommercialPurchaseRecord, start: datetime, invoice_id: str
+    ) -> CommercialContract:
+        plan, cadence, _ = self._resolve_plan(purchase)
+        pricing = self._pricing_at_purchase(purchase)
+        definition = next(p for p in pricing.plans if p.plan_id == purchase.plan_id)
+        return CommercialContract(
+            purchase_id=purchase.purchase_id,
+            plan=plan,
+            cadence=cadence,
+            grace_days=definition.grace_days,
+            pricing_configuration_id=pricing.configuration_id,
+            pricing_version=pricing.version,
+            periods=(
+                PaidCommercialPeriod(
+                    invoice_id=invoice_id,
+                    paid_at=start,
+                    start=start,
+                    end=period_end(start, cadence),
+                ),
+            ),
+        )
+
+    @staticmethod
+    def _require_coverage(subscription: DurableCommercialSubscription, now: datetime) -> None:
+        if not CommercialSubscription.restore(subscription.checkpoint).accepts_operations_at(now):
+            raise CommercialFulfillmentError("commercial subscription coverage blocks activation")
+
     def _subscription(
         self,
         *,
@@ -305,18 +323,27 @@ class CommercialCustomerActivationService:
         start = purchase.last_event_at
         if purchase.billing_status is SubscriptionStatus.TRIAL:
             if trial_days < 1:
-                raise CommercialFulfillmentError(
-                    "commercial plan is not eligible for trial"
-                )
+                raise CommercialFulfillmentError("commercial plan is not eligible for trial")
             end = start + timedelta(days=trial_days)
         else:
             end = self._period_end(start, cadence)
+        with self._unit_of_work_factory() as uow:
+            contract = uow.commercial.get_contract(purchase.purchase_id)
+        if contract is not None:
+            plan = contract.plan
+            start, end = contract.periods[-1].start, contract.periods[-1].end
         subscription = CommercialSubscription(
             tenant_id=purchase.tenant_id,
             plan=plan,
             status=purchase.billing_status or SubscriptionStatus.ACTIVE,
             period_start=start,
             period_end=end,
+            grace_days=0 if contract is None else contract.grace_days,
+            previous_periods=()
+            if contract is None
+            else tuple(
+                UsagePeriodCheckpoint(p.start, p.end, p.usage) for p in contract.periods[:-1]
+            ),
         )
         return DurableCommercialSubscription(
             subscription_id=self._subscription_id(purchase.purchase_id),
@@ -335,21 +362,7 @@ class CommercialCustomerActivationService:
 
     @staticmethod
     def _period_end(start: datetime, cadence: BillingCadence) -> datetime:
-        months = {
-            BillingCadence.MONTHLY: 1,
-            BillingCadence.QUARTERLY: 3,
-            BillingCadence.SEMIANNUAL: 6,
-            BillingCadence.ANNUAL: 12,
-        }.get(cadence)
-        if months is None:
-            if cadence is BillingCadence.ONE_TIME:
-                return datetime.max.replace(tzinfo=start.tzinfo)
-            raise CommercialFulfillmentError("unsupported billing cadence")
-        month_index = start.month - 1 + months
-        year = start.year + month_index // 12
-        month = month_index % 12 + 1
-        day = min(start.day, calendar.monthrange(year, month)[1])
-        return start.replace(year=year, month=month, day=day)
+        return period_end(start, cadence)
 
     @staticmethod
     def _aware(value: datetime, field_name: str) -> None:

@@ -1,7 +1,9 @@
 # NFV1-P03-T05 — Lifecycle comercial: auditoria e política proposta
 
 Data: 2026-10-08 (America/Sao_Paulo).
-Status: PROPOSED — T05-B01 — decisão comercial pendente.
+Status: POLICY_APPROVED_FOR_INTERNAL_IMPLEMENTATION — T05-B01 RESOLVIDO.
+Aprovação explícita do dono: “Aprovo”, em 2026-10-08 (America/Sao_Paulo).
+Implementação/testes internos autorizados; merge/deploy/operação real não autorizados.
 Produto: FM NFCORE V1. Repositório: faabio3131/kordena-fiscal-engine-v2.
 Main: `c0e42fbb7ecfb1558c4aace664f971fb93eeeaba`.
 Predecessor: T04 certificada internamente; PR #139/#140 MERGED;
@@ -73,7 +75,7 @@ sem recriar identidade e sem transformar status ACTIVE em validade ilimitada.
    novos; reutilizar os contratados. Browser nunca define pagamento, período ou grants.
 
 Configuração comercial pertence à plataforma existente, com versão/audit/permissão;
-não ao browser/tenant arbitrário. A política acima não é implementada nem aprovada.
+não ao browser/tenant arbitrário. A política acima foi integralmente aprovada; implementação e certificação pendentes.
 Regras de quotas periódicas/carência deverão ser explícitas na configuração canônica,
 sem constantes por cliente e sem alterar código/deploy para configurar um cliente.
 Não alterar segurança fiscal, permissões de leitura histórica ou autoridade de emissão.
@@ -94,12 +96,12 @@ Não alterar segurança fiscal, permissões de leitura histórica ou autoridade 
 
 ## Gate e continuidade
 
-T05 BLOCKED_INTERNAL por T05-B01. Implementação de regras novas aguarda aprovação.
+T05 IN_PROGRESS. T05-B01 resolvido pela aprovação específica do conjunto pelo dono.
 AGENTS.md exige autorização específica antes de decisão de produto/preço e mudança
 de segurança sensível; o executor interpreta período/carência/quota como decisão
 comercial que concede ou bloqueia direitos. Não tratar autorização genérica para
 executar T05 como seleção dessas regras ainda não apresentadas.
 
-Próxima ação: aprovar/ajustar T05-B01; implementar somente T05 e certificar todos
+Próxima ação: implementar somente T05 conforme política aprovada e certificar todos
 os gates antes de propor merge. T05 não concluída; P4 não iniciada.
 PRODUCTION_APPROVED=NO; COMMERCIAL_LIVE=NO.

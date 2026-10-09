@@ -40,7 +40,7 @@ OFFER = "/v1/commercial/offer"
 
 class ReadyHarnessDatabase(composition._RuntimeDatabase):
     def applied_migrations(self):
-        return tuple(range(1, 16))
+        return tuple(range(1, 17))
 
 
 def harness(monkeypatch, **overrides):

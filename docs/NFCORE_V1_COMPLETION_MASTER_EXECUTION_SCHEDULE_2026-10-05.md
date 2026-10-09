@@ -438,7 +438,7 @@ Auditoria de retomada em 2026-10-08 confirmou gap de receiver/binding na oferta.
 
 Cobrir sale, activation, renewal, late payment, pause, recovery, cancel, refund e chargeback.
 
-Auditoria T05 em 2026-10-08: transições existem, mas renovação não avança período da assinatura; política comercial T05-B01 proposta em `NFV1_P03_T05_LIFECYCLE_POLICY_PROPOSAL_2026-10-08.md`. Período pago, carência, invoice deduplicada e quota periódica aguardam decisão humana específica antes de implementação. T05 bloqueada internamente, não concluída; IDs/ordem/escopo preservados.
+Auditoria T05 em 2026-10-08: transições existem, mas renovação não avança período da assinatura; política comercial T05-B01 proposta em `NFV1_P03_T05_LIFECYCLE_POLICY_PROPOSAL_2026-10-08.md`. T05-B01 RESOLVIDO: conjunto integral aprovado explicitamente pelo dono (“Aprovo”) em 2026-10-08, POLICY_APPROVED_FOR_INTERNAL_IMPLEMENTATION. Período pago, carência, invoice deduplicada e quotas periódicas autorizados para implementação/testes internos. T05 em execução, não concluída; IDs/ordem/escopo preservados. Merge/deploy/operação real não autorizados.
 
 ## Gate
 
