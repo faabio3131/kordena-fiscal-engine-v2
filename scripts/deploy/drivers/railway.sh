@@ -107,7 +107,8 @@ capture_rollback_baseline() {
     "$NFCORE_RAILWAY_WORKER_SERVICE" \
     "$NFCORE_RAILWAY_PORTAL_SERVICE"
   do
-    baseline="$(latest_baseline "$service")"
+    baseline="$(latest_baseline "$service")" ||
+      fail "service=$service immutable baseline unavailable"
     deployment_id="$(printf '%s' "$baseline" | cut -f1)"
     baseline_revision="$(printf '%s' "$baseline" | cut -f2)"
     [ -n "$deployment_id" ] && [ "${#baseline_revision}" -eq 40 ] ||
