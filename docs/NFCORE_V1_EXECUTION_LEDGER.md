@@ -346,16 +346,16 @@ Antecipação P6 antes de P5 aprovada em 2026-10-09 (“Autorizado”), conforme
 
 ### 26. NFV1-P06-T03 — Certificar escopo
 
-- [ ] **Estado:** pendente
+- [ ] **Estado:** em execução
 - **Objetivo:** executar exatamente a tarefa NFV1-P06-T03 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P06-T02 concluído e certificado; mais as dependências formais do cronograma
-- **Entregar:** tudo que o cronograma exige para NFV1-P06-T03, mais os testes/evidências diretamente necessários.
+- **Entregar:** matriz de escopo nos resolvers GSM canônicos, SQLite/PostgreSQL, auditoria sanitizada e checkpoint P06-T03; sem operação cloud real.
 - **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
 - **Critério de aceite:** critérios específicos de NFV1-P06-T03 no cronograma satisfeitos e nenhum gate transversal violado.
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
-- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** PENDENTE
+- **Riscos / não confirmado:** P6-T01-B02 conta/IAM/bootstrap/provider real permanece aberto; testes com payload sintético não certificam Google Cloud. Staging segue em drift, Worker0/1. T04 não iniciada.
+- **Decisões do dono pendentes:** execução interna/branch/testes/PR Draft autorizados pelo dono em2026-10-10 (Pode executar). Merge/deploy/conta/credencial/IAM/operação externa exigem autorização específica.
+- **Prova:** EM EXECUCAO; entrada main `4855613613eb8d265fe62289fff39fe5ab710c4c`;PR #156 MERGED;CI #742/run37989321439/tentativa3/job114121909282 SUCCESS41/41 e Governance #163 SUCCESS. T02 pós-merge certificada;bloqueioDockerHub429 resolvido. ProvaT03/HEAD/PR/CI será registrada após gates. Checkpoint `docs/checkpoints/NFV1_P06_T03_SCOPE_CERTIFICATION_2026-10-10.md`.25/59 concluídas;T03 não concluída.
 
 ### 27. NFV1-P06-T04 — Rotação e falha
 
