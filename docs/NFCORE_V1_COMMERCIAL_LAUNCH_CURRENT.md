@@ -1,3 +1,13 @@
+# CURRENT superior — NFV1-P06-T04 certificada internamente pós-merge — 2026-10-10
+
+GitHub reconfirmado: PR #159 MERGED, `main` `d2600c6a6604d9f3f8be3ea3642b78ebbf688832`, head original `0763dc97f6fe3053bf80f22d1eae27095a9d24a0`. CI da PR #747/run38063730623 e Governance #168/run38063730630 SUCCESS; pós-merge CI main #748/run38064965857 e Governance #169/run38064965821 SUCCESS no SHA do merge, 41/41 etapas, 2.022 Python/PostgreSQL PASS, 14 frontend PASS, 28 Playwright PASS, zero FAIL/SKIP e um warning TestClient. Segurança, migrations, containers/SBOM, backup/restore/readiness PASS.
+
+T04 `DONE_CERTIFIED_INTERNAL`: seis classes de falha e rotação certificadas com quatro tipos de segredo, reuso das autoridades canônicas, 85 testes adicionais e bancos SQLite/PostgreSQL. **Nenhum código de produção alterado.** Provas persistidas na PR #159 e no checkpoint `docs/checkpoints/NFV1_P06_T04_ROTATION_FAILURES_2026-10-10.md`. Closeout documental registra 27/59 concluídas **quando integrado**; primeira pendente NFV1-P05-T01, ainda bloqueada.
+
+**P6-T01-B02 BLOCKED_EXTERNAL**: conta/projeto/região/billing/budget/identidade/IAM/bootstrap/canal e acesso GSM real sem prova. `EXTERNAL_SECRET_BACKEND_CERTIFIED=NOT MET`. Último staging somente leitura: API/Portal/PostgreSQL 1/1, Worker 0/1, drift, não reinspecionado neste closeout. `PRODUCTION_APPROVED=NO`; `COMMERCIAL_LIVE=NO`. **P05-T01 não está liberada**, staging/deploy/conta/gasto/credencial/cloud real/fiscal real permanecem sujeitos a autorização e evidência. Este fechamento não inicia P5 e não executa deploy.
+
+---
+
 # CURRENT superior — NFV1-P06-T04 em execução — 2026-10-10
 
 GitHub reconfirmado antes da tarefa: main `0e61a8311253aecf06a3faa48afd3b5b1be073b4`, PR #158 MERGED, zero PRs abertas, CI #746/run38062516241 e Governance #167/run38062516233 SUCCESS no mesmo SHA. Predecessora T03 DONE_CERTIFIED_INTERNAL; ledger com 26/59 concluídas. Primeira pendente T04 — rotação e falha, agora em execução numa branch isolada; **não marcada concluída**.
