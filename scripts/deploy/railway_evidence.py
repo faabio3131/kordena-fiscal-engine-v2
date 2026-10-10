@@ -156,7 +156,7 @@ def main() -> int:
             proof = deployment(payload, expected_sha=args.revision, previous=args.previous)
         elif args.check == "baseline":
             deployment_id = deployment(payload, expected_sha=None, previous=None)
-            proof = deployment_id + "\\t" + _obj(payload[0]["meta"])["commitHash"]
+            proof = deployment_id + "\t" + _obj(payload[0]["meta"])["commitHash"]
         elif args.check == "latest-id":
             if not isinstance(payload, list) or not payload:
                 raise EvidenceError("latest deployment unavailable")
