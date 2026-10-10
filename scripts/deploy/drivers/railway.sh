@@ -49,30 +49,45 @@ preflight_checks() {
     --json >/dev/null 2>&1 || fail "unable to select Railway project/environment"
 }
 
-latest_status() {
-  service="$1"
-  railway deployment list \
-    --service "$service" \
-    --environment "$NFCORE_RAILWAY_ENVIRONMENT_ID" \
-    --limit 1 --json 2>/dev/null |
-    python -c 'import json,sys
-rows=json.load(sys.stdin)
-row=rows[0] if isinstance(rows,list) and rows else {}
-print(str(row.get("status","")))' 2>/dev/null || true
+evidence() {
+  helper="scripts/deploy/railway_evidence.py"
+  [ -f "$helper" ] || fail "Railway evidence verifier is missing"
+  python "$helper" "$@"
 }
 
-latest_successful_deployment_id() {
-  service="$1"
+deployment_list() {
   railway deployment list \
-    --service "$service" \
+    --service "$1" \
     --environment "$NFCORE_RAILWAY_ENVIRONMENT_ID" \
-    --limit 20 --json 2>/dev/null |
-    python -c 'import json,sys
-rows=json.load(sys.stdin)
-for row in rows if isinstance(rows,list) else []:
-    if str(row.get("status","")) == "SUCCESS" and row.get("id"):
-        print(str(row["id"]))
-        break' 2>/dev/null || true
+    --limit 1 --json
+}
+
+runtime_status() {
+  railway status \
+    --project "$NFCORE_RAILWAY_PROJECT_ID" \
+    --environment "$NFCORE_RAILWAY_ENVIRONMENT_ID" --json
+}
+
+require_running() {
+  service="$1"
+  deployment_id="$2"
+  observed="$(runtime_status)" || fail "provider runtime status unavailable"
+  printf '%s' "$observed" | evidence runtime \
+    "$NFCORE_RAILWAY_PROJECT_ID" "$NFCORE_RAILWAY_ENVIRONMENT_ID" \
+    "$service" "$deployment_id" >/dev/null ||
+    fail "service=$service running replica/current deployment unverified"
+}
+
+latest_baseline() {
+  observed="$(deployment_list "$1")" || fail "provider deployment listing unavailable"
+  printf '%s' "$observed" | evidence baseline ||
+    fail "service=$1 immutable baseline unavailable"
+}
+
+latest_deployment_identity() {
+  observed="$(deployment_list "$1")" || fail "provider deployment listing unavailable"
+  printf '%s' "$observed" | evidence latest-id ||
+    fail "service=$1 latest deployment identity unavailable"
 }
 
 rollback_baseline_file() {
@@ -83,18 +98,24 @@ capture_rollback_baseline() {
   file="$(rollback_baseline_file)"
   directory="$(dirname "$file")"
   mkdir -p "$directory"
-  : > "$file"
+  # Capture only a proven healthy pre-migration baseline. Worker 0/1 blocks.
+  temp_file="$file.pending"
+  : > "$temp_file"
 
   for service in \
     "$NFCORE_RAILWAY_API_SERVICE" \
     "$NFCORE_RAILWAY_WORKER_SERVICE" \
     "$NFCORE_RAILWAY_PORTAL_SERVICE"
   do
-    deployment_id="$(latest_successful_deployment_id "$service")"
-    [ -n "$deployment_id" ] || fail "service=$service has no successful rollback baseline"
-    printf '%s\t%s\n' "$service" "$deployment_id" >> "$file"
+    baseline="$(latest_baseline "$service")"
+    deployment_id="$(printf '%s' "$baseline" | cut -f1)"
+    baseline_revision="$(printf '%s' "$baseline" | cut -f2)"
+    [ -n "$deployment_id" ] && [ "${#baseline_revision}" -eq 40 ] ||
+      fail "service=$service baseline incomplete"
+    require_running "$service" "$deployment_id"
+    printf '%s\t%s\t%s\n' "$service" "$deployment_id" "$baseline_revision" >> "$temp_file"
   done
-
+  mv "$temp_file" "$file"
   echo "railway staging driver: ROLLBACK_BASELINE_CAPTURED"
 }
 
@@ -103,6 +124,13 @@ baseline_deployment_for_service() {
   file="$(rollback_baseline_file)"
   [ -f "$file" ] || fail "rollback baseline file is missing"
   awk -F '\t' -v service="$service" '$1 == service { print $2; exit }' "$file"
+}
+
+baseline_revision_for_service() {
+  service="$1"
+  file="$(rollback_baseline_file)"
+  [ -f "$file" ] || fail "rollback baseline file is missing"
+  awk -F '\t' -v service="$service" '$1 == service { print $3; exit }' "$file"
 }
 
 request_rollback() {
@@ -115,30 +143,33 @@ request_rollback() {
 
 wait_for_success() {
   service="$1"
+  revision="$2"
+  previous_id="$3"
   attempts="${NFCORE_RAILWAY_WAIT_ATTEMPTS:-60}"
   delay="${NFCORE_RAILWAY_WAIT_SECONDS:-5}"
   count=0
 
   while [ "$count" -lt "$attempts" ]; do
-    status="$(latest_status "$service")"
-    case "$status" in
-      SUCCESS)
-        echo "railway staging driver: SERVICE_READY service=$service"
+    observed="$(deployment_list "$service")" ||
+      fail "service=$service deployment listing unavailable"
+    deployment_id="$(printf '%s' "$observed" |
+      evidence deployment "$revision" "$previous_id" 2>/dev/null)" || deployment_id=""
+    if [ -n "$deployment_id" ]; then
+      live="$(runtime_status)" ||
+        fail "service=$service runtime status unavailable"
+      if printf '%s' "$live" | evidence runtime \
+        "$NFCORE_RAILWAY_PROJECT_ID" "$NFCORE_RAILWAY_ENVIRONMENT_ID" \
+        "$service" "$deployment_id" >/dev/null 2>&1; then
+        echo "railway staging driver: SERVICE_READY service=$service revision=$revision"
         return 0
-        ;;
-      FAILED|CRASHED|REMOVED|REMOVING)
-        fail "service=$service status=$status"
-        ;;
-      *)
-        count=$((count + 1))
-        if [ "$count" -lt "$attempts" ] && [ "$delay" -gt 0 ] 2>/dev/null; then
-          sleep "$delay"
-        fi
-        ;;
-    esac
+      fi
+    fi
+    count=$((count + 1))
+    if [ "$count" -lt "$attempts" ] && [ "$delay" -gt 0 ] 2>/dev/null; then
+      sleep "$delay"
+    fi
   done
-
-  fail "service=$service status=timeout"
+  fail "service=$service immutable revision or running replicas unverified"
 }
 
 assert_local_revision() {
@@ -150,11 +181,15 @@ assert_local_revision() {
 
 deploy_service() {
   service="$1"
+  revision="$2"
+  # The captured baseline is immutable, not re-read from potentially partial deploys.
+  previous_id="$(baseline_deployment_for_service "$service")"
+  [ -n "$previous_id" ] || fail "service=$service baseline missing"
   railway up --ci \
     --project "$NFCORE_RAILWAY_PROJECT_ID" \
     --environment "$NFCORE_RAILWAY_ENVIRONMENT_ID" \
     --service "$service"
-  wait_for_success "$service"
+  wait_for_success "$service" "$revision" "$previous_id"
 }
 
 case "$command" in
@@ -173,13 +208,34 @@ case "$command" in
     require_revision "$revision"
     preflight_checks
     short_revision="$(printf '%s' "$revision" | cut -c1-12)"
-    railway postgres pitr backup create \
+    backup_name="nfcore-pre-$short_revision-$(date -u +%Y%m%d%H%M%S)"
+    request="$(railway postgres pitr backup create \
       --project "$NFCORE_RAILWAY_PROJECT_ID" \
       --environment "$NFCORE_RAILWAY_ENVIRONMENT_ID" \
       --service "$NFCORE_RAILWAY_POSTGRES_SERVICE" \
-      --name "nfcore-pre-$short_revision" \
-      --json >/dev/null
-    echo "railway staging driver: BACKUP_REQUESTED revision=$revision"
+      --name "$backup_name" --json)" || fail "backup request failed"
+    backup_id="$(printf '%s' "$request" | evidence backup-request "$backup_name")" ||
+      fail "backup request id not proven"
+    count=0
+    attempts="${NFCORE_RAILWAY_BACKUP_WAIT_ATTEMPTS:-60}"
+    delay="${NFCORE_RAILWAY_BACKUP_WAIT_SECONDS:-5}"
+    while [ "$count" -lt "$attempts" ]; do
+      listing="$(railway postgres pitr backup list \
+        --project "$NFCORE_RAILWAY_PROJECT_ID" \
+        --environment "$NFCORE_RAILWAY_ENVIRONMENT_ID" \
+        --service "$NFCORE_RAILWAY_POSTGRES_SERVICE" --json)" ||
+        fail "backup listing unavailable"
+      if printf '%s' "$listing" |
+        evidence backup-receipt "$backup_id" "$backup_name" >/dev/null 2>&1; then
+        echo "railway staging driver: BACKUP_COMPLETED revision=$revision"
+        exit 0
+      fi
+      count=$((count + 1))
+      if [ "$count" -lt "$attempts" ] && [ "$delay" -gt 0 ] 2>/dev/null; then
+        sleep "$delay"
+      fi
+    done
+    fail "backup completion/retention unverified"
     ;;
   prepare-rollback)
     revision="${2:-}"
@@ -203,16 +259,18 @@ case "$command" in
       deployment_id="$(baseline_deployment_for_service "$service")"
       [ -n "$deployment_id" ] || fail "service=$service rollback baseline is missing"
     done
-    deploy_service "$NFCORE_RAILWAY_API_SERVICE"
-    deploy_service "$NFCORE_RAILWAY_WORKER_SERVICE"
-    deploy_service "$NFCORE_RAILWAY_PORTAL_SERVICE"
+    deploy_service "$NFCORE_RAILWAY_API_SERVICE" "$revision"
+    deploy_service "$NFCORE_RAILWAY_WORKER_SERVICE" "$revision"
+    deploy_service "$NFCORE_RAILWAY_PORTAL_SERVICE" "$revision"
     echo "railway staging driver: DEPLOY_READY revision=$revision"
     ;;
   verify-worker)
     revision="${2:-}"
     require_revision "$revision"
     preflight_checks
-    wait_for_success "$NFCORE_RAILWAY_WORKER_SERVICE"
+    previous_id="$(baseline_deployment_for_service "$NFCORE_RAILWAY_WORKER_SERVICE")"
+    [ -n "$previous_id" ] || fail "worker baseline missing"
+    wait_for_success "$NFCORE_RAILWAY_WORKER_SERVICE" "$revision" "$previous_id"
     echo "railway staging driver: WORKER_READY revision=$revision"
     ;;
   rollback)
@@ -226,8 +284,11 @@ case "$command" in
     do
       deployment_id="$(baseline_deployment_for_service "$service")"
       [ -n "$deployment_id" ] || fail "service=$service rollback baseline is missing"
+      previous_id="$(latest_deployment_identity "$service")"
+      restored_revision="$(baseline_revision_for_service "$service")"
+      [ -n "$restored_revision" ] || fail "service=$service baseline revision missing"
       request_rollback "$deployment_id"
-      wait_for_success "$service"
+      wait_for_success "$service" "$restored_revision" "$previous_id"
     done
     echo "railway staging driver: ROLLBACK_READY failed_revision=$revision"
     ;;
