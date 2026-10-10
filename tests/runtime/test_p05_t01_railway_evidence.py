@@ -118,7 +118,8 @@ def test_backup_must_be_completed_fresh_and_retained() -> None:
         "completedAt": (now - timedelta(minutes=1)).isoformat(),
         "expiresAt": (now + timedelta(days=7)).isoformat(),
     }
-    check = lambda data: _cli("backup-receipt", "backup-123", "nfcore-pre-abcd", payload=data)
+    def check(data: Any) -> subprocess.CompletedProcess[str]:
+        return _cli("backup-receipt", "backup-123", "nfcore-pre-abcd", payload=data)
     assert check([good]).returncode == 0
     for row in [
         {**good, "status": "QUEUED"},
@@ -147,6 +148,6 @@ def test_malformed_provider_data_is_redacted() -> None:
 
 def test_baseline_identity_contains_sha_and_refuses_missing_commit() -> None:
     good = [{"id": "deployment-id", "status": "SUCCESS", "meta": {"commitHash": SHA}}]
-    assert _cli("baseline", payload=good).stdout.strip() == f"deployment-id\\t{SHA}"
+    assert _cli("baseline", payload=good).stdout.strip() == f"deployment-id\t{SHA}"
     assert _cli("latest-id", payload=good).stdout.strip() == "deployment-id"
     assert _cli("baseline", payload=[{"id": "deployment-id", "status": "SUCCESS"}]).returncode == 1
