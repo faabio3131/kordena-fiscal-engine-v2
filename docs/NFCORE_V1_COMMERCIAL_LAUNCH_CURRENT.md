@@ -1,3 +1,11 @@
+# CURRENT superior — revalidação real de staging NFV1-P05-T01 (somente leitura) — 2026-10-10
+
+GitHub `main` `088735ed2a34ed1f372e62e4208cad3389c48f1d`; CI #751/Governance #172 SUCCESS; cronograma 27/59 concluídas, primeira pendente T01 **BLOCKED_EXTERNAL**. Railway projeto **FM NFCORE Staging** com ambiente chamado `production` (somente rótulo, não autorização de produção): API 1/1, Portal 1/1, Postgres 1/1 (imagem PostgreSQL18), Worker **0/1 running** apesar de `SUCCESS`/`Online`. Revisões antigas API/Portal `f9b5b2c5...` e Worker `1c34ba00...`, diferentes da main. Driver do staging aceita SUCCESS sem comprovar SHA/réplicas; solicita backup sem aguardar recibo; configuração API ainda invoca `migration_guard.py --apply` por preDeployCommand, potencialmente antes do backup e duplicando a ordem do script. B01 backup comprovado, B02 SQL/restore real, B04/P6-T01-B02 IAM/GSM/Worker, B05 driver/runtime continuam sem prova. Checkpoint novo: `docs/checkpoints/NFV1_P05_T01_READ_ONLY_STAGING_REVALIDATION_2026-10-10.md`.
+
+**Nenhuma alteração externa realizada**; sem token, valor de variável, dados de cliente, DB query, backup, secrets/IAM, deploy ou migration. `EXTERNAL_SECRET_BACKEND_CERTIFIED=NOT MET`, `STAGING_CURRENT_SHA_E2E_CERTIFIED=NOT MET`, `PRODUCTION_APPROVED=NO`, `COMMERCIAL_LIVE=NO`. O ledger de T01 continua aberto; PR apenas documental, sem marcar gate concluído nem avançar para T02.
+
+---
+
 # CURRENT superior — NFV1-P06-T04 certificada internamente pós-merge — 2026-10-10
 
 GitHub reconfirmado: PR #159 MERGED, `main` `d2600c6a6604d9f3f8be3ea3642b78ebbf688832`, head original `0763dc97f6fe3053bf80f22d1eae27095a9d24a0`. CI da PR #747/run38063730623 e Governance #168/run38063730630 SUCCESS; pós-merge CI main #748/run38064965857 e Governance #169/run38064965821 SUCCESS no SHA do merge, 41/41 etapas, 2.022 Python/PostgreSQL PASS, 14 frontend PASS, 28 Playwright PASS, zero FAIL/SKIP e um warning TestClient. Segurança, migrations, containers/SBOM, backup/restore/readiness PASS.
