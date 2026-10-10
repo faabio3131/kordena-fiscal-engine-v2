@@ -91,3 +91,16 @@ solicitar merge somente após prova concreta. T04 permanecependente.
 ## Pré-publicação
 
 Validador planoPASS59/primeiraT03;secret scanPASS;diffcheckPASS;migrationpolicy1..17PASS. Revisão final contém somente5arquivos(testes+4documentos);nenhumcódigodeprodução. Relógio fiscal eassinatura explicitamente fixados nos testes para não depender da data futura daCI. HEAD remoto eCI serão registrados no corpo daPR,sem reescrever árvore após certificação. Merge continua nãoautorizado.
+
+
+## Registro superior de certificação pós-merge — 2026-10-10
+
+O estágio histórico `IN_PROGRESS` acima está superado: **NFV1-P06-T03 DONE_CERTIFIED apenas internamente**, após os gates certificados no GitHub.
+
+- PR #157 MERGED; branch `test/nfv1-p06-t03-secret-scope`; head `36021c5a4aa43d60645084eaae5fd36e2c0954d0`; merge/main `1f5ec590104c5819173196b7d6dc56e58a2f3a53`; tree `6860ab7eb3145f461b62736c615b24b326e6950b`.
+- CI PR #743/run38051172757 e main #744/run38055767078 SUCCESS; Plan Governance #164/run38051172760 e #165/run38055767027 SUCCESS, 41/41 etapas pós-merge.
+- PostgreSQL/Python **1.937 PASS, zero FAIL, zero SKIP**; frontend **14 PASS**, Playwright **28 PASS**; 196 novos cenários T03 coletados/executados em CI, incluindo backend PostgreSQL. Segurança/SBOM/containers, backup/restore e readiness PASS.
+- PR #157: testes de escopo e documentos; nenhum código de produção alterado. Certifica comportamento interno, não prova Google Cloud, IAM ou segredo real.
+- Ledger: **26/59** concluídas por evidência; primeira pendente `NFV1-P06-T04 — Rotação e falha` (não iniciada nesta revisão). Fechamento documental em branch/PR própria, sujeito a gates e merge específico.
+- P6-T01-B02: **BLOCKED_EXTERNAL**; conta/projeto/região/billing/budget/identidade/IAM/bootstrap/canal e leitura GSM real sem evidência. Último staging read-only: API/Portal/PostgreSQL 1/1, Worker 0/1, drift; não retestado.
+- `EXTERNAL_SECRET_BACKEND_CERTIFIED=NOT MET`; `PRODUCTION_APPROVED=NO`; `COMMERCIAL_LIVE=NO`. Nenhum deploy, conta, gasto, IAM, cloud I/O, credencial real, SQL/migration de produção, DNS ou emissão fiscal.
