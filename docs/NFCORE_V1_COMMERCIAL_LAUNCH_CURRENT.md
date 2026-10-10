@@ -1,3 +1,13 @@
+# CURRENT superior — NFV1-P06-T04 em execução — 2026-10-10
+
+GitHub reconfirmado antes da tarefa: main `0e61a8311253aecf06a3faa48afd3b5b1be073b4`, PR #158 MERGED, zero PRs abertas, CI #746/run38062516241 e Governance #167/run38062516233 SUCCESS no mesmo SHA. Predecessora T03 DONE_CERTIFIED_INTERNAL; ledger com 26/59 concluídas. Primeira pendente T04 — rotação e falha, agora em execução numa branch isolada; **não marcada concluída**.
+
+CURRENT do código: bindings GSM duráveis metadata-only com estado active/revoked, cloud_version pinada, revision/CAS e revalidação de escopo/estado após I/O; adapters de assinatura/fiscal existem. TARGET T04: testes reprodutíveis dos cenários missing, revoked, expired, permission denied, backend unavailable, rotation, inclusive race/replay/CAS e auditoria sanitizada nos dois backends SQL. Não criar nova autoridade nem automatizar acesso cloud. A CI da candidata ainda precisa ser executada.
+
+B02 P6-T01 externo não solucionado: projeto/conta/região/identidade/IAM/bootstrap/canal de prova real GSM sem evidência. Último staging read-only conhecido: API/Portal/PostgreSQL 1/1, Worker 0/1 e drift; **não reinspecionado** nesta etapa. `EXTERNAL_SECRET_BACKEND_CERTIFIED=NOT MET`, `PRODUCTION_APPROVED=NO`, `COMMERCIAL_LIVE=NO`. Sem credenciais, cloud real, conta, gastos, deploy, SQL produtivo, DNS ou emissão fiscal.
+
+---
+
 # CURRENT superior — NFV1-P06-T03 certificada internamente pós-merge — 2026-10-10
 
 Reconsulta ao GitHub: `main` `1f5ec590104c5819173196b7d6dc56e58a2f3a53`; PR #157 MERGED, nenhuma PR aberta antes deste fechamento. Head `36021c5a4aa43d60645084eaae5fd36e2c0954d0`, tree `6860ab7eb3145f461b62736c615b24b326e6950b`. CI #743/run38051172757 e #744/run38055767078 SUCCESS; Governance #164/run38051172760 e #165/run38055767027 SUCCESS. Pós-merge 41/41 etapas, 1.937 Python/PostgreSQL, 14 frontend, 28 Playwright PASS, zero FAIL/zero SKIP, inclusive segurança, containers/SBOM e backup/restore/readiness.
