@@ -183,8 +183,10 @@ deploy_service() {
   service="$1"
   revision="$2"
   # The captured baseline is immutable, not re-read from potentially partial deploys.
-  previous_id="$(baseline_deployment_for_service "$service")"
-  [ -n "$previous_id" ] || fail "service=$service baseline missing"
+  baseline_id="$(baseline_deployment_for_service "$service")"
+  [ -n "$baseline_id" ] || fail "service=$service baseline missing"
+  # Never reuse a successful deployment from an earlier partial/retried rollout.
+  previous_id="$(latest_deployment_identity "$service")"
   railway up --ci \
     --project "$NFCORE_RAILWAY_PROJECT_ID" \
     --environment "$NFCORE_RAILWAY_ENVIRONMENT_ID" \
