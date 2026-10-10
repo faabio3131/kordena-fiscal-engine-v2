@@ -1,3 +1,13 @@
+# CURRENT superior — NFV1-P05-T01 B05 patch fail-closed em PR #162 — 2026-10-10
+
+GitHub main de entrada `3a14cf5dff00f892b0c8b3502fb2e12d13be6f87`, CI #753 e Governance #174 SUCCESS; 27/59 tarefas concluídas. Em execução **apenas o patch interno B05** na branch `fix/nfv1-p05-t01-railway-predeploy-failclosed` / PR #162, sem merge ou deploy. A task P05-T01 continua `[ ] bloqueado externo`, pois backup e SQL/restore reais, Google Secret Manager/IAM/bootstrap e Worker runtime real seguem sem certificação.
+
+Correção candidata: provider Railway precisa comprovar backup COMPLETED/retenção, ID de deployment novo, SHA exato e réplicas RUNNING; o driver rejeita dados ausentes, version mismatch e Worker 0/1. Regressões sintéticas e gates CI PR pendentes. Sem prover prova real de schema CLI backup, o driver permanece fail-closed; CI sintética não homologa integração externa. A API tem `preDeployCommand` de migration não reconciliado, logo staging não foi liberado. Checkpoint `docs/checkpoints/NFV1_P05_T01_RAILWAY_PREDEPLOY_FAILCLOSED_PATCH_2026-10-10.md`.
+
+`EXTERNAL_SECRET_BACKEND_CERTIFIED=NOT MET`; `STAGING_CURRENT_SHA_E2E_CERTIFIED=NOT MET`; `PRODUCTION_APPROVED=NO`; `COMMERCIAL_LIVE=NO`. Nenhum IAM, segredo, conta, billing, SQL, backup real, migration real, deploy, DNS ou operação fiscal executado.
+
+---
+
 # CURRENT superior — revalidação real de staging NFV1-P05-T01 (somente leitura) — 2026-10-10
 
 GitHub `main` `088735ed2a34ed1f372e62e4208cad3389c48f1d`; CI #751/Governance #172 SUCCESS; cronograma 27/59 concluídas, primeira pendente T01 **BLOCKED_EXTERNAL**. Railway projeto **FM NFCORE Staging** com ambiente chamado `production` (somente rótulo, não autorização de produção): API 1/1, Portal 1/1, Postgres 1/1 (imagem PostgreSQL18), Worker **0/1 running** apesar de `SUCCESS`/`Online`. Revisões antigas API/Portal `f9b5b2c5...` e Worker `1c34ba00...`, diferentes da main. Driver do staging aceita SUCCESS sem comprovar SHA/réplicas; solicita backup sem aguardar recibo; configuração API ainda invoca `migration_guard.py --apply` por preDeployCommand, potencialmente antes do backup e duplicando a ordem do script. B01 backup comprovado, B02 SQL/restore real, B04/P6-T01-B02 IAM/GSM/Worker, B05 driver/runtime continuam sem prova. Checkpoint novo: `docs/checkpoints/NFV1_P05_T01_READ_ONLY_STAGING_REVALIDATION_2026-10-10.md`.

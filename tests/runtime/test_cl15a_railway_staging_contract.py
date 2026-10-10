@@ -134,73 +134,38 @@ def test_railway_driver_preflight_can_be_prepared_without_exposing_secrets(
     assert "link --project project-id --environment environment-id --json" in log.read_text()
 
 
-def test_railway_driver_prepares_native_postgres_backup(
+def test_railway_driver_never_promotes_backup_request_without_receipt(
     tmp_path: Path,
 ) -> None:
     env = _base_env()
     env.update(
-        {
-            "NFCORE_RAILWAY_REAL_EXECUTION_ENABLED": "true",
-            "RAILWAY_API_TOKEN": "synthetic-token",
-        }
+        NFCORE_RAILWAY_REAL_EXECUTION_ENABLED="true",
+        RAILWAY_API_TOKEN="synthetic-token",
+        NFCORE_RAILWAY_BACKUP_WAIT_ATTEMPTS="1",
+        NFCORE_RAILWAY_BACKUP_WAIT_SECONDS="0",
     )
     log = _fake_railway(tmp_path, env)
-    revision = "a" * 40
-
-    result = _run("backup", revision, env=env)
-
-    assert result.returncode == 0
-    assert f"BACKUP_REQUESTED revision={revision}" in result.stdout
-    command_log = log.read_text()
-    assert (
-        "postgres pitr backup create --project project-id "
-        "--environment environment-id --service postgres "
-        "--name nfcore-pre-aaaaaaaaaaaa --json"
-    ) in command_log
+    result = _run("backup", "a" * 40, env=env)
+    assert result.returncode != 0
+    assert "BACKUP_COMPLETED" not in result.stdout
+    assert "postgres pitr backup create" in log.read_text()
 
 
-def test_railway_driver_prepares_immutable_three_service_deploy(
-    tmp_path: Path,
-) -> None:
+
+def test_driver_rejects_status_only_baseline_before_any_mutation(tmp_path: Path) -> None:
     env = _base_env()
     env.update(
-        {
-            "NFCORE_RAILWAY_REAL_EXECUTION_ENABLED": "true",
-            "RAILWAY_API_TOKEN": "synthetic-token",
-            "NFCORE_RAILWAY_WAIT_ATTEMPTS": "1",
-            "NFCORE_RAILWAY_WAIT_SECONDS": "0",
-            "NFCORE_RAILWAY_ROLLBACK_BASELINE_FILE": str(tmp_path / "baseline.tsv"),
-        }
+        NFCORE_RAILWAY_REAL_EXECUTION_ENABLED="true",
+        RAILWAY_API_TOKEN="synthetic-token",
+        NFCORE_RAILWAY_ROLLBACK_BASELINE_FILE=str(tmp_path / "baseline.tsv"),
     )
     log = _fake_railway(tmp_path, env)
-    revision = _git_head()
+    result = _run("prepare-rollback", _git_head(), env=env)
+    assert result.returncode != 0
+    assert "ROLLBACK_BASELINE_CAPTURED" not in result.stdout
+    assert "up --ci" not in log.read_text()
+    assert "postgres pitr backup" not in log.read_text()
 
-    prepared = _run("prepare-rollback", revision, env=env)
-    baseline_before = Path(env["NFCORE_RAILWAY_ROLLBACK_BASELINE_FILE"]).read_text()
-    result = _run("deploy", revision, env=env)
-
-    assert prepared.returncode == 0
-    assert "ROLLBACK_BASELINE_CAPTURED" in prepared.stdout
-    assert result.returncode == 0
-    assert Path(env["NFCORE_RAILWAY_ROLLBACK_BASELINE_FILE"]).read_text() == baseline_before
-    assert f"DEPLOY_READY revision={revision}" in result.stdout
-    baseline = Path(env["NFCORE_RAILWAY_ROLLBACK_BASELINE_FILE"]).read_text()
-    for service in ("api", "worker", "portal"):
-        assert f"{service}\tdeployment-1" in baseline
-    command_log = log.read_text()
-    for service in ("api", "worker", "portal"):
-        assert (
-            f"deployment list --service {service} --environment environment-id "
-            "--limit 20 --json"
-        ) in command_log
-        assert (
-            f"up --ci --project project-id --environment environment-id "
-            f"--service {service}"
-        ) in command_log
-        assert (
-            f"deployment list --service {service} --environment environment-id "
-            "--limit 1 --json"
-        ) in command_log
 
 
 def test_railway_driver_refuses_deploy_without_successful_rollback_baseline(
@@ -219,64 +184,45 @@ def test_railway_driver_refuses_deploy_without_successful_rollback_baseline(
     result = _run("prepare-rollback", _git_head(), env=env)
 
     assert result.returncode == 1
-    assert "has no successful rollback baseline" in result.stdout
+    assert "immutable baseline unavailable" in result.stdout
     assert "up --ci" not in log.read_text()
 
 
-def test_railway_driver_verify_worker_uses_terminal_success(
-    tmp_path: Path,
-) -> None:
+def test_driver_does_not_accept_success_without_live_worker_evidence(tmp_path: Path) -> None:
     env = _base_env()
     env.update(
-        {
-            "NFCORE_RAILWAY_REAL_EXECUTION_ENABLED": "true",
-            "RAILWAY_API_TOKEN": "synthetic-token",
-            "NFCORE_RAILWAY_WAIT_ATTEMPTS": "1",
-            "NFCORE_RAILWAY_WAIT_SECONDS": "0",
-        }
+        NFCORE_RAILWAY_REAL_EXECUTION_ENABLED="true",
+        RAILWAY_API_TOKEN="synthetic-token",
+        NFCORE_RAILWAY_WAIT_ATTEMPTS="1",
+        NFCORE_RAILWAY_WAIT_SECONDS="0",
     )
     _fake_railway(tmp_path, env)
-    revision = _git_head()
-
-    result = _run("verify-worker", revision, env=env)
-
-    assert result.returncode == 0
-    assert f"WORKER_READY revision={revision}" in result.stdout
+    result = _run("verify-worker", _git_head(), env=env)
+    assert result.returncode != 0
+    assert "WORKER_READY" not in result.stdout
 
 
-def test_railway_driver_rolls_back_to_captured_deployments(
-    tmp_path: Path,
-) -> None:
+
+def test_driver_does_not_rollback_with_unversioned_baseline(tmp_path: Path) -> None:
     env = _base_env()
     env.update(
-        {
-            "NFCORE_RAILWAY_REAL_EXECUTION_ENABLED": "true",
-            "RAILWAY_API_TOKEN": "synthetic-token",
-            "NFCORE_RAILWAY_WAIT_ATTEMPTS": "1",
-            "NFCORE_RAILWAY_WAIT_SECONDS": "0",
-            "NFCORE_RAILWAY_ROLLBACK_BASELINE_FILE": str(tmp_path / "baseline.tsv"),
-        }
+        NFCORE_RAILWAY_REAL_EXECUTION_ENABLED="true",
+        RAILWAY_API_TOKEN="synthetic-token",
+        NFCORE_RAILWAY_WAIT_ATTEMPTS="1",
+        NFCORE_RAILWAY_WAIT_SECONDS="0",
+        NFCORE_RAILWAY_ROLLBACK_BASELINE_FILE=str(tmp_path / "baseline.tsv"),
     )
     _fake_railway(tmp_path, env)
     graphql_log = _fake_rollback_helper(tmp_path, env)
     Path(env["NFCORE_RAILWAY_ROLLBACK_BASELINE_FILE"]).write_text(
-        "api\tapi-deployment\n"
-        "worker\tworker-deployment\n"
-        "portal\tportal-deployment\n",
+        "api\tapi-deployment\nworker\tworker-deployment\nportal\tportal-deployment\n",
         encoding="utf-8",
     )
-    revision = "0" * 40
+    result = _run("rollback", "a" * 40, env=env)
+    assert result.returncode != 0
+    assert "ROLLBACK_READY" not in result.stdout
+    assert not graphql_log.exists()
 
-    result = _run("rollback", revision, env=env)
-
-    assert result.returncode == 0
-    assert f"ROLLBACK_READY failed_revision={revision}" in result.stdout
-    requests = graphql_log.read_text().splitlines()
-    assert requests == [
-        "rollback api-deployment",
-        "rollback worker-deployment",
-        "rollback portal-deployment",
-    ]
 
 
 def test_railway_driver_refuses_deploy_without_pre_migration_baseline(tmp_path: Path) -> None:
