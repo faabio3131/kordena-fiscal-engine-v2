@@ -361,16 +361,16 @@ Antecipação P6 antes de P5 aprovada em 2026-10-09 (“Autorizado”), conforme
 
 ### 27. NFV1-P06-T04 — Rotação e falha
 
-- [ ] **Estado:** em execução
-- **Objetivo:** certificar fail-closed e rotação segura dos bindings GSM canônicos existentes, sem ativar Google Cloud real.
-- **Depende de:** NFV1-P06-T03 integrada e certificada internamente na main pelo merge PR #158, CI #746, Governance #167.
-- **Entregar:** testes para missing, revoked, expired, permission denied, backend unavailable e rotation; incluindo versão numérica fixa, revogação concorrente, replay antigo, CAS e auditoria metadata-only em SQLite/PostgreSQL; checkpoint T04.
-- **Não fazer:** não antecipar P5; não criar segunda autoridade de segredo; não habilitar IAM, bootstrap ou acesso Google Cloud real; não fazer deploy, migração ou alterações de produção.
-- **Critério de aceite:** todas as quatro classes (signature/certificate/csc/credentials) negam falhas/versões antigas sem vazamento; rotação nova só é lida após binding versionado e autorizado, estado antigo e requisições em voo falham fechado; suíte PostgreSQL e CI integrais 0 FAIL/0 SKIP. O gate externo EXTERNAL_SECRET_BACKEND_CERTIFIED permanece NOT MET sem identidade/IAM/GSM reais.
-- **Verificação:** `python3 scripts/check_nfcore_plan.py`, Ruff, Mypy, pytest incluindo SQLite/PostgreSQL, frontend, Playwright, Docker/containers, segurança/SBOM e backup/restore pela CI canônica. Testes dirigidos locais quando possível; resultados não observados permanecem pendentes.
-- **Riscos / não confirmado:** P6-T01-B02 BLOCKED_EXTERNAL (conta/projeto/região/billing/budget/identidade/IAM/bootstrap/canal/leitura real GSM). Payloads sintéticos não certificam cloud; último staging read-only em drift com Worker 0/1 não revalidado por T04. Eventual erro de teste/implementação precisa ser investigado e corrigido sem relaxar gates.
-- **Decisões do dono pendentes:** "Pode executar" autorizado para trabalho interno em 2026-10-10; merge da futura PR, conta/gasto/IAM/deploy/credenciais e acesso cloud exigem autorização específica.
-- **Prova:** IN_PROGRESS; main de entrada `0e61a8311253aecf06a3faa48afd3b5b1be073b4`; PR #158 MERGED; CI #746/run38062516241 e Governance #167/run38062516233 SUCCESS, 41/41. Branch `test/nfv1-p06-t04-secret-rotation-failures`; testes candidatos em `tests/vault/test_p06_t04_rotation_failures.py`. Resultados desta branch/PR/CI ainda NÃO certificados. Checkpoint `docs/checkpoints/NFV1_P06_T04_ROTATION_FAILURES_2026-10-10.md`. 26/59 concluídas; T04 em execução, não concluída.
+- [x] **Estado:** concluído
+- **Objetivo:** certificar internamente o fail-closed e rotação segura dos bindings GSM canônicos existentes, sem ativar Google Cloud real.
+- **Depende de:** NFV1-P06-T03 integrada e certificada internamente na main pela PR #158; CI #746 e Governance #167 SUCCESS.
+- **Entregar:** testes para missing, revoked, expired, permission denied, backend unavailable e rotation; versão numérica pinada, revogação concorrente, replay antigo, CAS e auditoria metadata-only em SQLite/PostgreSQL; checkpoint T04.
+- **Não fazer:** não antecipar P5; não criar segunda autoridade de segredo; não habilitar IAM, bootstrap nem Google Cloud real; não fazer deploy, migration de produção ou alterações de produção.
+- **Critério de aceite:** os quatro tipos de segredo (signature/certificate/csc/credentials) negam falhas e versões antigas sem vazamento; rotação exige binding versionado/autorizado, leitura concorrente revogada falha fechado; PostgreSQL e CI completas zero FAIL/zero SKIP. Certificação apenas interna, não substitui gate externo.
+- **Verificação:** `python3 scripts/check_nfcore_plan.py`, Ruff, Mypy, pytest SQLite/PostgreSQL, frontend, Playwright, Docker/containers, supply-chain/SBOM, backup/restore e readiness, com provas da CI PR e pós-merge.
+- **Riscos / não confirmado:** P6-T01-B02 BLOCKED_EXTERNAL: conta/projeto/região/billing/budget/identidade/IAM/bootstrap/canal e acesso GSM cloud real não demonstrados. Payloads sintéticos não provam IAM ou produção. Último staging read-only em drift e Worker 0/1, não reinspecionado. Gate `EXTERNAL_SECRET_BACKEND_CERTIFIED=NOT MET`; `PRODUCTION_APPROVED=NO`; `COMMERCIAL_LIVE=NO`.
+- **Decisões do dono pendentes:** execução T04 e merge PR #159 autorizados explicitamente em 2026-10-10. Integração do presente fechamento documental, deploy, conta, IAM, credenciais reais e gastos exigem autorizações específicas.
+- **Prova:** PR #159 MERGED; head `0763dc97f6fe3053bf80f22d1eae27095a9d24a0`; merge/main `d2600c6a6604d9f3f8be3ea3642b78ebbf688832`; CI PR #747/run38063730623 e Governance #168/run38063730630 SUCCESS; CI main #748/run38064965857 e Governance #169/run38064965821 SUCCESS no merge SHA, 41/41 etapas, 2.022 Python/PostgreSQL PASS, 14 frontend PASS, 28 Playwright PASS, zero FAIL/zero SKIP, 1 warning TestClient. Segurança/secret scan, migrations, containers/SBOM, backup/restore/readiness PASS. Checkpoint `docs/checkpoints/NFV1_P06_T04_ROTATION_FAILURES_2026-10-10.md`. **T04 DONE_CERTIFIED_INTERNAL condicionado à integração do presente closeout documental; 27/59 concluídas após fechamento.** Próximo item NFV1-P05-T01 BLOCKED_EXTERNAL pela P6-T01-B02. Sem deploy.
 
 ### 28. NFV1-P05-T01 — Pré-deploy
 
