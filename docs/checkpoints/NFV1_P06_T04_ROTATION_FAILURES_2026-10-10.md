@@ -28,3 +28,18 @@ TARGET: testar as seis classes de falhas exigidas pelo cronograma em assinatura,
 P6-T01-B02 **BLOCKED_EXTERNAL**: conta/projeto/região/billing/budget, identidade/IAM, bootstrap/rota de acesso e prova real GSM. Staging permanece em drift no último levantamento (API/Portal/PostgreSQL 1/1, Worker 0/1), sem inspeção nova ou deploy. Sem segredo/credencial real, produção, SQL externo, DNS, compra ou operação fiscal. `PRODUCTION_APPROVED=NO`, `COMMERCIAL_LIVE=NO`.
 
 **Próxima ação:** validar testes dirigidos quando possível, executar Ruff/MyPy/validador de plano, abrir PR Draft com escopo único T04, certificar CI no HEAD exato, preservar o gate humano de merge. Não iniciar P5.
+
+
+## Certificação pós-merge — evidência superior (2026-10-10)
+
+O status `IN_PROGRESS` e os placeholders de PR/CI deste checkpoint são históricos. A PR #159 foi integrada e os gates posteriores encerraram com sucesso:
+- **Branch testada:** `test/nfv1-p06-t04-secret-rotation-failures`, head `0763dc97f6fe3053bf80f22d1eae27095a9d24a0`; **PR #159 MERGED**, merge/main `d2600c6a6604d9f3f8be3ea3642b78ebbf688832`.
+- **Pré-merge:** CI #747/run38063730623 e Governance #168/run38063730630 SUCCESS no head.
+- **Pós-merge:** CI #748/run38064965857 (quality job 114250640404) e Governance #169/run38064965821 SUCCESS no SHA do merge; **41/41 etapas**.
+- **Logs CI main:** 2.022 Python/PostgreSQL PASS, zero FAIL, zero SKIP, 1 warning preexistente TestClient, 439,52s; 14 frontend PASS; 28 Playwright PASS em 23,6s. Ruff, Mypy, secret scan, migrations 1–17, dependências, frontend lint/typecheck/build, E2E, containers, non-root, vulnerability policy, SBOM, PostgreSQL backup/restore/readiness PASS.
+- **T04** cobre missing, revoked, expired, permission denied, backend unavailable, timeout/version missing, rotação 9→10, conflito CAS e revogação concorrente em signature/certificate/csc/credentials; 85 novos casos adicionados ao baseline. Não foi necessário modificar regras ou código de produção.
+- **Classificação:** `NFV1-P06-T04 DONE_CERTIFIED_INTERNAL`, condicionado ao merge e gates específicos do presente fechamento documental. Após esse fechamento: 27/59 concluídas; próxima tarefa no ledger `NFV1-P05-T01` continua `BLOCKED_EXTERNAL`.
+- **Bloqueio externo não mitigado:** P6-T01-B02 (identidade/IAM/GSM real/conta/bootstrap/canal) sem prova, `EXTERNAL_SECRET_BACKEND_CERTIFIED=NOT MET`. Testes sintéticos não certificam cloud nem staging. Último staging read-only segue em drift/Worker 0/1, não reinspecionado; `PRODUCTION_APPROVED=NO`; `COMMERCIAL_LIVE=NO`.
+- Nenhum segredo/credencial real, criação de conta, gasto, IAM, cloud I/O, migration produtiva, DNS, deploy ou emissão fiscal ocorreu. **Merge deste fechamento documental exige autorização própria.**
+
+Evidências remotas: [CI pós-merge #748](https://github.com/faabio3131/kordena-fiscal-engine-v2/actions/runs/38064965857) e [Governance #169](https://github.com/faabio3131/kordena-fiscal-engine-v2/actions/runs/38064965821).
