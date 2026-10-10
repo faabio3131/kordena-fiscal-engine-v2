@@ -12,7 +12,7 @@ import re
 import sys
 from typing import Any
 
-_SHA = re.compile(r"[0-9a-fA-F]{40}\\Z")
+_SHA = re.compile(r"[0-9a-fA-F]{40}\Z")
 
 
 class EvidenceError(ValueError):
