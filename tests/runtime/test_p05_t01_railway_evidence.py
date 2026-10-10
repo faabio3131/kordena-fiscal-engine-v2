@@ -1,12 +1,12 @@
 """Provider-evidence regression matrix; no Railway operations or credentials."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
 import importlib.util
 import json
-from pathlib import Path
 import subprocess
 import sys
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from types import ModuleType
 from typing import Any
 
@@ -50,7 +50,10 @@ def _status(
                     "activeDeployments": [{
                         "id": active, "status": "SUCCESS",
                         "deploymentStopped": stopped,
-                        "instances": [{"status": x} for x in (instances if instances is not None else ["RUNNING"])],
+                        "instances": [
+                            {"status": x}
+                            for x in (instances if instances is not None else ["RUNNING"])
+                        ],
                     }],
                 }}]},
             }}],
@@ -112,7 +115,7 @@ def test_backup_request_requires_provider_id_and_exact_name() -> None:
 
 
 def test_backup_must_be_completed_fresh_and_retained() -> None:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     good = {
         "id": "backup-123", "name": "nfcore-pre-abcd", "status": "COMPLETED",
         "completedAt": (now - timedelta(minutes=1)).isoformat(),
