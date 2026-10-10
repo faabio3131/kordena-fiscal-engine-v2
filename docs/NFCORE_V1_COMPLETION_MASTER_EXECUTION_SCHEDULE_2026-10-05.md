@@ -542,6 +542,9 @@ Tenant, unidade, ambiente, provider, purpose, version e expiration.
 
 Testar missing, revoked, expired, permission denied, backend unavailable e rotation.
 
+
+**Fechamento interno T04 — 2026-10-10:** PR #159 MERGED; `main` `d2600c6a6604d9f3f8be3ea3642b78ebbf688832`; CI #747 (PR), #748 (main), Governance #168/#169 SUCCESS, pós-merge 41/41 etapas: 2.022 Python/PostgreSQL, 14 frontend e 28 Playwright PASS, zero FAIL/zero SKIP (um warning TestClient). 85 casos novos cobrindo as classes signature/certificate/csc/credentials, SQLite/PostgreSQL, falhas, rotação e concorrência. **NFV1-P06-T04 DONE_CERTIFIED_INTERNAL**; 27/59 tarefas concluídas após fechamento documental. Não confundir com `EXTERNAL_SECRET_BACKEND_CERTIFIED`: **gate P6 NOT MET** por P6-T01-B02 (conta/identidade/IAM/bootstrap e operação Google Secret Manager real pendentes). P5-T01 continua BLOCKED_EXTERNAL, não liberada para deploy. Sem segredo real, cloud I/O, gasto ou deploy.
+
 ## Gate
 
 - [ ] zero secret raw em Git/log;
