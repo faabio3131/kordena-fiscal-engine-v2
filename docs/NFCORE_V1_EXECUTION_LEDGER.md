@@ -13,6 +13,8 @@
 
 ## Itens — ordem obrigatória, um por vez
 
+CURRENT superior 2026-10-10: P06-T03 DONE_CERTIFIED interno após PR #157 MERGED, main `1f5ec590104c5819173196b7d6dc56e58a2f3a53`, CI main #744 (41/41) e Governance #165 SUCCESS; 26/59 tarefas concluídas. Primeira pendente NFV1-P06-T04. Fechamento documental em PR separada, não integra nem inicia T04. P6-T01-B02 externo, staging drift/Worker 0/1 (última leitura), PRODUCTION_APPROVED=NO; COMMERCIAL_LIVE=NO.
+
 Antecipação P6 antes de P5 aprovada em 2026-10-09 (“Autorizado”), conforme checkpoint P05-T01. Mesmos59 IDs, índices renumerados,23 concluídos,zero checkbox promovida. Validador inalterado. Próxima tarefa depois de integrar/certificar o registro: NFV1-P06-T01. P05-T01 permanece bloqueada.
 
 ### 1. NFV1-P00-T01 — Reconciliar documentação CURRENT
@@ -346,16 +348,16 @@ Antecipação P6 antes de P5 aprovada em 2026-10-09 (“Autorizado”), conforme
 
 ### 26. NFV1-P06-T03 — Certificar escopo
 
-- [ ] **Estado:** em execução
+- [x] **Estado:** concluído
 - **Objetivo:** executar exatamente a tarefa NFV1-P06-T03 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P06-T02 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** matriz de escopo nos resolvers GSM canônicos, SQLite/PostgreSQL, auditoria sanitizada e checkpoint P06-T03; sem operação cloud real.
 - **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
 - **Critério de aceite:** critérios específicos de NFV1-P06-T03 no cronograma satisfeitos e nenhum gate transversal violado.
-- **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** P6-T01-B02 conta/IAM/bootstrap/provider real permanece aberto; testes com payload sintético não certificam Google Cloud. Staging segue em drift, Worker0/1. T04 não iniciada.
-- **Decisões do dono pendentes:** execução interna/branch/testes/PR Draft autorizados pelo dono em2026-10-10 (Pode executar). Merge/deploy/conta/credencial/IAM/operação externa exigem autorização específica.
-- **Prova:** EM EXECUCAO; entrada main `4855613613eb8d265fe62289fff39fe5ab710c4c`;PR #156 MERGED;CI #742/run37989321439/tentativa3/job114121909282 SUCCESS41/41 e Governance #163 SUCCESS. T02 pós-merge certificada;bloqueioDockerHub429 resolvido. ProvaT03/HEAD/PR/CI será registrada após gates. Checkpoint `docs/checkpoints/NFV1_P06_T03_SCOPE_CERTIFICATION_2026-10-10.md`.25/59 concluídas;T03 não concluída.
+- **Verificação:** 196 casos novos de escopo em SQLite/PostgreSQL, Ruff, Mypy strict, Python/frontend/Playwright, segurança/SBOM/containers/backup/restore/readiness, governança e `python3 scripts/check_nfcore_plan.py`.
+- **Riscos / não confirmado:** T03 certificada somente internamente. P6-T01-B02 permanece BLOCKED_EXTERNAL: conta/projeto/região/billing/budget/identidade/IAM/bootstrap/canal e acesso real ao GSM não comprovados; testes sintéticos não provam Google Cloud. Último staging read-only: API/Portal/PostgreSQL 1/1 e Worker 0/1, em drift; sem nova inspeção nesta revisão. Gate externo P6 NOT MET, PRODUCTION_APPROVED=NO, COMMERCIAL_LIVE=NO.
+- **Decisões do dono pendentes:** execução interna e merge PR #157 autorizados em 2026-10-10; este fechamento documental, deploy, conta, IAM, credencial real, gasto e operação externa dependem de gates/autorização próprios.
+- **Prova:** PR #157 MERGED; HEAD `36021c5a4aa43d60645084eaae5fd36e2c0954d0`; merge/main `1f5ec590104c5819173196b7d6dc56e58a2f3a53`; tree `6860ab7eb3145f461b62736c615b24b326e6950b`. CI PR #743/run38051172757 SUCCESS, pós-merge main CI #744/run38055767078 SUCCESS; Governance PR #164/run38051172760 e main #165/run38055767027 SUCCESS. Pós-merge 41/41 etapas, 1.937 Python/PostgreSQL, 14 frontend, 28 Playwright PASS, zero FAIL/zero SKIP; segurança, containers, SBOM, backup/restore e readiness PASS. Checkpoint `docs/checkpoints/NFV1_P06_T03_SCOPE_CERTIFICATION_2026-10-10.md`; 26/59 concluídas; próxima NFV1-P06-T04 ainda pendente. Sem deploy.
 
 ### 27. NFV1-P06-T04 — Rotação e falha
 
