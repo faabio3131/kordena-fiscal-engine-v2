@@ -6,10 +6,10 @@ blocked until an actual provider sample is reviewed.
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timezone
 import json
 import re
 import sys
+from datetime import UTC, datetime
 from typing import Any
 
 _SHA = re.compile(r"[0-9a-fA-F]{40}\Z")
@@ -61,15 +61,18 @@ def backup_receipt(payload: Any, backup_id: str, expected_name: str) -> str:
     rows = payload if isinstance(payload, list) else _obj(payload).get("backups")
     if not isinstance(rows, list):
         raise EvidenceError("unknown backup listing schema")
-    records = [_obj(item) for item in rows if isinstance(item, dict) and item.get("id") == backup_id]
+    records = [
+        _obj(item) for item in rows
+        if isinstance(item, dict) and item.get("id") == backup_id
+    ]
     if len(records) != 1:
         raise EvidenceError("backup receipt absent or ambiguous")
     record = records[0]
     if record.get("name") != expected_name or record.get("status") != "COMPLETED":
         raise EvidenceError("backup not completed")
-    if _time(record.get("completedAt")) > datetime.now(timezone.utc):
+    if _time(record.get("completedAt")) > datetime.now(UTC):
         raise EvidenceError("backup completion in future")
-    if _time(record.get("expiresAt")) <= datetime.now(timezone.utc):
+    if _time(record.get("expiresAt")) <= datetime.now(UTC):
         raise EvidenceError("backup expired or retention unproven")
     return backup_id
 
