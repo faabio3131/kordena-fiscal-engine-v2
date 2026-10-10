@@ -536,7 +536,7 @@ Execução interna autorizada pelo dono (“Executar”) em2026-10-09 após PR15
 
 Tenant, unidade, ambiente, provider, purpose, version e expiration.
 
-Execução interna autorizada pelo dono (Pode executar) em2026-10-10. Entrada main `4855613613eb8d265fe62289fff39fe5ab710c4c`,PR156 MERGED,CI742 tentativa3/job114121909282 SUCCESS41/41 e Governance163 SUCCESS;bloqueio DockerHub429 resolvido,fechamentoT02 certificado. Certificar escopo antes do I/O, envelope tipado, revalidação após leitura, expiração exata/durante acesso e identidade imutável pelos resolvers/vault/admin canônicos, com SQLite/PostgreSQL. Testes sintéticos não certificam providercloudreal. T03 emexecução;T04 não iniciada;P6-T01-B02 continua. Checkpoint `docs/checkpoints/NFV1_P06_T03_SCOPE_CERTIFICATION_2026-10-10.md`. Semnovaautoridade/código deprodução/deploy/credencial/IAM/conta/gasto.
+**DONE_CERTIFIED interno em 2026-10-10:** PR #157 MERGED (`1f5ec590104c5819173196b7d6dc56e58a2f3a53`); CI #743 (PR) e #744 (main), Governance #164 e #165 SUCCESS. Pós-merge: 41/41 etapas, 1.937 Python/PostgreSQL, 14 frontend e 28 Playwright PASS, zero FAIL/zero SKIP. 196 novos casos de escopo, checkpoints e regressões em `tests/vault/test_p06_t03_scope_certification.py` e `docs/checkpoints/NFV1_P06_T03_SCOPE_CERTIFICATION_2026-10-10.md`. 26/59 tarefas concluídas internamente; próxima T04 não iniciada neste closeout. **P6-T01-B02 permanece BLOCKED_EXTERNAL**: conta/IAM/bootstrap/acesso efetivo Google Secret Manager não certificados. Gate externo P6 não cumprido; sem deploy, cloud real, credencial ou operação fiscal. PRODUCTION_APPROVED=NO; COMMERCIAL_LIVE=NO.
 
 ### NFV1-P06-T04 — Rotação e falha
 
