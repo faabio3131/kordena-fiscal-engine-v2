@@ -220,7 +220,11 @@ def assert_material(material, kind):
         with pytest.raises(SecretResolutionError):
             material.reveal()
     else:
-        field = {"certificate": "pkcs12_bytes", "csc": "code", "credentials": "credential_bytes"}[kind]
+        field = {
+            "certificate": "pkcs12_bytes",
+            "csc": "code",
+            "credentials": "credential_bytes",
+        }[kind]
         assert getattr(material, field) == SECRET
     assert SECRET.decode() not in repr(material)
 
@@ -267,7 +271,8 @@ def test_failure_matrix_fails_closed_without_secret_leaks(database, kind, failur
     assert SECRET.decode() not in str(exc.value)
     assert "synthetic-provider-private-detail" not in str(exc.value)
     assert exc.value.__cause__ is None
-    assert access.calls == ([] if failure in {"missing", "revoked", "expired"} else [binding.version_name])
+    expected_calls = [] if failure in {"missing", "revoked", "expired"} else [binding.version_name]
+    assert access.calls == expected_calls
     events = signature_events if kind == "signature" else audit.events
     assert len(events) == 1 and events[0].outcome != "resolved"
     assert SECRET.decode() not in json.dumps([asdict(event) for event in events], default=str)
@@ -352,7 +357,10 @@ def test_revision_conflict_cannot_override_rotated_binding(database, kind):
 @pytest.mark.parametrize(
     "sdk_error,expected",
     [
-        (exceptions.PermissionDenied("synthetic-private-sdk-detail"), ExternalSecretPermissionDenied),
+        (
+            exceptions.PermissionDenied("synthetic-private-sdk-detail"),
+            ExternalSecretPermissionDenied,
+        ),
         (exceptions.NotFound("synthetic-private-sdk-detail"), SecretResolutionError),
         (exceptions.ServiceUnavailable("synthetic-private-sdk-detail"), SecretBackendUnavailable),
         (exceptions.DeadlineExceeded("synthetic-private-sdk-detail"), SecretBackendUnavailable),
