@@ -139,6 +139,7 @@ def main() -> int:
     item.add_argument("revision")
     item.add_argument("previous")
     sub.add_parser("baseline")
+    sub.add_parser("latest-id")
     item = sub.add_parser("runtime")
     for key in ("project", "environment", "service", "deployment_id"):
         item.add_argument(key)
@@ -154,7 +155,12 @@ def main() -> int:
                 raise EvidenceError("invalid expected SHA")
             proof = deployment(payload, expected_sha=args.revision, previous=args.previous)
         elif args.check == "baseline":
-            proof = deployment(payload, expected_sha=None, previous=None)
+            deployment_id = deployment(payload, expected_sha=None, previous=None)
+            proof = deployment_id + "\\t" + _obj(payload[0]["meta"])["commitHash"]
+        elif args.check == "latest-id":
+            if not isinstance(payload, list) or not payload:
+                raise EvidenceError("latest deployment unavailable")
+            proof = _str(_obj(payload[0]).get("id"))
         else:
             proof = runtime(payload, project=args.project, environment=args.environment,
                             service=args.service, deployment_id=args.deployment_id)
