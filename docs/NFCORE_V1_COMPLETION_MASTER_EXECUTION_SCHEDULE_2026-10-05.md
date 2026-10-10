@@ -536,6 +536,8 @@ Execução interna autorizada pelo dono (“Executar”) em2026-10-09 após PR15
 
 Tenant, unidade, ambiente, provider, purpose, version e expiration.
 
+Execução interna autorizada pelo dono (Pode executar) em2026-10-10. Entrada main `4855613613eb8d265fe62289fff39fe5ab710c4c`,PR156 MERGED,CI742 tentativa3/job114121909282 SUCCESS41/41 e Governance163 SUCCESS;bloqueio DockerHub429 resolvido,fechamentoT02 certificado. Certificar escopo antes do I/O, envelope tipado, revalidação após leitura, expiração exata/durante acesso e identidade imutável pelos resolvers/vault/admin canônicos, com SQLite/PostgreSQL. Testes sintéticos não certificam providercloudreal. T03 emexecução;T04 não iniciada;P6-T01-B02 continua. Checkpoint `docs/checkpoints/NFV1_P06_T03_SCOPE_CERTIFICATION_2026-10-10.md`. Semnovaautoridade/código deprodução/deploy/credencial/IAM/conta/gasto.
+
 ### NFV1-P06-T04 — Rotação e falha
 
 Testar missing, revoked, expired, permission denied, backend unavailable e rotation.

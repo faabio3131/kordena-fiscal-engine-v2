@@ -1,3 +1,13 @@
+# CURRENT superior — P06-T03 em execução — 2026-10-10
+
+Main reconfirmada `4855613613eb8d265fe62289fff39fe5ab710c4c`;PR156 MERGED,zeroPRs abertas na entrada. FechamentoT02 certificado:CI742/run37989321439/tentativa3/job114121909282 SUCCESS41/41,1741Python/PostgreSQL,14frontend,28Playwright PASS/0FAIL/0SKIP;Governance163/run37989321416 SUCCESS. DockerHub429 resolvido sem alteração de workflow/teste/registry/credencial. Evidência superior registrada naPR156.
+
+Dono autorizou executar P06-T03 (Pode executar). CURRENT:adapterGSM integrado,prova fiscal detalhada de escopo ainda T03. TARGET:certificação interna de tenant/unidade/ambiente/provider/purpose/version/expiration nos resolvers/vault/bindingadmin existentes,com SQLite/PostgreSQL e payloads sintéticos. Somente testes/documentação;nenhum código deprodução,migration,dependência ou workflow muda. T03 emexecução;25/59 concluídas;T04 não iniciada. Checkpoint `checkpoints/NFV1_P06_T03_SCOPE_CERTIFICATION_2026-10-10.md`;provaHEAD/PR/CI desta revisão será registrada naPR.
+
+Staging somente leitura reconfirmado2026-10-10:mesmos deploymentsAPIc0f8fb2b/Portal35b7aafc/Worker3215f498/Postgresce9b66e7;running1/1,1/1,0/1,1/1. Worker Online não significa processo ativo;patchstaged histórico zerochanges. P6-T01-B02 identidade/IAM/conta/bootstrap/canal/provaGSMreal aberto. Não confundir com CI429resolvida. GateP6 não certificado;PRODUCTION_APPROVED=NO;COMMERCIAL_LIVE=NO. Semdeploy/SQLreal/secretreal/cloudI/O/gasto.
+
+## Snapshot histórico — T02
+
 # CURRENT superior — NFV1-P06-T02 integrado e certificado internamente — 2026-10-09
 
 PR #155 MERGED; HEAD `5eb98614f4dfdc092871bb6e06c1efef7825e6ba`; main `8ad5a20e8ec954ef91f5e2c8f77a17ad09e8e62b`; árvore idêntica `5531ec7f0d7da61c59f92117b08f56807fae8715`. CI #739/run37973027312/job113964215052 (PR), #740/run37978308311/job113982097370 (main), Governance #160/run37973027313 e #161/run37978308448 SUCCESS. PR/main:41/41 etapas;1741 Python/PostgreSQL,14 frontend,28 Playwright PASS/zero FAIL/zero SKIP;um warning TestClient preexistente. Backup/restore PostgreSQL16 sintético, checksum e readiness PASS.
