@@ -46,20 +46,25 @@ class _ResetDelivery:
 
 
 class _Cursor:
+    def __init__(self, statement: str = "") -> None:
+        self._statement = statement
+
     def fetchone(self) -> tuple[int]:
         return (1,)
 
     def fetchall(self) -> tuple[tuple[int, ...], ...]:
+        if "FROM fm_cakto_schema_migrations" in self._statement:
+            return ((1,), (2,))
         return ()
 
 
 class _Connection:
     def execute(
         self,
-        _statement: str,
+        statement: str,
         _parameters: tuple[object, ...] = (),
     ) -> _Cursor:
-        return _Cursor()
+        return _Cursor(statement)
 
     def commit(self) -> None:
         return None
