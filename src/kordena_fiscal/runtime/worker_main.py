@@ -62,7 +62,10 @@ def run(
 
         database = PostgresFiscalDatabase(settings.database_url)
         try:
-            database.initialize()
+            if settings.is_production_like:
+                database.require_current_schema()
+            else:
+                database.initialize()
             with database.connection() as connection:
                 connection.execute("SELECT 1").fetchone()
 
