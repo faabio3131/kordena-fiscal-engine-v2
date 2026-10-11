@@ -161,7 +161,7 @@ def build_postgres_runtime_composition(
     cakto_checkout_administration: CaktoCheckoutAdministrationService | None = None
     if enable_cakto_checkout:
         cakto_commercial_database = postgres_cakto_commercial_database(database)
-        cakto_commercial_database.initialize()
+        cakto_commercial_database.require_current_schema()
         cakto_checkout_administration = CaktoCheckoutAdministrationService(
             cakto_commercial_database
         )
