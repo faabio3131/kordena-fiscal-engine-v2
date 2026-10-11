@@ -149,7 +149,10 @@ class _RuntimeDatabase:
         self.closed = False
 
     def initialize(self) -> tuple[int]:
-        return (1,)
+        raise AssertionError("staging API startup must never apply migrations")
+
+    def require_current_schema(self) -> tuple[int]:
+        return self.applied_migrations()
 
     @contextmanager
     def connection(self) -> Iterator[_Connection]:
