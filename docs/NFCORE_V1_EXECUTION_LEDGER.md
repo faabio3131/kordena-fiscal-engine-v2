@@ -375,6 +375,7 @@ Antecipação P6 antes de P5 aprovada em 2026-10-09 (“Autorizado”), conforme
 ### 28. NFV1-P05-T01 — Pré-deploy
 
 - [ ] **Estado:** bloqueado externo
+- **Auditoria/patch de autoridade 2026-10-10 (candidato, branch `fix/nfv1-p05-t01-single-migration-authority`):** PR #162 está **MERGED** na main `0fdcce7de18a779ecf7a193fbd01b83d8087c5c5`, CI #762 + Governance #183 SUCCESS, mas Worker Railway 0/1 e API/Portal antigos. Identificadas migrations adicionais disparadas por `RuntimeApi` e Worker via `PostgresFiscalDatabase.initialize()` no startup, além de `preDeployCommand` da API e orquestrador externo. Correção interna em branch exige schema completo 1..17 por consulta read-only antes de iniciar API/Worker em staging/produção e recusa de `migration_guard --apply` dentro do serviço Railway; **CI/merge ainda pendentes neste registro**. Alteração externa da configuração API não realizada. Nome da variável ONESHOT presente mas valor desconhecido; Worker sem causa provada. Backup/restore reais PG18, GSM/IAM, Worker runtime e provider contract ainda B01/B02/B04/B05 **BLOCKED_EXTERNAL**. Checkpoint `docs/checkpoints/NFV1_P05_T01_RUNTIME_MIGRATION_AUTHORITY_2026-10-10.md`. Não conta nova tarefa nem muda 27/59.
 - **Objetivo:** executar exatamente a tarefa NFV1-P05-T01 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P06-T04 concluído e certificado, além de P1..P4; retomar após gate P6, conforme decisão aprovada em 2026-10-09
 - **Entregar:** tudo que o cronograma exige para NFV1-P05-T01, mais os testes/evidências diretamente necessários.
