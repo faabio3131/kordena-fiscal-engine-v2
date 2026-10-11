@@ -19,7 +19,7 @@ from pathlib import Path
 PROJECT_ID = "b84b290d-f3b4-46a1-9023-0b761cb96b0d"
 ENVIRONMENT_ID = "c9878b9b-62b2-4a97-b8ba-743c8a3e99ec"
 POSTGRES_SERVICE_ID = "71691da6-8d32-4c95-9475-d63d9da1cb0c"
-AGE_RECIPIENT = re.compile(r"age1[023456789acdefghjklmnpqrstuvwxyz]{55}\Z")
+AGE_RECIPIENT = re.compile(r"age1[023456789acdefghjklmnpqrstuvwxyz]{58}\Z")
 MAX_SECONDS = 900
 
 
@@ -99,8 +99,13 @@ def create_encrypted_backup(destination: Path, *, environ: dict[str, str] | None
     pg_dump: subprocess.Popen[bytes] | None = None
     encrypt: subprocess.Popen[bytes] | None = None
     published = False
+    owned_partial = False
+    owned_manifest_pending = False
+    owned_output = False
+    owned_manifest = False
     try:
         descriptor = os.open(partial, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        owned_partial = True
         # PG connection settings are inherited from the approved runtime channel,
         # never placed in argv or printed. No plaintext dump file is ever opened.
         pg_dump = subprocess.Popen(
@@ -135,13 +140,16 @@ def create_encrypted_backup(destination: Path, *, environ: dict[str, str] | None
         digest = _sha256(partial)
         # Never replace an existing artifact. Hard link is atomic on POSIX.
         os.link(partial, destination)
+        owned_output = True
         descriptor = os.open(digest_pending, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        owned_manifest_pending = True
         with os.fdopen(descriptor, "w", encoding="ascii") as manifest:
             descriptor = None
             manifest.write(digest + "\n")
             manifest.flush()
             os.fsync(manifest.fileno())
         os.link(digest_pending, digest_path)
+        owned_manifest = True
         published = True
         return digest
     except BackupBlocked:
@@ -155,11 +163,15 @@ def create_encrypted_backup(destination: Path, *, environ: dict[str, str] | None
                 proc.wait(timeout=5)
         if descriptor is not None:
             os.close(descriptor)
-        for path in (partial, digest_pending):
-            path.unlink(missing_ok=True)
+        if owned_partial:
+            partial.unlink(missing_ok=True)
+        if owned_manifest_pending:
+            digest_pending.unlink(missing_ok=True)
         if not published:
-            destination.unlink(missing_ok=True)
-            digest_path.unlink(missing_ok=True)
+            if owned_output:
+                destination.unlink(missing_ok=True)
+            if owned_manifest:
+                digest_path.unlink(missing_ok=True)
 
 
 def main() -> int:
