@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import runpy
 import sqlite3
 from contextlib import contextmanager
+from pathlib import Path
 
 import pytest
 
@@ -16,7 +18,6 @@ from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
 from kordena_fiscal.runtime import api as runtime_api
 from kordena_fiscal.runtime import worker_main
 from kordena_fiscal.runtime.config import RuntimeSettings
-from scripts.ci import migration_guard
 
 
 def _staging_settings() -> RuntimeSettings:
@@ -167,8 +168,11 @@ def test_railway_service_predeploy_cannot_apply_migrations(
     monkeypatch.setenv("NFCORE_SCHEMA_MIGRATION_APPROVED", "true")
     monkeypatch.setenv("RAILWAY_SERVICE_ID", "railway-service-internal")
     monkeypatch.setenv("DATABASE_URL", "postgresql://synthetic.invalid/db")
+    apply = runpy.run_path(
+        str(Path(__file__).resolve().parents[2] / "scripts/ci/migration_guard.py")
+    )["apply"]
     with pytest.raises(RuntimeError, match="Railway service preDeploy"):
-        migration_guard.apply()
+        apply()
 
 
 def test_cakto_schema_guard_is_read_only(tmp_path) -> None:
