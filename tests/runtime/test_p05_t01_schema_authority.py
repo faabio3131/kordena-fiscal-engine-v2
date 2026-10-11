@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+import sqlite3
 
 import pytest
 
+from kordena_fiscal.persistence.cakto import CaktoStateConflictError, SqliteCaktoCommercialDatabase
 from kordena_fiscal.persistence.ports import PersistenceStateError
 from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
 from kordena_fiscal.runtime import api as runtime_api
@@ -164,3 +166,22 @@ def test_railway_service_predeploy_cannot_apply_migrations(
     monkeypatch.setenv("DATABASE_URL", "postgresql://synthetic.invalid/db")
     with pytest.raises(RuntimeError, match="Railway service preDeploy"):
         migration_guard.apply()
+
+
+def test_cakto_schema_guard_is_read_only(tmp_path) -> None:
+    path = tmp_path / "cakto-schema.sqlite3"
+    database = SqliteCaktoCommercialDatabase(path)
+    with pytest.raises(CaktoStateConflictError, match="certified migration version"):
+        database.require_current_schema()
+    with sqlite3.connect(path) as connection:
+        rows = connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='fm_cakto_schema_migrations'"
+        ).fetchall()
+    assert rows == [], "read-only guard must not initialize missing schema"
+
+    assert database.initialize() is True
+    assert database.require_current_schema() == (1, 2)
+    with sqlite3.connect(path) as connection:
+        connection.execute("DELETE FROM fm_cakto_schema_migrations WHERE version = 2")
+    with pytest.raises(CaktoStateConflictError, match="certified migration version"):
+        database.require_current_schema()
