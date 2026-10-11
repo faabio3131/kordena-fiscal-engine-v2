@@ -11,6 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 from kordena_fiscal.runtime import worker_main
+from kordena_fiscal.runtime.worker_health import check_worker_health
 from kordena_fiscal.runtime.config import RuntimeConfigurationError
 from kordena_fiscal.runtime.worker_composition import WorkerWebhookDependencies
 from kordena_fiscal.security import InMemoryWebhookKeyRing, WebhookSecurity
@@ -54,7 +55,8 @@ def test_unconfigured_worker_rejects_before_database_open(
             raise AssertionError("a rejected Worker must not open PostgreSQL")
 
     monkeypatch.setattr(worker_main, "PostgresFiscalDatabase", ForbiddenDatabase)
-    factory = lambda _db, _settings: {}
+    def factory(_db, _settings):
+        return {}
     if kind == "ambiguous":
         kwargs = {"handler_factory": factory, "webhook": _valid_webhook()}
     elif kind == "invalid_factory":
@@ -68,7 +70,7 @@ def test_unconfigured_worker_rejects_before_database_open(
         worker_main.run(health_path=tmp_path / "worker-health", **kwargs)
     assert database_calls == []
     assert not (tmp_path / "worker-health").exists() or (
-        not worker_main.check_worker_health(path=tmp_path / "worker-health")
+        not check_worker_health(path=tmp_path / "worker-health")
     )
 
 
