@@ -91,6 +91,9 @@ def main() -> None:
 
     try:
         fixture("reset")
+        # The disposable CI schema must be migrated explicitly before service startup.
+        # Production Worker startup stays read-only and fails closed on schema drift.
+        fixture("prepare")
         # Keep the image's unconfigured production CMD fail-closed. This fixture does
         # not introduce an env-selected factory or ship a synthetic handler in src.
         rejected = docker("run", "--rm", "--network", "host", *ENVIRONMENT, IMAGE, check=False)
