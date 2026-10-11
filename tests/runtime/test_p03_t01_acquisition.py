@@ -13,6 +13,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from kordena_fiscal.control_plane.models import AdminPrincipal, ControlPlanePermission
+from kordena_fiscal.persistence.cakto import postgres_cakto_commercial_database
+from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
 from kordena_fiscal.product.command_commercial import CommandBinding
 from kordena_fiscal.product.commercial_release import (
     CommercialReleaseDecision,
@@ -180,6 +182,13 @@ def settings():
     with psycopg.connect(dsn, autocommit=True) as connection:
         connection.execute("DROP SCHEMA public CASCADE")
         connection.execute("CREATE SCHEMA public")
+    # CI fixture owns schema application explicitly, never API startup.
+    database = PostgresFiscalDatabase(dsn)
+    try:
+        database.initialize()
+        postgres_cakto_commercial_database(database).initialize()
+    finally:
+        database.close()
     return RuntimeSettings.from_mapping(
         {
             "NFCORE_ENVIRONMENT": "staging",
