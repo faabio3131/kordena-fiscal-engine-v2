@@ -42,7 +42,20 @@ def validate_config(env: dict[str, str], destination: Path) -> str:
         or env.get("NFCORE_RAILWAY_PROJECT_ID") != PROJECT_ID
         or env.get("NFCORE_RAILWAY_ENVIRONMENT_ID") != ENVIRONMENT_ID
         or env.get("NFCORE_RAILWAY_POSTGRES_SERVICE_ID") != POSTGRES_SERVICE_ID
-        or not _get(env, "PGHOST").endswith(".railway.internal")
+        or _get(env, "PGHOST") != "postgres.railway.internal"
+        # libpq can override the physical host via PGHOSTADDR or PGSERVICE.
+        # Never inherit alternate connection identities or password-file paths.
+        or any(
+            env.get(name)
+            for name in (
+                "PGHOSTADDR",
+                "PGSERVICE",
+                "PGSERVICEFILE",
+                "PGPASSFILE",
+                "PGOPTIONS",
+                "PGREQUIRESSL",
+            )
+        )
         or not _get(env, "PGPORT").isdigit()
         or not 1 <= int(_get(env, "PGPORT")) <= 65535
         or env.get("PGSSLMODE") not in {"require", "verify-ca", "verify-full"}
