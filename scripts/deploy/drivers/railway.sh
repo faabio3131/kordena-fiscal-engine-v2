@@ -120,6 +120,26 @@ capture_rollback_baseline() {
   echo "railway staging driver: ROLLBACK_BASELINE_CAPTURED"
 }
 
+validate_rollback_baseline() {
+  file="$(rollback_baseline_file)"
+  [ -s "$file" ] || fail "rollback baseline file is missing or empty"
+  # The baseline must describe exactly the three expected services, once each.
+  [ "$(awk 'END { print NR }' "$file")" -eq 3 ] ||
+    fail "rollback baseline service count invalid"
+  for expected_service in \
+    "$NFCORE_RAILWAY_API_SERVICE" \
+    "$NFCORE_RAILWAY_WORKER_SERVICE" \
+    "$NFCORE_RAILWAY_PORTAL_SERVICE"
+  do
+    matching="$(awk -F '\t' -v service="$expected_service" '$1 == service { n++ } END { print n+0 }' "$file")"
+    [ "$matching" -eq 1 ] || fail "rollback baseline service missing or duplicated"
+    record="$(awk -F '\t' -v service="$expected_service" '$1 == service { print $2 " " $3; exit }' "$file")"
+    set -- $record
+    [ "$#" -eq 2 ] && [ -n "$1" ] || fail "rollback baseline entry incomplete"
+    require_revision "$2"
+  done
+}
+
 baseline_deployment_for_service() {
   service="$1"
   file="$(rollback_baseline_file)"
@@ -253,7 +273,7 @@ case "$command" in
     preflight_checks
     assert_local_revision "$revision"
     # Never replace the pre-migration baseline during a retry or partial deploy.
-    [ -f "$(rollback_baseline_file)" ] || fail "rollback baseline file is missing"
+    validate_rollback_baseline
     for service in \
       "$NFCORE_RAILWAY_API_SERVICE" \
       "$NFCORE_RAILWAY_WORKER_SERVICE" \
@@ -271,6 +291,7 @@ case "$command" in
     revision="${2:-}"
     require_revision "$revision"
     preflight_checks
+    validate_rollback_baseline
     previous_id="$(baseline_deployment_for_service "$NFCORE_RAILWAY_WORKER_SERVICE")"
     [ -n "$previous_id" ] || fail "worker baseline missing"
     wait_for_success "$NFCORE_RAILWAY_WORKER_SERVICE" "$revision" "$previous_id"
@@ -280,6 +301,7 @@ case "$command" in
     revision="${2:-}"
     require_revision "$revision"
     preflight_checks
+    validate_rollback_baseline
     for service in \
       "$NFCORE_RAILWAY_API_SERVICE" \
       "$NFCORE_RAILWAY_WORKER_SERVICE" \
