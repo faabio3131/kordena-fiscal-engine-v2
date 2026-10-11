@@ -660,6 +660,24 @@ class CaktoCommercialDatabase:
         finally:
             context.__exit__(None, None, None)
 
+    def require_current_schema(self) -> tuple[int, ...]:
+        """Require the governed Cakto schema without applying startup DDL."""
+        try:
+            with self._acquire() as connection:
+                rows = connection.execute(
+                    "SELECT version FROM fm_cakto_schema_migrations ORDER BY version"
+                ).fetchall()
+        except Exception:
+            raise CaktoStateConflictError(
+                "Cakto schema is not at the certified migration version"
+            ) from None
+        versions = tuple(int(cast(int | str, row[0])) for row in rows)
+        if versions != tuple(range(1, CAKTO_SCHEMA_VERSION + 1)):
+            raise CaktoStateConflictError(
+                "Cakto schema is not at the certified migration version"
+            )
+        return versions
+
     def unit_of_work(self) -> CaktoSqlUnitOfWork:
         return CaktoSqlUnitOfWork(self._acquire)
 
