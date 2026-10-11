@@ -143,3 +143,27 @@ def test_driver_rejects_worker_zero_replicas_before_backup(
     assert "ROLLBACK_BASELINE_CAPTURED" not in result.stdout
     assert not (tmp_path / "baseline.tsv").exists()
     assert "postgres pitr backup" not in (tmp_path / "cmds.log").read_text()
+
+
+def test_driver_rejects_corrupted_rollback_baselines_before_any_rollout(
+    tmp_path: Path,
+) -> None:
+    env = _fake(tmp_path)
+    assert _run(env, "prepare-rollback").returncode == 0
+    baseline = tmp_path / "baseline.tsv"
+    valid = baseline.read_text()
+    cases = [
+        "",
+        valid.splitlines()[0] + "\n",
+        valid + valid.splitlines()[0] + "\n",
+        valid.replace("b" * 40, "invalid", 1),
+    ]
+    for corrupted in cases:
+        baseline.write_text(corrupted)
+        before = (tmp_path / "cmds.log").read_text()
+        result = _run(env, "deploy")
+        assert result.returncode != 0
+        assert "DEPLOY_READY" not in result.stdout
+        after = (tmp_path / "cmds.log").read_text()
+        assert "up --ci" not in after[len(before):]
+    baseline.write_text(valid)
