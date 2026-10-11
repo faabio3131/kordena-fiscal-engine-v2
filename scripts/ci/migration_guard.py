@@ -185,6 +185,12 @@ def apply() -> None:
     environment = os.getenv("NFCORE_ENVIRONMENT", "").strip().casefold()
     if environment not in {"staging", "production"}:
         raise RuntimeError("schema migration apply is restricted to staging/production profiles")
+    # Railway service preDeployCommand must not be a second migration authority.
+    # Only the external governed orchestrator, after a proven backup, may apply.
+    if os.getenv("RAILWAY_SERVICE_ID", "").strip():
+        raise RuntimeError(
+            "schema migration blocked: Railway service preDeploy is not an authorized executor"
+        )
     _require_apply_approval(environment)
     dsn = os.getenv("DATABASE_URL", "").strip()
     if not dsn:
