@@ -33,3 +33,9 @@
 `P05-T01=BLOCKED_EXTERNAL`, `EXTERNAL_SECRET_BACKEND_CERTIFIED=NOT MET`, `STAGING_CURRENT_SHA_E2E_CERTIFIED=NOT MET`, `PRODUCTION_APPROVED=NO`, `COMMERCIAL_LIVE=NO`.
 
 **Próxima ação:** revisão CI da PR e decisão humana de merge; depois obter autorização operacional separada para leitura de valores estritamente não secretos necessários (ex. ONESHOT), retirada governada do preDeployCommand e execução real de backup/SQL/GSM com evidências. Não promover task até os comprovantes efetivos.
+
+## 5. Rota Cakto descoberta durante a auditoria cruzada
+
+`build_postgres_runtime_composition(..., enable_cakto_checkout=True)` também chamava `CaktoCommercialDatabase.initialize()` no bootstrap da API, executando DDL e aplicando migrations Cakto v1/v2 fora da autoridade aprovada. O patch substitui essa chamada por `CaktoCommercialDatabase.require_current_schema()` read-only, que exige versões `(1, 2)` e rejeita schema ausente/desatualizado. O `migration_guard.py --apply`, já executado pelo único orquestrador governado após backup, passa a aplicar e verificar **as duas famílias** de migrations (NFCore 1..17 e Cakto 1..2). Regressão adicional de Cakto em SQLite sintético verifica que a consulta sem schema não cria tabela e que versões incompletas são rejeitadas. Nenhum banco real foi alterado.
+
+**Limite importante:** a API Railway ainda tem o `preDeployCommand` externo e precisa de correção governada antes de qualquer deploy, mesmo com o fail-closed no código. A revisão completa depende de CI e de revalidação do comportamento real do provider; não confundir fixture SQLite/Postgres de CI com PostgreSQL18 staging.
