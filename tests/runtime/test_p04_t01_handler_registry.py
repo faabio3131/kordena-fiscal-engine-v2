@@ -11,6 +11,7 @@ from kordena_fiscal.application.webhook_delivery import SignedWebhookOutboxHandl
 from kordena_fiscal.contingency import FiscalDispatchStatus, FiscalOutboxService, FiscalOutboxStatus
 from kordena_fiscal.domain import ExecutionScope, FiscalEnvironment
 from kordena_fiscal.persistence import SqliteFiscalDatabase
+from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
 from kordena_fiscal.runtime.config import RuntimeConfigurationError
 from kordena_fiscal.runtime.worker_composition import (
     WorkerWebhookDependencies,
@@ -32,6 +33,12 @@ def _configure_staging_worker(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", dsn)
     monkeypatch.setenv("NFCORE_SECRET_BACKEND", "external")
     monkeypatch.setenv("NFCORE_REQUIRE_HTTPS", "true")
+    # Prepare the CI database outside the worker; startup is read-only.
+    database = PostgresFiscalDatabase(dsn)
+    try:
+        database.initialize()
+    finally:
+        database.close()
 
 
 def dependencies():
