@@ -65,10 +65,16 @@ class RuntimeApi:
         self._composition_boot_error = False
         if settings.persistence_backend == "postgres":
             assert settings.database_url is not None
+            database = None
             try:
                 database = PostgresFiscalDatabase(settings.database_url)
-                database.initialize()
+                if settings.is_production_like:
+                    database.require_current_schema()
+                else:
+                    database.initialize()
             except Exception:
+                if database is not None:
+                    database.close()
                 self._database_boot_error = True
             else:
                 self.database = database
