@@ -36,7 +36,7 @@ def main():
     mode = sys.argv[1]
     health = Path(sys.argv[2]) if len(sys.argv) > 2 else HEALTH_PATH
     state = Path(sys.argv[3]) if len(sys.argv) > 3 else Path("/proof/state")
-    if mode in {"reset", "seed", "verify_drained", "verify_finished"}:
+    if mode in {"reset", "prepare", "seed", "verify_drained", "verify_finished"}:
         dsn = os.environ["DATABASE_URL"]
         if mode == "reset":
             with psycopg.connect(dsn, autocommit=True) as connection:
@@ -46,6 +46,8 @@ def main():
         db = PostgresFiscalDatabase(dsn)
         try:
             db.initialize()
+            if mode == "prepare":
+                return 0
             with db() as uow:
                 if mode == "seed":
                     for i in range(13):
