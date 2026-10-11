@@ -1,3 +1,15 @@
+# CURRENT superior — NFV1-P05-T01 runtime migration authority em branch — 2026-10-10
+
+Revalidado: `main=0fdcce7de18a779ecf7a193fbd01b83d8087c5c5`, PR #162 **MERGED**, CI #762 e Governance #183 **SUCCESS** no SHA da main, 41/41, 2038 Python/Postgres + 14 frontend + 28 Playwright PASS; 27/59 concluídas, primeira pendente P05-T01. Nenhuma PR aberta na entrada desta intervenção. O checkpoint de B05 abaixo reflete o estado **histórico durante a PR #162**, não seu estado final.
+
+Railway read-only novamente: FM NFCORE Staging env label `production` (não é aprovação de produção), API/Portal/DB 1/1, Worker **0/1**, deployments API/Portal `f9b5b2c5...` e Worker `1c34ba00...` (drift em relação à main). API `preDeployCommand` ainda executa `migration_guard.py --apply`; código vigente também chamava `database.initialize()` em API e Worker ao iniciar, criando caminhos de migration sem recibo de backup. Nome da variável `NFCORE_WORKER_ONESHOT` presente; **valor e causa do Worker parado não confirmados**.
+
+**Em execução somente patch interno, branch `fix/nfv1-p05-t01-single-migration-authority`**: API e Worker em staging/produção verificam schema read-only `1..17` e nunca executam `initialize()`; comando `migration_guard --apply` bloqueia contexto de preDeploy Railway, testes de regressão. **Ainda não certificado neste registro**, merge não autorizado. A configuração externa duplicada permanece sem alteração, assim como SQL/backup real PG18, GSM/IAM/bootstrap e Worker. Ver `docs/checkpoints/NFV1_P05_T01_RUNTIME_MIGRATION_AUTHORITY_2026-10-10.md`.
+
+`P05-T01=[ ] bloqueado externo`, `EXTERNAL_SECRET_BACKEND_CERTIFIED=NOT MET`, `STAGING_CURRENT_SHA_E2E_CERTIFIED=NOT MET`, `PRODUCTION_APPROVED=NO`, `COMMERCIAL_LIVE=NO`. Nenhum deploy/redeploy, migração SQL real, backup/restore real, alteração IAM/secret/variável Railway nem operação fiscal.
+
+---
+
 # CURRENT superior — NFV1-P05-T01 B05 patch fail-closed em PR #162 — 2026-10-10
 
 GitHub main de entrada `3a14cf5dff00f892b0c8b3502fb2e12d13be6f87`, CI #753 e Governance #174 SUCCESS; 27/59 tarefas concluídas. Em execução **apenas o patch interno B05** na branch `fix/nfv1-p05-t01-railway-predeploy-failclosed` / PR #162, sem merge ou deploy. A task P05-T01 continua `[ ] bloqueado externo`, pois backup e SQL/restore reais, Google Secret Manager/IAM/bootstrap e Worker runtime real seguem sem certificação.
