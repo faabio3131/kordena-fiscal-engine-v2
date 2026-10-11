@@ -291,6 +291,8 @@ def process_env():
     )
     env.pop("NFCORE_WORKER_ONESHOT", None)
     subprocess.run([sys.executable, str(FIXTURE), "reset"], env=env, check=True, timeout=20)
+    # Governed CI fixture applies schema before the worker process is started.
+    subprocess.run([sys.executable, str(FIXTURE), "prepare"], env=env, check=True, timeout=30)
     return env
 
 
