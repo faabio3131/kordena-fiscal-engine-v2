@@ -60,6 +60,24 @@ def run(
             )
         assert settings.database_url is not None
 
+        # Gate the continuous process before even opening the database. A Railway
+        # deployment that lacks the approved signing/handler composition must not
+        # masquerade as a healthy worker or attempt any startup database work.
+        # ONESHOT remains a dedicated read-only dependency probe in staging CI.
+        oneshot = _oneshot_requested()
+        if not oneshot and not stop.is_set():
+            if handler_factory is not None and webhook is not None:
+                raise RuntimeConfigurationError("worker must use one handler composition source")
+            if handler_factory is None and webhook is None:
+                raise RuntimeConfigurationError(
+                    "continuous worker requires an explicitly configured handler factory "
+                    "or canonical webhook signing dependencies"
+                )
+            if handler_factory is not None and not callable(handler_factory):
+                raise RuntimeConfigurationError("worker handler factory is invalid")
+            if webhook is not None and not isinstance(webhook, WorkerWebhookDependencies):
+                raise RuntimeConfigurationError("worker webhook signing dependencies are invalid")
+
         database = PostgresFiscalDatabase(settings.database_url)
         try:
             if settings.is_production_like:
@@ -71,11 +89,9 @@ def run(
 
             # ONESHOT probes dependencies only and never publishes continuous readiness.
             # A signal received during bootstrap must not be lost or followed by a claim.
-            if _oneshot_requested() or stop.is_set():
+            if oneshot or stop.is_set():
                 return 0
 
-            if handler_factory is not None and webhook is not None:
-                raise RuntimeConfigurationError("worker must use one handler composition source")
             handlers = (
                 handler_factory(database, settings)
                 if handler_factory is not None
