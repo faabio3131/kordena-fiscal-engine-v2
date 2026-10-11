@@ -178,7 +178,8 @@ def test_cakto_schema_guard_is_read_only(tmp_path) -> None:
         database.require_current_schema()
     with sqlite3.connect(path) as connection:
         rows = connection.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='fm_cakto_schema_migrations'"
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name='fm_cakto_schema_migrations'"
         ).fetchall()
     assert rows == [], "read-only guard must not initialize missing schema"
 
