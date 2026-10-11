@@ -830,6 +830,21 @@ class PostgresFiscalDatabase:
                 return ()
             return tuple(int(row[0]) for row in rows)
 
+    def require_current_schema(self) -> tuple[int, ...]:
+        """Check schema compatibility without DDL or migration side effects.
+
+        In staging/production only the governed migration_guard orchestrator may
+        call initialize(). Running services must fail closed on drift/missing
+        versions instead of creating tables during startup.
+        """
+        applied = self.applied_migrations()
+        required = tuple(range(1, SECRET_BINDING_VERSION + 1))
+        if applied != required:
+            raise PersistenceStateError(
+                "PostgreSQL schema is not at the certified migration version"
+            )
+        return applied
+
     def unit_of_work(self) -> PostgresFiscalUnitOfWork:
         return PostgresFiscalUnitOfWork(self)
 
