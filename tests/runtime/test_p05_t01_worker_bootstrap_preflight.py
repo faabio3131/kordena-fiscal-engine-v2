@@ -11,9 +11,9 @@ from types import SimpleNamespace
 import pytest
 
 from kordena_fiscal.runtime import worker_main
-from kordena_fiscal.runtime.worker_health import check_worker_health
 from kordena_fiscal.runtime.config import RuntimeConfigurationError
 from kordena_fiscal.runtime.worker_composition import WorkerWebhookDependencies
+from kordena_fiscal.runtime.worker_health import check_worker_health
 from kordena_fiscal.security import InMemoryWebhookKeyRing, WebhookSecurity
 
 
