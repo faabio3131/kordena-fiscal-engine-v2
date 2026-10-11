@@ -14,6 +14,7 @@ from kordena_fiscal.contingency import (
 )
 from kordena_fiscal.domain import ExecutionScope, FiscalEnvironment, FiscalValidationError
 from kordena_fiscal.persistence import SqliteFiscalDatabase
+from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
 from kordena_fiscal.runtime.config import RuntimeConfigurationError
 from kordena_fiscal.runtime.worker_composition import build_production_worker_runtime
 from kordena_fiscal.runtime.worker_main import run
@@ -132,6 +133,12 @@ def _configure_staging_worker(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DATABASE_URL", dsn)
     monkeypatch.setenv("NFCORE_SECRET_BACKEND", "external")
     monkeypatch.setenv("NFCORE_REQUIRE_HTTPS", "true")
+    # The migration authority is the fixture, not the worker entrypoint.
+    database = PostgresFiscalDatabase(dsn)
+    try:
+        database.initialize()
+    finally:
+        database.close()
 
 
 def test_worker_oneshot_is_readiness_only_and_does_not_require_handlers(
