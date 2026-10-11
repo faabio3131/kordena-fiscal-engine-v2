@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from contextlib import contextmanager
 import sqlite3
+from contextlib import contextmanager
 
 import pytest
 
-from kordena_fiscal.persistence.cakto import CaktoStateConflictError, SqliteCaktoCommercialDatabase
+from kordena_fiscal.persistence.cakto import (
+    CaktoStateConflictError,
+    SqliteCaktoCommercialDatabase,
+)
 from kordena_fiscal.persistence.ports import PersistenceStateError
 from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
 from kordena_fiscal.runtime import api as runtime_api
