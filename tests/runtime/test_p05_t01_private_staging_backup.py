@@ -7,6 +7,7 @@ encrypt/decrypt/recoverability rehearsal is an explicit external gate.
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import os
 import subprocess
 import sys
@@ -14,14 +15,18 @@ from pathlib import Path
 
 import pytest
 
-from scripts.backup.private_staging_backup import BackupBlocked, create_encrypted_backup
-
 PROJECT = "b84b290d-f3b4-46a1-9023-0b761cb96b0d"
 ENVIRONMENT = "c9878b9b-62b2-4a97-b8ba-743c8a3e99ec"
 SERVICE = "71691da6-8d32-4c95-9475-d63d9da1cb0c"
 SYNTHETIC_DUMP = b"synthetic-only-not-customer-data-20261011"
 FAKE_RECIPIENT = "age1" + "q" * 58
 SCRIPT = Path(__file__).resolve().parents[2] / "scripts/backup/private_staging_backup.py"
+SPEC = importlib.util.spec_from_file_location("nfcore_private_staging_backup", SCRIPT)
+assert SPEC is not None and SPEC.loader is not None
+BACKUP = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(BACKUP)
+BackupBlocked = BACKUP.BackupBlocked
+create_encrypted_backup = BACKUP.create_encrypted_backup
 
 
 def _env(tmp_path: Path) -> dict[str, str]:
@@ -172,3 +177,33 @@ def test_cli_does_not_print_pg_config_or_recipient(tmp_path: Path) -> None:
     for sensitive in ("PGPASSWORD", env["PGPASSWORD"], FAKE_RECIPIENT, env["PGUSER"]):
         assert sensitive not in output
     assert "EXTERNAL_STORAGE_AND_RESTORE_NOT_CERTIFIED" in output
+
+def test_export_missing_cannot_erase_competing_pending_file(tmp_path: Path) -> None:
+    _fake_executables(tmp_path)
+    dest = _stage(tmp_path)
+    competing = Path(str(dest) + ".pending")
+    competing.write_bytes(b"another-operation-private-ciphertext")
+    with pytest.raises(BackupBlocked):
+        create_encrypted_backup(dest, environ=_env(tmp_path))
+    assert competing.read_bytes() == b"another-operation-private-ciphertext"
+    assert not dest.exists()
+
+
+def test_existing_checksum_does_not_trigger_unlink(tmp_path: Path) -> None:
+    _fake_executables(tmp_path)
+    dest = _stage(tmp_path)
+    digest = Path(str(dest) + ".sha256")
+    digest.write_text("previous-owner-evidence")
+    with pytest.raises(BackupBlocked):
+        create_encrypted_backup(dest, environ=_env(tmp_path))
+    assert digest.read_text() == "previous-owner-evidence"
+
+
+def test_encryption_failure_removes_only_owned_artifacts(tmp_path: Path) -> None:
+    _fake_executables(tmp_path)
+    dest = _stage(tmp_path)
+    (tmp_path / "age").write_text("#!/usr/bin/env python3\nimport sys\nsys.exit(11)\n")
+    (tmp_path / "age").chmod(0o755)
+    with pytest.raises(BackupBlocked):
+        create_encrypted_backup(dest, environ=_env(tmp_path))
+    assert list(dest.parent.iterdir()) == []
