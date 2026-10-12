@@ -16,6 +16,15 @@ migration_guard = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(migration_guard)
 
 
+@pytest.fixture(autouse=True)
+def _approved_migration_versions(monkeypatch) -> None:
+    # Policy itself is exercised separately by check-policy in the CI.
+    # Keep this suite focused on SELECT-only preflight and drift handling.
+    monkeypatch.setattr(
+        migration_guard, "validate_policy", lambda: tuple(range(1, 18))
+    )
+
+
 class _Cursor:
     def __init__(self, rows: tuple[tuple[object, ...], ...]) -> None:
         self._rows = rows
