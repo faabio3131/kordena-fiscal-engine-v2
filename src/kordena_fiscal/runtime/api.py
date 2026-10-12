@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
-import re
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
