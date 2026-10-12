@@ -27,7 +27,10 @@ from kordena_fiscal.runtime.observability import (
     TraceRecord,
     WorkerObservability,
 )
-from kordena_fiscal.runtime.worker_composition import build_production_worker_runtime
+from kordena_fiscal.runtime.worker_composition import (
+    _TracedOutboxHandler,
+    build_production_worker_runtime,
+)
 
 NOW = datetime(2026, 10, 9, tzinfo=UTC)
 PRIVATE = "synthetic-private-payload-and-error"
@@ -464,3 +467,26 @@ def test_p09_worker_tracing_sink_errors_cannot_reprocess_jobs(database) -> None:
     assert len(handler.calls) == 1
     with database() as uow:
         assert uow.outbox.get(entry.entry_id).status is FiscalOutboxStatus.SUCCEEDED
+
+
+def test_p09_trace_wrapper_preserves_invalid_handler_result_for_canonical_rejection(
+    database,
+) -> None:
+    records: list[TraceRecord] = []
+    malformed = object()
+
+    class Sink:
+        def record(self, trace: TraceRecord) -> None:
+            records.append(trace)
+
+    class MalformedHandler:
+        def dispatch(self, entry):
+            del entry
+            return malformed
+
+    entry = put(database, "p09-invalid-handler")
+    wrapper = _TracedOutboxHandler(MalformedHandler(), SafeTracer(Sink()))
+    assert wrapper.dispatch(entry) is malformed
+    assert len(records) == 1
+    assert records[0].operation == "worker.dispatch"
+    assert records[0].outcome == "invalid"
