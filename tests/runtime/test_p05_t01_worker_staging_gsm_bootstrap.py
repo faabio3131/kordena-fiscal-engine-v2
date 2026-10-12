@@ -1,8 +1,6 @@
 """P05 single-scope Worker GSM bootstrap: only real-scoped signing, never fallback."""
 from __future__ import annotations
 
-import hashlib
-import json
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -12,7 +10,6 @@ from unittest.mock import Mock
 import google_crc32c
 import pytest
 
-from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
 from kordena_fiscal.runtime import worker_staging_gsm_bootstrap as boot
 from kordena_fiscal.runtime.config import RuntimeConfigurationError, RuntimeEnvironment
 from kordena_fiscal.security.secret_binding import SecretBinding
