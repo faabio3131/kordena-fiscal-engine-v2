@@ -154,3 +154,55 @@ def test_baseline_identity_contains_sha_and_refuses_missing_commit() -> None:
     assert _cli("baseline", payload=good).stdout.strip() == f"deployment-id\t{SHA}"
     assert _cli("latest-id", payload=good).stdout.strip() == "deployment-id"
     assert _cli("baseline", payload=[{"id": "deployment-id", "status": "SUCCESS"}]).returncode == 1
+
+
+def test_stopped_worker_baseline_is_never_mistaken_for_health() -> None:
+    stopped = _status(instances=[])
+    assert _cli("runtime", "project", "env", "worker", "new", payload=stopped).returncode == 1
+    assert (
+        _cli("stopped-worker-baseline", "project", "env", "worker", "new", payload=stopped)
+        .stdout.strip()
+        == "new"
+    )
+    assert (
+        _cli("stopped-worker-baseline", "project", "env", "worker", "new",
+             payload=_status(instances=[], stopped=True)).returncode == 0
+    )
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        _status(instances=["RUNNING"]),
+        _status(instances=["CRASHED"]),
+        _status(instances=[], latest="old"),
+        _status(instances=[], active="old"),
+        _status(instances=[], environment="other"),
+        _status(instances=[], service="other"),
+        {"id": "project", "environments": {}},
+        {},
+    ],
+)
+def test_stopped_worker_baseline_rejects_nonzero_or_ambiguous_state(
+    payload: dict[str, Any],
+) -> None:
+    result = _cli(
+        "stopped-worker-baseline", "project", "env", "worker", "new", payload=payload,
+    )
+    assert result.returncode == 1
+    assert "BLOCKED" in result.stdout
+
+
+def test_stopped_worker_baseline_requires_explicit_replica_and_stop_metadata() -> None:
+    payload = _status(instances=[])
+    entry = payload["environments"]["edges"][0]["node"]["serviceInstances"]["edges"][0]["node"]
+    active = entry["activeDeployments"][0]
+    del active["instances"]
+    assert _cli(
+        "stopped-worker-baseline", "project", "env", "worker", "new", payload=payload,
+    ).returncode == 1
+    active["instances"] = []
+    del active["deploymentStopped"]
+    assert _cli(
+        "stopped-worker-baseline", "project", "env", "worker", "new", payload=payload,
+    ).returncode == 1
