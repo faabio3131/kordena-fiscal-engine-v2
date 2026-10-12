@@ -69,6 +69,16 @@ runtime_status() {
     --environment "$NFCORE_RAILWAY_ENVIRONMENT_ID" --json
 }
 
+staging_stopped_worker_allowed() {
+  # Explicit opt-in limited to the known FM NFCORE Staging project.
+  # Railway's environment label is "production" but this is not fiscal production.
+  [ "${NFCORE_RAILWAY_ALLOW_STOPPED_WORKER_BASELINE:-false}" = "true" ] &&
+    [ "${NFCORE_ENVIRONMENT:-}" = "staging" ] &&
+    [ "${NFCORE_RAILWAY_PROJECT_ID:-}" = "b84b290d-f3b4-46a1-9023-0b761cb96b0d" ] &&
+    [ "${NFCORE_RAILWAY_ENVIRONMENT_ID:-}" = "c9878b9b-62b2-4a97-b8ba-743c8a3e99ec" ] &&
+    [ "${NFCORE_RAILWAY_WORKER_SERVICE:-}" = "nfcore-worker" ]
+}
+
 require_running() {
   service="$1"
   deployment_id="$2"
@@ -114,8 +124,26 @@ capture_rollback_baseline() {
     baseline_revision="$(printf '%s' "$baseline" | cut -f2)"
     [ -n "$deployment_id" ] && [ "${#baseline_revision}" -eq 40 ] ||
       fail "service=$service baseline incomplete"
-    require_running "$service" "$deployment_id"
-    printf '%s\t%s\t%s\n' "$service" "$deployment_id" "$baseline_revision" >> "$temp_file"
+    baseline_state="running"
+    if [ "$service" = "$NFCORE_RAILWAY_WORKER_SERVICE" ] &&
+       staging_stopped_worker_allowed; then
+      observed="$(runtime_status)" || fail "worker baseline provider status unavailable"
+      if printf '%s' "$observed" | evidence runtime \
+          "$NFCORE_RAILWAY_PROJECT_ID" "$NFCORE_RAILWAY_ENVIRONMENT_ID" \
+          "$service" "$deployment_id" >/dev/null 2>&1; then
+        baseline_state="running"
+      elif printf '%s' "$observed" | evidence stopped-worker-baseline \
+          "$NFCORE_RAILWAY_PROJECT_ID" "$NFCORE_RAILWAY_ENVIRONMENT_ID" \
+          "$service" "$deployment_id" >/dev/null 2>&1; then
+        baseline_state="stopped"
+      else
+        fail "worker baseline neither RUNNING nor verified zero-replica STOPPED"
+      fi
+    else
+      require_running "$service" "$deployment_id"
+    fi
+    printf '%s\t%s\t%s\t%s\n' \
+      "$service" "$deployment_id" "$baseline_revision" "$baseline_state" >> "$temp_file"
   done
   mv "$temp_file" "$file"
   echo "railway staging driver: ROLLBACK_BASELINE_CAPTURED"
@@ -134,11 +162,29 @@ validate_rollback_baseline() {
   do
     matching="$(awk -F '\t' -v service="$expected_service" '$1 == service { n++ } END { print n+0 }' "$file")"
     [ "$matching" -eq 1 ] || fail "rollback baseline service missing or duplicated"
-    record="$(awk -F '\t' -v service="$expected_service" '$1 == service { print $2 " " $3; exit }' "$file")"
+    field_count="$(awk -F '\t' -v service="$expected_service" '$1 == service { print NF; exit }' "$file")"
+    [ "$field_count" -eq 4 ] || fail "rollback baseline record requires four fields"
+    record="$(awk -F '\t' -v service="$expected_service" '$1 == service { print $2 " " $3 " " $4; exit }' "$file")"
     set -- $record
-    [ "$#" -eq 2 ] && [ -n "$1" ] || fail "rollback baseline entry incomplete"
+    [ "$#" -eq 3 ] && [ -n "$1" ] || fail "rollback baseline entry incomplete"
     require_revision "$2"
+    case "$3" in
+      running) ;;
+      stopped)
+        [ "$expected_service" = "$NFCORE_RAILWAY_WORKER_SERVICE" ] &&
+          staging_stopped_worker_allowed ||
+          fail "degraded baseline forbidden outside explicitly approved staging worker"
+        ;;
+      *) fail "rollback baseline health state invalid" ;;
+    esac
   done
+}
+
+baseline_state_for_service() {
+  service="$1"
+  file="$(rollback_baseline_file)"
+  [ -f "$file" ] || fail "rollback baseline file is missing"
+  awk -F '\t' -v service="$service" '$1 == service { print $4; exit }' "$file"
 }
 
 baseline_deployment_for_service() {
@@ -192,6 +238,37 @@ wait_for_success() {
     fi
   done
   fail "service=$service immutable revision or running replicas unverified"
+}
+
+wait_for_stopped_baseline() {
+  service="$1"
+  revision="$2"
+  previous_id="$3"
+  staging_stopped_worker_allowed ||
+    fail "degraded rollback forbidden outside explicitly approved staging worker"
+  attempts="${NFCORE_RAILWAY_WAIT_ATTEMPTS:-60}"
+  delay="${NFCORE_RAILWAY_WAIT_SECONDS:-5}"
+  count=0
+  while [ "$count" -lt "$attempts" ]; do
+    observed="$(deployment_list "$service")" ||
+      fail "worker rollback deployment listing unavailable"
+    deployment_id="$(printf '%s' "$observed" |
+      evidence deployment "$revision" "$previous_id" 2>/dev/null)" || deployment_id=""
+    if [ -n "$deployment_id" ]; then
+      live="$(runtime_status)" || fail "worker rollback runtime status unavailable"
+      if printf '%s' "$live" | evidence stopped-worker-baseline \
+          "$NFCORE_RAILWAY_PROJECT_ID" "$NFCORE_RAILWAY_ENVIRONMENT_ID" \
+          "$service" "$deployment_id" >/dev/null 2>&1; then
+        echo "railway staging driver: WORKER_PRIOR_STOPPED_STATE_RESTORED revision=$revision"
+        return 0
+      fi
+    fi
+    count=$((count + 1))
+    if [ "$count" -lt "$attempts" ] && [ "$delay" -gt 0 ] 2>/dev/null; then
+      sleep "$delay"
+    fi
+  done
+  fail "previous stopped-worker state unverified after rollback"
 }
 
 assert_local_revision() {
@@ -303,6 +380,7 @@ case "$command" in
     require_revision "$revision"
     preflight_checks
     validate_rollback_baseline
+    restored_degraded_worker="false"
     for service in \
       "$NFCORE_RAILWAY_API_SERVICE" \
       "$NFCORE_RAILWAY_WORKER_SERVICE" \
@@ -312,11 +390,23 @@ case "$command" in
       [ -n "$deployment_id" ] || fail "service=$service rollback baseline is missing"
       previous_id="$(latest_deployment_identity "$service")"
       restored_revision="$(baseline_revision_for_service "$service")"
+      baseline_state="$(baseline_state_for_service "$service")"
       [ -n "$restored_revision" ] || fail "service=$service baseline revision missing"
       request_rollback "$deployment_id"
-      wait_for_success "$service" "$restored_revision" "$previous_id"
+      if [ "$baseline_state" = "stopped" ]; then
+        [ "$service" = "$NFCORE_RAILWAY_WORKER_SERVICE" ] ||
+          fail "non-worker degraded rollback forbidden"
+        wait_for_stopped_baseline "$service" "$restored_revision" "$previous_id"
+        restored_degraded_worker="true"
+      else
+        wait_for_success "$service" "$restored_revision" "$previous_id"
+      fi
     done
-    echo "railway staging driver: ROLLBACK_READY failed_revision=$revision"
+    if [ "$restored_degraded_worker" = "true" ]; then
+      echo "railway staging driver: ROLLBACK_RESTORED_DEGRADED_WORKER failed_revision=$revision"
+    else
+      echo "railway staging driver: ROLLBACK_READY failed_revision=$revision"
+    fi
     ;;
   *)
     echo "railway staging driver: FAIL unsupported command"
