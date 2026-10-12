@@ -308,6 +308,17 @@ case "$command" in
     revision="${2:-}"
     require_revision "$revision"
     preflight_checks
+    # The Railway workspace does not provide PITR on its current plan.
+    # A distinct operator-local mode validates the actual encrypted artifact
+    # and a prior isolated restore attestation, never claiming provider PITR.
+    if [ "${NFCORE_RAILWAY_BACKUP_MODE:-pitr}" = "local-logical-attested" ]; then
+      python scripts/deploy/logical_backup_evidence.py ||
+        fail "staging logical backup evidence not verified"
+      echo "railway staging driver: LOGICAL_BACKUP_OPERATOR_ATTESTED revision=$revision"
+      exit 0
+    fi
+    [ "${NFCORE_RAILWAY_BACKUP_MODE:-pitr}" = "pitr" ] ||
+      fail "unsupported staging backup mode"
     short_revision="$(printf '%s' "$revision" | cut -c1-12)"
     backup_name="nfcore-pre-$short_revision-$(date -u +%Y%m%d%H%M%S)"
     request="$(railway postgres pitr backup create \
