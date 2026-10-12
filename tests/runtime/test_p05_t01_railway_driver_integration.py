@@ -27,7 +27,10 @@ up = Path(os.environ["FAKE_UP"])
 up_services = up.read_text().splitlines() if up.exists() else []
 rollback_file = Path(os.environ.get("FAKE_ROLLBACKS", "/nonexistent-rollback-file"))
 rolled_back = rollback_file.read_text().splitlines() if rollback_file.exists() else []
-service = args[args.index("--service") + 1] if "--service" in args else os.environ["NFCORE_RAILWAY_API_SERVICE"]
+service = (
+    args[args.index("--service") + 1]
+    if "--service" in args else os.environ["NFCORE_RAILWAY_API_SERVICE"]
+)
 
 
 def snap(name):
