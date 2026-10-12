@@ -1,5 +1,18 @@
 # NFV1-P05-T01 — Pré-deploy — 2026-10-09
 
+## Intervenção 2026-10-12 — rollback com Worker legado 0/1 (candidata, PR #173)
+
+**Autorização:** o dono autorizou a correção específica de P05-T01; não autorizou merge, deploy, mudanças no Railway, backup real, migration ou material secreto.
+**CURRENT de entrada:** main `a8b2c7979af4b536dbf4eb9dba003064a59dde61`, CI #813 e Governança #234 SUCCESS. Railway FM NFCORE Staging: API/Portal/Postgres 1/1 e Worker 0/1; revisões de aplicação antigas. O campo API `deploy.preDeployCommand` foi observado vazio (bloqueio histórico desse campo superado).
+
+**Causa comprovada do bloqueio do driver:** `capture_rollback_baseline` exigia 3/3 aplicações saudáveis; o Worker antigo 0/1 impedia até capturar o baseline e chegar ao backup. Não transformar Worker 0/1 em baseline saudável.
+
+**Correção candidata estritamente governada:** adicionar captura de estado `stopped` (separado de `running`) somente para o Worker antigo, mediante `NFCORE_RAILWAY_ALLOW_STOPPED_WORKER_BASELINE=true`, `NFCORE_ENVIRONMENT=staging`, projeto `b84b290d-f3b4-46a1-9023-0b761cb96b0d`, ambiente `c9878b9b-62b2-4a97-b8ba-743c8a3e99ec` e serviço `nfcore-worker`. O parser exige deployment exato e 0 réplicas; fora desse caso falha fechado. API/Portal anteriores continuam obrigatoriamente RUNNING. Após deploy, Worker novo exige RUNNING. Um rollback ao Worker antigo 0/1 relata `ROLLBACK_RESTORED_DEGRADED_WORKER`, não `ROLLBACK_READY`.
+
+**Testes adicionados:** evidência 0 versus running, escopo exato, ausência de flag, alteração maliciosa de baseline, novo Worker parado, retorno ao baseline degradado. CI da PR é fonte do resultado final; não inferir aprovação por este registro.
+
+**Permanece bloqueado:** P05-T01 backup real/restore/PG18/schema/GSM/workload signing e pré-requisitos externos; P05-T02 não autorizada; nenhuma nova variável deve ser ativada automaticamente. O Worker real só poderá ser considerado funcional após implantação autorizada e prova contínua. O objetivo imediato segue a paridade integral da V1 na Web.
+
 Estado: BLOQUEADO EXTERNO, com pré-requisitos internos remanescentes. 23/59 tarefas concluídas. T02 não iniciada. O dono autorizou iniciar T01 (“Executar”); não houve deploy, alteração Railway, migration externa, criação/restauração de backup real ou acesso a material de credencial.
 
 ## Decisão posterior — 2026-10-09 — aprovada e merge #151 realizado
