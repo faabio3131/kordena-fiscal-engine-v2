@@ -95,10 +95,11 @@ def deployment(payload: Any, *, expected_sha: str | None, previous: str | None) 
     return deployment_id
 
 
-def runtime(
+def _live_service_deployment(
     payload: Any, *,
     project: str, environment: str, service: str, deployment_id: str,
-) -> str:
+) -> tuple[dict[str, Any], list[Any]]:
+    """Resolve one exact provider deployment without inferring process health."""
     status = _obj(payload)
     if status.get("id") != project:
         raise EvidenceError("project mismatch")
@@ -118,15 +119,48 @@ def runtime(
         raise EvidenceError("active deployments unavailable")
     serving = [_obj(x) for x in active if isinstance(x, dict) and x.get("id") == deployment_id]
     if len(serving) != 1:
-        raise EvidenceError("new deployment not serving")
+        raise EvidenceError("deployment not serving")
     live = serving[0]
-    if live.get("status") != "SUCCESS" or live.get("deploymentStopped") is not False:
-        raise EvidenceError("deployment is stopped")
+    if live.get("status") != "SUCCESS" or not isinstance(live.get("deploymentStopped"), bool):
+        raise EvidenceError("deployment state unverified")
     instances = live.get("instances")
-    if not isinstance(instances, list) or not instances:
+    if not isinstance(instances, list):
+        raise EvidenceError("replica state unavailable")
+    return live, instances
+
+
+def runtime(
+    payload: Any, *,
+    project: str, environment: str, service: str, deployment_id: str,
+) -> str:
+    live, instances = _live_service_deployment(
+        payload, project=project, environment=environment,
+        service=service, deployment_id=deployment_id,
+    )
+    if live["deploymentStopped"]:
+        raise EvidenceError("deployment is stopped")
+    if not instances:
         raise EvidenceError("no replica observed")
     if not all(_obj(x).get("status") == "RUNNING" for x in instances):
         raise EvidenceError("replicas not all running")
+    return deployment_id
+
+
+def stopped_worker_baseline(
+    payload: Any, *,
+    project: str, environment: str, service: str, deployment_id: str,
+) -> str:
+    """Attest the old Worker's exact degraded 0/1 state, never its readiness.
+
+    Only the staging driver may permit this evidence; this parser has no
+    authority to authorize a deployment, a migration or a production exception.
+    """
+    _live, instances = _live_service_deployment(
+        payload, project=project, environment=environment,
+        service=service, deployment_id=deployment_id,
+    )
+    if instances:
+        raise EvidenceError("worker is not at zero replicas")
     return deployment_id
 
 
@@ -144,6 +178,9 @@ def main() -> int:
     sub.add_parser("baseline")
     sub.add_parser("latest-id")
     item = sub.add_parser("runtime")
+    for key in ("project", "environment", "service", "deployment_id"):
+        item.add_argument(key)
+    item = sub.add_parser("stopped-worker-baseline")
     for key in ("project", "environment", "service", "deployment_id"):
         item.add_argument(key)
     args = parser.parse_args()
@@ -164,9 +201,12 @@ def main() -> int:
             if not isinstance(payload, list) or not payload:
                 raise EvidenceError("latest deployment unavailable")
             proof = _str(_obj(payload[0]).get("id"))
-        else:
+        elif args.check == "runtime":
             proof = runtime(payload, project=args.project, environment=args.environment,
                             service=args.service, deployment_id=args.deployment_id)
+        else:
+            proof = stopped_worker_baseline(payload, project=args.project, environment=args.environment,
+                                            service=args.service, deployment_id=args.deployment_id)
     except (ValueError, TypeError, KeyError):
         # Never echo the provider payload, raw exception or credential.
         print("railway evidence: BLOCKED unverified provider receipt")
