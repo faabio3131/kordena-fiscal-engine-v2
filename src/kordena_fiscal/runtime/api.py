@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
+import re
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
@@ -53,6 +54,9 @@ from .observability import (
     TraceContext,
 )
 from .security import configure_edge_security
+
+
+_TRACE_REFERENCE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}\Z")
 
 
 class RuntimeApi:
@@ -302,10 +306,20 @@ def create_runtime_app(
         started_at = datetime.now(UTC)
         correlation_id = request.headers.get("X-Correlation-Id", "").strip() or uuid4().hex
         causation_id = request.headers.get("X-Causation-Id", "").strip() or None
+        # Untrusted HTTP headers may contain secrets; only bounded safe references
+        # become trace metadata. Existing request/header contracts are unchanged.
+        trace_correlation = (
+            correlation_id if _TRACE_REFERENCE.fullmatch(correlation_id) else uuid4().hex
+        )
+        trace_causation = (
+            causation_id
+            if causation_id is not None and _TRACE_REFERENCE.fullmatch(causation_id)
+            else None
+        )
         context = TraceContext(
             trace_id=uuid4().hex,
-            correlation_id=correlation_id,
-            causation_id=causation_id,
+            correlation_id=trace_correlation,
+            causation_id=trace_causation,
         )
         request.state.nfcore_trace_context = context
         try:
