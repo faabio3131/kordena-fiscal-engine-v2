@@ -62,7 +62,7 @@ def test_restore_checks_integrity_and_passes_connection_as_dbname(
     assert ("restore_completed=" in result.stdout) == (not corrupt and restore_exit == 0)
 
 
-@pytest.mark.parametrize("failed_stage", ["prepare-rollback", "backup", "migration"])
+@pytest.mark.parametrize("failed_stage", ["prepare-rollback", "backup", "migration", "approval"])
 def test_predeploy_stops_before_mutation_when_a_prerequisite_fails(
     tmp_path: Path, failed_stage: str
 ) -> None:
@@ -96,6 +96,7 @@ def test_predeploy_stops_before_mutation_when_a_prerequisite_fails(
         NFCORE_ENVIRONMENT="staging", NFCORE_PERSISTENCE_BACKEND="postgres",
         NFCORE_SECRET_BACKEND="external", NFCORE_REQUIRE_HTTPS="true",
         NFCORE_DEPLOY_REVISION="a" * 40, DATABASE_URL="postgresql://synthetic@localhost/db",
+        NFCORE_SCHEMA_MIGRATION_APPROVED="false" if failed_stage == "approval" else "true",
     )
     result = subprocess.run(
         ["sh", "scripts/ci/run_staging_deploy.sh"], cwd=tmp_path,
@@ -104,4 +105,8 @@ def test_predeploy_stops_before_mutation_when_a_prerequisite_fails(
     assert result.returncode != 0
     assert log.exists(), result.stdout + result.stderr
     expected = ["prepare-rollback", "backup", "migration"]
-    assert log.read_text().splitlines() == expected[:expected.index(failed_stage) + 1]
+    if failed_stage == "approval":
+        assert "explicit schema migration approval missing" in result.stdout
+        assert log.read_text().splitlines() == expected[:2]
+    else:
+        assert log.read_text().splitlines() == expected[:expected.index(failed_stage) + 1]
