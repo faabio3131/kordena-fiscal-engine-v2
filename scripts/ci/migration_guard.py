@@ -181,6 +181,51 @@ def _require_apply_approval(environment: str) -> None:
         )
 
 
+
+def plan_staging() -> None:
+    """Read-only plan using the canonical migration authorities.
+
+    An unknown, out-of-order or newer installed version is NOT safe to upgrade.
+    Missing Cakto tracking table is the expected uninitialized Cakto state.
+    """
+    expected = validate_policy()
+    if os.getenv("NFCORE_ENVIRONMENT") != "staging":
+        raise RuntimeError("schema preflight is restricted to staging")
+    if os.getenv("RAILWAY_SERVICE_ID", "").strip():
+        raise RuntimeError("schema preflight must execute outside service startup")
+    dsn = os.getenv("DATABASE_URL", "").strip()
+    if not dsn:
+        raise RuntimeError("schema preflight requires DATABASE_URL")
+    database = PostgresFiscalDatabase(dsn)
+    try:
+        before = database.applied_migrations()
+        if before != expected[:len(before)]:
+            raise RuntimeError("schema preflight blocked: unexpected fiscal migration sequence")
+        with database.connection() as connection:
+            available = connection.execute(
+                "SELECT to_regclass('public.fm_cakto_schema_migrations')"
+            ).fetchone()
+            if available is None:
+                raise RuntimeError("schema preflight blocked: PostgreSQL catalog unavailable")
+            if available[0] is None:
+                cakto = ()
+            else:
+                rows = connection.execute(
+                    "SELECT version FROM fm_cakto_schema_migrations ORDER BY version"
+                ).fetchall()
+                cakto = tuple(int(row[0]) for row in rows)
+        expected_cakto = tuple(range(1, CAKTO_SCHEMA_VERSION + 1))
+        if cakto != expected_cakto[:len(cakto)]:
+            raise RuntimeError("schema preflight blocked: unexpected Cakto migration sequence")
+    finally:
+        database.close()
+    print(
+        "schema preflight: PASS READ_ONLY "
+        f"fiscal_installed={before} fiscal_pending={expected[len(before):]} "
+        f"cakto_installed={cakto} cakto_pending={expected_cakto[len(cakto):]}"
+    )
+
+
 def apply() -> None:
     validate_policy()
     environment = os.getenv("NFCORE_ENVIRONMENT", "").strip().casefold()
@@ -218,11 +263,14 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     action = parser.add_mutually_exclusive_group(required=True)
     action.add_argument("--check-policy", action="store_true")
+    action.add_argument("--plan-staging", action="store_true")
     action.add_argument("--apply", action="store_true")
     args = parser.parse_args()
 
     if args.check_policy:
         validate_policy()
+    elif args.plan_staging:
+        plan_staging()
     else:
         apply()
     return 0
