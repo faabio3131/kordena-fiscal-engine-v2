@@ -20,9 +20,10 @@ require_value() {
 }
 
 require_revision() {
-  revision="${1:-}"
-  [ "${#revision}" -eq 40 ] || fail "immutable 40-hex revision is required"
-  case "$revision" in
+  # POSIX sh has no portable local; never overwrite caller's deployment revision.
+  validated_revision="${1:-}"
+  [ "${#validated_revision}" -eq 40 ] || fail "immutable 40-hex revision is required"
+  case "$validated_revision" in
     *[!0-9a-fA-F]*) fail "immutable 40-hex revision is required" ;;
     *) ;;
   esac
