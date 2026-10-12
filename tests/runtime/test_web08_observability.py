@@ -299,3 +299,31 @@ def test_p09_untrusted_correlation_header_does_not_escape_into_trace() -> None:
     assert records[0].context.causation_id is None
     assert len(records[0].context.correlation_id) == 32
     assert SECRET not in repr(records)
+
+
+def test_p09_webhook_trace_does_not_replace_canonical_response_validation() -> None:
+    records: list[TraceRecord] = []
+    malformed = object()
+
+    class Sink:
+        def record(self, trace: TraceRecord) -> None:
+            records.append(trace)
+
+    class MalformedTransport:
+        def deliver(self, request: WebhookDeliveryRequest) -> object:
+            del request
+            return malformed
+
+    request = WebhookDeliveryRequest(
+        destination=WebhookDestination("synthetic-destination", "https://example.org/hook"),
+        body=b"synthetic",
+        headers=(("Content-Type", "application/json"),),
+        outbox_entry_id="outbox-synthetic-malformed",
+        attempt_count=1,
+    )
+    response = _TracedWebhookTransport(MalformedTransport(), SafeTracer(Sink())).deliver(
+        request
+    )
+    assert response is malformed
+    assert len(records) == 1 and records[0].outcome == "error"
+    assert records[0].attributes == {}
