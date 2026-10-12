@@ -92,7 +92,9 @@ def test_schema_drift_blocks_preflight(monkeypatch, installed, cakto) -> None:
 def test_preflight_rejects_other_environments_without_db(monkeypatch, env) -> None:
     monkeypatch.setenv("NFCORE_ENVIRONMENT", env)
     monkeypatch.setenv("DATABASE_URL", "postgresql://synthetic/not-used")
-    monkeypatch.setattr(migration_guard, "PostgresFiscalDatabase", lambda _: pytest.fail("opened DB"))
+    monkeypatch.setattr(
+        migration_guard, "PostgresFiscalDatabase", lambda _: pytest.fail("opened DB")
+    )
     with pytest.raises(RuntimeError, match="restricted to staging"):
         migration_guard.plan_staging()
 
@@ -101,6 +103,8 @@ def test_preflight_rejects_service_startup_without_db(monkeypatch) -> None:
     monkeypatch.setenv("NFCORE_ENVIRONMENT", "staging")
     monkeypatch.setenv("DATABASE_URL", "postgresql://synthetic/not-used")
     monkeypatch.setenv("RAILWAY_SERVICE_ID", "service")
-    monkeypatch.setattr(migration_guard, "PostgresFiscalDatabase", lambda _: pytest.fail("opened DB"))
+    monkeypatch.setattr(
+        migration_guard, "PostgresFiscalDatabase", lambda _: pytest.fail("opened DB")
+    )
     with pytest.raises(RuntimeError, match="outside service startup"):
         migration_guard.plan_staging()
