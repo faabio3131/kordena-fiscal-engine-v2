@@ -374,7 +374,8 @@ Antecipação P6 antes de P5 aprovada em 2026-10-09 (“Autorizado”), conforme
 
 ### 28. NFV1-P09-T01 — Tracing
 
-- [ ] **Estado:** pendente
+- [ ] **Estado:** em execução
+- **Implementação candidata 2026-10-12:** PR #172 DRAFT, branch `feat/nfv1-p09-t01-runtime-tracing`, base main `efefc121cd47453f27a6d8aecd6e2426aca8983a`, pós-merge anterior CI #802/Governance #223 SUCCESS. Reutiliza `runtime.observability.SafeTracer` e as composições existentes: traces HTTP/DB-readiness na API, DB outbox/dispatch/cycle no Worker e transporte webhook canônico. Testes novos de API, erros de sink, webhook e Worker SQLite/PostgreSQL. CI e Mypy/Ruff/pytest/gov da PR ainda pendentes; não usar esta nota como certificação. O tracing é process-local/injetável, sem exporter/dashboards em staging e sem PII, URL de destino, payload ou material de autenticação. `P05-T01` continua BLOCKED_EXTERNAL e 27/59 não muda.
 - **Objetivo:** executar exatamente a tarefa NFV1-P09-T01 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P06-T04 DONE_CERTIFIED_INTERNAL e P1..P4 internos certificados; P05 não é predecessor desta parcela de construção interna
 - **Entregar:** tudo que o cronograma exige para NFV1-P09-T01, mais os testes/evidências diretamente necessários.
