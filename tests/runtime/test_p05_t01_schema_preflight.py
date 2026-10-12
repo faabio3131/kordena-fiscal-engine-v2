@@ -1,11 +1,20 @@
 """P05 read-only preflight: inspect installed schema without granting DDL authority."""
 from __future__ import annotations
 
+import importlib.util
 from contextlib import contextmanager
 
 import pytest
 
-from scripts.ci import migration_guard
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+SPEC = importlib.util.spec_from_file_location(
+    "nfcore_migration_guard", ROOT / "scripts" / "ci" / "migration_guard.py"
+)
+assert SPEC is not None and SPEC.loader is not None
+migration_guard = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(migration_guard)
 
 
 class _Cursor:
