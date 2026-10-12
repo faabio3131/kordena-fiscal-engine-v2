@@ -25,13 +25,15 @@ with Path(os.environ["FAKE_COMMANDS"]).open("a") as handle:
     handle.write(" ".join(args) + "\n")
 up = Path(os.environ["FAKE_UP"])
 up_services = up.read_text().splitlines() if up.exists() else []
-service = args[args.index("--service") + 1] if "--service" in args else "api"
+rollback_file = Path(os.environ.get("FAKE_ROLLBACKS", "/nonexistent-rollback-file"))
+rolled_back = rollback_file.read_text().splitlines() if rollback_file.exists() else []
+service = args[args.index("--service") + 1] if "--service" in args else os.environ["NFCORE_RAILWAY_API_SERVICE"]
 
 
 def snap(name):
-    is_new = name in up_services
+    is_new = name in up_services and name not in rolled_back
     return {
-        "id": name + "-new" if is_new else name + "-old",
+        "id": name + ("-rollback" if name in rolled_back else "-new" if is_new else "-old"),
         "status": "SUCCESS",
         "meta": {"commitHash": os.environ["FAKE_NEW_SHA"] if is_new else "b" * 40},
     }
@@ -41,24 +43,35 @@ if args[:2] == ["deployment", "list"]:
     print(json.dumps([snap(service)]))
 elif args[0] == "status":
     rows = []
-    for name in ["api", "worker", "portal"]:
+    for name in [
+        os.environ["NFCORE_RAILWAY_API_SERVICE"],
+        os.environ["NFCORE_RAILWAY_WORKER_SERVICE"],
+        os.environ["NFCORE_RAILWAY_PORTAL_SERVICE"],
+    ]:
         d = snap(name)
-        instances = (
-            []
-            if name == "worker" and os.environ.get("FAKE_STOPPED") == "true"
-            else [{"status": "RUNNING"}]
+        stopped = (
+            name == os.environ["NFCORE_RAILWAY_WORKER_SERVICE"]
+            and (
+                name in rolled_back
+                or os.environ.get("FAKE_ALWAYS_STOPPED") == "true"
+                or (
+                    os.environ.get("FAKE_STOPPED") == "true"
+                    and name not in up_services
+                )
+            )
         )
+        instances = [] if stopped else [{"status": "RUNNING"}]
         rows.append({"node": {
             "serviceId": name, "serviceName": name,
             "latestDeployment": {"id": d["id"], "status": "SUCCESS"},
             "activeDeployments": [{
-                "id": d["id"], "status": "SUCCESS", "deploymentStopped": False,
+                "id": d["id"], "status": "SUCCESS", "deploymentStopped": stopped,
                 "instances": instances,
             }],
         }})
     print(json.dumps({
-        "id": "project", "environments": {"edges": [{"node": {
-            "id": "env", "serviceInstances": {"edges": rows},
+        "id": os.environ["NFCORE_RAILWAY_PROJECT_ID"], "environments": {"edges": [{"node": {
+            "id": os.environ["NFCORE_RAILWAY_ENVIRONMENT_ID"], "serviceInstances": {"edges": rows},
         }}]},
     }))
 elif args[0] == "up":
@@ -87,6 +100,7 @@ elif args[:4] == ["postgres", "pitr", "backup", "list"]:
         FAKE_COMMANDS=str(tmp_path / "cmds.log"),
         FAKE_UP=str(tmp_path / "up.log"),
         FAKE_BACKUP_NAME=str(tmp_path / "backup_name"),
+        FAKE_ROLLBACKS=str(tmp_path / "rollbacks.log"),
         FAKE_NEW_SHA=sha,
         FAKE_STOPPED="true" if stopped_worker else "false",
         NFCORE_RAILWAY_PROJECT_ID="project",
