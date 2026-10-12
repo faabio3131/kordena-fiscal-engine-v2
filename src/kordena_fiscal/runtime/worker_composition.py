@@ -11,7 +11,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from time import monotonic
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 from uuid import uuid4
@@ -20,16 +19,16 @@ if TYPE_CHECKING:
     from kordena_fiscal.application.webhook_delivery import SignedWebhookOutboxHandler
     from kordena_fiscal.security import WebhookSecurity
 
-from kordena_fiscal.application.webhook_delivery import (
-    WebhookDeliveryRequest,
-    WebhookDeliveryResponse,
-    WebhookTransport,
-)
 from kordena_fiscal.application import (
     BackgroundCycleResult,
     BackgroundWorkerRuntime,
     DurableFiscalOutboxWorker,
     RoutedOutboxHandler,
+)
+from kordena_fiscal.application.webhook_delivery import (
+    WebhookDeliveryRequest,
+    WebhookDeliveryResponse,
+    WebhookTransport,
 )
 from kordena_fiscal.contingency import (
     FiscalDispatchResult,
@@ -52,8 +51,9 @@ from .observability import (
 )
 
 
-def _new_trace_context(*, correlation_id: str | None = None,
-                       causation_id: str | None = None) -> TraceContext:
+def _new_trace_context(
+    *, correlation_id: str | None = None, causation_id: str | None = None
+) -> TraceContext:
     return TraceContext(
         trace_id=uuid4().hex,
         correlation_id=correlation_id or uuid4().hex,
@@ -149,6 +149,7 @@ class _TracedWebhookTransport:
         )
         return response
 
+
 DELIVER_WEBHOOK_OPERATION = "deliver_webhook"
 
 
@@ -242,10 +243,11 @@ def build_production_worker_runtime(
     """
 
     runtime_tracer = tracer or SafeTracer()
-    routed = RoutedOutboxHandler(
-        {operation: _TracedOutboxHandler(handler, runtime_tracer)
-         for operation, handler in handlers.items()}
-    )
+    traced_handlers = {
+        operation: _TracedOutboxHandler(handler, runtime_tracer)
+        for operation, handler in handlers.items()
+    }
+    routed = RoutedOutboxHandler(traced_handlers)
     metrics = MetricsRegistry()
 
     def queue_counts() -> Mapping[FiscalOutboxStatus, int]:
