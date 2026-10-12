@@ -144,7 +144,7 @@ class _TracedWebhookTransport:
         self._tracer.record(
             operation="external.webhook", context=context, started_at=started,
             elapsed_seconds=timer.elapsed(),
-            outcome="ok" if response.status_code < 400 else "error",
+            outcome="ok" if 200 <= response.status_code <= 299 else "error",
             attributes={"status_class": f"{response.status_code // 100}xx"},
         )
         return response
