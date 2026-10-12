@@ -312,13 +312,13 @@ def test_attested_logical_backup_uses_verified_local_artifact_not_paid_pitr(
     env["NFCORE_LOGICAL_RESTORE_TABLE_COUNT"] = "34"
     env["NFCORE_LOGICAL_RESTORE_CLEANED"] = "true"
     archive = tmp_path / "backup.dump.age"
-    archive.write_bytes(b"age-encryption.org/v1\\n" + b"x" * 100)
+    archive.write_bytes(b"age-encryption.org/v1\n" + b"x" * 100)
     identity = tmp_path / "identity"
     identity.write_text("synthetic")
     age = tmp_path / "bin" / "age"
     age.write_text(
-        "#!/usr/bin/env python3\\nimport sys\\n"
-        "sys.stdout.buffer.write(b'PGDMP' + b'x' * 100)\\n"
+        "#!/usr/bin/env python3\nimport sys\n"
+        "sys.stdout.buffer.write(b'PGDMP' + b'x' * 100)\n"
     )
     age.chmod(0o755)
     env["NFCORE_LOGICAL_BACKUP_FILE"] = str(archive)
