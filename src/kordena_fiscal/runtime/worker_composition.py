@@ -82,9 +82,12 @@ class _TracedOutboxHandler:
                 elapsed_seconds=timer.elapsed(), outcome="error",
             )
             raise
+        # Do not validate the domain result in the tracing adapter; the canonical
+        # outbox worker remains the only authority for invalid handler responses.
+        outcome = result.status.value if isinstance(result, FiscalDispatchResult) else "invalid"
         self._tracer.record(
             operation="worker.dispatch", context=context, started_at=started,
-            elapsed_seconds=timer.elapsed(), outcome=result.status.value,
+            elapsed_seconds=timer.elapsed(), outcome=outcome,
         )
         return result
 
@@ -141,11 +144,14 @@ class _TracedWebhookTransport:
                 elapsed_seconds=timer.elapsed(), outcome="error",
             )
             raise
+        # The signed delivery handler validates response types. Tracing must not
+        # replace that validation with AttributeError or reinterpret the result.
+        status = response.status_code if isinstance(response, WebhookDeliveryResponse) else None
         self._tracer.record(
             operation="external.webhook", context=context, started_at=started,
             elapsed_seconds=timer.elapsed(),
-            outcome="ok" if 200 <= response.status_code <= 299 else "error",
-            attributes={"status_class": f"{response.status_code // 100}xx"},
+            outcome="ok" if status is not None and 200 <= status <= 299 else "error",
+            attributes={} if status is None else {"status_class": f"{status // 100}xx"},
         )
         return response
 
