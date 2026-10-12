@@ -10,24 +10,144 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
+from time import monotonic
 from types import MappingProxyType
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 if TYPE_CHECKING:
     from kordena_fiscal.application.webhook_delivery import SignedWebhookOutboxHandler
     from kordena_fiscal.security import WebhookSecurity
 
+from kordena_fiscal.application.webhook_delivery import (
+    WebhookDeliveryRequest,
+    WebhookDeliveryResponse,
+    WebhookTransport,
+)
 from kordena_fiscal.application import (
+    BackgroundCycleResult,
     BackgroundWorkerRuntime,
     DurableFiscalOutboxWorker,
     RoutedOutboxHandler,
 )
-from kordena_fiscal.contingency import FiscalOutboxHandler, FiscalOutboxStatus, FiscalRetryPolicy
+from kordena_fiscal.contingency import (
+    FiscalDispatchResult,
+    FiscalOutboxEntry,
+    FiscalOutboxHandler,
+    FiscalOutboxStatus,
+    FiscalRetryPolicy,
+)
 from kordena_fiscal.persistence.ports import FiscalUnitOfWorkFactory
 
 from .config import RuntimeConfigurationError
-from .observability import MetricsRegistry, StructuredLogger, WorkerHealth, WorkerObservability
+from .observability import (
+    MetricsRegistry,
+    RequestTimer,
+    SafeTracer,
+    StructuredLogger,
+    TraceContext,
+    WorkerHealth,
+    WorkerObservability,
+)
+
+
+def _new_trace_context(*, correlation_id: str | None = None,
+                       causation_id: str | None = None) -> TraceContext:
+    return TraceContext(
+        trace_id=uuid4().hex,
+        correlation_id=correlation_id or uuid4().hex,
+        causation_id=causation_id,
+    )
+
+
+class _TracedOutboxHandler:
+    """Observe canonical dispatch without interpreting scope, payload or fiscal outcomes."""
+
+    def __init__(self, delegate: FiscalOutboxHandler, tracer: SafeTracer) -> None:
+        self._delegate = delegate
+        self._tracer = tracer
+
+    def dispatch(self, entry: FiscalOutboxEntry) -> FiscalDispatchResult:
+        timer = RequestTimer()
+        started = datetime.now(UTC)
+        context = _new_trace_context(
+            correlation_id=entry.scope.correlation_id, causation_id=entry.entry_id
+        )
+        try:
+            result = self._delegate.dispatch(entry)
+        except Exception:
+            self._tracer.record(
+                operation="worker.dispatch", context=context, started_at=started,
+                elapsed_seconds=timer.elapsed(), outcome="error",
+            )
+            raise
+        self._tracer.record(
+            operation="worker.dispatch", context=context, started_at=started,
+            elapsed_seconds=timer.elapsed(), outcome=result.status.value,
+        )
+        return result
+
+
+class _TracingWorkerObserver:
+    """Preserve the certified P04 observer while recording worker cycles."""
+
+    def __init__(self, observer: WorkerObservability, tracer: SafeTracer) -> None:
+        self._observer = observer
+        self._tracer = tracer
+
+    def worker_started(self) -> None:
+        self._observer.worker_started()
+
+    def worker_stopped(self) -> None:
+        self._observer.worker_stopped()
+
+    def cycle_completed(self, result: BackgroundCycleResult) -> None:
+        self._observer.cycle_completed(result)
+        self._record(result.elapsed_seconds, "ok")
+
+    def cycle_failed(self, *, error_type: str, elapsed_seconds: float) -> None:
+        self._observer.cycle_failed(error_type=error_type, elapsed_seconds=elapsed_seconds)
+        self._record(elapsed_seconds, "error")
+
+    def _record(self, elapsed_seconds: float, outcome: str) -> None:
+        self._tracer.record(
+            operation="worker.cycle",
+            context=_new_trace_context(),
+            started_at=datetime.now(UTC) - timedelta(seconds=elapsed_seconds),
+            elapsed_seconds=elapsed_seconds, outcome=outcome,
+        )
+
+
+class _TracedWebhookTransport:
+    """Trace the actual signed transport port, never URL/body/signature/headers."""
+
+    def __init__(self, delegate: WebhookTransport, tracer: SafeTracer) -> None:
+        self._delegate = delegate
+        self._tracer = tracer
+
+    def deliver(self, request: WebhookDeliveryRequest) -> WebhookDeliveryResponse:
+        timer = RequestTimer()
+        started = datetime.now(UTC)
+        context = _new_trace_context(
+            correlation_id=(request.scope.correlation_id if request.scope else None),
+            causation_id=request.outbox_entry_id,
+        )
+        try:
+            response = self._delegate.deliver(request)
+        except Exception:
+            self._tracer.record(
+                operation="external.webhook", context=context, started_at=started,
+                elapsed_seconds=timer.elapsed(), outcome="error",
+            )
+            raise
+        self._tracer.record(
+            operation="external.webhook", context=context, started_at=started,
+            elapsed_seconds=timer.elapsed(),
+            outcome="ok" if response.status_code < 400 else "error",
+            attributes={"status_class": f"{response.status_code // 100}xx"},
+        )
+        return response
 
 DELIVER_WEBHOOK_OPERATION = "deliver_webhook"
 
@@ -63,6 +183,7 @@ def build_canonical_worker_handlers(
     *,
     uow_factory: FiscalUnitOfWorkFactory,
     webhook: WorkerWebhookDependencies | None,
+    tracer: SafeTracer | None = None,
 ) -> Mapping[str, FiscalOutboxHandler]:
     """Register existing concrete handlers only, over the canonical outbox.
 
@@ -81,6 +202,7 @@ def build_canonical_worker_handlers(
                 uow_factory=uow_factory,
                 security=webhook.security,
                 destination_id=webhook.destination_id,
+                tracer=tracer,
             )
         }
     )
@@ -110,6 +232,7 @@ def build_production_worker_runtime(
     idle_wait_seconds: float = 1.0,
     failure_wait_seconds: float = 2.0,
     heartbeat_timeout_seconds: float = 60.0,
+    tracer: SafeTracer | None = None,
 ) -> ProductionWorkerComposition:
     """Compose one durable worker over the canonical outbox and observer boundaries.
 
@@ -118,12 +241,31 @@ def build_production_worker_runtime(
     actually be executed.
     """
 
-    routed = RoutedOutboxHandler(handlers)
+    runtime_tracer = tracer or SafeTracer()
+    routed = RoutedOutboxHandler(
+        {operation: _TracedOutboxHandler(handler, runtime_tracer)
+         for operation, handler in handlers.items()}
+    )
     metrics = MetricsRegistry()
 
     def queue_counts() -> Mapping[FiscalOutboxStatus, int]:
-        with uow_factory() as uow:
-            return uow.outbox.counts_by_status()
+        timer = RequestTimer()
+        started = datetime.now(UTC)
+        context = _new_trace_context()
+        try:
+            with uow_factory() as uow:
+                counts = uow.outbox.counts_by_status()
+        except Exception:
+            runtime_tracer.record(
+                operation="db.outbox_counts", context=context, started_at=started,
+                elapsed_seconds=timer.elapsed(), outcome="error",
+            )
+            raise
+        runtime_tracer.record(
+            operation="db.outbox_counts", context=context, started_at=started,
+            elapsed_seconds=timer.elapsed(), outcome="ok",
+        )
+        return counts
 
     observer = WorkerObservability(
         metrics=metrics,
@@ -138,7 +280,7 @@ def build_production_worker_runtime(
     )
     runtime = BackgroundWorkerRuntime(
         worker=worker,
-        observer=observer,
+        observer=_TracingWorkerObserver(observer, runtime_tracer),
         batch_size=batch_size,
         lease_duration=lease_duration,
         idle_wait_seconds=idle_wait_seconds,
@@ -157,6 +299,7 @@ def build_customer_webhook_handler(
     uow_factory: FiscalUnitOfWorkFactory,
     security: WebhookSecurity,
     destination_id: str,
+    tracer: SafeTracer | None = None,
 ) -> SignedWebhookOutboxHandler:
     """Compose the approved adapter without activating any worker operation/deploy."""
     from kordena_fiscal.application.webhook_delivery import SignedWebhookOutboxHandler
@@ -169,5 +312,5 @@ def build_customer_webhook_handler(
         security=security,
         policy=policy,
         destination_resolver=DurableWebhookDestinationResolver(uow_factory, destination_id),
-        transport=PinnedWebhookTransport(policy),
+        transport=_TracedWebhookTransport(PinnedWebhookTransport(policy), tracer or SafeTracer()),
     )
