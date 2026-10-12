@@ -294,3 +294,42 @@ def test_stopped_worker_rollback_reports_degraded_state_not_healthy(
     assert "ROLLBACK_RESTORED_DEGRADED_WORKER" in reverted.stdout
     assert "ROLLBACK_READY" not in reverted.stdout
     assert "WORKER_PRIOR_STOPPED_STATE_RESTORED" in reverted.stdout
+
+
+def test_attested_logical_backup_uses_verified_local_artifact_not_paid_pitr(
+    tmp_path: Path,
+) -> None:
+    import hashlib
+
+    env = _staging_degraded(_fake(tmp_path, stopped_worker=True))
+    env["NFCORE_RAILWAY_POSTGRES_SERVICE"] = (
+        "71691da6-8d32-4c95-9475-d63d9da1cb0c"
+    )
+    env["NFCORE_RAILWAY_BACKUP_MODE"] = "local-logical-attested"
+    env["NFCORE_RAILWAY_LOGICAL_BACKUP_OPT_IN"] = "true"
+    env["NFCORE_LOGICAL_RESTORE_STATUS"] = "RESTAURACAO_ISOLADA_OK"
+    env["NFCORE_LOGICAL_RESTORE_PG_MAJOR"] = "18"
+    env["NFCORE_LOGICAL_RESTORE_TABLE_COUNT"] = "34"
+    env["NFCORE_LOGICAL_RESTORE_CLEANED"] = "true"
+    archive = tmp_path / "backup.dump.age"
+    archive.write_bytes(b"age-encryption.org/v1\\n" + b"x" * 100)
+    identity = tmp_path / "identity"
+    identity.write_text("synthetic")
+    age = tmp_path / "bin" / "age"
+    age.write_text(
+        "#!/usr/bin/env python3\\nimport sys\\n"
+        "sys.stdout.buffer.write(b'PGDMP' + b'x' * 100)\\n"
+    )
+    age.chmod(0o755)
+    env["NFCORE_LOGICAL_BACKUP_FILE"] = str(archive)
+    env["NFCORE_LOGICAL_BACKUP_IDENTITY"] = str(identity)
+    env["NFCORE_LOGICAL_BACKUP_SHA256"] = hashlib.sha256(archive.read_bytes()).hexdigest()
+    assert _run(env, "prepare-rollback").returncode == 0
+    result = _run(env, "backup")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "LOGICAL_BACKUP_OPERATOR_ATTESTED" in result.stdout
+    assert "postgres pitr backup" not in (tmp_path / "cmds.log").read_text()
+    env["NFCORE_LOGICAL_BACKUP_SHA256"] = "0" * 64
+    denied = _run(env, "backup")
+    assert denied.returncode != 0
+    assert "LOGICAL_BACKUP_OPERATOR_ATTESTED" not in denied.stdout
