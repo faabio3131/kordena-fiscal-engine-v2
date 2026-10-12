@@ -45,7 +45,13 @@ from .cakto import build_cakto_webhook_router
 from .composition import RuntimeComposition, build_postgres_runtime_composition
 from .config import RuntimeSettings
 from .fiscal_runtime import FiscalOperationHandler
-from .observability import MetricsRegistry, RequestTimer, SafeTracer, StructuredLogger, TraceContext
+from .observability import (
+    MetricsRegistry,
+    RequestTimer,
+    SafeTracer,
+    StructuredLogger,
+    TraceContext,
+)
 from .security import configure_edge_security
 
 
