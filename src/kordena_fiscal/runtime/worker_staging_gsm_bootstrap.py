@@ -13,6 +13,7 @@ import stat
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 
 from google.oauth2.service_account import Credentials as ServiceAccountCredentials
 
@@ -130,7 +131,11 @@ def staging_gsm_handler_factory(
         ):
             raise RuntimeConfigurationError("worker GSM durable signing binding unavailable")
         try:
-            credentials = ServiceAccountCredentials.from_service_account_file(str(file))
+            loader = cast(
+                Callable[[str], ServiceAccountCredentials],
+                ServiceAccountCredentials.from_service_account_file,
+            )
+            credentials = loader(str(file))
             access = build_staging_workload_gsm_access(
                 credentials=credentials,
                 workload_id="nfcore-worker",
