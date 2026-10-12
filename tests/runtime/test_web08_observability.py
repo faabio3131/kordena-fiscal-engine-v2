@@ -273,3 +273,28 @@ def test_p09_webhook_transport_preserves_exception_and_observes_failure() -> Non
         _TracedWebhookTransport(FailingTransport(), SafeTracer(Sink())).deliver(request)
     assert len(records) == 1 and records[0].outcome == "error"
     assert SECRET not in repr(records)
+
+
+def test_p09_untrusted_correlation_header_does_not_escape_into_trace() -> None:
+    records: list[TraceRecord] = []
+
+    class Sink:
+        def record(self, trace: TraceRecord) -> None:
+            records.append(trace)
+
+    app = create_runtime_app(
+        _settings(),
+        tracer=SafeTracer(Sink()),
+        logger=StructuredLogger(service="nfcore-api", environment="test", sink=lambda _: None),
+    )
+    with TestClient(app) as client:
+        response = client.get(
+            "/health/live",
+            headers={"X-Correlation-Id": f"Bearer {SECRET}",
+                     "X-Causation-Id": f"Bearer {SECRET}"},
+        )
+    assert response.status_code == 200
+    assert len(records) == 1
+    assert records[0].context.causation_id is None
+    assert len(records[0].context.correlation_id) == 32
+    assert SECRET not in repr(records)
