@@ -372,7 +372,46 @@ Antecipação P6 antes de P5 aprovada em 2026-10-09 (“Autorizado”), conforme
 - **Decisões do dono pendentes:** execução T04 e merge PR #159 autorizados explicitamente em 2026-10-10. Integração do presente fechamento documental, deploy, conta, IAM, credenciais reais e gastos exigem autorizações específicas.
 - **Prova:** PR #159 MERGED; head `0763dc97f6fe3053bf80f22d1eae27095a9d24a0`; merge/main `d2600c6a6604d9f3f8be3ea3642b78ebbf688832`; CI PR #747/run38063730623 e Governance #168/run38063730630 SUCCESS; CI #748/run38064965857 (main) e Governance #169/run38064965821 SUCCESS no merge SHA, 41/41 etapas, 2.022 Python/PostgreSQL PASS, 14 frontend PASS, 28 Playwright PASS, zero FAIL/zero SKIP, 1 warning TestClient. Segurança/secret scan, migrations, containers/SBOM, backup/restore/readiness PASS. Checkpoint `docs/checkpoints/NFV1_P06_T04_ROTATION_FAILURES_2026-10-10.md`. **T04 DONE_CERTIFIED_INTERNAL condicionado à integração do presente closeout documental; 27/59 concluídas após fechamento.** Próximo item NFV1-P05-T01 BLOCKED_EXTERNAL pela P6-T01-B02. Sem deploy.
 
-### 28. NFV1-P05-T01 — Pré-deploy
+### 28. NFV1-P09-T01 — Tracing
+
+- [ ] **Estado:** pendente
+- **Objetivo:** executar exatamente a tarefa NFV1-P09-T01 do cronograma mestre, sem ampliar escopo.
+- **Depende de:** NFV1-P06-T04 DONE_CERTIFIED_INTERNAL e P1..P4 internos certificados; P05 não é predecessor desta parcela de construção interna
+- **Entregar:** tudo que o cronograma exige para NFV1-P09-T01, mais os testes/evidências diretamente necessários.
+- **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
+- **Critério de aceite:** critérios específicos de NFV1-P09-T01 no cronograma satisfeitos e nenhum gate transversal violado.
+- **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
+- **Riscos / não confirmado:** sem staging CURRENT, nenhum trace ou alerta operacional pode ser declarado ativo; evidência de integração interna/CI não substitui exporter/collector/ambiente real.
+- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
+- **Prova:** PENDENTE
+
+### 29. NFV1-P09-T02 — Métricas
+
+- [ ] **Estado:** pendente
+- **Objetivo:** executar exatamente a tarefa NFV1-P09-T02 do cronograma mestre, sem ampliar escopo.
+- **Depende de:** NFV1-P09-T01 concluído e certificado; mais as dependências formais do cronograma
+- **Entregar:** tudo que o cronograma exige para NFV1-P09-T02, mais os testes/evidências diretamente necessários.
+- **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
+- **Critério de aceite:** critérios específicos de NFV1-P09-T02 no cronograma satisfeitos e nenhum gate transversal violado.
+- **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
+- **Riscos / não confirmado:** sem staging CURRENT, nenhum trace ou alerta operacional pode ser declarado ativo; evidência de integração interna/CI não substitui exporter/collector/ambiente real.
+- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
+- **Prova:** PENDENTE
+
+### 30. NFV1-P09-T03 — Alerts
+
+- [ ] **Estado:** pendente
+- **Objetivo:** executar exatamente a tarefa NFV1-P09-T03 do cronograma mestre, sem ampliar escopo.
+- **Depende de:** NFV1-P09-T02 concluído e certificado; mais as dependências formais do cronograma
+- **Entregar:** tudo que o cronograma exige para NFV1-P09-T03, mais os testes/evidências diretamente necessários.
+- **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
+- **Critério de aceite:** critérios específicos de NFV1-P09-T03 no cronograma satisfeitos e nenhum gate transversal violado.
+- **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
+- **Riscos / não confirmado:** sem staging CURRENT, nenhum trace ou alerta operacional pode ser declarado ativo; evidência de integração interna/CI não substitui exporter/collector/ambiente real.
+- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
+- **Prova:** PENDENTE
+
+### 31. NFV1-P05-T01 — Pré-deploy
 
 - [ ] **Estado:** bloqueado externo
 - **Certificação adicional B05 (2026-10-11):** PR #169 MERGED, HEAD `8b87a45b0d44d5705a7f523d1688a713f0d6c451`, squash/main `b2dc1ac32a91b0104245b6a64d5d761f464e6417`; CI PR #797/run38186700669 e Governance #218/run38186700687 SUCCESS; pós-merge CI main #798/run38188298859 e Governance #219/run38188298903 SUCCESS (mesmo SHA). Driver Railway rejeita baseline ausente, parcial, duplicado ou SHA inválido antes de avançar; reparado teste de regressão #796 sem mascarar falha. Evidência: `docs/checkpoints/NFV1_P05_T01_PREDEPLOY_2026-10-09.md`. Apenas hardening interno, **não** comprova backup real, SQL/migrations PG18, GSM/IAM ou Worker operacional. B01/B02/B04 e contrato externo B05 permanecem; P05-T01 `[ ] bloqueado externo`, P05-T02 proibido, 27/59 inalterado. Dono priorizou concluir construção interna sem aprovar mudança automática de ordem, deploy ou serviço real.
@@ -389,7 +428,7 @@ Antecipação P6 antes de P5 aprovada em 2026-10-09 (“Autorizado”), conforme
 - **Decisões do dono pendentes:** ordem P6 antes de P5 e merge #151 aprovados em 2026-10-09 (“Autorizado”); resta aprovar canal operacional para prova backup/SQL, provider/IAM e composição de assinatura real. Deploy/credencial/produção não autorizados.
 - **Prova:** parcial: PR #151 MERGED, HEAD `8bfa783180c99a8e0532822142ba128375f399bb`, main `250afa737fa970411d13fe1f48735b6147f9e13d`, árvore idêntica `7ff6b29b182e499ca5d1710d84ad43e93c6a4fb8`;CI #730/run37947093378 e Governance #151/run37947093342 SUCCESS,41/41 etapas,1673 Python/PostgreSQL,14 frontend,28 Playwright,zero FAIL/SKIP,backup/restore canônico em PostgreSQL16 sintético PASS. Pós-merge CI #731/run37950345107 e Governance #152/run37950345322 em certificação na criação deste registro. Ordem P6/P5 aprovada;23/59 concluídas. Histórico de entrada: entrada main `5b63449d9ef3bbe7fdf7023e1d9bdfd96235f00c`, PR #150 MERGED, CI #728/run37942395431 e Governance #149/run37942395342 SUCCESS; 41/41 etapas,1666 Python/PostgreSQL,14 frontend,28 Playwright,zero FAIL/SKIP. Auditoria Railway somente leitura 2026-10-09: API/Portal/PostgreSQL1/1,Worker0/1; versões divergentes. Checkpoint `docs/checkpoints/NFV1_P05_T01_PREDEPLOY_2026-10-09.md`. Prova externa insuficiente; checkbox permanece vazio.
 
-### 29. NFV1-P05-T02 — Deploy reconciliado
+### 32. NFV1-P05-T02 — Deploy reconciliado
 
 - [ ] **Estado:** pendente
 - **Objetivo:** executar exatamente a tarefa NFV1-P05-T02 do cronograma mestre, sem ampliar escopo.
@@ -402,7 +441,7 @@ Antecipação P6 antes de P5 aprovada em 2026-10-09 (“Autorizado”), conforme
 - **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
 - **Prova:** PENDENTE
 
-### 30. NFV1-P05-T03 — Smoke
+### 33. NFV1-P05-T03 — Smoke
 
 - [ ] **Estado:** pendente
 - **Objetivo:** executar exatamente a tarefa NFV1-P05-T03 do cronograma mestre, sem ampliar escopo.
@@ -415,7 +454,7 @@ Antecipação P6 antes de P5 aprovada em 2026-10-09 (“Autorizado”), conforme
 - **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
 - **Prova:** PENDENTE
 
-### 31. NFV1-P05-T04 — E2E real
+### 34. NFV1-P05-T04 — E2E real
 
 - [ ] **Estado:** pendente
 - **Objetivo:** executar exatamente a tarefa NFV1-P05-T04 do cronograma mestre, sem ampliar escopo.
@@ -428,7 +467,7 @@ Antecipação P6 antes de P5 aprovada em 2026-10-09 (“Autorizado”), conforme
 - **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
 - **Prova:** PENDENTE
 
-### 32. NFV1-P05-T05 — Rollback rehearsal
+### 35. NFV1-P05-T05 — Rollback rehearsal
 
 - [ ] **Estado:** pendente
 - **Objetivo:** executar exatamente a tarefa NFV1-P05-T05 do cronograma mestre, sem ampliar escopo.
@@ -441,7 +480,7 @@ Antecipação P6 antes de P5 aprovada em 2026-10-09 (“Autorizado”), conforme
 - **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
 - **Prova:** PENDENTE
 
-### 33. NFV1-P07-T01 — Definir launch matrix
+### 36. NFV1-P07-T01 — Definir launch matrix
 
 - [ ] **Estado:** pendente
 - **Objetivo:** executar exatamente a tarefa NFV1-P07-T01 do cronograma mestre, sem ampliar escopo.
@@ -454,7 +493,7 @@ Antecipação P6 antes de P5 aprovada em 2026-10-09 (“Autorizado”), conforme
 - **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
 - **Prova:** PENDENTE
 
-### 34. NFV1-P07-T02 — Adapter de transporte
+### 37. NFV1-P07-T02 — Adapter de transporte
 
 - [ ] **Estado:** pendente
 - **Objetivo:** executar exatamente a tarefa NFV1-P07-T02 do cronograma mestre, sem ampliar escopo.
@@ -467,7 +506,7 @@ Antecipação P6 antes de P5 aprovada em 2026-10-09 (“Autorizado”), conforme
 - **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
 - **Prova:** PENDENTE
 
-### 35. NFV1-P07-T03 — Signer/CSC/certificado
+### 38. NFV1-P07-T03 — Signer/CSC/certificado
 
 - [ ] **Estado:** pendente
 - **Objetivo:** executar exatamente a tarefa NFV1-P07-T03 do cronograma mestre, sem ampliar escopo.
@@ -480,7 +519,7 @@ Antecipação P6 antes de P5 aprovada em 2026-10-09 (“Autorizado”), conforme
 - **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
 - **Prova:** PENDENTE
 
-### 36. NFV1-P07-T04 — Contract tests
+### 39. NFV1-P07-T04 — Contract tests
 
 - [ ] **Estado:** pendente
 - **Objetivo:** executar exatamente a tarefa NFV1-P07-T04 do cronograma mestre, sem ampliar escopo.
@@ -493,7 +532,7 @@ Antecipação P6 antes de P5 aprovada em 2026-10-09 (“Autorizado”), conforme
 - **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
 - **Prova:** PENDENTE
 
-### 37. NFV1-P08-T01 — Configurar provider aprovado
+### 40. NFV1-P08-T01 — Configurar provider aprovado
 
 - [ ] **Estado:** pendente
 - **Objetivo:** executar exatamente a tarefa NFV1-P08-T01 do cronograma mestre, sem ampliar escopo.
@@ -506,7 +545,7 @@ Antecipação P6 antes de P5 aprovada em 2026-10-09 (“Autorizado”), conforme
 - **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
 - **Prova:** PENDENTE
 
-### 38. NFV1-P08-T02 — Compra controlada
+### 41. NFV1-P08-T02 — Compra controlada
 
 - [ ] **Estado:** pendente
 - **Objetivo:** executar exatamente a tarefa NFV1-P08-T02 do cronograma mestre, sem ampliar escopo.
@@ -519,7 +558,7 @@ Antecipação P6 antes de P5 aprovada em 2026-10-09 (“Autorizado”), conforme
 - **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
 - **Prova:** PENDENTE
 
-### 39. NFV1-P08-T03 — Lifecycle
+### 42. NFV1-P08-T03 — Lifecycle
 
 - [ ] **Estado:** pendente
 - **Objetivo:** executar exatamente a tarefa NFV1-P08-T03 do cronograma mestre, sem ampliar escopo.
@@ -532,7 +571,7 @@ Antecipação P6 antes de P5 aprovada em 2026-10-09 (“Autorizado”), conforme
 - **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
 - **Prova:** PENDENTE
 
-### 40. NFV1-P08-T04 — Reconciliação
+### 43. NFV1-P08-T04 — Reconciliação
 
 - [ ] **Estado:** pendente
 - **Objetivo:** executar exatamente a tarefa NFV1-P08-T04 do cronograma mestre, sem ampliar escopo.
@@ -540,45 +579,6 @@ Antecipação P6 antes de P5 aprovada em 2026-10-09 (“Autorizado”), conforme
 - **Entregar:** tudo que o cronograma exige para NFV1-P08-T04, mais os testes/evidências diretamente necessários.
 - **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
 - **Critério de aceite:** critérios específicos de NFV1-P08-T04 no cronograma satisfeitos e nenhum gate transversal violado.
-- **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
-- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** PENDENTE
-
-### 41. NFV1-P09-T01 — Tracing
-
-- [ ] **Estado:** pendente
-- **Objetivo:** executar exatamente a tarefa NFV1-P09-T01 do cronograma mestre, sem ampliar escopo.
-- **Depende de:** NFV1-P08-T04 concluído e certificado; mais as dependências formais do cronograma
-- **Entregar:** tudo que o cronograma exige para NFV1-P09-T01, mais os testes/evidências diretamente necessários.
-- **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
-- **Critério de aceite:** critérios específicos de NFV1-P09-T01 no cronograma satisfeitos e nenhum gate transversal violado.
-- **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
-- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** PENDENTE
-
-### 42. NFV1-P09-T02 — Métricas
-
-- [ ] **Estado:** pendente
-- **Objetivo:** executar exatamente a tarefa NFV1-P09-T02 do cronograma mestre, sem ampliar escopo.
-- **Depende de:** NFV1-P09-T01 concluído e certificado; mais as dependências formais do cronograma
-- **Entregar:** tudo que o cronograma exige para NFV1-P09-T02, mais os testes/evidências diretamente necessários.
-- **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
-- **Critério de aceite:** critérios específicos de NFV1-P09-T02 no cronograma satisfeitos e nenhum gate transversal violado.
-- **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
-- **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
-- **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** PENDENTE
-
-### 43. NFV1-P09-T03 — Alerts
-
-- [ ] **Estado:** pendente
-- **Objetivo:** executar exatamente a tarefa NFV1-P09-T03 do cronograma mestre, sem ampliar escopo.
-- **Depende de:** NFV1-P09-T02 concluído e certificado; mais as dependências formais do cronograma
-- **Entregar:** tudo que o cronograma exige para NFV1-P09-T03, mais os testes/evidências diretamente necessários.
-- **Não fazer:** não antecipar tarefa posterior; não criar autoridade paralela; não mascarar falha; não usar mock/synthetic como prova de integração real; não executar ação humana/externa não autorizada.
-- **Critério de aceite:** critérios específicos de NFV1-P09-T03 no cronograma satisfeitos e nenhum gate transversal violado.
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
 - **Riscos / não confirmado:** preencher na PR/checkpoint; ausência de prova permanece não confirmada.
 - **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
