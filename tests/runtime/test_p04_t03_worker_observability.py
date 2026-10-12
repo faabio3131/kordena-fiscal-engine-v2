@@ -22,7 +22,9 @@ from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
 from kordena_fiscal.persistence.sqlite_outbox_archive import SqliteFiscalOutboxStore
 from kordena_fiscal.runtime.observability import (
     MetricsRegistry,
+    SafeTracer,
     StructuredLogger,
+    TraceRecord,
     WorkerObservability,
 )
 from kordena_fiscal.runtime.worker_composition import build_production_worker_runtime
@@ -408,3 +410,57 @@ def test_malformed_snapshot_cannot_promote_readiness(counts):
     assert metric(metrics, "nfcore_worker_ready") == 0
     assert metric(metrics, "nfcore_worker_queue_snapshot_valid") == 0
     assert metric(metrics, "nfcore_worker_telemetry_failures_total", "queue") == 1
+
+
+def test_p09_worker_tracing_covers_real_outbox_db_dispatch_and_cycle(database) -> None:
+    records: list[TraceRecord] = []
+
+    class Sink:
+        def record(self, trace: TraceRecord) -> None:
+            records.append(trace)
+
+    entry = put(database, "p09-canonical-worker")
+    handler = Handler()
+    comp = build_production_worker_runtime(
+        uow_factory=database,
+        handlers={"deliver_webhook": handler},
+        environment="test",
+        tracer=SafeTracer(Sink()),
+    )
+    result = comp.runtime.run_cycle()
+    assert result.claimed == result.succeeded == 1
+    assert len(handler.calls) == 1
+    assert {item.operation for item in records} == {
+        "worker.dispatch", "db.outbox_counts", "worker.cycle"
+    }
+    dispatch = next(item for item in records if item.operation == "worker.dispatch")
+    assert dispatch.context.correlation_id == entry.scope.correlation_id
+    assert dispatch.context.causation_id == entry.entry_id
+    assert dispatch.outcome == "succeeded"
+    assert all(len(item.context.trace_id) == 32 for item in records)
+    assert PRIVATE not in repr(records)
+    assert "private-tenant" not in repr(records)
+    assert "private-unit" not in repr(records)
+    with database() as uow:
+        assert uow.outbox.get(entry.entry_id).status is FiscalOutboxStatus.SUCCEEDED
+
+
+def test_p09_worker_tracing_sink_errors_cannot_reprocess_jobs(database) -> None:
+    class FailingSink:
+        def record(self, trace: TraceRecord) -> None:
+            del trace
+            raise RuntimeError(PRIVATE)
+
+    entry = put(database, "p09-failing-sink")
+    handler = Handler()
+    comp = build_production_worker_runtime(
+        uow_factory=database,
+        handlers={"deliver_webhook": handler},
+        environment="test",
+        tracer=SafeTracer(FailingSink()),
+    )
+    assert comp.runtime.run_cycle().succeeded == 1
+    assert comp.runtime.run_cycle().claimed == 0
+    assert len(handler.calls) == 1
+    with database() as uow:
+        assert uow.outbox.get(entry.entry_id).status is FiscalOutboxStatus.SUCCEEDED
