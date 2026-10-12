@@ -116,5 +116,15 @@ def run(
                 signal.signal(signum, handler)
 
 
+def main() -> int:
+    # The existing container CMD uses this entrypoint. ONESHOT is exclusively a
+    # dependency probe; no signing handler can be silently replaced by a stub.
+    if _oneshot_requested():
+        return run()
+    from .worker_staging_gsm_bootstrap import staging_gsm_handler_factory
+
+    return run(handler_factory=staging_gsm_handler_factory())
+
+
 if __name__ == "__main__":
-    raise SystemExit(run())
+    raise SystemExit(main())
