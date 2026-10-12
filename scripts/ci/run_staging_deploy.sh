@@ -23,7 +23,12 @@ sh "$NFCORE_STAGING_DEPLOY_DRIVER" prepare-rollback "$revision"
 # schema mutation. The driver owns external storage; no backup material enters Git.
 sh "$NFCORE_STAGING_DEPLOY_DRIVER" backup "$revision"
 
-export NFCORE_SCHEMA_MIGRATION_APPROVED=true
+# Migration is a separately authorized state-changing operation. Neither
+# successful backup verification nor deployment intent grants implicit approval.
+if [ "${NFCORE_SCHEMA_MIGRATION_APPROVED:-}" != "true" ]; then
+  echo "staging deploy: BLOCKED_EXTERNAL explicit schema migration approval missing"
+  exit 42
+fi
 python scripts/ci/migration_guard.py --apply
 
 # Provider-specific driver contract v1:
