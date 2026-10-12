@@ -14,7 +14,6 @@ from kordena_fiscal.application.webhook_delivery import (
 )
 from kordena_fiscal.runtime.api import create_runtime_app
 from kordena_fiscal.runtime.config import RuntimeSettings
-from kordena_fiscal.runtime.worker_composition import _TracedWebhookTransport
 from kordena_fiscal.runtime.observability import (
     MetricsRegistry,
     SafeTracer,
@@ -24,6 +23,7 @@ from kordena_fiscal.runtime.observability import (
     WorkerObservability,
     redact,
 )
+from kordena_fiscal.runtime.worker_composition import _TracedWebhookTransport
 
 SECRET = "never-expose-this-secret"
 NOW = datetime(2026, 9, 14, 23, 30, tzinfo=UTC)
