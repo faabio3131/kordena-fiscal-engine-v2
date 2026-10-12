@@ -181,3 +181,113 @@ def test_driver_rejects_corrupted_rollback_baselines_before_any_rollout(
         after = (tmp_path / "cmds.log").read_text()
         assert "up --ci" not in after[len(before):]
     baseline.write_text(valid)
+
+
+STAGING_PROJECT = "b84b290d-f3b4-46a1-9023-0b761cb96b0d"
+STAGING_ENVIRONMENT = "c9878b9b-62b2-4a97-b8ba-743c8a3e99ec"
+
+
+def _staging_degraded(env: dict[str, str]) -> dict[str, str]:
+    env.update(
+        NFCORE_RAILWAY_ALLOW_STOPPED_WORKER_BASELINE="true",
+        NFCORE_ENVIRONMENT="staging",
+        NFCORE_RAILWAY_PROJECT_ID=STAGING_PROJECT,
+        NFCORE_RAILWAY_ENVIRONMENT_ID=STAGING_ENVIRONMENT,
+        NFCORE_RAILWAY_WORKER_SERVICE="nfcore-worker",
+    )
+    return env
+
+
+def test_explicit_staging_exception_captures_stopped_worker_and_requires_new_running_one(
+    tmp_path: Path,
+) -> None:
+    env = _staging_degraded(_fake(tmp_path, stopped_worker=True))
+    captured = _run(env, "prepare-rollback")
+    assert captured.returncode == 0, captured.stdout + captured.stderr
+    baseline = (tmp_path / "baseline.tsv").read_text()
+    assert f"nfcore-worker\tnfcore-worker-old\t{'b' * 40}\tstopped" in baseline
+    assert f"api\tapi-old\t{'b' * 40}\trunning" in baseline
+    assert f"portal\tportal-old\t{'b' * 40}\trunning" in baseline
+    assert _run(env, "backup").returncode == 0
+    deployed = _run(env, "deploy")
+    assert deployed.returncode == 0, deployed.stdout + deployed.stderr
+    assert _run(env, "verify-worker").returncode == 0
+    assert (tmp_path / "cmds.log").read_text().count("up --ci") == 3
+
+
+def test_explicit_staging_exception_never_accepts_a_new_stopped_worker(
+    tmp_path: Path,
+) -> None:
+    env = _staging_degraded(_fake(tmp_path, stopped_worker=True))
+    env["FAKE_ALWAYS_STOPPED"] = "true"
+    assert _run(env, "prepare-rollback").returncode == 0
+    assert _run(env, "backup").returncode == 0
+    result = _run(env, "deploy")
+    assert result.returncode != 0
+    assert "DEPLOY_READY" not in result.stdout
+    assert (tmp_path / "cmds.log").read_text().count("up --ci") == 2
+
+
+def test_degraded_staging_baseline_is_invalid_without_exact_scope_and_opt_in(
+    tmp_path: Path,
+) -> None:
+    env = _staging_degraded(_fake(tmp_path, stopped_worker=True))
+    for key, value in [
+        ("NFCORE_RAILWAY_ALLOW_STOPPED_WORKER_BASELINE", "false"),
+        ("NFCORE_ENVIRONMENT", "production"),
+        ("NFCORE_ENVIRONMENT", "development"),
+        ("NFCORE_RAILWAY_PROJECT_ID", "another-project"),
+        ("NFCORE_RAILWAY_ENVIRONMENT_ID", "another-environment"),
+        ("NFCORE_RAILWAY_WORKER_SERVICE", "other-worker"),
+    ]:
+        invalid = {**env, key: value}
+        result = _run(invalid, "prepare-rollback")
+        assert result.returncode != 0, (key, result.stdout, result.stderr)
+        assert "ROLLBACK_BASELINE_CAPTURED" not in result.stdout
+        assert "postgres pitr backup" not in (tmp_path / "cmds.log").read_text()
+    assert not (tmp_path / "baseline.tsv").exists()
+
+
+def test_revoking_opt_in_blocks_deploy_of_previously_captured_degraded_baseline(
+    tmp_path: Path,
+) -> None:
+    env = _staging_degraded(_fake(tmp_path, stopped_worker=True))
+    assert _run(env, "prepare-rollback").returncode == 0
+    invalid = {**env, "NFCORE_RAILWAY_ALLOW_STOPPED_WORKER_BASELINE": "false"}
+    result = _run(invalid, "deploy")
+    assert result.returncode != 0
+    assert "DEPLOY_READY" not in result.stdout
+    assert "up --ci" not in (tmp_path / "cmds.log").read_text()
+
+
+def test_tampered_stopped_api_baseline_is_rejected_without_deploy(
+    tmp_path: Path,
+) -> None:
+    env = _staging_degraded(_fake(tmp_path, stopped_worker=True))
+    assert _run(env, "prepare-rollback").returncode == 0
+    baseline = tmp_path / "baseline.tsv"
+    baseline.write_text(baseline.read_text().replace("\trunning", "\tstopped", 1))
+    result = _run(env, "deploy")
+    assert result.returncode != 0
+    assert "up --ci" not in (tmp_path / "cmds.log").read_text()
+
+
+def test_stopped_worker_rollback_reports_degraded_state_not_healthy(
+    tmp_path: Path,
+) -> None:
+    env = _staging_degraded(_fake(tmp_path, stopped_worker=True))
+    assert _run(env, "prepare-rollback").returncode == 0
+    assert _run(env, "backup").returncode == 0
+    assert _run(env, "deploy").returncode == 0
+    helper = tmp_path / "rollback_helper.py"
+    helper.write_text(
+        "import os,sys\nfrom pathlib import Path\n"
+        "name=sys.argv[2].removesuffix('-old')\n"
+        "with Path(os.environ['FAKE_ROLLBACKS']).open('a') as f:f.write(name+'\\n')\n"
+    )
+    env["NFCORE_RAILWAY_GRAPHQL_HELPER"] = str(helper)
+    reverted = _run(env, "rollback")
+    assert reverted.returncode == 0, reverted.stdout + reverted.stderr
+    assert "ROLLBACK_RESTORED_DEGRADED_WORKER" in reverted.stdout
+    assert "ROLLBACK_READY" not in reverted.stdout
+    assert "WORKER_PRIOR_STOPPED_STATE_RESTORED" in reverted.stdout
