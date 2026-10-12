@@ -205,8 +205,13 @@ def main() -> int:
             proof = runtime(payload, project=args.project, environment=args.environment,
                             service=args.service, deployment_id=args.deployment_id)
         else:
-            proof = stopped_worker_baseline(payload, project=args.project, environment=args.environment,
-                                            service=args.service, deployment_id=args.deployment_id)
+            proof = stopped_worker_baseline(
+                payload,
+                project=args.project,
+                environment=args.environment,
+                service=args.service,
+                deployment_id=args.deployment_id,
+            )
     except (ValueError, TypeError, KeyError):
         # Never echo the provider payload, raw exception or credential.
         print("railway evidence: BLOCKED unverified provider receipt")
