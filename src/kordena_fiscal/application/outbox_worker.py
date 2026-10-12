@@ -12,6 +12,7 @@ from kordena_fiscal.contingency import (
     FiscalRetryPolicy,
     OutboxStateError,
 )
+from kordena_fiscal.contingency.outbox import OutboxClaimSelection
 from kordena_fiscal.domain import FiscalValidationError
 from kordena_fiscal.events.delivery_audit import DeliveryAuditError
 from kordena_fiscal.persistence.ports import FiscalUnitOfWorkFactory
@@ -31,10 +32,14 @@ class DurableFiscalOutboxWorker:
         uow_factory: FiscalUnitOfWorkFactory,
         handler: FiscalOutboxHandler,
         retry_policy: FiscalRetryPolicy | None = None,
+        claim_selection: OutboxClaimSelection | None = None,
     ) -> None:
         self._uow_factory = uow_factory
         self._handler = handler
         self._policy = retry_policy or FiscalRetryPolicy()
+        if claim_selection is not None and not isinstance(claim_selection, OutboxClaimSelection):
+            raise FiscalValidationError("invalid worker claim selection")
+        self._claim_selection = claim_selection
 
     def run_once(
         self,
@@ -78,11 +83,17 @@ class DurableFiscalOutboxWorker:
         lease_duration: timedelta,
     ) -> tuple[FiscalOutboxEntry, ...]:
         with self._uow_factory() as uow:
-            claimed = uow.outbox.claim_due(
-                now=now,
-                limit=limit,
-                lease_duration=lease_duration,
-            )
+            if self._claim_selection is None:
+                claimed = uow.outbox.claim_due(
+                    now=now, limit=limit, lease_duration=lease_duration,
+                )
+            else:
+                claimed = uow.outbox.claim_due(
+                    now=now, limit=limit, lease_duration=lease_duration,
+                    selection=self._claim_selection,
+                )
+                if any(not self._claim_selection.matches(entry) for entry in claimed):
+                    raise OutboxStateError("outbox store returned an unauthorized partition")
             try:
                 for entry in claimed:
                     uow.delivery_audit.expire_prior_attempts(

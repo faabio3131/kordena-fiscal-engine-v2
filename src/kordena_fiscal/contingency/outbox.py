@@ -213,8 +213,41 @@ class FiscalDispatchResult:
             raise FiscalValidationError("failed dispatch requires error only")
 
 
+@dataclass(frozen=True, slots=True)
+class OutboxClaimSelection:
+    """Platform-supplied exact partition, never inferred from a job payload."""
+
+    scope: ExecutionScope
+    operations: frozenset[str]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.scope, ExecutionScope):
+            raise FiscalValidationError("claim selection requires an execution scope")
+        if any(value == "*" for value in self.scope.identity_material):
+            raise FiscalValidationError("wildcard claim partition prohibited")
+        if (
+            not isinstance(self.operations, frozenset)
+            or not self.operations
+            or any(
+                not isinstance(value, str) or not value or value != value.strip()
+                or value != value.lower() or value == "*" or len(value) > 128
+                or any(ord(char) < 32 or ord(char) == 127 for char in value)
+                for value in self.operations
+            )
+        ):
+            raise FiscalValidationError("claim selection requires explicit operations")
+
+    def matches(self, entry: FiscalOutboxEntry) -> bool:
+        return (
+            entry.scope.identity_partition_key == self.scope.identity_partition_key
+            and entry.operation in self.operations
+        )
+
+
 class FiscalOutboxStore(Protocol):
-    def counts_by_status(self) -> Mapping[FiscalOutboxStatus, int]:
+    def counts_by_status(
+        self, *, selection: OutboxClaimSelection | None = None
+    ) -> Mapping[FiscalOutboxStatus, int]:
         """Process-wide operational aggregate; never a tenant-facing projection."""
         ...
 
@@ -236,6 +269,7 @@ class FiscalOutboxStore(Protocol):
         now: datetime,
         limit: int,
         lease_duration: timedelta,
+        selection: OutboxClaimSelection | None = None,
     ) -> tuple[FiscalOutboxEntry, ...]: ...
 
     def mark_succeeded(
@@ -277,10 +311,18 @@ class InMemoryFiscalOutboxStore:
         self._lock = Lock()
         self._entries: dict[str, FiscalOutboxEntry] = {}
 
-    def counts_by_status(self) -> Mapping[FiscalOutboxStatus, int]:
+    def counts_by_status(
+        self, *, selection: OutboxClaimSelection | None = None
+    ) -> Mapping[FiscalOutboxStatus, int]:
+        if selection is not None and not isinstance(selection, OutboxClaimSelection):
+            raise FiscalValidationError("invalid outbox claim selection")
         with self._lock:
             return {
-                status: sum(entry.status is status for entry in self._entries.values())
+                status: sum(
+                    entry.status is status
+                    for entry in self._entries.values()
+                    if selection is None or selection.matches(entry)
+                )
                 for status in FiscalOutboxStatus
             }
 
@@ -339,12 +381,15 @@ class InMemoryFiscalOutboxStore:
         now: datetime,
         limit: int,
         lease_duration: timedelta,
+        selection: OutboxClaimSelection | None = None,
     ) -> tuple[FiscalOutboxEntry, ...]:
         _aware(now, "now")
         if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
             raise FiscalValidationError("limit must be a positive integer")
         if lease_duration <= timedelta(0):
             raise FiscalValidationError("lease_duration must be positive")
+        if selection is not None and not isinstance(selection, OutboxClaimSelection):
+            raise FiscalValidationError("invalid outbox claim selection")
         claimed: list[FiscalOutboxEntry] = []
         with self._lock:
             candidates = sorted(
@@ -352,6 +397,8 @@ class InMemoryFiscalOutboxStore:
                 key=lambda item: (item.available_at, item.created_at, item.entry_id),
             )
             for entry in candidates:
+                if selection is not None and not selection.matches(entry):
+                    continue
                 if len(claimed) >= limit:
                     break
                 if not _is_claimable(entry, now):

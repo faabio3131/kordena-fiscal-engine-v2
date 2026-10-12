@@ -20,6 +20,7 @@ from kordena_fiscal.contingency import (
     OutboxConflictError,
     OutboxStateError,
 )
+from kordena_fiscal.contingency.outbox import OutboxClaimSelection
 from kordena_fiscal.domain import ExecutionScope, FiscalValidationError
 
 from ._sqlite_common import (
@@ -41,11 +42,36 @@ class SqliteFiscalOutboxStore:
     def __init__(self, connection: sqlite3.Connection) -> None:
         self._connection = connection
 
-    def counts_by_status(self) -> dict[FiscalOutboxStatus, int]:
+    @staticmethod
+    def _selection_sql(
+        selection: OutboxClaimSelection | None, prefix: str = ""
+    ) -> tuple[str, tuple[object, ...]]:
+        if selection is None:
+            return "", ()
+        if not isinstance(selection, OutboxClaimSelection):
+            raise FiscalValidationError("invalid outbox claim selection")
+        scope = selection.scope
+        operations = tuple(sorted(selection.operations))
+        sql = " AND ".join(
+            f"{prefix}{field} = ?"
+            for field in ("host_namespace", "tenant_id", "unit_id", "environment")
+        )
+        sql += f" AND {prefix}operation IN (" + ",".join("?" for _ in operations) + ")"
+        return sql, (
+            host_key(scope.host_namespace), scope.tenant_id, scope.unit_id,
+            scope.environment.value, *operations,
+        )
+
+    def counts_by_status(
+        self, *, selection: OutboxClaimSelection | None = None
+    ) -> dict[FiscalOutboxStatus, int]:
         """Aggregate in the database without payloads, scope IDs or pagination."""
         counts = dict.fromkeys(FiscalOutboxStatus, 0)
+        filtering, values = self._selection_sql(selection)
         for status, count in self._connection.execute(
-            "SELECT status, COUNT(*) FROM fm_fiscal_outbox GROUP BY status"
+            "SELECT status, COUNT(*) FROM fm_fiscal_outbox "
+            + (f"WHERE {filtering} " if filtering else "") + "GROUP BY status",
+            values,
         ).fetchall():
             counts[FiscalOutboxStatus(text(status, "status"))] = integer(count, "count")
         return counts
@@ -171,14 +197,16 @@ class SqliteFiscalOutboxStore:
         now: datetime,
         limit: int,
         lease_duration: timedelta,
+        selection: OutboxClaimSelection | None = None,
     ) -> tuple[FiscalOutboxEntry, ...]:
         now_iso = iso(now)
         if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
             raise FiscalValidationError("limit must be a positive integer")
         if lease_duration <= timedelta(0):
             raise FiscalValidationError("lease_duration must be positive")
+        filtering, values = self._selection_sql(selection, "current.")
         rows = self._connection.execute(
-            """
+            f"""
             SELECT current.entry_id, current.host_namespace, current.tenant_id,
                    current.unit_id, current.environment, current.correlation_id,
                    current.operation, current.deduplication_key, current.payload,
@@ -195,6 +223,7 @@ class SqliteFiscalOutboxStore:
                     AND current.lease_until <= ?
                 )
             )
+            {f"AND {filtering}" if filtering else ""}
             AND (
                 current_ordering.ordering_key IS NULL
                 OR NOT EXISTS (
@@ -226,6 +255,7 @@ class SqliteFiscalOutboxStore:
                 now_iso,
                 FiscalOutboxStatus.IN_FLIGHT.value,
                 now_iso,
+                *values,
                 FiscalOutboxStatus.SUCCEEDED.value,
                 FiscalOutboxStatus.DEAD_LETTER.value,
                 limit,

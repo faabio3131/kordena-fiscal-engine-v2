@@ -33,6 +33,7 @@ def _metadata(tmp_path: Path) -> dict[str, str]:
         "NFCORE_WORKER_GSM_KEY_NOT_AFTER": (NOW + timedelta(days=10)).isoformat(),
         "NFCORE_WORKER_GSM_TENANT_ID": "pilot-tenant",
         "NFCORE_WORKER_GSM_UNIT_ID": "pilot-unit",
+        "NFCORE_WORKER_GSM_HOST_NAMESPACE": "nfcore",
         "NFCORE_WORKER_GSM_SIGNING_REFERENCE": REF,
         "NFCORE_WORKER_GSM_SIGNING_VERSION": "1",
         "NFCORE_WORKER_GSM_PROVIDER_ID": "webhook",
@@ -82,6 +83,9 @@ def test_no_opt_in_never_constructs_handlers() -> None:
         ("NFCORE_WORKER_GSM_MODE", "anything-else"),
         ("NFCORE_ENVIRONMENT", "production"),
         ("NFCORE_WORKER_GSM_UNIT_ID", "*"),
+        ("NFCORE_WORKER_GSM_TENANT_ID", "*"),
+        ("NFCORE_WORKER_GSM_HOST_NAMESPACE", "*"),
+        ("NFCORE_WORKER_GSM_HOST_NAMESPACE", ""),
         ("NFCORE_WORKER_GSM_RESOURCE", "projects/other-project/secrets/s"),
         ("NFCORE_WORKER_GSM_SIGNING_REFERENCE", "tenant-controlled"),
         ("NFCORE_WORKER_GSM_SIGNING_VERSION", "0"),
@@ -166,7 +170,12 @@ def test_actual_secret_resolution_is_required_before_handlers(
     )
     db = _FakeDb(binding)
     handlers = factory(db, SimpleNamespace(environment=RuntimeEnvironment.STAGING))
-    assert set(handlers) == {"deliver_webhook"}
+    assert set(handlers.handlers) == {"deliver_webhook"}
+    assert handlers.claim_selection.scope.host_namespace == "nfcore"
+    assert handlers.claim_selection.scope.tenant_id == "pilot-tenant"
+    assert handlers.claim_selection.scope.unit_id == "pilot-unit"
+    assert handlers.claim_selection.scope.environment.value == "homologation"
+    assert handlers.claim_selection.operations == frozenset({"deliver_webhook"})
     assert access.access.call_count == 1
     assert db.reads >= 2
     # Only authorized configuration can use a real handler. No fake delivery occurs.

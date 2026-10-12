@@ -592,6 +592,20 @@ Colocar API, Portal e Worker na mesma revisão imutável e certificar o ambiente
 
 Main CI verde, SHA imutável, backup, migrations governadas, rollback baseline, secrets fora de Git e Postgres saudável.
 
+Retomada autorizada em 2026-10-12 pelo dono: CURRENT main
+`cb3c640e2ddc16e02aa491874140beedc113540e`, PR #175 MERGED, CI #831 e
+Governance #252 SUCCESS. Resolver isolamento antes do claim da outbox canônica
+por host/tenant/unidade/ambiente fiscal/operação, sem fila ou schema novo.
+Critério: jobs estrangeiros, inclusive leases expiradas, preservam status,
+attempt, lease e auditoria; backlog reflete somente a partição autorizada.
+Mapa de impacto: contrato/store outbox, UOW/worker/composition/entrypoint,
+bootstrap GSM staging e testes SQLite/PostgreSQL. O piloto continua limitado a
+uma partição; registry dinâmico multi-tenant não é certificado por esta correção.
+Planejamento migrations 13..17 e Cakto 1..2 somente leitura; usar backup age já
+restaurado em PG18, sem repetir restore certificado. Schema/migrations/publicação
+exigem aprovação humana específica após gates. GSM real e SQL remoto bloqueados
+nesta sessão por console GCP indisponível e cota Desktop Commander esgotada.
+
 Execução T01 autorizada em 2026-10-09 (“Executar”), após PR #150 MERGED e CI main #728/Governance #149 SUCCESS. Escopo: auditoria somente leitura, plano de migration/rollback e correções mínimas dos scripts de restauração e captura do baseline antes da migration. Sem deploy T02, acesso novo a credenciais reais ou implementação P6.
 
 Blockers T01: B01 backup concluído com recibo verificável não confirmado; B02 versões atuais/saúde SQL e compatibilidade de rollback não confirmadas; B03 correções de restore/checksum/SHA/baseline integradas na PR #151, com gates pós-merge em validação; B04 bootstrap real do Worker depende do adapter P6 e da composição canônica; decisão de ordem aprovada em 2026-10-09; B05 driver ainda confunde deployment SUCCESS com processo saudável/revisão exata (correção obrigatória antes de T02, com verificação em T03). Todos pertencem a T01 como pré-requisitos; não criam tarefa concorrente. Checkpoint `docs/checkpoints/NFV1_P05_T01_PREDEPLOY_2026-10-09.md`. Gate permanece bloqueado e 23/59 concluídas.

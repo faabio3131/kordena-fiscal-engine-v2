@@ -17,7 +17,8 @@ from typing import cast
 
 from google.oauth2.service_account import Credentials as ServiceAccountCredentials
 
-from kordena_fiscal.contingency import FiscalOutboxHandler
+from kordena_fiscal.contingency.outbox import OutboxClaimSelection
+from kordena_fiscal.domain import ExecutionScope, FiscalEnvironment
 from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
 from kordena_fiscal.security.secrets import SecretReference, SecretResolver, SecretScope
 from kordena_fiscal.vault.google_secret_manager import (
@@ -29,7 +30,11 @@ from .config import RuntimeConfigurationError, RuntimeEnvironment, RuntimeSettin
 from .gsm_staging_identity_policy import build_staging_workload_gsm_access
 from .observability import StructuredLogger
 from .secret_manager import build_gsm_worker_webhook_dependencies
-from .worker_composition import build_canonical_worker_handlers
+from .worker_composition import (
+    DELIVER_WEBHOOK_OPERATION,
+    ScopedWorkerHandlerComposition,
+    build_canonical_worker_handlers,
+)
 
 _RESOURCE = re.compile(r"projects/fm-nfcore-staging/secrets/[A-Za-z0-9_-]{1,255}\Z")
 _MODE = "scoped-staging-sa-v1"
@@ -39,6 +44,7 @@ _ENV_FIELDS = (
     "NFCORE_WORKER_GSM_KEY_NOT_AFTER",
     "NFCORE_WORKER_GSM_TENANT_ID",
     "NFCORE_WORKER_GSM_UNIT_ID",
+    "NFCORE_WORKER_GSM_HOST_NAMESPACE",
     "NFCORE_WORKER_GSM_SIGNING_REFERENCE",
     "NFCORE_WORKER_GSM_SIGNING_VERSION",
     "NFCORE_WORKER_GSM_PROVIDER_ID",
@@ -77,7 +83,7 @@ def _timestamp(value: str) -> datetime:
 
 def staging_gsm_handler_factory(
     environ: Mapping[str, str] | None = None,
-) -> Callable[[PostgresFiscalDatabase, RuntimeSettings], Mapping[str, FiscalOutboxHandler]] | None:
+) -> Callable[[PostgresFiscalDatabase, RuntimeSettings], ScopedWorkerHandlerComposition] | None:
     """Fixed canonical composition selected by an explicit, exact staging opt-in."""
     values = dict(os.environ if environ is None else environ)
     mode = values.get("NFCORE_WORKER_GSM_MODE", "").strip()
@@ -103,6 +109,16 @@ def staging_gsm_handler_factory(
             values["NFCORE_WORKER_GSM_UNIT_ID"],
             "webhook-signing",
         )
+        selection = OutboxClaimSelection(
+            scope=ExecutionScope(
+                tenant_id=scope.tenant_id,
+                unit_id=values["NFCORE_WORKER_GSM_UNIT_ID"],
+                host_namespace=values["NFCORE_WORKER_GSM_HOST_NAMESPACE"],
+                environment=FiscalEnvironment.HOMOLOGATION,
+                correlation_id="worker-staging-claim",
+            ),
+            operations=frozenset({DELIVER_WEBHOOK_OPERATION}),
+        )
     except (ValueError, TypeError):
         raise RuntimeConfigurationError("worker GSM signing metadata invalid") from None
     provider = values["NFCORE_WORKER_GSM_PROVIDER_ID"]
@@ -110,7 +126,7 @@ def staging_gsm_handler_factory(
 
     def build(
         database: PostgresFiscalDatabase, settings: RuntimeSettings
-    ) -> Mapping[str, FiscalOutboxHandler]:
+    ) -> ScopedWorkerHandlerComposition:
         if settings.environment is not RuntimeEnvironment.STAGING:
             raise RuntimeConfigurationError("worker GSM requires staging")
         with database() as uow:
@@ -171,6 +187,9 @@ def staging_gsm_handler_factory(
             resolver=resolver, reference=reference, scope=scope,
             destination_id=destination,
         )
-        return build_canonical_worker_handlers(uow_factory=database, webhook=webhook)
+        return ScopedWorkerHandlerComposition(
+            handlers=build_canonical_worker_handlers(uow_factory=database, webhook=webhook),
+            claim_selection=selection,
+        )
 
     return build

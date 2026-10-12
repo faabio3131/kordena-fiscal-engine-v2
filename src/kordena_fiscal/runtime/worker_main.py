@@ -19,6 +19,7 @@ from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
 
 from .config import RuntimeConfigurationError, RuntimeSettings
 from .worker_composition import (
+    ScopedWorkerHandlerComposition,
     WorkerWebhookDependencies,
     build_canonical_worker_handlers,
     build_production_worker_runtime,
@@ -27,7 +28,7 @@ from .worker_health import HEALTH_PATH, WorkerHealthPublisher
 
 WorkerHandlerFactory = Callable[
     [PostgresFiscalDatabase, RuntimeSettings],
-    Mapping[str, FiscalOutboxHandler],
+    Mapping[str, FiscalOutboxHandler] | ScopedWorkerHandlerComposition,
 ]
 
 
@@ -92,15 +93,22 @@ def run(
             if oneshot or stop.is_set():
                 return 0
 
-            handlers = (
+            handler_composition = (
                 handler_factory(database, settings)
                 if handler_factory is not None
                 else build_canonical_worker_handlers(uow_factory=database, webhook=webhook)
             )
+            claim_selection = None
+            if isinstance(handler_composition, ScopedWorkerHandlerComposition):
+                handlers = handler_composition.handlers
+                claim_selection = handler_composition.claim_selection
+            else:
+                handlers = handler_composition
             composition = build_production_worker_runtime(
                 uow_factory=database,
                 handlers=handlers,
                 environment=settings.environment.value,
+                claim_selection=claim_selection,
             )
             publisher.attach(composition.health)
             composition.runtime.run_forever(stop)

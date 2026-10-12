@@ -37,6 +37,7 @@ from kordena_fiscal.contingency import (
     FiscalOutboxStatus,
     FiscalRetryPolicy,
 )
+from kordena_fiscal.contingency.outbox import OutboxClaimSelection
 from kordena_fiscal.persistence.ports import FiscalUnitOfWorkFactory
 
 from .config import RuntimeConfigurationError
@@ -160,6 +161,22 @@ DELIVER_WEBHOOK_OPERATION = "deliver_webhook"
 
 
 @dataclass(frozen=True, slots=True)
+class ScopedWorkerHandlerComposition:
+    """Carry trusted claim authority alongside concrete handlers to the entrypoint."""
+
+    handlers: Mapping[str, FiscalOutboxHandler]
+    claim_selection: OutboxClaimSelection
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.claim_selection, OutboxClaimSelection)
+            or frozenset(self.handlers) != self.claim_selection.operations
+        ):
+            raise RuntimeConfigurationError("worker handlers and claim selection disagree")
+        object.__setattr__(self, "handlers", MappingProxyType(dict(self.handlers)))
+
+
+@dataclass(frozen=True, slots=True)
 class WorkerWebhookDependencies:
     """Explicit platform dependencies; no URL, raw key or tenant authority here.
 
@@ -240,6 +257,7 @@ def build_production_worker_runtime(
     failure_wait_seconds: float = 2.0,
     heartbeat_timeout_seconds: float = 60.0,
     tracer: SafeTracer | None = None,
+    claim_selection: OutboxClaimSelection | None = None,
 ) -> ProductionWorkerComposition:
     """Compose one durable worker over the canonical outbox and observer boundaries.
 
@@ -248,6 +266,11 @@ def build_production_worker_runtime(
     actually be executed.
     """
 
+    if claim_selection is not None and (
+        not isinstance(claim_selection, OutboxClaimSelection)
+        or claim_selection.operations != frozenset(handlers)
+    ):
+        raise RuntimeConfigurationError("worker handlers and claim selection disagree")
     runtime_tracer = tracer or SafeTracer()
     traced_handlers = {
         operation: _TracedOutboxHandler(handler, runtime_tracer)
@@ -262,7 +285,11 @@ def build_production_worker_runtime(
         context = _new_trace_context()
         try:
             with uow_factory() as uow:
-                counts = uow.outbox.counts_by_status()
+                counts = (
+                    uow.outbox.counts_by_status()
+                    if claim_selection is None
+                    else uow.outbox.counts_by_status(selection=claim_selection)
+                )
         except Exception:
             runtime_tracer.record(
                 operation="db.outbox_counts", context=context, started_at=started,
@@ -285,6 +312,7 @@ def build_production_worker_runtime(
         uow_factory=uow_factory,
         handler=routed,
         retry_policy=retry_policy,
+        claim_selection=claim_selection,
     )
     runtime = BackgroundWorkerRuntime(
         worker=worker,
