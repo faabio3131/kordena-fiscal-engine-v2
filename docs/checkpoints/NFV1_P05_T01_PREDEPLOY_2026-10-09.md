@@ -91,3 +91,16 @@ Proposta para aprovação, ainda NÃO aplicada:
 ## Continuidade
 
 Integrar correções somente mediante autorização de merge específica. Mesmo integrada, esta PR não conclui T01 nem libera staging. Depois de decisão do dono, persistir a ordem aprovada em PR própria, recertificar governança e executar uma tarefa por vez. PRODUCTION_APPROVED=NO;COMMERCIAL_LIVE=NO.
+
+
+## Certificação interna adicional — PR #169 / 2026-10-11
+
+**CURRENT verificado após merge:** `main=b2dc1ac32a91b0104245b6a64d5d761f464e6417`. PR [#169](https://github.com/faabio3131/kordena-fiscal-engine-v2/pull/169) **MERGED** por squash, HEAD da PR `8b87a45b0d44d5705a7f523d1688a713f0d6c451`.
+
+- **Motivação técnica (B05, parcela interna):** o driver `scripts/deploy/drivers/railway.sh` aceitava arquivo de baseline existente sem conferir cardinalidade/unicidade dos três serviços nem a validade dos SHAs internos. O hardening verifica uma entrada por API/Worker/Portal, três entradas no total, SHA imutável 40-hex e conteúdo não vazio antes de `deploy`, `verify-worker` e `rollback`.
+- **Regressão durante certificação:** CI PR #796 falhou 1 teste de integração (2.108 PASS) porque a função Shell `require_revision` sobrescrevia a variável de escopo global `revision` ao validar cada SHA do baseline. Corrigido usando variável de validação separada; o alvo de deploy não é alterado.
+- **Prova PR corrigida:** CI **#797**, run [38186700669](https://github.com/faabio3131/kordena-fiscal-engine-v2/actions/runs/38186700669), **COMPLETED/SUCCESS**; Governance **#218**, run [38186700687](https://github.com/faabio3131/kordena-fiscal-engine-v2/actions/runs/38186700687), **COMPLETED/SUCCESS** no mesmo HEAD.
+- **Prova pós-merge `main`:** CI **#798**, run [38188298859](https://github.com/faabio3131/kordena-fiscal-engine-v2/actions/runs/38188298859), **COMPLETED/SUCCESS**; Governance **#219**, run [38188298903](https://github.com/faabio3131/kordena-fiscal-engine-v2/actions/runs/38188298903), **COMPLETED/SUCCESS**, ambos no SHA exato `b2dc1ac32a91b0104245b6a64d5d761f464e6417`.
+- **Alcance da certificação:** código interno e mocks/simuladores de Railway; **não** comprovam serviços reais, status de deploy, base PostgreSQL 18 ou restore externo.
+- **Estado canônico inalterado:** `NFV1-P05-T01=[ ] bloqueado externo`; 27/59 tarefas concluídas. B01 backup real+retenção+restauração, B02 SQL/migrations e compatibilidade, B04 GSM/IAM/segredos/Worker, e verificações do contrato Railway real continuam pendentes. `P05-T02` não liberada. `PRODUCTION_APPROVED=NO`, `COMMERCIAL_LIVE=NO`.
+- **Orientação do dono:** terminar a **construção interna** antes de operações externas; não converter essa prioridade em autorização de pular o ledger. Próximo trabalho apenas na tarefa P05-T01 enquanto houver recorte interno legítimo ou, se bloqueada integralmente, propor alteração de ordem formal no cronograma/ledger para decisão humana antes de outra tarefa. Nenhum merge, deploy, migration, credencial real, gasto ou operação fiscal autorizado por este registro.
