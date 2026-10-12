@@ -13,6 +13,7 @@ import pytest
 from kordena_fiscal.runtime import worker_staging_gsm_bootstrap as boot
 from kordena_fiscal.runtime.config import RuntimeConfigurationError, RuntimeEnvironment
 from kordena_fiscal.security.secret_binding import SecretBinding
+from kordena_fiscal.security.secrets import SecretResolutionError
 from kordena_fiscal.vault.google_secret_manager import GsmPayload, encode_gsm_envelope
 
 RESOURCE = "projects/fm-nfcore-staging/secrets/nfcore-webhook-pilot"
@@ -89,7 +90,7 @@ def test_no_opt_in_never_constructs_handlers() -> None:
 def test_invalid_metadata_blocks_before_db(tmp_path: Path, key: str, bad: str) -> None:
     metadata = _metadata(tmp_path)
     metadata[key] = bad
-    with pytest.raises(Exception):
+    with pytest.raises((RuntimeConfigurationError, SecretResolutionError)):
         boot.staging_gsm_handler_factory(metadata)
 
 
@@ -134,7 +135,9 @@ def test_wrong_durable_binding_blocks_before_key_access(
         lambda path: pytest.fail("invalid binding must not load identity"),
     )
     with pytest.raises(RuntimeConfigurationError, match="binding unavailable"):
-        factory(_FakeDb(_binding(**override)), SimpleNamespace(environment=RuntimeEnvironment.STAGING))
+        factory(
+            _FakeDb(_binding(**override)), SimpleNamespace(environment=RuntimeEnvironment.STAGING)
+        )
 
 
 def test_actual_secret_resolution_is_required_before_handlers(
@@ -183,5 +186,5 @@ def test_invalid_cloud_payload_prevents_worker_readiness(monkeypatch, tmp_path: 
             access=lambda name: GsmPayload(name, b"corrupt", 0)
         ),
     )
-    with pytest.raises(Exception):
+    with pytest.raises(SecretResolutionError):
         factory(_FakeDb(_binding()), SimpleNamespace(environment=RuntimeEnvironment.STAGING))
