@@ -176,7 +176,7 @@ capacidades já implementadas ou homologadas.
 
 ## 5.1 Dependência obrigatória
 
-Ordem canônica aprovada em 2026-10-09: P0, P1, P2, P3, P4, P6, P5, P7, P8, P9, P10, P11, P12. P6 usa a infraestrutura staging existente para certificar o backend concreto; P5 só retoma depois do gate P6. Cada tarefa segue o ledger, com seus gates e autorizações próprias. A mudança remove o ciclo de dependência P5/P6 e não dispensa pendências de P5.
+Ordem vigente em `main` antes desta proposta (2026-10-09): P0, P1, P2, P3, P4, P6, P5, P7, P8, P9, P10, P11, P12. **Proposta sujeita a decisão/merge:** P0, P1, P2, P3, P4, P6, **P09-T01→T03 (somente construção interna)**, P5, P7, P8, P09-T04→T05, P10, P11, P12. P6 usa a infraestrutura staging existente para certificar o backend concreto; P5 só retoma depois do gate P6. Cada tarefa segue o ledger, com seus gates e autorizações próprias. A mudança remove o ciclo de dependência P5/P6 e não dispensa pendências de P5.
 
 Fases paralelas somente podem ocorrer quando não mascaram blocker anterior.
 
@@ -556,6 +556,26 @@ Testar missing, revoked, expired, permission denied, backend unavailable e rotat
 
 ---
 
+## Antecipação governada — construção interna P09 antes de P05 (sem deploy)
+
+**Escopo:** executar exclusivamente os contratos internos de tracing, métricas e alertas na mesma aplicação NFCore, reutilizando o runtime, os serviços e as autoridades existentes. Esta antecipação separa trabalho implementável da certificação de operação real. Não altera o gate final de P9 nem autoriza external exporter, Railway, secrets, SQL real, deploy, backup ou produção.
+
+**Dependências internas de entrada:** P1..P4 e P6-T04 internamente certificados; exige auditoria do CURRENT antes de cada tarefa. T01 → T02 → T03 permanecem sequenciais. Os testes devem provar API, DB, chamadas externas e Worker em ambiente controlado. Ausência de qualquer prova impede marcar a tarefa concluída. Traces, dashboards e alertas *reais* continuam gates operacionais dependentes de P05 e P09-T04/T05.
+
+**Justificativa/decisão a confirmar:** o dono determinou concluir a construção antes da publicação e solicitou prosseguir; a alteração exata de ordem depende de revisão e merge humano desta PR documental. P05-T01 mantém `BLOCKED_EXTERNAL` e não é encerrada por esta reorganização. Preservam-se todos os 59 IDs e o validador existente.
+
+### NFV1-P09-T01 — Tracing
+
+Ativar e provar traces de API, DB, chamadas externas e Worker.
+
+### NFV1-P09-T02 — Métricas
+
+HTTP/error/latency, commercial events, fulfillment, worker backlog, retries, dead-letter, provider errors, fiscal rejection, reconciliation e activation.
+
+### NFV1-P09-T03 — Alerts
+
+5xx, provider unavailable, queue backlog, dead-letter, certificate expiry, secret failure, DB, deployment e rejection rate.
+
 # P5 — RECONCILIAÇÃO E CERTIFICAÇÃO DO STAGING
 
 **Status inicial:** NOT_STARTED
@@ -698,26 +718,14 @@ Detectar e corrigir drift provider x canonical state.
 # P9 — OBSERVABILIDADE, BACKUP E OPERAÇÃO
 
 **Status inicial:** NOT_STARTED  
-**Dependência:** P5  
-**Pode avançar em paralelo com P7-P8, sem mascarar blockers; P6 agora é predecessor de P5.**
+**Dependência operacional:** P5  
+**Construção interna T01→T03 proposta antes de P5**, na seção antecipada acima. **T04→T05 e o gate operacional permanecem após P5/P7/P8**, sem mascarar blockers. P6 é predecessor de P5.
 
 ## Objetivo
 
 Transformar contratos internos de observabilidade e recovery em operação real.
 
 ## Tarefas
-
-### NFV1-P09-T01 — Tracing
-
-Ativar e provar traces de API, DB, chamadas externas e Worker.
-
-### NFV1-P09-T02 — Métricas
-
-HTTP/error/latency, commercial events, fulfillment, worker backlog, retries, dead-letter, provider errors, fiscal rejection, reconciliation e activation.
-
-### NFV1-P09-T03 — Alerts
-
-5xx, provider unavailable, queue backlog, dead-letter, certificate expiry, secret failure, DB, deployment e rejection rate.
 
 ### NFV1-P09-T04 — Backup/restore operacional
 
