@@ -219,7 +219,8 @@ def test_p09_http_tracing_sink_failure_never_breaks_health() -> None:
         assert client.get("/health/live").status_code == 200
 
 
-def test_p09_canonical_webhook_transport_emits_safe_outcomes() -> None:
+@pytest.mark.parametrize("status_code", [302, 503])
+def test_p09_canonical_webhook_transport_emits_safe_outcomes(status_code: int) -> None:
     records: list[TraceRecord] = []
 
     class Sink:
@@ -229,7 +230,7 @@ def test_p09_canonical_webhook_transport_emits_safe_outcomes() -> None:
     class FakeTransport:
         def deliver(self, request: WebhookDeliveryRequest) -> WebhookDeliveryResponse:
             assert request.body == SECRET.encode()
-            return WebhookDeliveryResponse(status_code=503, error_detail=SECRET)
+            return WebhookDeliveryResponse(status_code=status_code, error_detail=SECRET)
 
     request = WebhookDeliveryRequest(
         destination=WebhookDestination("synthetic-destination", "https://example.org/hook"),
@@ -240,11 +241,11 @@ def test_p09_canonical_webhook_transport_emits_safe_outcomes() -> None:
     )
     traced = _TracedWebhookTransport(FakeTransport(), SafeTracer(Sink()))
     response = traced.deliver(request)
-    assert response.status_code == 503 and response.error_detail == SECRET
+    assert response.status_code == status_code and response.error_detail == SECRET
     assert len(records) == 1
     assert records[0].operation == "external.webhook"
     assert records[0].outcome == "error"
-    assert records[0].attributes == {"status_class": "5xx"}
+    assert records[0].attributes == {"status_class": f"{status_code // 100}xx"}
     assert records[0].context.causation_id == "outbox-synthetic-1"
     assert SECRET not in repr(records)
     assert "example.org" not in repr(records)
