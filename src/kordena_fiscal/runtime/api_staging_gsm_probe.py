@@ -9,9 +9,9 @@ from __future__ import annotations
 import json
 import os
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
-from typing import Callable, cast
+from typing import cast
 
 from google.oauth2.service_account import Credentials as ServiceAccountCredentials
 
