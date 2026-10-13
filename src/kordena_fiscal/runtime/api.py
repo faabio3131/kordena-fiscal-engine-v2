@@ -45,6 +45,7 @@ from kordena_fiscal.web.staging_webhook_approval import create_staging_webhook_e
 from kordena_fiscal.web.staging_webhook_probe import create_staging_webhook_probe_router
 
 from .activation_email import build_activation_delivery_from_environ
+from .api_staging_gsm_probe import staging_probe_verifier
 from .cakto import build_cakto_webhook_router
 from .composition import RuntimeComposition, build_postgres_runtime_composition
 from .config import RuntimeSettings
@@ -166,6 +167,12 @@ def create_runtime_app(
         environment=resolved.environment.value,
     )
     composition = runtime.composition
+    if (
+        staging_probe_security is None
+        and resolved.environment.value == "staging"
+        and runtime.database is not None
+    ):
+        staging_probe_security = staging_probe_verifier(runtime.database)
     selected_checkout = commercial_checkout_projector
     selected_checkout_starter = commercial_checkout_starter
     selected_checkout_processing = commercial_checkout_processing_configured
