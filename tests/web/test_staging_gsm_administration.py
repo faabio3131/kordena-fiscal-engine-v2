@@ -53,7 +53,7 @@ class _BindingAdmin:
     def __init__(self) -> None:
         self.bound: list[Any] = []
 
-    def put(self, *, actor: _Actor, binding: Any, expected_revision: int, correlation_id: str) -> None:
+    def put(\n        self, *, actor: _Actor, binding: Any, expected_revision: int, correlation_id: str\n    ) -> None:
         assert actor.account.is_platform_admin
         assert expected_revision == 0
         assert correlation_id
@@ -75,12 +75,12 @@ def test_binding_requires_session_and_platform_admin() -> None:
     response = client.post("/internal/staging/gsm-binding", headers=HEADERS)
     assert response.status_code == 200
     assert {b.workload_id for b in administration.bound} == {"nfcore-worker", "nfcore-api"}
-    assert all(b.resource.endswith("nfcore-stg-pilot-webhook-signing") for b in administration.bound)
+    assert all(\n        b.resource.endswith("nfcore-stg-pilot-webhook-signing")\n        for b in administration.bound\n    )
 
 
 def test_binding_rejects_non_platform_admin() -> None:
     administration = _BindingAdmin()
-    client = _client(create_staging_gsm_binding_router(_Identity(_Actor(admin=False)), administration))
+    client = _client(\n        create_staging_gsm_binding_router(_Identity(_Actor(admin=False)), administration)\n    )
     client.cookies.update(COOKIES)
     assert client.post("/internal/staging/gsm-binding", headers=HEADERS).status_code == 403
     assert not administration.bound
