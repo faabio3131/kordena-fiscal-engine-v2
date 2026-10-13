@@ -59,3 +59,15 @@ def test_receipt_uses_actual_iam_times():
 def test_no_redirect_with_auth_headers():
     with pytest.raises(operator.Blocked, match="redirect"):
         operator.NoRedirect().redirect_request(None, None, 302, "", {}, "https://evil.invalid")
+
+
+def test_failed_cli_after_write_recovers_public_key_id_for_revocation(tmp_path):
+    import json
+    file = tmp_path / "synthetic-identity.json"
+    file.write_text(json.dumps({"type": "service_account", "project_id": operator.PROJECT,
+                               "client_email": operator.SA, "private_key_id": "a" * 40}))
+    assert operator.recover_created_key_id(file) == "a" * 40
+    file.write_text("corrupt")
+    assert operator.recover_created_key_id(file) is None
+    file.unlink()
+    assert operator.recover_created_key_id(file) is None

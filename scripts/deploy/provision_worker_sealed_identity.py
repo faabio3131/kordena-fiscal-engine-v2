@@ -113,6 +113,22 @@ def rotation_metadata(key, key_id, now):
     }
 
 
+def recover_created_key_id(file):
+    """Recover public ID if CLI failed after creating/writing the protected key."""
+    try:
+        if file.stat().st_size > 64 * 1024:
+            return None
+        info = json.loads(file.read_text(encoding="utf-8"))
+        key_id = info.get("private_key_id")
+        if (info.get("type") == "service_account" and info.get("project_id") == PROJECT
+                and info.get("client_email") == SA and isinstance(key_id, str)
+                and re.fullmatch(r"[a-f0-9]{40}", key_id)):
+            return key_id
+    except Exception:
+        pass
+    return None
+
+
 def private_directory(root):
     # Windows BitLocker + current SID-only ACL before gcloud writes anything.
     if os.name != "nt" or not root.is_absolute() or not re.fullmatch(r"[A-Za-z]:", root.drive):
@@ -173,11 +189,8 @@ def main():
         google("iam", "service-accounts", "keys", "create", str(key_file),
                f"--iam-account={SA}", "--key-file-type=json")
         raw = key_file.read_text(encoding="utf-8")
-        info = json.loads(raw)
-        key_id = info.get("private_key_id")
-        if (info.get("type") != "service_account" or info.get("project_id") != PROJECT
-                or info.get("client_email") != SA or not isinstance(key_id, str)
-                or not re.fullmatch(r"[a-f0-9]{40}", key_id)):
+        key_id = recover_created_key_id(key_file)
+        if key_id is None:
             raise Blocked("Created credential identity invalid.")
         keys = json.loads(google("iam", "service-accounts", "keys", "list",
                                  f"--iam-account={SA}", "--managed-by=user"))
@@ -199,6 +212,11 @@ def main():
                           args.rotation_owner, "rotation_due": metadata[
                               "NFCORE_WORKER_GSM_KEY_NOT_AFTER"], "metadata": metadata}))
     finally:
+        if not transferred and key_id is None:
+            key_id = recover_created_key_id(key_file)
+            if key_id is None:
+                print("URGENT: key creation outcome uncertain; inspect SA keys locally in IAM.",
+                      file=sys.stderr)
         if key_id and not transferred:
             try:
                 google("iam", "service-accounts", "keys", "delete", key_id,
