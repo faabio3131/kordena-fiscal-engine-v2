@@ -62,6 +62,26 @@ def create_staging_gsm_binding_router(
                 expected_revision=0,
                 correlation_id=uuid4().hex,
             )
+            verification_binding = SecretBinding(
+                reference_id="sec_nfcore_staging_pilot_gsm_verify_01",
+                tenant_id=_PILOT_TENANT,
+                unit_id=_PILOT_UNIT,
+                purpose="webhook-signing",
+                runtime_environment="staging",
+                fiscal_environment=None,
+                provider_id="google-secret-manager",
+                workload_id="nfcore-api",
+                kind="signature",
+                canonical_version=1,
+                resource=_PILOT_RESOURCE,
+                cloud_version="1",
+            )
+            administration.put(
+                actor=actor,
+                binding=verification_binding,
+                expected_revision=0,
+                correlation_id=uuid4().hex,
+            )
         except SecretResolutionError:
             raise HTTPException(status_code=409, detail="GSM_BINDING_DENIED") from None
         return {"status": "bound", "reference_id": _PILOT_REFERENCE}
