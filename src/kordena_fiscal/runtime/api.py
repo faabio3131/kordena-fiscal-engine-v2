@@ -41,6 +41,7 @@ from kordena_fiscal.web.commercial_acquisition import (
 from kordena_fiscal.web.commercial_trial import create_commercial_trial_router
 from kordena_fiscal.web.human_recovery import PasswordResetDelivery
 from kordena_fiscal.web.staging_webhook_probe import create_staging_webhook_probe_router
+from kordena_fiscal.web.staging_gsm_binding_admin import create_staging_gsm_binding_router
 
 from .activation_email import build_activation_delivery_from_environ
 from .cakto import build_cakto_webhook_router
@@ -55,6 +56,7 @@ from .observability import (
     TraceContext,
 )
 from .security import configure_edge_security
+from .secret_manager import SecretBindingAdministration
 
 _TRACE_REFERENCE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}\Z")
 
@@ -533,6 +535,12 @@ def create_runtime_app(
             "command_webhook_configured": command_receiver is not None,
             "cakto_webhook_configured": cakto_receiver is not None,
         }
+
+    if resolved.environment.value == "staging" and composition is not None and runtime.database is not None:
+        app.include_router(create_staging_gsm_binding_router(
+            composition.human_identity,
+            SecretBindingAdministration(runtime.database),
+        ))
 
     if staging_probe_security is not None:
         if resolved.environment.value != "staging":
