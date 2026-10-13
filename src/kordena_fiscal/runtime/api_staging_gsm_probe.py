@@ -11,6 +11,7 @@ import os
 import re
 from collections.abc import Mapping
 from datetime import UTC, datetime
+from typing import Callable, cast
 
 from google.oauth2.service_account import Credentials as ServiceAccountCredentials
 
@@ -94,7 +95,11 @@ def _credentials(raw: str, key_id: str) -> ServiceAccountCredentials:
         or info["private_key_id"] != key_id
     ):
         raise ValueError("credential identity denied")
-    return ServiceAccountCredentials.from_service_account_info(info)
+    loader = cast(
+        Callable[[dict[str, str]], ServiceAccountCredentials],
+        ServiceAccountCredentials.from_service_account_info,
+    )
+    return loader(info)
 
 
 def staging_probe_verifier(
