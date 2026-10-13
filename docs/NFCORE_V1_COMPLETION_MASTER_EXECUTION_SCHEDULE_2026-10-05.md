@@ -592,6 +592,23 @@ Colocar API, Portal e Worker na mesma revisão imutável e certificar o ambiente
 
 Main CI verde, SHA imutável, backup, migrations governadas, rollback baseline, secrets fora de Git e Postgres saudável.
 
+Retomada superior autorizada em 2026-10-13: PR #176 MERGED, main
+`59963946c876b5db1c89f3f7b3047e44c2a51d79`, Governance #254 SUCCESS;
+CI #833/run38324737715 SUCCESS,41/41 etapas,2208 Python/PostgreSQL PASS.
+Isolamento pré-claim existente deve ser preservado.
+Operador informa CLI Google autenticado, Secret Manager habilitado, segredo
+`nfcore-stg-pilot-webhook-signing` versão cloud 1 e grant secretAccessor restrito
+à SA Worker nesse segredo; não é prova de resolução runtime/envelope/binding.
+Escopo mínimo autorizado: fonte JSON sealed Railway carregada em memória no
+bootstrap existente, metadados de identidade/rotação reconciliados com IAM,
+procedimento único Windows sem exposição e configuração não secreta incompleta
+explicitamente bloqueada por IDs/binding/destino reais. Sem credencial criada,
+merge, mutation schema, migration ou deploy nesta candidata. Console e Commander
+não são dependências; operações Google autenticadas ficam no CLI do operador.
+Após GSM, preflight SQL somente leitura e integridade atual do backup existente;
+não repetir restore PG18 certificado. P05 permanece BLOCKED_EXTERNAL e 27/59.
+
+
 Retomada autorizada em 2026-10-12 pelo dono: CURRENT main
 `cb3c640e2ddc16e02aa491874140beedc113540e`, PR #175 MERGED, CI #831 e
 Governance #252 SUCCESS. Resolver isolamento antes do claim da outbox canônica
