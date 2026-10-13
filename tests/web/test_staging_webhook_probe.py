@@ -57,3 +57,35 @@ def test_probe_rejects_oversize_body_before_auth() -> None:
         content=b"x" * (MAX_PROBE_BYTES + 1),
     )
     assert response.status_code == 413
+
+
+
+def test_probe_rejects_expired_signature() -> None:
+    from datetime import timedelta
+
+    client, security = _client()
+    payload = b"expired"
+    old = datetime.now(UTC) - timedelta(minutes=6)
+    signature = security.sign(payload, now=old).header_value
+    response = client.post(
+        "/internal/staging/webhook-probe",
+        content=payload,
+        headers={"X-FM-Webhook-Signature": signature},
+    )
+    assert response.status_code == 401
+
+
+def test_probe_fails_closed_if_verifier_backend_unavailable() -> None:
+    client, security = _client()
+
+    def unavailable(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("secret backend unreachable")
+
+    security.verify = unavailable  # type: ignore[method-assign]
+    response = client.post(
+        "/internal/staging/webhook-probe",
+        content=b"probe",
+        headers={"X-FM-Webhook-Signature": "t=1,kid=invalid,v1=" + "0" * 64},
+    )
+    assert response.status_code == 401
+    assert b"unreachable" not in response.content
