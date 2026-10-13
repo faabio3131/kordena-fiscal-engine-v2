@@ -11,7 +11,7 @@ from kordena_fiscal.runtime.secret_manager import SecretBindingAdministration
 from kordena_fiscal.security.human_identity import HumanIdentityService
 from kordena_fiscal.security.secret_binding import SecretBinding
 from kordena_fiscal.security.secrets import SecretResolutionError
-from kordena_fiscal.web.human_auth import SESSION_COOKIE, CSRF_COOKIE, CSRF_HEADER
+from kordena_fiscal.web.human_auth import CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE
 
 _PILOT_TENANT = "nfcore-staging-e2e"
 _PILOT_UNIT = "pilot-gsm-staging"
