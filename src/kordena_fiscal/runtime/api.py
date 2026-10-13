@@ -41,6 +41,7 @@ from kordena_fiscal.web.commercial_acquisition import (
 from kordena_fiscal.web.commercial_trial import create_commercial_trial_router
 from kordena_fiscal.web.human_recovery import PasswordResetDelivery
 from kordena_fiscal.web.staging_gsm_binding_admin import create_staging_gsm_binding_router
+from kordena_fiscal.web.staging_webhook_approval import create_staging_webhook_egress_router
 from kordena_fiscal.web.staging_webhook_probe import create_staging_webhook_probe_router
 
 from .activation_email import build_activation_delivery_from_environ
@@ -544,6 +545,10 @@ def create_runtime_app(
         app.include_router(create_staging_gsm_binding_router(
             composition.human_identity,
             SecretBindingAdministration(runtime.database),
+        ))
+        app.include_router(create_staging_webhook_egress_router(
+            composition.human_identity,
+            runtime.database,
         ))
 
     if staging_probe_security is not None:
