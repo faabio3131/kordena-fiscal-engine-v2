@@ -10,11 +10,11 @@ import google_crc32c
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
+from test_p05_t01_worker_staging_gsm_bootstrap import _binding, _FakeDb, _metadata
 
 from kordena_fiscal.runtime import worker_staging_gsm_bootstrap as boot
 from kordena_fiscal.runtime.config import RuntimeConfigurationError, RuntimeEnvironment
 from kordena_fiscal.vault.google_secret_manager import GsmPayload, encode_gsm_envelope
-from tests.runtime.test_p05_t01_worker_staging_gsm_bootstrap import _binding, _FakeDb, _metadata
 
 KEY_ID = "a" * 40
 
