@@ -733,4 +733,8 @@ dialog::backdrop { background: rgba(2,7,13,.75); backdrop-filter: blur(7px); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
 }
-\n.password-field { display: flex; align-items: stretch; gap: 8px; width: 100%; }\n.password-field input { flex: 1; min-width: 0; }\n.password-toggle { flex: 0 0 auto; align-self: stretch; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--radius-xs); background: var(--ink-850); color: var(--text-soft); font-weight: 700; }\n.password-toggle:focus-visible { outline: 2px solid var(--brand-cyan); outline-offset: 2px; }\n
+
+.password-field { display: flex; align-items: stretch; gap: 8px; width: 100%; }
+.password-field input { flex: 1; min-width: 0; }
+.password-toggle { flex: 0 0 auto; align-self: stretch; padding: 0 12px; border: 1px solid var(--line); border-radius: var(--radius-xs); background: var(--ink-850); color: var(--text-soft); font-weight: 700; }
+.password-toggle:focus-visible { outline: 2px solid var(--brand-cyan); outline-offset: 2px; }\n
