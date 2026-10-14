@@ -21,7 +21,9 @@
       <p>Entre com sua conta. Tenant, permissões e unidades são definidos exclusivamente pela sessão autenticada.</p>
       <form id="login-form">
         <label>E-mail<input id="login-email" name="email" type="email" autocomplete="username" required></label>
-        <label>Senha<input id="login-password" name="password" type="password" autocomplete="current-password" required></label>
+        <label for="login-password">Senha</label>
+        <div class="password-field"><input id="login-password" name="password" type="password" autocomplete="current-password" aria-describedby="login-password-hint" required><button class="password-toggle" type="button" data-password-target="login-password" aria-label="Mostrar senha" aria-pressed="false">Mostrar</button></div>
+        <p id="login-password-hint" class="form-hint">Sua senha cadastrada deve ter entre 12 e 1024 caracteres. Maiúsculas, números e símbolos não são obrigatórios.</p>
         <button class="primary" type="submit">Entrar</button>
         <button class="ghost" id="forgot-password-action" type="button">Esqueci minha senha</button>
         <p id="login-error" class="form-error" role="alert" aria-live="polite"></p>
@@ -41,7 +43,8 @@
           Use de 12 a 1024 caracteres. Letras, números, espaços e símbolos são permitidos.
           Senhas fortes sugeridas pelo navegador ou por gerenciadores de senha são aceitas.
         </p>
-        <label>Nova senha<input id="password-reset-new-password" name="new_password" type="password" autocomplete="new-password" minlength="12" maxlength="1024" aria-describedby="password-policy" required></label>
+        <label for="password-reset-new-password">Nova senha</label>
+        <div class="password-field"><input id="password-reset-new-password" name="new_password" type="password" autocomplete="new-password" minlength="12" maxlength="1024" aria-describedby="password-policy" required><button class="password-toggle" type="button" data-password-target="password-reset-new-password" aria-label="Mostrar senha" aria-pressed="false">Mostrar</button></div>
         <button class="primary" type="submit">Alterar senha</button>
         <p id="password-reset-complete-status" class="form-error" role="alert" aria-live="polite"></p>
       </form>
