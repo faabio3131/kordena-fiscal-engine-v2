@@ -120,9 +120,11 @@ def staging_probe_verifier(
     )
     if any(not source.get(name) for name in required):
         raise RuntimeConfigurationError("staging verifier identity incomplete")
+    phase = "DATABASE_READ"
     try:
         with database() as uow:
             binding = uow.secret_bindings.get(_VERIFY_REFERENCE)
+        phase = "BINDING_CONTRACT"
         if (
             binding is None
             or binding.tenant_id != _TENANT
@@ -140,9 +142,11 @@ def staging_probe_verifier(
             or (binding.not_after is not None and binding.not_after <= datetime.now(UTC))
         ):
             raise ValueError("verifier binding unavailable")
+        phase = "SERVICE_ACCOUNT_CREDENTIALS"
         credentials = _credentials(
             source[_JSON_FIELD], source["NFCORE_API_GSM_KEY_ID"]
         )
+        phase = "ROTATION_POLICY_OR_CLIENT"
         access = build_staging_workload_gsm_access(
             credentials=credentials,
             workload_id="nfcore-api",
@@ -150,6 +154,7 @@ def staging_probe_verifier(
             key_created_at=_timestamp(source["NFCORE_API_GSM_KEY_CREATED_AT"]),
             key_not_after=_timestamp(source["NFCORE_API_GSM_KEY_NOT_AFTER"]),
         )
+        phase = "RESOLVER_COMPOSITION"
         reader = DurableGsmReader(
             uow_factory=database,
             access=access,
@@ -161,6 +166,7 @@ def staging_probe_verifier(
             GoogleSignatureSecretBackend(reader, provider_id=_PROVIDER),
             environment="staging",
         )
+        phase = "GSM_SECRET_READ_OR_ENVELOPE"
         # Require actual GSM permission and correct binding before declaring ready.
         with resolver.resolve(
             SecretReference(_VERIFY_REFERENCE, 1),
@@ -168,7 +174,11 @@ def staging_probe_verifier(
         ):
             pass
     except Exception:
-        raise RuntimeConfigurationError("staging GSM verifier unavailable") from None
+        # Only this finite phase label is exposed. Never log credentials, tokens,
+        # exception messages, cloud payloads, tenant identifiers, or key material.
+        raise RuntimeConfigurationError(
+            f"staging GSM verifier unavailable [{phase}]"
+        ) from None
     return WebhookSecurity(
         key_resolver=_VerifierKeyResolver(resolver),
         signing_key_id=_SIGNING_REFERENCE,
