@@ -39,6 +39,7 @@ from kordena_fiscal.vault.google_secret_manager import (
     GsmPayload,
     build_google_sdk_access,
     encode_gsm_envelope,
+    same_secret_version,
 )
 
 NOW = datetime(2026, 10, 9, tzinfo=UTC)
@@ -541,3 +542,47 @@ def test_binding_survives_new_database_handle(database):
     finally:
         if isinstance(restarted, PostgresFiscalDatabase):
             restarted.close()
+
+
+@pytest.mark.parametrize(
+    ("returned", "expected"),
+    [
+        ("projects/nfcore-synthetic/secrets/s-1/versions/9", True),
+        ("projects/123456789012/secrets/s-1/versions/9", True),  # Google echoes project number
+        ("projects/123456789012/secrets/other/versions/9", False),
+        ("projects/123456789012/secrets/s-1/versions/10", False),
+        ("projects/other-project/secrets/s-1/versions/9", False),  # two different textual IDs
+        ("projects/1/secrets/s-1/versions/9/../10", False),
+        ("projects/123456789012/secrets/s-1/versions/latest", False),
+        ("", False),
+        (None, False),
+    ],
+)
+def test_returned_version_accepts_project_number_but_stays_fail_closed(returned, expected):
+    requested = "projects/nfcore-synthetic/secrets/s-1/versions/9"
+    assert same_secret_version(returned, requested) is expected
+
+
+def test_reader_accepts_project_number_echo(database):
+    put(database)
+    access = Access()
+    access.payload = replace(
+        access.payload,
+        name=access.payload.name.replace("nfcore-synthetic", "123456789012"),
+    )
+    reader = DurableGsmReader(
+        uow_factory=database,
+        access=access,
+        environment="staging",
+        workload_id=BINDING.workload_id,
+        allowed_resources=frozenset({BINDING.resource}),
+        clock=lambda: NOW,
+    )
+    _, value, _ = reader.read(
+        reference_id=BINDING.reference_id,
+        scope=SCOPE,
+        kind="signature",
+        provider_id=BINDING.provider_id,
+        fiscal_environment=BINDING.fiscal_environment,
+    )
+    assert value == KEY

@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import json
 import math
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -42,6 +43,28 @@ from .external import (
 
 MAX_ENVELOPE_BYTES = 65536
 GSM_ENDPOINT = "secretmanager.googleapis.com"
+
+_VERSION_NAME = re.compile(
+    r"projects/([A-Za-z0-9_.:-]{1,64})/secrets/([A-Za-z0-9_-]{1,255})/versions/([1-9][0-9]{0,18})\Z"
+)
+
+
+def same_secret_version(returned: object, requested: str) -> bool:
+    """Fail-closed identity check for the version Google returned.
+
+    AccessSecretVersion may echo the project NUMBER (``projects/123/...``) even when the
+    request used the project ID (``projects/my-project/...``). Secret ID and version must
+    match exactly. The project segment must match exactly, or differ only as number versus
+    textual ID; two different textual IDs or two different numbers never match.
+    """
+    if not isinstance(returned, str):
+        return False
+    got = _VERSION_NAME.fullmatch(returned)
+    want = _VERSION_NAME.fullmatch(requested)
+    if got is None or want is None or got.group(2, 3) != want.group(2, 3):
+        return False
+    a, b = got.group(1), want.group(1)
+    return a == b or (a.isdigit() != b.isdigit())
 
 
 @dataclass(frozen=True, slots=True, repr=False)
@@ -242,7 +265,7 @@ class DurableGsmReader:
             raise SecretBackendUnavailable("GSM version unavailable") from None
         try:
             if (
-                payload.name != binding.version_name
+                not same_secret_version(payload.name, binding.version_name)
                 or type(payload.data) is not bytes
                 or not 0 < len(payload.data) <= MAX_ENVELOPE_BYTES
                 or type(payload.crc32c) is not int
