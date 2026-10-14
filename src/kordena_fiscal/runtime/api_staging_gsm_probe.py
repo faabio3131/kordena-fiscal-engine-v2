@@ -134,7 +134,7 @@ def staging_probe_verifier(
             or binding.kind != "signature"
             or binding.provider_id != _PROVIDER
             or binding.canonical_version != 1
-            or binding.cloud_version != "1"
+            or binding.cloud_version != "2"
             or binding.resource != _RESOURCE
             or binding.state != "active"
             or (binding.not_after is not None and binding.not_after <= datetime.now(UTC))
