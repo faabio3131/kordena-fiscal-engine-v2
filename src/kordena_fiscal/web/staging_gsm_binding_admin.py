@@ -70,7 +70,11 @@ def create_staging_gsm_binding_router(
                     binding = existing_worker
                 else:
                     worker_revision = existing_worker.revision
-                    binding = replace(existing_worker, revision=existing_worker.revision + 1, cloud_version="3")
+                    binding = replace(
+                        existing_worker,
+                        revision=existing_worker.revision + 1,
+                        cloud_version="3",
+                    )
             else:
                 binding = replace(binding, cloud_version="3")
             administration.put(
