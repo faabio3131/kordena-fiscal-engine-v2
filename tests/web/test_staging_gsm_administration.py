@@ -253,7 +253,7 @@ def test_staging_gsm_diagnostic_reports_binding_contract_without_contents() -> N
     class _Uow:
         secret_bindings = SimpleNamespace(get=lambda reference: None)
 
-        def __enter__(self) -> "_Uow":
+        def __enter__(self) -> _Uow:
             return self
 
         def __exit__(self, *args: Any) -> None:
