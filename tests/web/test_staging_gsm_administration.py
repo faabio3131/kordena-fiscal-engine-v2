@@ -224,3 +224,48 @@ def test_staging_verifier_refuses_wrong_environment_and_incomplete_identity() ->
     with pytest.raises(RuntimeConfigurationError):
         staging_probe_verifier(None, {"NFCORE_API_GSM_MODE": "scoped-staging-sa-v1",
                                       "NFCORE_ENVIRONMENT": "staging"})
+
+
+def test_staging_gsm_diagnostics_are_bounded_and_do_not_leak_errors() -> None:
+    import pytest
+
+    class _FailedDatabase:
+        def __call__(self) -> None:
+            raise RuntimeError("PRIVATE_KEY=must-not-leak")
+
+    env = {
+        "NFCORE_API_GSM_MODE": "scoped-staging-sa-v1",
+        "NFCORE_ENVIRONMENT": "staging",
+        "NFCORE_API_GSM_KEY_ID": "0" * 40,
+        "NFCORE_API_GSM_KEY_CREATED_AT": "2026-10-14T08:00:00+00:00",
+        "NFCORE_API_GSM_KEY_NOT_AFTER": "2026-11-10T08:00:00+00:00",
+        "NFCORE_API_GSM_CREDENTIAL_JSON": "private-sensitive-value",
+    }
+    with pytest.raises(RuntimeConfigurationError, match="\\[DATABASE_READ\\]") as exc:
+        staging_probe_verifier(_FailedDatabase(), env)
+    assert "must-not-leak" not in str(exc.value)
+    assert exc.value.__cause__ is None
+
+
+def test_staging_gsm_diagnostic_reports_binding_contract_without_contents() -> None:
+    import pytest
+
+    class _Uow:
+        secret_bindings = SimpleNamespace(get=lambda reference: None)
+
+        def __enter__(self) -> "_Uow":
+            return self
+
+        def __exit__(self, *args: Any) -> None:
+            return None
+
+    env = {
+        "NFCORE_API_GSM_MODE": "scoped-staging-sa-v1",
+        "NFCORE_ENVIRONMENT": "staging",
+        "NFCORE_API_GSM_KEY_ID": "0" * 40,
+        "NFCORE_API_GSM_KEY_CREATED_AT": "2026-10-14T08:00:00+00:00",
+        "NFCORE_API_GSM_KEY_NOT_AFTER": "2026-11-10T08:00:00+00:00",
+        "NFCORE_API_GSM_CREDENTIAL_JSON": "private-sensitive-value",
+    }
+    with pytest.raises(RuntimeConfigurationError, match="\\[BINDING_CONTRACT\\]"):
+        staging_probe_verifier(lambda: _Uow(), env)
