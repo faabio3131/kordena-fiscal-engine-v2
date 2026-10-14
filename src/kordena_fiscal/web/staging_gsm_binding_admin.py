@@ -62,7 +62,8 @@ def create_staging_gsm_binding_router(
             if existing_worker is not None:
                 if (
                     existing_worker.cloud_version not in {"1", "3"}
-                    or replace(existing_worker, revision=1, cloud_version="3") != replace(binding, cloud_version="3")
+                    or replace(existing_worker, revision=1, cloud_version="3")
+                    != replace(binding, cloud_version="3")
                 ):
                     raise SecretResolutionError("GSM worker binding conflict")
                 if existing_worker.cloud_version == "3":
