@@ -19,6 +19,10 @@ from kordena_fiscal.vault.google_secret_manager import (
 )
 
 PROJECT_ID = "fm-nfcore-staging"
+# Number Google echoes for this project in AccessSecretVersion names (observed via
+# `gcloud secrets versions describe`). Pinned: no other project number is equivalent.
+PROJECT_NUMBER = "672015004427"
+PROJECT_NUMBERS = {PROJECT_ID: PROJECT_NUMBER}
 WORKLOAD_IDENTITIES = {
     "nfcore-api": "nfcore-stg-api@fm-nfcore-staging.iam.gserviceaccount.com",
     "nfcore-worker": "nfcore-stg-worker@fm-nfcore-staging.iam.gserviceaccount.com",

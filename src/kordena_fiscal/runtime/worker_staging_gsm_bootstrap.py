@@ -30,6 +30,7 @@ from kordena_fiscal.vault.google_secret_manager import (
 from .config import RuntimeConfigurationError, RuntimeEnvironment, RuntimeSettings
 from .gsm_staging_identity_policy import (
     PROJECT_ID,
+    PROJECT_NUMBERS,
     WORKLOAD_IDENTITIES,
     build_staging_workload_gsm_access,
 )
@@ -235,6 +236,7 @@ def staging_gsm_handler_factory(
             environment="staging",
             workload_id="nfcore-worker",
             allowed_resources=frozenset({resource}),
+            project_numbers=PROJECT_NUMBERS,
         )
         logger = StructuredLogger(service="nfcore-worker", environment="staging")
 

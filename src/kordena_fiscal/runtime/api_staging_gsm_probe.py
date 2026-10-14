@@ -26,6 +26,7 @@ from kordena_fiscal.vault.google_secret_manager import (
 from .config import RuntimeConfigurationError
 from .gsm_staging_identity_policy import (
     PROJECT_ID,
+    PROJECT_NUMBERS,
     WORKLOAD_IDENTITIES,
     build_staging_workload_gsm_access,
 )
@@ -161,6 +162,7 @@ def staging_probe_verifier(
             environment="staging",
             workload_id="nfcore-api",
             allowed_resources=frozenset({_RESOURCE}),
+            project_numbers=PROJECT_NUMBERS,
         )
         resolver = SecretResolver(
             GoogleSignatureSecretBackend(reader, provider_id=_PROVIDER),

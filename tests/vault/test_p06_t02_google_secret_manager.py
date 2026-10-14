@@ -544,45 +544,89 @@ def test_binding_survives_new_database_handle(database):
             restarted.close()
 
 
+PINNED = {"nfcore-synthetic": "123456789012"}
+
+
 @pytest.mark.parametrize(
     ("returned", "expected"),
     [
         ("projects/nfcore-synthetic/secrets/s-1/versions/9", True),
-        ("projects/123456789012/secrets/s-1/versions/9", True),  # Google echoes project number
+        ("projects/123456789012/secrets/s-1/versions/9", True),  # the pinned number
+        ("projects/999999999999/secrets/s-1/versions/9", False),  # another project's number
+        ("projects/123456789013/secrets/s-1/versions/9", False),  # off by one digit
         ("projects/123456789012/secrets/other/versions/9", False),
         ("projects/123456789012/secrets/s-1/versions/10", False),
-        ("projects/other-project/secrets/s-1/versions/9", False),  # two different textual IDs
+        ("projects/other-project/secrets/s-1/versions/9", False),
         ("projects/1/secrets/s-1/versions/9/../10", False),
         ("projects/123456789012/secrets/s-1/versions/latest", False),
         ("", False),
         (None, False),
     ],
 )
-def test_returned_version_accepts_project_number_but_stays_fail_closed(returned, expected):
+def test_returned_version_accepts_only_the_pinned_project_number(returned, expected):
     requested = "projects/nfcore-synthetic/secrets/s-1/versions/9"
-    assert same_secret_version(returned, requested) is expected
+    assert same_secret_version(returned, requested, PINNED) is expected
 
 
-def test_reader_accepts_project_number_echo(database):
+def test_without_a_pinned_number_the_check_is_strict():
+    requested = "projects/nfcore-synthetic/secrets/s-1/versions/9"
+    assert same_secret_version(requested, requested) is True
+    assert same_secret_version("projects/123456789012/secrets/s-1/versions/9", requested) is False
+    assert (
+        same_secret_version("projects/123456789012/secrets/s-1/versions/9", requested, {}) is False
+    )
+
+
+def test_the_staging_policy_pins_exactly_one_number():
+    from kordena_fiscal.runtime.gsm_staging_identity_policy import (
+        PROJECT_ID,
+        PROJECT_NUMBERS,
+    )
+
+    assert PROJECT_NUMBERS == {PROJECT_ID: "672015004427"}
+
+
+def _reader_with_returned_project(database, returned_project, pinned):
     put(database)
     access = Access()
     access.payload = replace(
         access.payload,
-        name=access.payload.name.replace("nfcore-synthetic", "123456789012"),
+        name=access.payload.name.replace("nfcore-synthetic", returned_project),
     )
-    reader = DurableGsmReader(
+    return DurableGsmReader(
         uow_factory=database,
         access=access,
         environment="staging",
         workload_id=BINDING.workload_id,
         allowed_resources=frozenset({BINDING.resource}),
+        project_numbers=pinned,
         clock=lambda: NOW,
     )
-    _, value, _ = reader.read(
+
+
+def _read(reader):
+    return reader.read(
         reference_id=BINDING.reference_id,
         scope=SCOPE,
         kind="signature",
         provider_id=BINDING.provider_id,
         fiscal_environment=BINDING.fiscal_environment,
     )
+
+
+def test_reader_accepts_the_pinned_project_number_echo(database):
+    _, value, _ = _read(_reader_with_returned_project(database, "123456789012", PINNED))
     assert value == KEY
+
+
+@pytest.mark.parametrize("pinned", [None, PINNED])
+def test_reader_rejects_an_unknown_project_number_echo(database, pinned):
+    reader = _reader_with_returned_project(database, "999999999999", pinned)
+    with pytest.raises(SecretResolutionError):
+        _read(reader)
+
+
+def test_reader_rejects_the_number_echo_when_nothing_is_pinned(database):
+    reader = _reader_with_returned_project(database, "123456789012", None)
+    with pytest.raises(SecretResolutionError):
+        _read(reader)
