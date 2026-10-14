@@ -57,10 +57,25 @@ def create_staging_gsm_binding_router(
                 resource=_PILOT_RESOURCE,
                 cloud_version="1",
             )
+            existing_worker = administration.current_binding(binding.reference_id)
+            worker_revision = 0
+            if existing_worker is not None:
+                if (
+                    existing_worker.cloud_version not in {"1", "3"}
+                    or replace(existing_worker, revision=1, cloud_version="3") != replace(binding, cloud_version="3")
+                ):
+                    raise SecretResolutionError("GSM worker binding conflict")
+                if existing_worker.cloud_version == "3":
+                    binding = existing_worker
+                else:
+                    worker_revision = existing_worker.revision
+                    binding = replace(existing_worker, revision=existing_worker.revision + 1, cloud_version="3")
+            else:
+                binding = replace(binding, cloud_version="3")
             administration.put(
                 actor=actor,
                 binding=binding,
-                expected_revision=0,
+                expected_revision=worker_revision,
                 correlation_id=uuid4().hex,
             )
             verification_binding = SecretBinding(
