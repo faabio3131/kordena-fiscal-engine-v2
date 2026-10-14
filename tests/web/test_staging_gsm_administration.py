@@ -85,7 +85,7 @@ def test_binding_requires_session_and_platform_admin() -> None:
     assert response.status_code == 200
     assert {b.workload_id for b in administration.bound} == {"nfcore-worker", "nfcore-api"}
     assert {b.workload_id: b.cloud_version for b in administration.bound} == {
-        "nfcore-worker": "1", "nfcore-api": "2"
+        "nfcore-worker": "3", "nfcore-api": "2"
     }
     assert all(
         b.resource.endswith("nfcore-stg-pilot-webhook-signing")
@@ -99,10 +99,16 @@ def test_binding_upgrades_existing_api_version_with_revision_and_replay() -> Non
     client = _client(create_staging_gsm_binding_router(_Identity(_Actor()), administration))
     client.cookies.update(COOKIES)
     assert client.post("/internal/staging/gsm-binding", headers=HEADERS).status_code == 200
+    worker = administration.current_binding("sec_nfcore_staging_pilot_gsm_signing_01")
+    assert worker.cloud_version == "3"
+    administration.bound[0] = replace(worker, cloud_version="1")
     verifier = administration.current_binding("sec_nfcore_staging_pilot_gsm_verify_01")
     assert verifier.cloud_version == "2"
     administration.bound[-1] = replace(verifier, cloud_version="1")
     assert client.post("/internal/staging/gsm-binding", headers=HEADERS).status_code == 200
+    upgraded_worker = administration.current_binding(worker.reference_id)
+    assert upgraded_worker.cloud_version == "3"
+    assert upgraded_worker.revision == 2
     upgraded = administration.current_binding(verifier.reference_id)
     assert upgraded.cloud_version == "2"
     assert upgraded.revision == 2
