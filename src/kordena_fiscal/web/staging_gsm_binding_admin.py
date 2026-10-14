@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -74,12 +75,28 @@ def create_staging_gsm_binding_router(
                 kind="signature",
                 canonical_version=1,
                 resource=_PILOT_RESOURCE,
-                cloud_version="1",
+                cloud_version="2",
             )
+            existing = administration.current_binding(verification_binding.reference_id)
+            expected_revision = 0
+            if existing is not None:
+                if (
+                    existing.cloud_version not in {"1", "2"}
+                    or replace(existing, revision=1, cloud_version="2")
+                    != verification_binding
+                ):
+                    raise SecretResolutionError("GSM verifier binding conflict")
+                if existing.cloud_version == "2":
+                    verification_binding = existing  # Safe idempotent replay.
+                else:
+                    expected_revision = existing.revision
+                    verification_binding = replace(
+                        existing, revision=existing.revision + 1, cloud_version="2"
+                    )
             administration.put(
                 actor=actor,
                 binding=verification_binding,
-                expected_revision=0,
+                expected_revision=expected_revision,
                 correlation_id=uuid4().hex,
             )
         except SecretResolutionError:
