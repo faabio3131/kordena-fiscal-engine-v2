@@ -1444,7 +1444,7 @@ document.querySelectorAll("[data-password-target]").forEach((button) => {
     input.type = reveal ? "text" : "password";
     button.setAttribute("aria-pressed", String(reveal));
     button.setAttribute("aria-label", reveal ? "Ocultar senha" : "Mostrar senha");
-    button.textContent = reveal ? "Ocultar" : "Mostrar";
+    button.textContent = reveal ? "🙈 Ocultar" : "👁 Mostrar";
   });
 });
 
