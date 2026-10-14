@@ -43,6 +43,11 @@ class SecretBindingAdministration:
         self._uow = uow_factory
         self._clock = clock or (lambda: datetime.now(UTC))
 
+    def current_binding(self, reference_id: str) -> SecretBinding | None:
+        """Read existing metadata for governed optimistic revision reconciliation."""
+        with self._uow() as uow:
+            return uow.secret_bindings.get(reference_id)
+
     def put(
         self,
         *,
