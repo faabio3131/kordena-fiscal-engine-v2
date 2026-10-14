@@ -61,6 +61,8 @@ class _BindingAdmin:
     ) -> None:
         assert actor.account.is_platform_admin
         previous = self.current_binding(binding.reference_id)
+        if previous == binding:
+            return
         assert expected_revision == (previous.revision if previous is not None else 0)
         assert correlation_id
         if previous != binding:
