@@ -53,6 +53,9 @@ class _BindingAdmin:
     def __init__(self) -> None:
         self.bound: list[Any] = []
 
+    def current_binding(self, reference_id: str) -> Any | None:
+        return next((b for b in reversed(self.bound) if b.reference_id == reference_id), None)
+
     def put(
         self, *, actor: _Actor, binding: Any, expected_revision: int, correlation_id: str
     ) -> None:
@@ -77,6 +80,9 @@ def test_binding_requires_session_and_platform_admin() -> None:
     response = client.post("/internal/staging/gsm-binding", headers=HEADERS)
     assert response.status_code == 200
     assert {b.workload_id for b in administration.bound} == {"nfcore-worker", "nfcore-api"}
+    assert {b.workload_id: b.cloud_version for b in administration.bound} == {
+        "nfcore-worker": "1", "nfcore-api": "2"
+    }
     assert all(
         b.resource.endswith("nfcore-stg-pilot-webhook-signing")
         for b in administration.bound
