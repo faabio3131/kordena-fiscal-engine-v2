@@ -307,14 +307,26 @@ def build_production_worker_runtime(
                     else uow.outbox.counts_by_status(selection=claim_selection)
                 )
         except Exception:
+            duration = timer.elapsed()
+            try:
+                metrics.increment("nfcore_outbox_snapshot_total", outcome="error")
+                metrics.observe_seconds("nfcore_outbox_snapshot", duration, outcome="error")
+            except Exception:
+                pass  # DB snapshot failure remains canonical, not metrics failure.
             runtime_tracer.record(
                 operation="db.outbox_counts", context=context, started_at=started,
-                elapsed_seconds=timer.elapsed(), outcome="error",
+                elapsed_seconds=duration, outcome="error",
             )
             raise
+        duration = timer.elapsed()
+        try:
+            metrics.increment("nfcore_outbox_snapshot_total", outcome="ok")
+            metrics.observe_seconds("nfcore_outbox_snapshot", duration, outcome="ok")
+        except Exception:
+            pass
         runtime_tracer.record(
             operation="db.outbox_counts", context=context, started_at=started,
-            elapsed_seconds=timer.elapsed(), outcome="ok",
+            elapsed_seconds=duration, outcome="ok",
         )
         return counts
 
