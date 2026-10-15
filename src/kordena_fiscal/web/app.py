@@ -21,6 +21,7 @@ from kordena_fiscal.control_plane.pricing_admin import CommercialPricingAdminist
 from kordena_fiscal.product.checkout import CommercialCheckoutProjector
 from kordena_fiscal.product.commercial_readiness import CommercialDeliveryPathReadiness
 from kordena_fiscal.runtime.observability import (
+    MetricsRegistry,
     RequestTimer,
     SafeTracer,
     StructuredLogger,
@@ -246,6 +247,12 @@ def _error_payload(error: HttpContractError) -> dict[str, str]:
     }
 
 
+def _metric_http_method(method: str) -> str:
+    """Bound metric cardinality; never expose arbitrary method or request fields."""
+    allowed = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
+    return method if method in allowed else "OTHER"
+
+
 def create_app(
     *,
     security: BridgeSecurityBoundary | None = None,
@@ -263,6 +270,7 @@ def create_app(
     commercial_delivery_readiness: CommercialDeliveryPathReadiness | None = None,
     commercial_operational_readiness: Callable[[], bool] | None = None,
     cakto_checkout_administration: CaktoCheckoutAdministrationService | None = None,
+    runtime_metrics: MetricsRegistry | None = None,
 ) -> FastAPI:
     """Create the web adapter without granting fiscal authority by default."""
 
@@ -272,6 +280,8 @@ def create_app(
         description="Web-first HTTP adapter for FM NFCORE fiscal infrastructure.",
     )
 
+    http_metrics = runtime_metrics if runtime_metrics is not None else MetricsRegistry()
+    app.state.runtime_metrics = http_metrics
     http_tracer = SafeTracer(
         StructuredLogTraceSink(
             StructuredLogger(service="nfcore-api", environment="unspecified")
@@ -288,14 +298,42 @@ def create_app(
         try:
             response = await call_next(request)
         except Exception:
+            duration = timer.elapsed()
+            try:
+                http_metrics.increment(
+                    "nfcore_http_requests_total",
+                    method=_metric_http_method(request.method), status_class="5xx",
+                )
+                http_metrics.observe_seconds(
+                    "nfcore_http_request", duration,
+                    method=_metric_http_method(request.method), status_class="5xx",
+                )
+            except Exception:
+                pass  # Metrics cannot become an HTTP/fiscal execution authority.
             http_tracer.record(
                 operation="http.request", context=context, started_at=started,
-                elapsed_seconds=timer.elapsed(), outcome="error",
+                elapsed_seconds=duration, outcome="error",
             )
             raise
+        duration = timer.elapsed()
+        status_class = (
+            f"{response.status_code // 100}xx"
+            if 100 <= response.status_code <= 599 else "other"
+        )
+        try:
+            http_metrics.increment(
+                "nfcore_http_requests_total",
+                method=_metric_http_method(request.method), status_class=status_class,
+            )
+            http_metrics.observe_seconds(
+                "nfcore_http_request", duration,
+                method=_metric_http_method(request.method), status_class=status_class,
+            )
+        except Exception:
+            pass  # No telemetry failure may change the canonical HTTP response.
         http_tracer.record(
             operation="http.request", context=context, started_at=started,
-            elapsed_seconds=timer.elapsed(),
+            elapsed_seconds=duration,
             outcome="error" if response.status_code >= 500 else "ok",
         )
         return response
@@ -355,6 +393,7 @@ def create_app(
                     ),
                     delivery_readiness=commercial_delivery_readiness,
                     operational_readiness=commercial_operational_readiness,
+                    runtime_metrics=http_metrics,
                 )
             )
     if password_recovery is not None:

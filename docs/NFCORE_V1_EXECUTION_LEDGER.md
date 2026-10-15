@@ -374,8 +374,8 @@ Antecipação P6 antes de P5 aprovada em 2026-10-09 (“Autorizado”), conforme
 
 ### 28. NFV1-P09-T01 — Tracing
 
-- [ ] **Estado:** em execução
-- **Implementação candidata 2026-10-12:** PR #172 DRAFT, branch `feat/nfv1-p09-t01-runtime-tracing`, base main `efefc121cd47453f27a6d8aecd6e2426aca8983a`, pós-merge anterior CI #802/Governance #223 SUCCESS. Reutiliza `runtime.observability.SafeTracer` e as composições existentes: traces HTTP/DB-readiness na API, DB outbox/dispatch/cycle no Worker e transporte webhook canônico. Testes novos de API, erros de sink, webhook e Worker SQLite/PostgreSQL. CI e Mypy/Ruff/pytest/gov da PR ainda pendentes; não usar esta nota como certificação. O tracing é process-local/injetável, sem exporter/dashboards em staging e sem PII, URL de destino, payload ou material de autenticação. `P05-T01` continua BLOCKED_EXTERNAL e 27/59 não muda.
+- [x] **Estado:** concluído
+- **Histórico da implementação candidata 2026-10-12 (substituído pela prova certificada abaixo):** PR #172 DRAFT, branch `feat/nfv1-p09-t01-runtime-tracing`, base main `efefc121cd47453f27a6d8aecd6e2426aca8983a`, pós-merge anterior CI #802/Governance #223 SUCCESS. Reutiliza `runtime.observability.SafeTracer` e as composições existentes: traces HTTP/DB-readiness na API, DB outbox/dispatch/cycle no Worker e transporte webhook canônico. Testes novos de API, erros de sink, webhook e Worker SQLite/PostgreSQL. CI e Mypy/Ruff/pytest/gov da PR ainda pendentes; não usar esta nota como certificação. O tracing é process-local/injetável, sem exporter/dashboards em staging e sem PII, URL de destino, payload ou material de autenticação. `P05-T01` continua BLOCKED_EXTERNAL e 27/59 não muda.
 - **Objetivo:** executar exatamente a tarefa NFV1-P09-T01 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P06-T04 DONE_CERTIFIED_INTERNAL e P1..P4 internos certificados; P05 não é predecessor desta parcela de construção interna
 - **Entregar:** tudo que o cronograma exige para NFV1-P09-T01, mais os testes/evidências diretamente necessários.
@@ -384,11 +384,11 @@ Antecipação P6 antes de P5 aprovada em 2026-10-09 (“Autorizado”), conforme
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
 - **Riscos / não confirmado:** sem staging CURRENT, nenhum trace ou alerta operacional pode ser declarado ativo; evidência de integração interna/CI não substitui exporter/collector/ambiente real.
 - **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** PENDENTE
+- **Prova:** PR #187 MERGED; CI #38744017770 SUCCESS e governança #38744017835 SUCCESS pós-merge em `main` SHA `4f7d520ef66831edb56d8d68c60ca24cc17b51f4`. Tracing interno certificado; staging/coletor externo permanecem pendentes.
 
 ### 29. NFV1-P09-T02 — Métricas
 
-- [ ] **Estado:** pendente
+- [ ] **Estado:** em execução
 - **Objetivo:** executar exatamente a tarefa NFV1-P09-T02 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P09-T01 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** tudo que o cronograma exige para NFV1-P09-T02, mais os testes/evidências diretamente necessários.
@@ -397,7 +397,9 @@ Antecipação P6 antes de P5 aprovada em 2026-10-09 (“Autorizado”), conforme
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
 - **Riscos / não confirmado:** sem staging CURRENT, nenhum trace ou alerta operacional pode ser declarado ativo; evidência de integração interna/CI não substitui exporter/collector/ambiente real.
 - **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** PENDENTE
+- **Prova:** parcial: PR #188, branch `feat/nfv1-p09-t02-runtime-metrics`; cobertura interna HTTP, worker dispatch/outbox DB, oferta comercial observada e webhook provider, com testes no branch. CI/Governança do HEAD final PENDENTES; sem staging/collector reais. Lacunas: fulfillment, ativação efetiva, eventos de venda, reconciliação e rejeições fiscais exigem prova na autoridade canônica; não inferir de HTTP, prontidão da oferta ou mocks.
+- **Auditoria de reuso 2026-10-15:** código confirma `CommercialFulfillmentService.process`, `CommercialCustomerActivationService.provision/mark_active`, `CaktoCanonicalCommercialBridgeService.reconcile` e `FiscalReconciliationEngine.reconcile_operation` como autoridades já existentes; `runtime/commercial_observability.py::CommercialTelemetry` é o vocabulário pré-existente. Falta provar wiring real, observações pós-commit e rejeição fiscal canônica; nenhuma dessas lógicas deve ser reimplementada. Matriz detalhada no `AGENTS.md` desta PR.
+- **Próxima ação:** resolver falhas de CI pela causa, concluir cobertura restante nas autoridades reais e executar `python3 scripts/check_nfcore_plan.py`; só depois certificar `[x]` e solicitar autorização para merge.
 
 ### 30. NFV1-P09-T03 — Alerts
 

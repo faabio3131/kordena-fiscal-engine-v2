@@ -66,9 +66,19 @@ def _new_trace_context(
 class _TracedOutboxHandler:
     """Observe canonical dispatch without interpreting scope, payload or fiscal outcomes."""
 
-    def __init__(self, delegate: FiscalOutboxHandler, tracer: SafeTracer) -> None:
+    def __init__(
+        self, delegate: FiscalOutboxHandler, tracer: SafeTracer, metrics: MetricsRegistry
+    ) -> None:
         self._delegate = delegate
         self._tracer = tracer
+        self._metrics = metrics
+
+    def _metric(self, seconds: float, outcome: str) -> None:
+        try:
+            self._metrics.increment("nfcore_dispatch_total", outcome=outcome)
+            self._metrics.observe_seconds("nfcore_dispatch", seconds, outcome=outcome)
+        except Exception:
+            pass  # Never grant metrics authority over fiscal dispatch.
 
     def dispatch(self, entry: FiscalOutboxEntry) -> FiscalDispatchResult:
         timer = RequestTimer()
@@ -79,6 +89,7 @@ class _TracedOutboxHandler:
         try:
             result = self._delegate.dispatch(entry)
         except Exception:
+            self._metric(timer.elapsed(), "error")
             self._tracer.record(
                 operation="worker.dispatch", context=context, started_at=started,
                 elapsed_seconds=timer.elapsed(), outcome="error",
@@ -87,6 +98,10 @@ class _TracedOutboxHandler:
         # Do not validate the domain result in the tracing adapter; the canonical
         # outbox worker remains the only authority for invalid handler responses.
         outcome = result.status.value if isinstance(result, FiscalDispatchResult) else "invalid"
+        metric_outcome = (
+            outcome if outcome in {"succeeded", "retry_wait", "dead_letter"} else "other"
+        )
+        self._metric(timer.elapsed(), metric_outcome)
         self._tracer.record(
             operation="worker.dispatch", context=context, started_at=started,
             elapsed_seconds=timer.elapsed(), outcome=outcome,
@@ -127,9 +142,24 @@ class _TracingWorkerObserver:
 class _TracedWebhookTransport:
     """Trace the actual signed transport port, never URL/body/signature/headers."""
 
-    def __init__(self, delegate: WebhookTransport, tracer: SafeTracer) -> None:
+    def __init__(
+        self, delegate: WebhookTransport, tracer: SafeTracer,
+        metrics: MetricsRegistry | None = None,
+    ) -> None:
         self._delegate = delegate
         self._tracer = tracer
+        self._metrics = metrics
+
+    def _metric(self, seconds: float, outcome: str) -> None:
+        if self._metrics is None:
+            return
+        try:
+            self._metrics.increment("nfcore_webhook_delivery_total", outcome=outcome)
+            self._metrics.observe_seconds(
+                "nfcore_webhook_delivery", seconds, outcome=outcome
+            )
+        except Exception:
+            pass  # Never change the signed transport's canonical result.
 
     def deliver(self, request: WebhookDeliveryRequest) -> WebhookDeliveryResponse:
         timer = RequestTimer()
@@ -141,6 +171,7 @@ class _TracedWebhookTransport:
         try:
             response = self._delegate.deliver(request)
         except Exception:
+            self._metric(timer.elapsed(), "error")
             self._tracer.record(
                 operation="external.webhook", context=context, started_at=started,
                 elapsed_seconds=timer.elapsed(), outcome="error",
@@ -149,6 +180,10 @@ class _TracedWebhookTransport:
         # The signed delivery handler validates response types. Tracing must not
         # replace that validation with AttributeError or reinterpret the result.
         status = response.status_code if isinstance(response, WebhookDeliveryResponse) else None
+        self._metric(
+            timer.elapsed(),
+            "ok" if status is not None and 200 <= status <= 299 else "error",
+        )
         self._tracer.record(
             operation="external.webhook", context=context, started_at=started,
             elapsed_seconds=timer.elapsed(),
@@ -275,12 +310,12 @@ def build_production_worker_runtime(
     runtime_tracer = tracer if tracer is not None else SafeTracer(
         StructuredLogTraceSink(StructuredLogger(service="nfcore-worker", environment=environment))
     )
+    metrics = MetricsRegistry()
     traced_handlers = {
-        operation: _TracedOutboxHandler(handler, runtime_tracer)
+        operation: _TracedOutboxHandler(handler, runtime_tracer, metrics)
         for operation, handler in handlers.items()
     }
     routed = RoutedOutboxHandler(traced_handlers)
-    metrics = MetricsRegistry()
 
     def queue_counts() -> Mapping[FiscalOutboxStatus, int]:
         timer = RequestTimer()
@@ -294,14 +329,26 @@ def build_production_worker_runtime(
                     else uow.outbox.counts_by_status(selection=claim_selection)
                 )
         except Exception:
+            duration = timer.elapsed()
+            try:
+                metrics.increment("nfcore_outbox_snapshot_total", outcome="error")
+                metrics.observe_seconds("nfcore_outbox_snapshot", duration, outcome="error")
+            except Exception:
+                pass  # DB snapshot failure remains canonical, not metrics failure.
             runtime_tracer.record(
                 operation="db.outbox_counts", context=context, started_at=started,
-                elapsed_seconds=timer.elapsed(), outcome="error",
+                elapsed_seconds=duration, outcome="error",
             )
             raise
+        duration = timer.elapsed()
+        try:
+            metrics.increment("nfcore_outbox_snapshot_total", outcome="ok")
+            metrics.observe_seconds("nfcore_outbox_snapshot", duration, outcome="ok")
+        except Exception:
+            pass
         runtime_tracer.record(
             operation="db.outbox_counts", context=context, started_at=started,
-            elapsed_seconds=timer.elapsed(), outcome="ok",
+            elapsed_seconds=duration, outcome="ok",
         )
         return counts
 
@@ -339,6 +386,7 @@ def build_customer_webhook_handler(
     security: WebhookSecurity,
     destination_id: str,
     tracer: SafeTracer | None = None,
+    metrics: MetricsRegistry | None = None,
 ) -> SignedWebhookOutboxHandler:
     """Compose the approved adapter without activating any worker operation/deploy."""
     from kordena_fiscal.application.webhook_delivery import SignedWebhookOutboxHandler
@@ -358,5 +406,6 @@ def build_customer_webhook_handler(
                     StructuredLogger(service="nfcore-worker", environment="unspecified")
                 )
             ),
+            metrics=metrics,
         ),
     )

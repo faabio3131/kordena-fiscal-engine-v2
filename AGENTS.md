@@ -97,3 +97,55 @@ Parar e solicitar autorização específica antes de:
 ### Regra de continuidade
 
 Ao retomar o projeto, nunca continue apenas do chat. Reabra o cronograma, o ledger e o último checkpoint persistente; depois reconfirme GitHub/CI/runtime e execute exatamente a próxima tarefa permitida.
+
+
+### Checkpoint ativo — NFV1-P09-T02 (2026-10-15)
+
+- CURRENT auditado: `main=4f7d520ef66831edb56d8d68c60ca24cc17b51f4`; P09-T01 PR #187 MERGED, CI pós-merge #38744017770 SUCCESS e governança #38744017835 SUCCESS.
+- Tarefa em execução: `NFV1-P09-T02 — Métricas`; PR [#188](https://github.com/faabio3131/kordena-fiscal-engine-v2/pull/188), branch `feat/nfv1-p09-t02-runtime-metrics`, **DRAFT / NÃO MERGEADA**.
+- Implementações sob revisão: métricas HTTP por método e classe de status, latência; métricas de despacho do Worker e snapshots outbox/PostgreSQL, usando somente `MetricsRegistry` canônico. Falhas de telemetria não podem alterar resposta ou execução fiscal.
+- Gates CURRENT devem ser consultados pelo HEAD da PR no GitHub; CI verde em commit anterior não certifica HEAD novo.
+- **PENDENTE / NÃO CERTIFICADO:** eventos comerciais, fulfillment, ativação, reconciliação, rejeições fiscais e falhas de provedores somente onde houver fronteiras canônicas reais. Não usar contagem de HTTP nem mocks como prova de operação comercial ou homologação fiscal.
+- Ao retomar: reconfirmar branch/HEAD/PR/CI; conferir Ruff/Mypy/Pytest/testes E2E e `python3 scripts/check_nfcore_plan.py`; conciliar ledger e provas. Somente marcar `[x]` após gates completos no HEAD correto. P09-T03 depende do fechamento de T02.
+- Restrições preservadas: sem merge não autorizado, sem deploy, migrations produtivas, DNS, segredos ou ativação fiscal real. O ledger e cronograma permanecem fontes de estado e escopo; este checkpoint não os substitui.
+
+### Auditoria de reuso obrigatório — P09-T02 (2026-10-15)
+
+A inspeção do código CURRENT na PR #188 confirmou que as autoridades abaixo **já existem**. Esta é uma matriz de desenho/impacto, **não** certificado de integração real:
+- **Fulfillment comercial:** `application/commercial_fulfillment.py::CommercialFulfillmentService.process` grava receipt idempotente, estado de compra/contrato/assinatura e commit; distingue replay. Instrumentação deve observar o resultado **depois** do commit, sem alterar decisões nem usar a entrada bruta como venda confirmada.
+- **Ativação efetiva:** `application/commercial_activation.py::CommercialCustomerActivationService.provision/mark_active` governa `ACTIVATION_PENDING` e `ACTIVE`; apenas `mark_active` com commit de estado ativo permite registrar ativação concluída. A simples abertura de oferta ou envio de email **não** é ativação.
+- **Reconciliação comercial:** `application/cakto_reconciliation.py::CaktoCanonicalCommercialBridgeService.reconcile` produz `CaktoReconciliationResult.drift` a partir de estado canônico e snapshot externo; não equivale a reconciliação fiscal.
+- **Reconciliação fiscal:** `reconciliation/engine.py::FiscalReconciliationEngine.reconcile_operation` já calcula status/issues, pure domain; a emissão operacional deve ocorrer no orquestrador autorizado, não como efeito colateral no motor puro.
+- **Taxonomia canônica existente:** `runtime/commercial_observability.py::CommercialTelemetry` define `CommercialTelemetryEvent`/`CommercialTelemetryOutcome` e `nfcore_commercial_events_total`. Reutilizar antes de propor novo contador para os mesmos fatos. `observability/metrics.py` é um subsistema V2 existente; inventariar usos/contratos antes de consolidar exportadores. Não criar terceiro registry.
+- **Rejeições fiscais:** pendente rastrear e provar o ponto de decisão canônico de rejeição por provedor, distinguindo erro de transporte, rejeição de negócio e indisponibilidade. Não contar qualquer erro HTTP/webhook como rejeição fiscal.
+
+**Estado:** mapa de reuso confirmado no código; conexões runtime, cobertura de testes da telemetria comercial e CI no HEAD final ainda PENDENTES. P09-T02 permanece EM EXECUÇÃO, PR #188 Draft. Não implementar nova regra de fulfillment/ativação/reconciliação; apenas adapters seguros e testes após inspeção de composição e persistência.
+
+### Reconciliação Web vs. código — ponto de continuidade (2026-10-15)
+
+- Auditoria persistida em `docs/checkpoints/NFV1_WEB_PARITY_RECONCILIATION_CURRENT_2026-10-15.md` na PR #188. `main` auditada: `4f7d520ef66831edb56d8d68c60ca24cc17b51f4`.
+- Constatado: menu `portal/app.js`, executor `web/portal_runtime.py`, rotas condicionais `web/app.py` e domínios comerciais/fiscais já existem. **Não reconstruir por padrão**; verificar composição real da API/Worker/Portal, RBAC/tenant e publicação Web na mesma revisão.
+- Paridade Web em staging permanece NÃO COMPROVADA; a auditoria do código não autoriza declarar produto pronto ou fazer deploy. PR #188 permanece DRAFT, P09-T02 em execução.
+- Próxima ação: mapear wiring runtime e comparar superfícies código→API→Web→E2E→staging; corrigir somente gaps comprovados. Preservar gates e autorização humana para merge/deploy.
+
+### Matriz operacional API/Portal/Worker — 2026-10-15
+
+- Auditoria estática do CURRENT `main=4f7d520ef66831edb56d8d68c60ca24cc17b51f4` documentada em `docs/checkpoints/NFV1_WEB_RUNTIME_WIRING_MATRIX_2026-10-15.md` na PR #188.
+- Docker API inicia `runtime.api`, que monta `web.app` com dependências opcionais; Portal usa `portal/app.js`; Worker inicia `runtime.worker_main` com registry/identidade GSM governada. Não assumir que menu visível equivale a rota/dado disponível.
+- Foram catalogadas superfícies, contratos, RBAC, unidades, operações fiscais e condições de billing e checkout. **Inspeção estática, não certificação de staging.**
+- Prioridade da retomada: confrontar bootstrap/health/readiness e a revisão efetivamente publicada na Railway com a matriz; corrigir somente wiring, contratos e permissões comprovadamente deficientes. PR #188 permanece Draft, T02 em andamento, sem merge/deploy/migrations autorizados.
+
+### Railway CURRENT audit read-only — 2026-10-15
+
+- Evidência detalhada em `docs/checkpoints/NFV1_RAILWAY_CURRENT_READONLY_AUDIT_2026-10-15.md`, PR #188 (Draft). Projeto Railway `FM NFCORE Staging`, ambiente interno `production`.
+- **BLOQUEIO CONFIRMADO:** API e Worker deployment `22a1fbf10e6a90704dcc2d63975cb29ed1373b26`, Portal deployment `f9b5b2c5b436045947159f1e76be9303f5a95d90`, enquanto `main` GitHub `4f7d520ef66831edb56d8d68c60ca24cc17b51f4`. Serviços online mas versões divergentes. Não afirmar Web operacional/compatível apenas por status online.
+- Variáveis GSM, DB, upstream e deploy revision têm nomes presentes; valores e funcionamento não foram validados. Sem prova de /health/ready, E2E real, autenticação, fiscal real, migrations ou provisionamento comercial.
+- Próxima ação: reconciliar gates do P05 e preparar deploy coordenado API/Portal/Worker no MESMO SHA, somente após autorização específica; não reconstruir funcionalidades existentes nem fazer deploy isolado. Nenhuma mudança Railway nesta auditoria.
+
+### Marco interno de construção Web — Railway sincronizada (2026-10-15)
+
+- **AUTORIZADO PELO PROPRIETÁRIO:** publicação coordenada interna de API/Portal/Worker, sem migrations ou alterações de segredos. Projeto `FM NFCORE Staging`, ambiente Railway de nome técnico `production`.
+- **EXECUTADO / CURRENT DEPLOY:** todos os três serviços no commit imutável `4f7d520ef66831edb56d8d68c60ca24cc17b51f4`. Railway deploys: API `cf593d0c-b4aa-4b96-a426-35bc48bec7d2`, Portal `04d0da6f-32d8-4777-aacd-e491e05f366d`, Worker `d4ff8f89-0e5e-412a-a459-5a8dd5ee0834`, todos SUCCESS. PostgreSQL mantido.
+- **SMOKE INTERNO READ-ONLY:** `https://nfcore-api-production.up.railway.app/health/live` retornou `status=live`; `/health/ready` retornou `status=ready,reason=ready`; `https://nfcore-portal-production.up.railway.app/` retornou página `FM NFCORE V1.0 — Control Center`. Sem login automatizado ou ações de negócio reais neste marco.
+- **PENDENTE DA CONSTRUÇÃO:** E2E autenticado Portal→API→DB/Worker, inventário de funcionalidades acessíveis, RBAC/tenant, jornada comercial e fiscal simulada, correções concretas necessárias. A sincronização não certifica produto integralmente funcional.
+- **DISCIPLINA:** diferenciar construção e teste interno de homologação externa futura; não bloquear conclusão de software por prova regulatória externa. A PR #188 continua Draft separada da main publicada; não a considerar implantada nem mergeada. Registro somente documental do marco de publicação já executado.
