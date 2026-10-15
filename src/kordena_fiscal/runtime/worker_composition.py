@@ -67,13 +67,15 @@ class _TracedOutboxHandler:
     """Observe canonical dispatch without interpreting scope, payload or fiscal outcomes."""
 
     def __init__(
-        self, delegate: FiscalOutboxHandler, tracer: SafeTracer, metrics: MetricsRegistry
+        self, delegate: FiscalOutboxHandler, tracer: SafeTracer, metrics: MetricsRegistry | None = None
     ) -> None:
         self._delegate = delegate
         self._tracer = tracer
         self._metrics = metrics
 
     def _metric(self, seconds: float, outcome: str) -> None:
+        if self._metrics is None:
+            return
         try:
             self._metrics.increment("nfcore_dispatch_total", outcome=outcome)
             self._metrics.observe_seconds("nfcore_dispatch", seconds, outcome=outcome)
