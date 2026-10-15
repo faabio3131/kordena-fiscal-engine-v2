@@ -26,6 +26,7 @@ from kordena_fiscal.product.commercial_release import (
     CommercialReleaseDecision,
     CommercialReleaseError,
 )
+from kordena_fiscal.runtime.observability import MetricsRegistry
 from kordena_fiscal.security.human_identity import HumanIdentityService
 from kordena_fiscal.web.portal_api import _csrf
 from kordena_fiscal.web.pricing_admin import _platform_actor, _public_catalog
@@ -40,6 +41,7 @@ def create_commercial_release_router(
     checkout_processing_configured: bool = False,
     delivery_readiness: CommercialDeliveryPathReadiness | None = None,
     operational_readiness: Callable[[], bool] | None = None,
+    runtime_metrics: MetricsRegistry | None = None,
 ) -> APIRouter:
     router = APIRouter(tags=["commercial-release"])
     resolved_delivery_readiness = delivery_readiness or CommercialDeliveryPathReadiness()
@@ -98,6 +100,15 @@ def create_commercial_release_router(
             delivery=resolved_delivery_readiness,
             operational_readiness=operational_readiness,
         )
+        # This observes offer readiness, not a completed purchase or activation.
+        if runtime_metrics is not None:
+            try:
+                runtime_metrics.increment(
+                    "nfcore_commercial_offer_observed_total",
+                    outcome="ready" if purchase_enabled else "blocked",
+                )
+            except Exception:
+                pass  # Observability must never gate canonical checkout policy.
         checkout_payload = checkout_projection.to_public_mapping(
             processing_configured=processing_configured,
             expose_urls=purchase_enabled,
