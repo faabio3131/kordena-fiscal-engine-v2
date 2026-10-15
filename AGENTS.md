@@ -134,3 +134,10 @@ A inspeção do código CURRENT na PR #188 confirmou que as autoridades abaixo *
 - Docker API inicia `runtime.api`, que monta `web.app` com dependências opcionais; Portal usa `portal/app.js`; Worker inicia `runtime.worker_main` com registry/identidade GSM governada. Não assumir que menu visível equivale a rota/dado disponível.
 - Foram catalogadas superfícies, contratos, RBAC, unidades, operações fiscais e condições de billing e checkout. **Inspeção estática, não certificação de staging.**
 - Prioridade da retomada: confrontar bootstrap/health/readiness e a revisão efetivamente publicada na Railway com a matriz; corrigir somente wiring, contratos e permissões comprovadamente deficientes. PR #188 permanece Draft, T02 em andamento, sem merge/deploy/migrations autorizados.
+
+### Railway CURRENT audit read-only — 2026-10-15
+
+- Evidência detalhada em `docs/checkpoints/NFV1_RAILWAY_CURRENT_READONLY_AUDIT_2026-10-15.md`, PR #188 (Draft). Projeto Railway `FM NFCORE Staging`, ambiente interno `production`.
+- **BLOQUEIO CONFIRMADO:** API e Worker deployment `22a1fbf10e6a90704dcc2d63975cb29ed1373b26`, Portal deployment `f9b5b2c5b436045947159f1e76be9303f5a95d90`, enquanto `main` GitHub `4f7d520ef66831edb56d8d68c60ca24cc17b51f4`. Serviços online mas versões divergentes. Não afirmar Web operacional/compatível apenas por status online.
+- Variáveis GSM, DB, upstream e deploy revision têm nomes presentes; valores e funcionamento não foram validados. Sem prova de /health/ready, E2E real, autenticação, fiscal real, migrations ou provisionamento comercial.
+- Próxima ação: reconciliar gates do P05 e preparar deploy coordenado API/Portal/Worker no MESMO SHA, somente após autorização específica; não reconstruir funcionalidades existentes nem fazer deploy isolado. Nenhuma mudança Railway nesta auditoria.
