@@ -388,7 +388,7 @@ Antecipação P6 antes de P5 aprovada em 2026-10-09 (“Autorizado”), conforme
 
 ### 29. NFV1-P09-T02 — Métricas
 
-- [ ] **Estado:** pendente
+- [ ] **Estado:** em execução — PR #188 DRAFT; sem certificação/merge
 - **Objetivo:** executar exatamente a tarefa NFV1-P09-T02 do cronograma mestre, sem ampliar escopo.
 - **Depende de:** NFV1-P09-T01 concluído e certificado; mais as dependências formais do cronograma
 - **Entregar:** tudo que o cronograma exige para NFV1-P09-T02, mais os testes/evidências diretamente necessários.
@@ -397,7 +397,8 @@ Antecipação P6 antes de P5 aprovada em 2026-10-09 (“Autorizado”), conforme
 - **Verificação:** executar os testes aplicáveis definidos no cronograma/PR e, obrigatoriamente, `python3 scripts/check_nfcore_plan.py`.
 - **Riscos / não confirmado:** sem staging CURRENT, nenhum trace ou alerta operacional pode ser declarado ativo; evidência de integração interna/CI não substitui exporter/collector/ambiente real.
 - **Decisões do dono pendentes:** nenhuma no bootstrap; registrar aqui se surgir decisão que o executor não pode tomar.
-- **Prova:** PENDENTE
+- **Prova:** parcial: PR #188, branch `feat/nfv1-p09-t02-runtime-metrics`; cobertura interna HTTP, worker dispatch/outbox DB, oferta comercial observada e webhook provider, com testes no branch. CI/Governança do HEAD final PENDENTES; sem staging/collector reais. Lacunas: fulfillment, ativação efetiva, eventos de venda, reconciliação e rejeições fiscais exigem prova na autoridade canônica; não inferir de HTTP, prontidão da oferta ou mocks.
+- **Próxima ação:** resolver falhas de CI pela causa, concluir cobertura restante nas autoridades reais e executar `python3 scripts/check_nfcore_plan.py`; só depois certificar `[x]` e solicitar autorização para merge.
 
 ### 30. NFV1-P09-T03 — Alerts
 
