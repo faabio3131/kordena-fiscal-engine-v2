@@ -249,7 +249,8 @@ def _error_payload(error: HttpContractError) -> dict[str, str]:
 
 def _metric_http_method(method: str) -> str:
     """Bound metric cardinality; never expose arbitrary method or request fields."""
-    return method if method in {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"} else "OTHER"
+    allowed = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
+    return method if method in allowed else "OTHER"
 
 
 def create_app(
@@ -299,8 +300,14 @@ def create_app(
         except Exception:
             duration = timer.elapsed()
             try:
-                http_metrics.increment("nfcore_http_requests_total", method=_metric_http_method(request.method), status_class="5xx")
-                http_metrics.observe_seconds("nfcore_http_request", duration, method=_metric_http_method(request.method), status_class="5xx")
+                http_metrics.increment(
+                    "nfcore_http_requests_total",
+                    method=_metric_http_method(request.method), status_class="5xx",
+                )
+                http_metrics.observe_seconds(
+                    "nfcore_http_request", duration,
+                    method=_metric_http_method(request.method), status_class="5xx",
+                )
             except Exception:
                 pass  # Metrics cannot become an HTTP/fiscal execution authority.
             http_tracer.record(
@@ -309,10 +316,19 @@ def create_app(
             )
             raise
         duration = timer.elapsed()
-        status_class = f"{response.status_code // 100}xx" if 100 <= response.status_code <= 599 else "other"
+        status_class = (
+            f"{response.status_code // 100}xx"
+            if 100 <= response.status_code <= 599 else "other"
+        )
         try:
-            http_metrics.increment("nfcore_http_requests_total", method=_metric_http_method(request.method), status_class=status_class)
-            http_metrics.observe_seconds("nfcore_http_request", duration, method=_metric_http_method(request.method), status_class=status_class)
+            http_metrics.increment(
+                "nfcore_http_requests_total",
+                method=_metric_http_method(request.method), status_class=status_class,
+            )
+            http_metrics.observe_seconds(
+                "nfcore_http_request", duration,
+                method=_metric_http_method(request.method), status_class=status_class,
+            )
         except Exception:
             pass  # No telemetry failure may change the canonical HTTP response.
         http_tracer.record(
