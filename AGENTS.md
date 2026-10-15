@@ -120,3 +120,10 @@ A inspeção do código CURRENT na PR #188 confirmou que as autoridades abaixo *
 - **Rejeições fiscais:** pendente rastrear e provar o ponto de decisão canônico de rejeição por provedor, distinguindo erro de transporte, rejeição de negócio e indisponibilidade. Não contar qualquer erro HTTP/webhook como rejeição fiscal.
 
 **Estado:** mapa de reuso confirmado no código; conexões runtime, cobertura de testes da telemetria comercial e CI no HEAD final ainda PENDENTES. P09-T02 permanece EM EXECUÇÃO, PR #188 Draft. Não implementar nova regra de fulfillment/ativação/reconciliação; apenas adapters seguros e testes após inspeção de composição e persistência.
+
+### Reconciliação Web vs. código — ponto de continuidade (2026-10-15)
+
+- Auditoria persistida em `docs/checkpoints/NFV1_WEB_PARITY_RECONCILIATION_CURRENT_2026-10-15.md` na PR #188. `main` auditada: `4f7d520ef66831edb56d8d68c60ca24cc17b51f4`.
+- Constatado: menu `portal/app.js`, executor `web/portal_runtime.py`, rotas condicionais `web/app.py` e domínios comerciais/fiscais já existem. **Não reconstruir por padrão**; verificar composição real da API/Worker/Portal, RBAC/tenant e publicação Web na mesma revisão.
+- Paridade Web em staging permanece NÃO COMPROVADA; a auditoria do código não autoriza declarar produto pronto ou fazer deploy. PR #188 permanece DRAFT, P09-T02 em execução.
+- Próxima ação: mapear wiring runtime e comparar superfícies código→API→Web→E2E→staging; corrigir somente gaps comprovados. Preservar gates e autorização humana para merge/deploy.
