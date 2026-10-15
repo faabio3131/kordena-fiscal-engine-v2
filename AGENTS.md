@@ -97,3 +97,11 @@ Parar e solicitar autorização específica antes de:
 ### Regra de continuidade
 
 Ao retomar o projeto, nunca continue apenas do chat. Reabra o cronograma, o ledger e o último checkpoint persistente; depois reconfirme GitHub/CI/runtime e execute exatamente a próxima tarefa permitida.
+
+### Auditoria obrigatória de paridade de construção Web — 2026-10-15
+
+- Revisão publicada e auditada: `main=4f7d520ef66831edb56d8d68c60ca24cc17b51f4`, deploys API/Portal/Worker Railway SUCCESS no mesmo SHA. Relatório: `docs/checkpoints/NFV1_FULL_WEB_CODE_RUNTIME_PARITY_2026-10-15.md`.
+- CONSULTA REAL `/runtime/profile`: `fiscal_operation_handlers_configured=[]`; ingressos comerciais (acquisition/trial/Cakto/Command) desconfigurados; checkout sem provider e processamento, catálogo não publicado e release indisponível. API/Portal/DB/fulfillment/provisioning/activation compostos. Não confundir serviço construído com fluxo Web funcional.
+- PRIORIDADE: confrontar plano completo P02/P03/P04/P12 com bootstrap autenticado e E2E; depois completar *wiring*, não reconstruir motor/Portal. Criar simulação exclusivamente de desenvolvimento, sem rotular como integração fiscal oficial.
+- Separar construção e testes internos de homologação externa futura. O projeto atual está em construção; homologação externa não deve impedir implementação, testes ou demonstração interna. Não inventar certificação de jornada não executada.
+- Nenhuma autorização para merge, mudanças de secrets, migrations, transações ou deploy adicionais foi presumida nesta auditoria. PR #188 métricas é paralela, permanece Draft e não foi incorporada na `main`.
