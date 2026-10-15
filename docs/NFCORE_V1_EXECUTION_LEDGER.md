@@ -808,3 +808,26 @@ Ao concluir o plano, registrar: entregas por tarefa; PRs e commits de merge; CI 
 3. O campo **Prova** de tarefa concluída deve conter PR + CI + commit/SHA.
 4. Nenhuma tarefa posterior pode ser concluída enquanto existir anterior não concluída.
 5. Se o cronograma ganhar, remover ou reordenar um ID, este ledger deve ser atualizado na mesma mudança; caso contrário o CI falha.
+
+
+## Reconciliação CURRENT — 2026-10-14/15 (em revisão, não certificação automática)
+
+**Base GitHub conferida:** `main` no merge da PR #185, commit `22a1fbf10e6a90704dcc2d63975cb29ed1373b26`; PRs #176–#185 foram consultadas na retomada, PR #182 continua OPEN/DRAFT (UX da senha no portal). A PR #185 está MERGED. A divergência deste ledger em relação às operações posteriores não deve causar repetição das fases P00–P04 e P06 já marcadas concluídas.
+
+**Estado real Railway, projeto FM NFCORE Staging:** ambiente nomeado `production` na Railway, **mas é staging lógico** (`NFCORE_ENVIRONMENT=staging`), não produção fiscal. Consulta ao estado das réplicas em 2026-10-14/15: `nfcore-api` 1/1 running, deploy `518b5ca0-834b-46ed-98ed-aefcbc4481d0` SUCCESS; `nfcore-worker` 1/1 running, deploy `71a196db-2f4e-4048-bdfd-e2deefb051be` SUCCESS; ambos com fonte `22a1fbf10e6a90704dcc2d63975cb29ed1373b26`. `nfcore-portal` e PostgreSQL também 1/1 running. API logou `Application startup complete`. Nenhuma alteração pendente na Railway após deploy.
+
+**GSM/Worker:** o usuário substituiu deliberadamente o valor sealed de `NFCORE_WORKER_GSM_CREDENTIAL_JSON` após relatar duas/três tentativas de colagem prévias. A nova variável foi confirmada presente e SEALED na Railway; em seguida restaurou-se `NFCORE_WORKER_GSM_MODE=scoped-staging-sa-v1` e implantou-se o commit corrigido da PR #185. O Worker passou a 1/1. **Hipótese**, não fato: o JSON anterior estava malformado/concatenado; seu conteúdo antigo não pôde ser verificado. **Causas observadas** de falhas anteriores: modo contínuo sem handler GSM ativo; diferença no nome de versão entre identificador textual e número de projeto Google, tratada com allowlist fixa pela PR #185. A mera inicialização 1/1 **não certifica assinatura/verificação E2E**.
+
+**Persistência:** migration 17 `external_secret_bindings` já aplicada em staging (registro SQL obtido anteriormente em 2026-10-13, 17:47 UTC); Worker signing binding ativo revisão 2 / versão cloud 3; API verification binding ativo revisão 2 / versão cloud 2. Não repetir migration nem recriar chaves sem evidência e aprovação específica.
+
+**Reclassificação sem alteração indevida das checkboxes:**
+- `NFV1-P09-T01` é a primeira tarefa **formalmente aberta** no ledger. Ainda não está certificada: auditar se já existe implementação cumulativa em commits posteriores antes de alterar código.
+- `NFV1-P05-T01`: o rótulo antigo `bloqueado externo` é **histórico desatualizado**, não representa indisponibilidade atual de API/Worker nem falta de GSM provisionado. Reavaliar seus critérios de pré-deploy; não afirmar que T01–T05 estão 100% concluídas só porque os serviços iniciaram.
+- `NFV1-P05-T02`: há prova **parcial de deploy reconciliado** (API/Worker mesmo SHA e 1/1); o critério integral de T02 requer comparação com o cronograma e suas demais evidências.
+- `NFV1-P05-T03`/T04/T05: processo 1/1 não substitui smoke, teste E2E interno ou rehearsal, quando tecnicamente aplicáveis.
+- `NFV1-P10-T01..T04`: validação com contabilidade parceira e homologação fiscal oficial pertencem a uma **etapa externa posterior à construção, operação Web e testes internos**. Não usar ausência dessa homologação externa futura para interromper a construção de P05/P07/P08/P09/P11 e tarefas internas de P12. Preservar requisitos legais: simulação não é homologação oficial, e ativação fiscal real exige prova e autorização humana.
+- `NFV1-P07/P08/P09/P11/P12`: estados documentais históricos não equivalem a auditoria integral do código; checar CURRENT antes de executar blocos. Não avançar automaticamente nem marcar [x] sem PR, CI, SHA e aceite.
+
+**Fonte operacional de diagnóstico:** GitHub Issue #181, comentário https://github.com/faabio3131/kordena-fiscal-engine-v2/issues/181#issuecomment-6181762910. **Próxima ação permitida após integrar esta reconciliação:** auditoria dirigida `NFV1-P09-T01` (primeiro item aberto), confrontando tracing já existente com aceite do cronograma; se já comprovado, fechar com prova; caso contrário, implementar apenas a lacuna. Corrigir P05 com as evidências reais sem iniciar novo ciclo de provisionamento ou homologação externa.
+
+**Disciplina reforçada:** todo bloco encerrado deve atualizar cronograma/ledger/checkpoint na própria PR de fechamento, registrando branch, HEAD, PR, CI, ambiente e testes; não deixar a atualização apenas em comentário de issue ou chat. Esta reconciliação **não muda checkboxes, contagem 27/59 ou ordem de execução**, pois evidências de runtime não satisfazem automaticamente todos os critérios formais de cada tarefa.
