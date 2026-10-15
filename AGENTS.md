@@ -127,3 +127,10 @@ A inspeção do código CURRENT na PR #188 confirmou que as autoridades abaixo *
 - Constatado: menu `portal/app.js`, executor `web/portal_runtime.py`, rotas condicionais `web/app.py` e domínios comerciais/fiscais já existem. **Não reconstruir por padrão**; verificar composição real da API/Worker/Portal, RBAC/tenant e publicação Web na mesma revisão.
 - Paridade Web em staging permanece NÃO COMPROVADA; a auditoria do código não autoriza declarar produto pronto ou fazer deploy. PR #188 permanece DRAFT, P09-T02 em execução.
 - Próxima ação: mapear wiring runtime e comparar superfícies código→API→Web→E2E→staging; corrigir somente gaps comprovados. Preservar gates e autorização humana para merge/deploy.
+
+### Matriz operacional API/Portal/Worker — 2026-10-15
+
+- Auditoria estática do CURRENT `main=4f7d520ef66831edb56d8d68c60ca24cc17b51f4` documentada em `docs/checkpoints/NFV1_WEB_RUNTIME_WIRING_MATRIX_2026-10-15.md` na PR #188.
+- Docker API inicia `runtime.api`, que monta `web.app` com dependências opcionais; Portal usa `portal/app.js`; Worker inicia `runtime.worker_main` com registry/identidade GSM governada. Não assumir que menu visível equivale a rota/dado disponível.
+- Foram catalogadas superfícies, contratos, RBAC, unidades, operações fiscais e condições de billing e checkout. **Inspeção estática, não certificação de staging.**
+- Prioridade da retomada: confrontar bootstrap/health/readiness e a revisão efetivamente publicada na Railway com a matriz; corrigir somente wiring, contratos e permissões comprovadamente deficientes. PR #188 permanece Draft, T02 em andamento, sem merge/deploy/migrations autorizados.
