@@ -97,3 +97,14 @@ Parar e solicitar autorização específica antes de:
 ### Regra de continuidade
 
 Ao retomar o projeto, nunca continue apenas do chat. Reabra o cronograma, o ledger e o último checkpoint persistente; depois reconfirme GitHub/CI/runtime e execute exatamente a próxima tarefa permitida.
+
+
+### Checkpoint ativo — NFV1-P09-T02 (2026-10-15)
+
+- CURRENT auditado: `main=4f7d520ef66831edb56d8d68c60ca24cc17b51f4`; P09-T01 PR #187 MERGED, CI pós-merge #38744017770 SUCCESS e governança #38744017835 SUCCESS.
+- Tarefa em execução: `NFV1-P09-T02 — Métricas`; PR [#188](https://github.com/faabio3131/kordena-fiscal-engine-v2/pull/188), branch `feat/nfv1-p09-t02-runtime-metrics`, **DRAFT / NÃO MERGEADA**.
+- Implementações sob revisão: métricas HTTP por método e classe de status, latência; métricas de despacho do Worker e snapshots outbox/PostgreSQL, usando somente `MetricsRegistry` canônico. Falhas de telemetria não podem alterar resposta ou execução fiscal.
+- Gates CURRENT devem ser consultados pelo HEAD da PR no GitHub; CI verde em commit anterior não certifica HEAD novo.
+- **PENDENTE / NÃO CERTIFICADO:** eventos comerciais, fulfillment, ativação, reconciliação, rejeições fiscais e falhas de provedores somente onde houver fronteiras canônicas reais. Não usar contagem de HTTP nem mocks como prova de operação comercial ou homologação fiscal.
+- Ao retomar: reconfirmar branch/HEAD/PR/CI; conferir Ruff/Mypy/Pytest/testes E2E e `python3 scripts/check_nfcore_plan.py`; conciliar ledger e provas. Somente marcar `[x]` após gates completos no HEAD correto. P09-T03 depende do fechamento de T02.
+- Restrições preservadas: sem merge não autorizado, sem deploy, migrations produtivas, DNS, segredos ou ativação fiscal real. O ledger e cronograma permanecem fontes de estado e escopo; este checkpoint não os substitui.
