@@ -19,10 +19,23 @@ def test_http_metrics_count_latency_and_status_without_identifiers() -> None:
     assert response.status_code == 200
     assert missing.status_code == 404
     samples = metrics.as_dicts()
-    assert any(s["name"] == "nfcore_http_requests_total" and s["labels"] == {"method": "GET", "status_class": "2xx"} and s["value"] == 1 for s in samples)
-    assert any(s["name"] == "nfcore_http_requests_total" and s["labels"] == {"method": "GET", "status_class": "4xx"} and s["value"] == 1 for s in samples)
-    assert any(s["name"] == "nfcore_http_request_count" and s["value"] == 1 for s in samples)
-    assert all(s["value"] >= 0 for s in samples)
+    assert any(
+        item["name"] == "nfcore_http_requests_total"
+        and item["labels"] == {"method": "GET", "status_class": "2xx"}
+        and item["value"] == 1
+        for item in samples
+    )
+    assert any(
+        item["name"] == "nfcore_http_requests_total"
+        and item["labels"] == {"method": "GET", "status_class": "4xx"}
+        and item["value"] == 1
+        for item in samples
+    )
+    assert any(
+        item["name"] == "nfcore_http_request_count" and item["value"] == 1
+        for item in samples
+    )
+    assert all(item["value"] >= 0 for item in samples)
     assert "private" not in str(samples)
     assert "token" not in str(samples)
 
