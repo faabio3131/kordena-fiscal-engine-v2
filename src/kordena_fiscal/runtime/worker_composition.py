@@ -66,9 +66,19 @@ def _new_trace_context(
 class _TracedOutboxHandler:
     """Observe canonical dispatch without interpreting scope, payload or fiscal outcomes."""
 
-    def __init__(self, delegate: FiscalOutboxHandler, tracer: SafeTracer) -> None:
+    def __init__(
+        self, delegate: FiscalOutboxHandler, tracer: SafeTracer, metrics: MetricsRegistry
+    ) -> None:
         self._delegate = delegate
         self._tracer = tracer
+        self._metrics = metrics
+
+    def _metric(self, seconds: float, outcome: str) -> None:
+        try:
+            self._metrics.increment("nfcore_dispatch_total", outcome=outcome)
+            self._metrics.observe_seconds("nfcore_dispatch", seconds, outcome=outcome)
+        except Exception:
+            pass  # Never grant metrics authority over fiscal dispatch.
 
     def dispatch(self, entry: FiscalOutboxEntry) -> FiscalDispatchResult:
         timer = RequestTimer()
@@ -79,6 +89,7 @@ class _TracedOutboxHandler:
         try:
             result = self._delegate.dispatch(entry)
         except Exception:
+            self._metric(timer.elapsed(), "error")
             self._tracer.record(
                 operation="worker.dispatch", context=context, started_at=started,
                 elapsed_seconds=timer.elapsed(), outcome="error",
@@ -87,6 +98,8 @@ class _TracedOutboxHandler:
         # Do not validate the domain result in the tracing adapter; the canonical
         # outbox worker remains the only authority for invalid handler responses.
         outcome = result.status.value if isinstance(result, FiscalDispatchResult) else "invalid"
+        metric_outcome = outcome if outcome in {"succeeded", "retry_wait", "dead_letter"} else "other"
+        self._metric(timer.elapsed(), metric_outcome)
         self._tracer.record(
             operation="worker.dispatch", context=context, started_at=started,
             elapsed_seconds=timer.elapsed(), outcome=outcome,
@@ -275,12 +288,12 @@ def build_production_worker_runtime(
     runtime_tracer = tracer if tracer is not None else SafeTracer(
         StructuredLogTraceSink(StructuredLogger(service="nfcore-worker", environment=environment))
     )
+    metrics = MetricsRegistry()
     traced_handlers = {
-        operation: _TracedOutboxHandler(handler, runtime_tracer)
+        operation: _TracedOutboxHandler(handler, runtime_tracer, metrics)
         for operation, handler in handlers.items()
     }
     routed = RoutedOutboxHandler(traced_handlers)
-    metrics = MetricsRegistry()
 
     def queue_counts() -> Mapping[FiscalOutboxStatus, int]:
         timer = RequestTimer()
