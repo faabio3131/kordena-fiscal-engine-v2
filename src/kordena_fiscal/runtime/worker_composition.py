@@ -142,9 +142,24 @@ class _TracingWorkerObserver:
 class _TracedWebhookTransport:
     """Trace the actual signed transport port, never URL/body/signature/headers."""
 
-    def __init__(self, delegate: WebhookTransport, tracer: SafeTracer) -> None:
+    def __init__(
+        self, delegate: WebhookTransport, tracer: SafeTracer,
+        metrics: MetricsRegistry | None = None,
+    ) -> None:
         self._delegate = delegate
         self._tracer = tracer
+        self._metrics = metrics
+
+    def _metric(self, seconds: float, outcome: str) -> None:
+        if self._metrics is None:
+            return
+        try:
+            self._metrics.increment("nfcore_webhook_delivery_total", outcome=outcome)
+            self._metrics.observe_seconds(
+                "nfcore_webhook_delivery", seconds, outcome=outcome
+            )
+        except Exception:
+            pass  # Never change the signed transport's canonical result.
 
     def deliver(self, request: WebhookDeliveryRequest) -> WebhookDeliveryResponse:
         timer = RequestTimer()
@@ -156,6 +171,7 @@ class _TracedWebhookTransport:
         try:
             response = self._delegate.deliver(request)
         except Exception:
+            self._metric(timer.elapsed(), "error")
             self._tracer.record(
                 operation="external.webhook", context=context, started_at=started,
                 elapsed_seconds=timer.elapsed(), outcome="error",
@@ -164,6 +180,10 @@ class _TracedWebhookTransport:
         # The signed delivery handler validates response types. Tracing must not
         # replace that validation with AttributeError or reinterpret the result.
         status = response.status_code if isinstance(response, WebhookDeliveryResponse) else None
+        self._metric(
+            timer.elapsed(),
+            "ok" if status is not None and 200 <= status <= 299 else "error",
+        )
         self._tracer.record(
             operation="external.webhook", context=context, started_at=started,
             elapsed_seconds=timer.elapsed(),
@@ -366,6 +386,7 @@ def build_customer_webhook_handler(
     security: WebhookSecurity,
     destination_id: str,
     tracer: SafeTracer | None = None,
+    metrics: MetricsRegistry | None = None,
 ) -> SignedWebhookOutboxHandler:
     """Compose the approved adapter without activating any worker operation/deploy."""
     from kordena_fiscal.application.webhook_delivery import SignedWebhookOutboxHandler
@@ -385,5 +406,6 @@ def build_customer_webhook_handler(
                     StructuredLogger(service="nfcore-worker", environment="unspecified")
                 )
             ),
+            metrics=metrics,
         ),
     )
