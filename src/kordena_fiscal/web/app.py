@@ -393,6 +393,7 @@ def create_app(
                     ),
                     delivery_readiness=commercial_delivery_readiness,
                     operational_readiness=commercial_operational_readiness,
+                    runtime_metrics=http_metrics,
                 )
             )
     if password_recovery is not None:
