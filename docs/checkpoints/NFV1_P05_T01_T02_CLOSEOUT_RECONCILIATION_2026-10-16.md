@@ -38,3 +38,13 @@ Leitura Railway do projeto `b84b290d-f3b4-46a1-9023-0b761cb96b0d`, ambiente `c98
 - Estão fora deste fechamento: T03 smoke completo, T04 E2E autenticado, T05 rollback real; não marcar essas tarefas [x] por status SUCCESS.
 
 **Regra de continuidade:** `P05_WORKER_RECOVERED = TRUE`, `P05_T02_DEPLOY_SAME_SHA = VERIFIED`, `P05_T01_ALL_GATES = NOT_YET_PROVEN`, `P05_T01_T02_CHECKBOX = NOT_PROMOTED`. Estes campos são classificação de evidência, não novos estados oficiais do validador.
+
+## Verificação read-only adicional pós-merge #203 (2026-10-16)
+
+- **GitHub:** `main=95cd0a852aea001c7bde0a84e5e0c2b4ac111be6`; Plan Governance pós-merge #38844139092 **SUCCESS**; CI pós-merge #38844139096 **IN_PROGRESS** na última consulta. Não declarar a CI concluída antecipadamente.
+- **Railway API — configuração efetiva:** `deploy.preDeployCommand=[]`; risco histórico de segundo aplicador automático via pre-deploy **resolvido na configuração atual**. Nenhuma mudança staged. Fonte vinculada ao mesmo commit `2f368983...` dos demais serviços. Variáveis com nomes `NFCORE_API_GSM_*`, `NFCORE_SECRET_BACKEND` e `DATABASE_URL` presentes; **a presença não comprova valor nem leitura de segredo**.
+- **Railway Worker — configuração efetiva:** fonte SHA idêntico, `NFCORE_WORKER_GSM_*` e `DATABASE_URL` presentes; `restartPolicyType=NEVER`; sem mudanças staged. `environment_status` confirma Worker ONLINE 1/1, API/Portal/Postgres ONLINE 1/1, sem incidentes ativos no intervalo observado.
+- **Runtime API:** logs mostram `Application startup complete` e respostas `GET /health/ready 200`; prova de readiness observada, não substitui SELECT de versões SQL nem E2E autenticado.
+- **Únicas lacunas T01 que esta leitura ainda não consegue autenticar:** `SELECT` read-only de versões exatas de `fm_schema_migrations` (1..17), `fm_cakto_schema_migrations` (1..2) e prova atual de baseline/backup com integridade e recuperabilidade conforme critérios, se exigida depois da migration. Não revelar dados, não repetir restauração histórica, não executar migration. Resultado `EVIDENCIA_INSUFICIENTE_PARA_CLOSEOUT_T01` até provas reais.
+
+**Não reiniciar serviços nem gerar novas credenciais.** Essas observações são adicionais ao fechamento técnico T02 já demonstrado; não são autorização para alterar `[ ]` no ledger.
