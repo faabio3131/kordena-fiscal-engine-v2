@@ -1286,3 +1286,7 @@ O dono autorizou integrar PR #151 e antecipar P6 antes de P5, respondendo “Aut
 | P05-T05 | Runbooks e capacidade rollback existentes | Ensaio controlado com evidência de preservação do estado, separadamente autorizado |
 
 **Próxima execução elegível:** alinhar publicação ao HEAD de main por rollout controlado após gates predeploy pertinentes; então testes autenticados T03 e E2E T04, sem repetir o smoke básico. Nenhum deploy/migration/produção fiscal foi realizado por este checkpoint. Registrar HEAD real, resultado e eventuais blockers antes de promover tarefas.
+
+
+### Verificação de rollout P05 — 17/10/2026 (delta SQL comercial)
+Em staging, SQL read-only comprovou `public.fm_schema_migrations` com 17 versões mas ausência da tabela `public.fm_cakto_schema_migrations`; o plano canônico considera Cakto não inicializado e exige migrations Cakto 1..2. Isto **não invalida** o restore histórico nem o smoke básico, porém impede classificar o schema comercial como pronto para um rollout integral até backup atual e autorização específica da migration pendente. Não invocar `run_staging_deploy.sh` sem esse gate, pois ele aplica schema. Não repetir migrations fiscais 1..17, T02 antiga ou T03 HTTP. Próximo passo: autorização de Cakto 1..2 após backup atual; então deploy controlado SHA `976ae4e` e jornada Web autenticada, sem produção fiscal. Evidência detalhada no ledger e Issue #181.
