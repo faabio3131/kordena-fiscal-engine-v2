@@ -1436,6 +1436,18 @@ async function bootstrap() {
   }
 }
 
+document.querySelectorAll("[data-password-target]").forEach((button) => {
+  button.addEventListener("click", () => {
+    const input = document.getElementById(button.dataset.passwordTarget);
+    if (!(input instanceof HTMLInputElement)) return;
+    const reveal = input.type === "password";
+    input.type = reveal ? "text" : "password";
+    button.setAttribute("aria-pressed", String(reveal));
+    button.setAttribute("aria-label", reveal ? "Ocultar senha" : "Mostrar senha");
+    button.textContent = reveal ? "🙈 Ocultar" : "👁 Mostrar";
+  });
+});
+
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   loginError.textContent = "";
