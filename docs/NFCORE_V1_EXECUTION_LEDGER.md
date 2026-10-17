@@ -841,3 +841,13 @@ Ao concluir o plano, registrar: entregas por tarefa; PRs e commits de merge; CI 
 **Fonte operacional de diagnóstico:** GitHub Issue #181, comentário https://github.com/faabio3131/kordena-fiscal-engine-v2/issues/181#issuecomment-6181762910. **Próxima ação permitida após integrar esta reconciliação:** auditoria dirigida `NFV1-P09-T01` (primeiro item aberto), confrontando tracing já existente com aceite do cronograma; se já comprovado, fechar com prova; caso contrário, implementar apenas a lacuna. Corrigir P05 com as evidências reais sem iniciar novo ciclo de provisionamento ou homologação externa.
 
 **Disciplina reforçada:** todo bloco encerrado deve atualizar cronograma/ledger/checkpoint na própria PR de fechamento, registrando branch, HEAD, PR, CI, ambiente e testes; não deixar a atualização apenas em comentário de issue ou chat. Esta reconciliação **não muda checkboxes, contagem 27/59 ou ordem de execução**, pois evidências de runtime não satisfazem automaticamente todos os critérios formais de cada tarefa.
+
+
+### Reconciliação P05-T01/T02/T03 — 2026-10-17, sem avanço artificial de checkbox
+
+- Fonte GitHub CURRENT consultada: `main=976ae4e223accd603af710d083b18ca47b95b614`, CI `38973387442` SUCCESS, Governança `38973387223` SUCCESS. Comprovado no staging: API, Portal, Worker e PostgreSQL online (1/1). Nenhuma alteração de banco/deploy nesta reconciliação.
+- **P05-T01 — execução já demonstrada:** backup lógico criptografado + restore real PG18 em ambiente isolado (34 tabelas/exit 0, 12/10); SQL read-only posterior confirmou migration versions 1..17 únicas. Não repetir esses testes por inércia; distinguir evidência de restauro histórico de proteção do novo estado antes de nova alteração.
+- **P05-T02 — aceita anteriormente quanto à paridade:** três serviços no mesmo commit `2f368983` (checkpoint 16/10). Versões publicadas atualmente divergentes: API/Worker `e4ffd584`, Portal `2f368983` vs `main=976ae4e`; isso é delta de sincronização, não prova de ausência de T02 histórica.
+- **P05-T03 — somente smoke básico comprovado:** endpoints HTTP de vida/prontidão/perfil e Portal PASS. O cronograma exige também login, recovery, portal bootstrap e onboarding; falta evidência de testes autenticados completos, que serão a próxima frente funcional após paridade da revisão.
+- **P05-T04:** E2E real permanece não certificado integralmente. **P05-T05:** rollback rehearsal pendente separadamente.
+- Este registro NÃO altera os 59 IDs, nem inventa conclusão T01/T03/T04, nem transfere code CI para homologação real. Próximo gate: rollout staging governado para o mesmo HEAD aprovado (sem migrations desnecessárias) e execuções funcionais autenticadas faltantes. Atualizar ledger/cronograma/AGENTS e gates em toda etapa efetivamente encerrada.
