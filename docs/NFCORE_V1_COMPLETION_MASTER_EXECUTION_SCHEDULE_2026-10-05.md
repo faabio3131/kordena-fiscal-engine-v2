@@ -1271,3 +1271,18 @@ O dono autorizou integrar PR #151 e antecipar P6 antes de P5, respondendo “Aut
 **Decisão do proprietário:** estabelecer dois marcos não intercambiáveis. Marco A: desenvolvimento, testes internos, segurança, operação estável e produto acessível na Web. Marco B: validação com contabilidade parceira e homologações oficiais exigidas, somente quando o produto estiver preparado e disponível. A falta de acesso futuro a parceiros/autoridades **não paralisa construção interna**; também não permite declarar autorização fiscal real, homologação oficial ou liberação comercial regulada sem prova. Dependências internas de segurança e testes técnicos continuam mandatórias. Qualquer alteração formal da ordem/critério das tarefas P10/P11/P12 requer revisão governada do cronograma e ledger na mesma PR, e não será inferida silenciosamente deste registro.
 
 **Regra anti-retrabalho:** primeira tarefa aberta documental segue `NFV1-P09-T01 — Tracing`; antes de codificar, comparar o aceite com implementações existentes na `main`. P05 tem recuperação operacional comprovada, mas seus critérios completos por tarefa devem ser reconciliados separadamente; não confundir réplicas 1/1 com smoke, E2E ou ensaio de rollback. Os 59 IDs, sua ordem e estados [x] foram preservados nesta atualização. Fechar cada nova tarefa com provas persistidas em PR, CI, SHA e ambiente, sem depender do histórico do chat.
+
+
+## Checkpoint P05 de continuidade — 17/10/2026 (sem reexecutar gates certificados)
+
+**Referência CURRENT da auditoria:** main `976ae4e223accd603af710d083b18ca47b95b614`, CI `38973387442` e governança `38973387223` SUCCESS; Railway staging API/Worker/Portal/Postgres 1/1. Este registro distingue evidência histórica de CURRENT, não altera os 59 IDs nem promove checkboxes sem aceites integrais.
+
+| Tarefa | EVIDÊNCIA JÁ CERTIFICADA / EXECUTADA | DELTA REAL PARA O GATE |
+| --- | --- | --- |
+| P05-T01 | Backup `pg_dump` age, restore PG18 isolado de 34 tabelas (exit 0) em 12/10; SSH corrigido; SQL read-only em 17/10 confirma migrations 1..17, sem duplicidades | Reconciliar apenas proteção/recuperabilidade do estado após alterações posteriores, se exigido pelo preflight do novo rollout; **não repetir restore nem migrations** |
+| P05-T02 | API, Portal e Worker em mesmo SHA `2f368983` comprovados no checkpoint 16/10 | Divergência CURRENT: API/Worker `e4ffd584`, Portal `2f368983`, enquanto main `976ae4e`; reconciliar deploy único governado, preservando baseline e sem nova infraestrutura |
+| P05-T03 | Smoke básico HTTP LIVE/READY/PROFILE e Portal PASS em staging; Worker/Postgres online | Escopo do cronograma também inclui login, recovery, portal bootstrap e onboarding autenticados. Não confundir com health checks; executar **somente delta funcional ainda não comprovado**, na revisão reconciliada |
+| P05-T04 | Testes de código/CI existentes não equivalem a E2E do cliente em staging | Validar login, unidade, configuração, RBAC/tenant, jornadas comerciais/fiscais controladas e recuperação no staging da revisão alvo |
+| P05-T05 | Runbooks e capacidade rollback existentes | Ensaio controlado com evidência de preservação do estado, separadamente autorizado |
+
+**Próxima execução elegível:** alinhar publicação ao HEAD de main por rollout controlado após gates predeploy pertinentes; então testes autenticados T03 e E2E T04, sem repetir o smoke básico. Nenhum deploy/migration/produção fiscal foi realizado por este checkpoint. Registrar HEAD real, resultado e eventuais blockers antes de promover tarefas.
