@@ -141,3 +141,12 @@ Ao retomar o projeto, nunca continue apenas do chat. Reabra o cronograma, o ledg
 6. P09-T01/T02 e P05 são gates separados: tracing/métricas em código não homologam staging; deployment SUCCESS não comprova jornada do cliente. A prioridade comercial Web não autoriza deploy, migration, segredo real ou fiscal real.
 7. Fechar cada PR com HEAD, gates PR e pós-merge, alterações, blockers e **próxima tarefa permitida** no repositório. A análise apenas no chat não vale como continuidade.
 8. Executar `python3 scripts/check_nfcore_plan.py` e CI. **O validador verifica estrutura; não autentica GitHub ou Railway**. Os dois níveis de prova são obrigatórios.
+
+
+## NFV1-P05 — retomada antirretrabalho 2026-10-17 (registro de escopo, não certificação nova)
+- GitHub `main=976ae4e223accd603af710d083b18ca47b95b614`, CI pós-merge `38973387442` SUCCESS e governança `38973387223` SUCCESS; PR #204 continua documental e sem merge na última consulta.
+- **T01:** prova anterior de `pg_dump` criptografado e restore PG18 isolado (34 tabelas, exit 0) preservada; SQL staging read-only em 17/10 confirmou `fm_schema_migrations` 1..17 (17 únicas) e SSH desbloqueado. Não repetir backup/restore/SSH nem migrations por rotina. Evidência contemporânea de proteção do estado após migrações permanece distinta da certificação histórica do restore.
+- **T02:** histórico certificado dos três serviços no mesmo SHA `2f368983`; CURRENT Railway em 17/10: API/Worker `e4ffd584`, Portal `2f368983`, todos 1/1; `main=976ae4e`. É drift posterior, não ausência de implantação anterior. Nenhum novo deploy nesta reconciliação.
+- **T03:** smoke HTTP básico PASS (`/health/live`, `/health/ready`, `/runtime/profile`, Portal `/`, perfil staging/Postgres/external/HTTPS); o cronograma exige adicionalmente login, recovery, bootstrap, onboarding, Worker e DB, sem prova consolidada de jornada autenticada. Não repetir endpoints verdes, não certificar T03 inteira por smoke básico.
+- **Próxima tarefa operacional:** preparar paridade de SHA governada no staging para testar jornadas autenticadas T03 e E2E T04 (login, unidade, configuração, RBAC, isolamento, recuperação, comercial/fiscal controlados). Reaproveitar testes existentes; nenhuma produção fiscal, migration ou deploy é autorizada por este registro. Não iniciar T05 antes de baseline adequado; não transformar CI ou healthcheck em homologação cliente.
+- Atualização de cronograma e ledger/documento ocorre por commit e CI, mantendo classificações explícitas e sem alterar checkboxes por presunção.
