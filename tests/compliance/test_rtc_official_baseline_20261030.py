@@ -60,3 +60,17 @@ def test_rtc_reference_baseline_never_implicitly_approves_fiscal_production() ->
     assert manifest["status"] != "PRODUCTION_APPROVED"
     assert "provider homologation" in manifest["excluded_until_verified"]
     assert "production rates and fiscal formulas" in manifest["excluded_until_verified"]
+
+
+def test_rtc_reference_manifest_cannot_be_used_as_authoritative_calculation_pin() -> None:
+    """A published NT listing does not supply verified bytes, XSD or fiscal rules."""
+    manifest = loads(_MANIFEST.read_text(encoding="utf-8"))
+    note = next(
+        item for item in manifest["artifacts"] if item["artifact_id"] == "NT-2025.002"
+    )
+    assert note["source_reference"] == "https://dfe-portal.svrs.rs.gov.br/NFe/Documentos"
+    assert "sha256" not in note
+    assert "effective_from" not in note
+    assert "full official XML XSD bundle checksums" in manifest["excluded_until_verified"]
+    assert "production rates and fiscal formulas" in manifest["excluded_until_verified"]
+    assert not any(item["kind"] == "rate_table" for item in manifest["artifacts"])
