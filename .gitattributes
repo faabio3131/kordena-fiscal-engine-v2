@@ -1,0 +1,5 @@
+# Preserve exact official artifact bytes across Windows/Linux checkouts.
+src/kordena_fiscal/xml/official/PL_010g_v1.03/*.xsd -text
+src/kordena_fiscal/xml/official/PL_010g_v1.03/manifest.json -text
+
+src/kordena_fiscal/xml/official/MG_LIFECYCLE_20261105/** -text

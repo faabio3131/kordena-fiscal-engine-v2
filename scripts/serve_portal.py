@@ -12,6 +12,7 @@ import threading
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from time import monotonic
 from urllib.parse import unquote, urlsplit
 
 _PORTAL_CSP = "; ".join(
@@ -59,9 +60,12 @@ _PROXY_RESPONSE_HEADERS = (
 # its own session. No fiscal mutation is retried if a pooled socket is stale.
 _POOL_LOCK = threading.Lock()
 _IDLE_UPSTREAM: dict[
-    tuple[str, str, int], queue.LifoQueue[http.client.HTTPConnection]
+    tuple[str, str, int], queue.LifoQueue[tuple[float, http.client.HTTPConnection]]
 ] = {}
 _IDLE_CAPACITY = 16
+# Keep this below the canonical API's 30s keep-alive timeout. Never replay a
+# request to hide a stale socket: retire idle connections before sending it.
+_MAX_UPSTREAM_IDLE_SECONDS = 10.0
 
 
 def _borrow_upstream(
@@ -71,12 +75,16 @@ def _borrow_upstream(
         idle = _IDLE_UPSTREAM.setdefault(
             origin, queue.LifoQueue(maxsize=_IDLE_CAPACITY)
         )
-    try:
-        return idle.get_nowait()
-    except queue.Empty:
-        scheme, host, port = origin
-        cls = http.client.HTTPSConnection if scheme == "https" else http.client.HTTPConnection
-        return cls(host, port, timeout=_PROXY_TIMEOUT_SECONDS)
+    while True:
+        try:
+            returned_at, connection = idle.get_nowait()
+        except queue.Empty:
+            scheme, host, port = origin
+            cls = http.client.HTTPSConnection if scheme == "https" else http.client.HTTPConnection
+            return cls(host, port, timeout=_PROXY_TIMEOUT_SECONDS)
+        if connection.sock is not None and monotonic() - returned_at < _MAX_UPSTREAM_IDLE_SECONDS:
+            return connection
+        connection.close()
 
 
 def _release_upstream(
@@ -93,7 +101,7 @@ def _release_upstream(
             origin, queue.LifoQueue(maxsize=_IDLE_CAPACITY)
         )
     try:
-        idle.put_nowait(connection)
+        idle.put_nowait((monotonic(), connection))
     except queue.Full:
         connection.close()
 

@@ -1,0 +1,32 @@
+{
+  "package_id": "PL_010g_v1.03",
+  "root_schema": "nfe_v4.00.xsd",
+  "source_url": "https://www.nfe.fazenda.gov.br/portal/exibirArquivo.aspx?conteudo=EQhOQMgipXY=",
+  "listing_url": "https://www.nfe.fazenda.gov.br/portal/listaConteudo.aspx?tipoConteudo=BMPFMBoln3w%3D",
+  "captured_date": "2026-11-05",
+  "archive_sha256": "b329ecbe7e4c05a41bfbc1527f105defb7047328acfeada7c77e1666da485eaf",
+  "archive_size_bytes": 49751,
+  "scope": "NFe subtree only; event schemas not promoted; no official homologation",
+  "resources": [
+    {
+      "name": "DFeTiposBasicos_v1.00.xsd",
+      "sha256": "2da0785a6c70db4f93571187a28514dde715cfd0b0f41e746176fbf3444549f2"
+    },
+    {
+      "name": "leiauteNFe_v4.00.xsd",
+      "sha256": "e8470f5d85ded3d99010676087907214aef71c9626140b672abbafa72656c0f5"
+    },
+    {
+      "name": "nfe_v4.00.xsd",
+      "sha256": "adce3646c13ceb54922ec3142fc1dc45bd4fb839ac35ad583e86c733c07d27df"
+    },
+    {
+      "name": "tiposBasico_v4.00.xsd",
+      "sha256": "772619c85723e598840667ca66e7298a250442df47eeb94b397d2a333ce62047"
+    },
+    {
+      "name": "xmldsig-core-schema_v1.01.xsd",
+      "sha256": "f56744a5f51c03f027de13f39f869307091781a9ef1d91b1ebe14719ce28e1ac"
+    }
+  ]
+}

@@ -176,7 +176,13 @@ class XmlSchemaValidator:
     def validate(self, payload: NfceXmlPayload) -> XmlValidationResult:
         if not isinstance(payload, NfceXmlPayload):
             raise FiscalValidationError("payload must be NfceXmlPayload")
-        document = _parse_xml_document(payload.xml)
+        return self.validate_document(payload.xml)
+
+    def validate_document(self, xml: bytes) -> XmlValidationResult:
+        """Validate protocol roots using the same pinned, no-network XSD compilation."""
+        if not isinstance(xml, bytes) or not xml or len(xml) > 2_097_152:
+            raise XmlSchemaValidationError("XML is empty or exceeds validation limit")
+        document = _parse_xml_document(xml)
         if not self._schema.validate(document):
             message = getattr(self._schema.error_log, "last_error", None)
             detail = message.message if message is not None else "unknown XSD validation error"
@@ -184,7 +190,7 @@ class XmlSchemaValidator:
         return XmlValidationResult(
             schema_version=self._schema_set.version,
             schema_package_sha256=self._schema_set.package_sha256,
-            xml_sha256=hashlib.sha256(payload.xml).hexdigest(),
+            xml_sha256=hashlib.sha256(xml).hexdigest(),
         )
 
 

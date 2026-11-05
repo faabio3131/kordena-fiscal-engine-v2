@@ -1,4 +1,4 @@
-"""Official SEFAZ-SP NF-e 4.00 homologation authorization over TLS/mTLS.
+"""Official SEFAZ NF-e 4.00 homologation authorization over TLS/mTLS.
 
 Operates only with an authorized, signed model-55 XML envelope and a
 scope-bound A1 identity. No synthetic responses or production endpoints.
@@ -10,16 +10,25 @@ import ssl
 import tempfile
 from collections.abc import Callable
 from datetime import UTC, datetime
+from email.message import Message
+from enum import StrEnum
 from pathlib import Path
+from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.request import HTTPSHandler, Request, build_opener
+from urllib.request import HTTPRedirectHandler, HTTPSHandler, Request, build_opener
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.serialization import pkcs12
 from lxml import etree
 
-from kordena_fiscal.domain import Cnpj, ExecutionScope, FiscalEnvironment, FiscalValidationError
-from kordena_fiscal.signing.nfe_xmldsig import sign_nfe_envi_xml
+from kordena_fiscal.domain import (
+    Cnpj,
+    ExecutionScope,
+    FiscalDocumentKind,
+    FiscalEnvironment,
+    FiscalValidationError,
+)
+from kordena_fiscal.signing.nfe_xmldsig import NfeSignatureProfile, sign_nfe_envi_xml
 from kordena_fiscal.vault import EphemeralCertificateMaterial
 from kordena_fiscal.vault.a1_preflight import validate_a1_for_issuer
 
@@ -123,10 +132,12 @@ def _authorized_nfe_proc(
 def _soap_envelope(invoice_batch: etree._Element) -> bytes:
     envelope = etree.Element(
         "{" + SOAP12_NAMESPACE + "}Envelope",
-        nsmap={"soap12": SOAP12_NAMESPACE},
+        nsmap={None: SOAP12_NAMESPACE},  # type: ignore[dict-item]
     )
     body = etree.SubElement(envelope, "{" + SOAP12_NAMESPACE + "}Body")
-    data = etree.SubElement(body, "{" + SERVICE_NAMESPACE + "}nfeDadosMsg")
+    data = etree.SubElement(
+        body, "{" + SERVICE_NAMESPACE + "}nfeDadosMsg", nsmap={None: SERVICE_NAMESPACE}  # type: ignore[dict-item]
+    )
     data.append(invoice_batch)
     return etree.tostring(envelope, encoding="utf-8", xml_declaration=True)
 
@@ -157,26 +168,92 @@ def _tls_context(material: EphemeralCertificateMaterial) -> ssl.SSLContext:
     return context
 
 
-class SefazSpHomologationGateway:
-    """Real NF-e 4.00 SOAP 1.2 authorization (official SP homologation only)."""
+class _RejectFiscalRedirects(HTTPRedirectHandler):
+    """Never forward an mTLS fiscal request to a redirected destination."""
+
+    def redirect_request(
+        self, req: Request, fp: Any, code: int, msg: str,
+        headers: Message, newurl: str,
+    ) -> None:
+        return None
+
+
+class HomologationAuthorizationTarget(StrEnum):
+    """Engineering configuration only; never an HTTP/provider binding authority."""
+
+    SP_NFE = "sp_nfe"
+    MG_NFE = "mg_nfe"
+
+
+def _validate_mg_authorization_scope(request: AuthorizationRequest) -> None:
+    """Reject cross-state/model/XML requests before accessing Vault or transport."""
+    if request.scope.environment is not FiscalEnvironment.HOMOLOGATION:
+        raise OfficialNfeTransportError("MG authorization requires tpAmb=2")
+    if request.access_key.value[:2] != "31" or request.access_key.value[20:22] != "55":
+        raise OfficialNfeTransportError("MG authorization requires MG model 55 key")
+    root = _parse_xml(request.signed_xml)
+    if root.find(".//{" + XMLDSIG_NAMESPACE + "}Signature") is not None:
+        raise OfficialNfeTransportError("MG requires unsigned XML for Vault-owned signing")
+    invoices = root.findall(f"{{{NFE_NAMESPACE}}}NFe")
+    if root.tag != f"{{{NFE_NAMESPACE}}}enviNFe" or root.get("versao") != "4.00":
+        raise OfficialNfeTransportError("MG authorization requires enviNFe 4.00")
+    if len(invoices) != 1:
+        raise OfficialNfeTransportError("MG authorization requires exactly one invoice")
+    info = invoices[0].find(f"{{{NFE_NAMESPACE}}}infNFe")
+    if info is None or info.get("Id") != "NFe" + request.access_key.value:
+        raise OfficialNfeTransportError("MG XML access key mismatch")
+    ide = info.find(f"{{{NFE_NAMESPACE}}}ide")
+    issuer = info.find(f"{{{NFE_NAMESPACE}}}emit")
+    if ide is None or issuer is None:
+        raise OfficialNfeTransportError("MG XML fiscal identity missing")
+    for field, expected in (("cUF", "31"), ("mod", "55"), ("tpAmb", "2")):
+        if ide.findtext(f"{{{NFE_NAMESPACE}}}{field}") != expected:
+            raise OfficialNfeTransportError("MG XML state/model/environment mismatch")
+    if issuer.findtext(f"{{{NFE_NAMESPACE}}}CNPJ") != request.access_key.issuer_identifier:
+        raise OfficialNfeTransportError("MG XML issuer mismatch")
+
+
+class SefazHomologationAuthorizationGateway:
+    """Shared SOAP authorization; explicit targets, no runtime auto-activation."""
 
     def __init__(
         self,
         *,
         resolve_certificate: Callable[[ExecutionScope, str], EphemeralCertificateMaterial],
+        target: HomologationAuthorizationTarget = HomologationAuthorizationTarget.SP_NFE,
+        validate_schema: Callable[[bytes], None] | None = None,
         timeout_seconds: float = 15.0,
         exchange: Callable[[bytes, ssl.SSLContext, float], bytes] | None = None,
     ) -> None:
         if not callable(resolve_certificate) or not 0 < timeout_seconds <= 60:
             raise ValueError("Invalid fiscal transport configuration")
+        if not isinstance(target, HomologationAuthorizationTarget):
+            raise ValueError("Unknown homologation authorization target")
+        if target is HomologationAuthorizationTarget.MG_NFE and not callable(validate_schema):
+            raise ValueError("MG authorization requires a trusted XSD validator")
+        self._target = target
+        self._validate_schema = validate_schema
+        self._endpoint = NFE_SP_HOMOLOGATION_AUTHORIZATION_URL
+        self._provider = _PROVIDER
+        if target is HomologationAuthorizationTarget.MG_NFE:
+            from kordena_fiscal.control_plane.commercial import ConfiguredFiscalOperation
+            from kordena_fiscal.control_plane.mg_official_homologation_catalog import (
+                mg_homologation_endpoint,
+            )
+
+            self._endpoint = mg_homologation_endpoint(
+                document_kind=FiscalDocumentKind.NFE,
+                environment=FiscalEnvironment.HOMOLOGATION,
+                operation=ConfiguredFiscalOperation.AUTHORIZE,
+            ).url
+            self._provider = GatewayProviderMetadata("sefaz-mg-homologacao-nfe4", "1.0")
         self._resolve_certificate = resolve_certificate
         self._timeout = timeout_seconds
         self._exchange = exchange or self._https_exchange
 
-    @staticmethod
-    def _https_exchange(payload: bytes, context: ssl.SSLContext, timeout: float) -> bytes:
+    def _https_exchange(self, payload: bytes, context: ssl.SSLContext, timeout: float) -> bytes:
         req = Request(
-            NFE_SP_HOMOLOGATION_AUTHORIZATION_URL,
+            self._endpoint,
             data=payload,
             method="POST",
             headers={
@@ -187,7 +264,7 @@ class SefazSpHomologationGateway:
                 "Accept": "application/soap+xml",
             },
         )
-        opener = build_opener(HTTPSHandler(context=context))
+        opener = build_opener(HTTPSHandler(context=context), _RejectFiscalRedirects())
         try:
             with opener.open(req, timeout=timeout) as response:
                 raw = response.read(_MAX_RESPONSE_BYTES + 1)
@@ -196,12 +273,16 @@ class SefazSpHomologationGateway:
             return bytes(raw)
         except (HTTPError, URLError, TimeoutError, OSError, ssl.SSLError):
             raise OfficialNfeTransportError(
-                "Comunicação com a SEFAZ-SP indisponível; verifique o resultado antes de reenviar"
+                "Comunicação com a SEFAZ indisponível; verifique o resultado antes de reenviar"
             ) from None
 
     def authorize(self, request: AuthorizationRequest) -> AuthorizationResult:
         if not isinstance(request, AuthorizationRequest):
             raise OfficialNfeTransportError("Solicitação de autorização fiscal inválida")
+        if self._target is HomologationAuthorizationTarget.MG_NFE:
+            _validate_mg_authorization_scope(request)
+            if self._validate_schema is None:
+                raise OfficialNfeTransportError("MG XSD validator unavailable")
         material = self._resolve_certificate(
             request.scope, request.access_key.issuer_identifier
         )
@@ -216,17 +297,29 @@ class SefazSpHomologationGateway:
         unsigned = _parse_xml(request.signed_xml)
         signed_bytes = request.signed_xml
         if unsigned.find(".//{" + XMLDSIG_NAMESPACE + "}Signature") is None:
-            signed_bytes = sign_nfe_envi_xml(request.signed_xml, material)
+            signed_bytes = sign_nfe_envi_xml(
+                request.signed_xml, material,
+                profile=(
+                    NfeSignatureProfile.NFE4_OFFICIAL_RSA_SHA1
+                    if self._target is HomologationAuthorizationTarget.MG_NFE
+                    else NfeSignatureProfile.RSA_SHA256
+                ),
+            )
         xml = _signed_homologation_xml(request, signed_bytes)
+        if self._validate_schema is not None:
+            self._validate_schema(signed_bytes)
         context = _tls_context(material)
         response = _parse_xml(
             self._exchange(_soap_envelope(xml), context, self._timeout)
         )
         if response.find(".//{" + SOAP12_NAMESPACE + "}Fault") is not None:
-            raise OfficialNfeTransportError("SEFAZ-SP retornou falha SOAP")
+            raise OfficialNfeTransportError("SEFAZ retornou falha SOAP")
         result = response.find(".//{" + NFE_NAMESPACE + "}retEnviNFe")
         if result is None or _text(result, "tpAmb") != "2":
-            raise OfficialNfeTransportError("Resposta da SEFAZ-SP sem homologação válida")
+            raise OfficialNfeTransportError("Resposta da SEFAZ sem homologação válida")
+        if self._target is HomologationAuthorizationTarget.MG_NFE:
+            if _text(result, "cUF") != "31":
+                raise OfficialNfeTransportError("MG response state mismatch")
         code = _text(result, "cStat")
         reason = _text(result, "xMotivo")
         if not code:
@@ -237,6 +330,10 @@ class SefazSpHomologationGateway:
             authorization_code = _text(protocol, "cStat") if protocol is not None else None
             protocol_no = _text(protocol, "nProt") if protocol is not None else None
             if authorization_code == "100" and protocol_no:
+                if self._target is HomologationAuthorizationTarget.MG_NFE:
+                    digest = xml.findtext(".//{" + XMLDSIG_NAMESPACE + "}DigestValue")
+                    if not digest or protocol is None or _text(protocol, "digVal") != digest:
+                        raise OfficialNfeTransportError("MG protocol digest mismatch")
                 authorized_xml = _authorized_nfe_proc(xml, result, request)
                 return AuthorizationResult(
                     status=AuthorizationStatus.AUTHORIZED,
@@ -244,7 +341,7 @@ class SefazSpHomologationGateway:
                     access_key=request.access_key,
                     idempotency_key=request.idempotency_key,
                     request_fingerprint=request.request_fingerprint,
-                    provider=_PROVIDER,
+                    provider=self._provider,
                     provider_request_id=receipt,
                     protocol_reference=protocol_no,
                     authorized_xml=authorized_xml,
@@ -265,9 +362,50 @@ class SefazSpHomologationGateway:
             access_key=request.access_key,
             idempotency_key=request.idempotency_key,
             request_fingerprint=request.request_fingerprint,
-            provider=_PROVIDER,
+            provider=self._provider,
             provider_request_id=receipt,
             rejection_code=code if status is AuthorizationStatus.REJECTED else None,
             rejection_message=(reason or "Rejeição fiscal")[:512]
             if status is AuthorizationStatus.REJECTED else None,
         )
+
+
+class SefazSpHomologationGateway(SefazHomologationAuthorizationGateway):
+    """Compatibility entrypoint retaining SP-only engineering configuration."""
+
+    def __init__(
+        self,
+        *,
+        resolve_certificate: Callable[[ExecutionScope, str], EphemeralCertificateMaterial],
+        timeout_seconds: float = 15.0,
+        exchange: Callable[[bytes, ssl.SSLContext, float], bytes] | None = None,
+    ) -> None:
+        super().__init__(
+            resolve_certificate=resolve_certificate,
+            timeout_seconds=timeout_seconds,
+            exchange=exchange,
+            target=HomologationAuthorizationTarget.SP_NFE,
+        )
+
+
+def build_mg_nfe_homologation_gateway(
+    *,
+    resolve_certificate: Callable[[ExecutionScope, str], EphemeralCertificateMaterial],
+    timeout_seconds: float = 15.0,
+    exchange: Callable[[bytes, ssl.SSLContext, float], bytes] | None = None,
+) -> SefazHomologationAuthorizationGateway:
+    """Compose MG with the pinned canonical invoice XSD validator, without activation."""
+    from kordena_fiscal.xml.official_operation_schema import OfficialOperationXmlValidator
+
+    validator = OfficialOperationXmlValidator(("NFeAutorizacao4",))
+
+    def validate_envelope(xml: bytes) -> None:
+        validator("NFeAutorizacao4", xml)
+
+    return SefazHomologationAuthorizationGateway(
+        target=HomologationAuthorizationTarget.MG_NFE,
+        resolve_certificate=resolve_certificate,
+        validate_schema=validate_envelope,
+        timeout_seconds=timeout_seconds,
+        exchange=exchange,
+    )
