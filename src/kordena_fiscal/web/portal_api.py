@@ -17,7 +17,9 @@ from typing import Annotated, Any, Protocol, runtime_checkable
 from uuid import uuid4
 
 from fastapi import APIRouter, Body, HTTPException, Request, status
+from fastapi.responses import Response
 
+from kordena_fiscal.archive import FiscalArchiveKind
 from kordena_fiscal.domain import ExecutionScope, FiscalEnvironment, FiscalValidationError
 from kordena_fiscal.security.human_identity import (
     AuthenticatedHuman,
@@ -325,6 +327,40 @@ def create_portal_router(
             "expires_at": evidence.expires_at.isoformat(),
             "fingerprint_sha256": evidence.certificate_fingerprint_sha256,
         }
+
+    @router.get("/documents/{document_reference}/artifacts/{kind}")
+    async def download_fiscal_artifact(
+        document_reference: str,
+        kind: str,
+        request: Request,
+        unit_id: str,
+        environment: FiscalEnvironment = FiscalEnvironment.HOMOLOGATION,
+    ) -> Response:
+        """Serve immutable fiscal files to the same authorized human session."""
+        auth = authority(request)
+        _authorized(auth, PortalPermission.DOCUMENT_QUERY, unit_id=unit_id)
+        if kind not in {"authorized_xml", "danfe"}:
+            raise HTTPException(400, detail={"code": "FISCAL_ARTIFACT_KIND_INVALID"})
+        if not 1 <= len(document_reference) <= 256:
+            raise HTTPException(400, detail={"code": "FISCAL_ARTIFACT_REFERENCE_INVALID"})
+        reader = getattr(require_executor(), "fiscal_artifact", None)
+        if not callable(reader):
+            raise HTTPException(503, detail={"code": "FISCAL_ARTIFACT_READER_NOT_CONFIGURED"})
+        content, media_type = reader(
+            authority=auth, unit_id=unit_id, environment=environment,
+            document_reference=document_reference, kind=FiscalArchiveKind(kind),
+        )
+        extension = "xml" if kind == "authorized_xml" else "pdf"
+        disposition = "attachment" if extension == "xml" else "inline"
+        return Response(
+            content=content,
+            media_type=media_type,
+            headers={
+                "Cache-Control": "no-store",
+                "Content-Disposition": f'{disposition}; filename="nfcore-documento.{extension}"',
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
 
     @router.get("/bootstrap")
     async def bootstrap(request: Request) -> dict[str, Any]:

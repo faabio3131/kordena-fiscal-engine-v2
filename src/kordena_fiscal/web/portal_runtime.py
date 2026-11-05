@@ -9,7 +9,7 @@ closed when that execution boundary is not yet present.
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
@@ -18,6 +18,11 @@ from fastapi import HTTPException, status
 from kordena_fiscal.application.commercial_portal import (
     CommercialPortalReader,
     CommercialPortalReadError,
+)
+from kordena_fiscal.archive import (
+    ArchiveIntegrityError,
+    FiscalArchiveKind,
+    FiscalArchiveVerifier,
 )
 from kordena_fiscal.compliance import CapabilityReadinessService, JurisdictionCapabilityError
 from kordena_fiscal.compliance.capability_api import CapabilityReadinessError
@@ -124,11 +129,13 @@ class DurableHumanPortalExecutor:
         capability_readiness: CapabilityReadinessService | None = None,
         user_administration: HumanAdministrationService | None = None,
         commercial_reader: CommercialPortalReader | None = None,
+        danfe_renderer: Callable[[bytes], bytes] | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
         self._operation_executor = operation_executor
         self._user_administration = user_administration
         self._commercial_reader = commercial_reader
+        self._danfe_renderer = danfe_renderer
         self._capabilities = (
             GovernedCapabilityReadinessService(
                 unit_of_work_factory=unit_of_work_factory,
@@ -807,6 +814,102 @@ class DurableHumanPortalExecutor:
             idempotency_key=idempotency_key,
         )
 
+    def fiscal_artifact(
+        self,
+        *,
+        authority: AuthenticatedHuman,
+        unit_id: str,
+        environment: FiscalEnvironment,
+        document_reference: str,
+        kind: FiscalArchiveKind,
+    ) -> tuple[bytes, str]:
+        """Read the real immutable XML/PDF by the signed-in unit authority.
+
+        No artifact is generated, inferred from metadata or taken from a
+        browser-supplied external URL. A missing archive returns a normal 404.
+        """
+        try:
+            authority.assert_permission(
+                PortalPermission.DOCUMENT_QUERY, unit_id=unit_id
+            )
+        except HumanAuthorizationError as exc:
+            raise _portal_error(
+                403, "FISCAL_ARTIFACT_FORBIDDEN", "Document access denied"
+            ) from exc
+        if kind not in {FiscalArchiveKind.AUTHORIZED_XML, FiscalArchiveKind.DANFE}:
+            raise _portal_error(
+                400, "FISCAL_ARTIFACT_KIND_INVALID", "Unsupported fiscal file"
+            )
+        if not document_reference or len(document_reference) > 256:
+            raise _portal_error(
+                400, "FISCAL_ARTIFACT_REFERENCE_INVALID", "Invalid document reference"
+            )
+        scope = ExecutionScope(
+            host_namespace="fm-nfcore",
+            tenant_id=authority.tenant_id,
+            unit_id=unit_id,
+            environment=environment,
+            correlation_id="fiscal-artifact-read",
+        )
+        with self._unit_of_work_factory() as uow:
+            entries = uow.archive.list_for_document(scope, document_reference)
+        matches = [entry for entry in entries if entry.kind is kind]
+        if not matches and kind is FiscalArchiveKind.DANFE and self._danfe_renderer:
+            # Generate the printable PDF ONLY from an already archived, genuine
+            # authorized XML. No synthetic fiscal authorization or XML is created.
+            authorized = [
+                entry for entry in entries if entry.kind is FiscalArchiveKind.AUTHORIZED_XML
+            ]
+            if len(authorized) == 1:
+                original = authorized[0]
+                if original.media_type not in {"text/xml", "application/xml"}:
+                    raise _portal_error(
+                        409, "FISCAL_ARTIFACT_MEDIA_INVALID", "Invalid archived XML type"
+                    )
+                try:
+                    FiscalArchiveVerifier().verify_entry(original)
+                    pdf = self._danfe_renderer(original.content)
+                except (ArchiveIntegrityError, FiscalValidationError) as exc:
+                    raise _portal_error(
+                        409, "FISCAL_DANFE_RENDER_FAILED",
+                        "Não foi possível gerar DANFE do XML autorizado",
+                    ) from exc
+                return pdf, "application/pdf"
+        if len(matches) != 1:
+            raise _portal_error(
+                404, "FISCAL_ARTIFACT_NOT_AVAILABLE",
+                "XML autorizado ou DANFE ainda não disponível para esta nota",
+            )
+        entry = matches[0]
+        if len(entry.content) > 8 * 1024 * 1024:
+            raise _portal_error(
+                413, "FISCAL_ARTIFACT_TOO_LARGE", "Fiscal file exceeds allowed size"
+            )
+        # Verify stored content rather than trusting a projected archive flag.
+        try:
+            FiscalArchiveVerifier().verify_entry(entry)
+        except ArchiveIntegrityError as exc:
+            raise _portal_error(
+                409, "FISCAL_ARTIFACT_INTEGRITY_FAILED",
+                "Stored fiscal document failed integrity verification",
+            ) from exc
+        allowed_media = {
+            FiscalArchiveKind.AUTHORIZED_XML: frozenset(
+                {"application/xml", "text/xml"}
+            ),
+            FiscalArchiveKind.DANFE: frozenset({"application/pdf"}),
+        }
+        if entry.media_type not in allowed_media[kind]:
+            raise _portal_error(
+                409, "FISCAL_ARTIFACT_MEDIA_INVALID",
+                "Archived fiscal file has unexpected content type",
+            )
+        if kind is FiscalArchiveKind.DANFE and not entry.content.startswith(b"%PDF-"):
+            raise _portal_error(
+                409, "FISCAL_ARTIFACT_MEDIA_INVALID", "Archived DANFE is not a PDF"
+            )
+        return entry.content, entry.media_type
+
     def _register_fiscal_profile(
         self,
         *,
@@ -825,6 +928,7 @@ class DurableHumanPortalExecutor:
             Cnpj,
             FiscalAddress,
             FiscalProfile,
+            MunicipalRegistration,
             StateRegistration,
             TaxRegimeCode,
         )
@@ -835,9 +939,14 @@ class DurableHumanPortalExecutor:
             "district", "municipality_name", "state_code", "municipality_ibge_code",
             "postal_code",
         }
+        optional = {"municipal_registration"}
         try:
-            if set(payload) != required:
+            if not required.issubset(payload) or set(payload) - required - optional:
                 raise ValueError("invalid issuer profile command fields")
+            if "municipal_registration" in payload and not isinstance(
+                payload["municipal_registration"], str
+            ):
+                raise ValueError("municipal registration must be a string")
             key = (idempotency_key or "").strip()
             if not key or len(key) > 256:
                 raise ValueError("idempotency key required")
@@ -877,6 +986,11 @@ class DurableHumanPortalExecutor:
                     exempt=payload["state_registration_exempt"],
                 ),
                 primary_cnae=CnaeCode(payload["primary_cnae"]),
+                municipal_registration=(
+                    MunicipalRegistration(payload["municipal_registration"])
+                    if payload.get("municipal_registration", "").strip()
+                    else None
+                ),
                 address=FiscalAddress(
                     street=payload["street"],
                     number=payload["number"],
@@ -909,6 +1023,7 @@ class DurableHumanPortalExecutor:
                     or existing.tax_regime != profile.tax_regime
                     or existing.state_registration != profile.state_registration
                     or existing.primary_cnae != profile.primary_cnae
+                    or existing.municipal_registration != profile.municipal_registration
                     or existing.address != profile.address
                     or existing.scope.tenant_id != authority.tenant_id
                     or existing.scope.unit_id != unit_id

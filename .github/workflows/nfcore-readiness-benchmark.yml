@@ -1,0 +1,30 @@
+name: NFCore Readiness Benchmark (non-mutating)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  controlled-readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify approved read-only benchmark script
+        run: python3 -m py_compile scripts/bench/nfcore_readiness_load.py
+      - name: Measure 50 and 100 concurrent GET health checks
+        run: |
+          python3 scripts/bench/nfcore_readiness_load.py \
+            --base-url https://api.nfcore.com.br \
+            --requests-per-phase 100 \
+            --acknowledge-shared-environment | tee nfcore-health-readiness-benchmark.json
+      - name: Publish inspectable results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: nfcore-readiness-50-100
+          path: nfcore-health-readiness-benchmark.json
+          if-no-files-found: ignore
+          retention-days: 30

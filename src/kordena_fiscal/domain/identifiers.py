@@ -59,6 +59,32 @@ class Cnpj:
 
 
 @dataclass(frozen=True, slots=True)
+class Cpf:
+    """Canonical Brazilian CPF with validation of both check digits."""
+
+    value: str
+
+    def __post_init__(self) -> None:
+        normalized = re.sub(r"[^0-9]", "", self.value)
+        if len(normalized) != 11 or len(set(normalized)) == 1:
+            raise FiscalValidationError("CPF requires eleven valid digits")
+
+        def digit(leading: str, start_weight: int) -> int:
+            total = sum(
+                int(character) * (start_weight - position)
+                for position, character in enumerate(leading)
+            )
+            remainder = (total * 10) % 11
+            return 0 if remainder == 10 else remainder
+
+        first = digit(normalized[:9], 10)
+        second = digit(normalized[:10], 11)
+        if normalized[-2:] != f"{first}{second}":
+            raise FiscalValidationError("CPF check digits are invalid")
+        object.__setattr__(self, "value", normalized)
+
+
+@dataclass(frozen=True, slots=True)
 class CnaeCode:
     """Seven-digit CNAE subclass code, stored without presentation punctuation."""
 

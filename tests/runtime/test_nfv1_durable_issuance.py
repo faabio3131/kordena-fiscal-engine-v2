@@ -500,3 +500,42 @@ def test_unified_wiring_issues_and_recovers_through_same_durable_authority(tmp_p
     assert execute("issueFiscalDocument")["replay"] is True
     assert provider.calls == 1
     assert len(query.query_calls) == 1
+
+
+def test_protocol_bound_xml_is_archived_in_authorization_transaction(tmp_path):
+    from kordena_fiscal.archive import FiscalArchiveKind
+
+    db, application, request = prepared(tmp_path)
+
+    class WithAuthorizedXml(Provider):
+        def authorize(self, received):
+            result = super().authorize(received)
+            return replace(
+                result,
+                authorized_xml=b"<nfeProc versao='4.00'/>",
+            )
+
+    provider = WithAuthorizedXml()
+    outcome = application.authorize_prepared_document(
+        document_id="doc-test",
+        request=request,
+        gateway=FiscalGatewayClient(provider),
+        occurred_at=NOW,
+    )
+    assert outcome.lifecycle.state is FiscalDocumentState.AUTHORIZED
+    with db.unit_of_work() as uow:
+        archived = [
+            entry for entry in uow.archive.list_for_document(request.scope, "doc-test")
+            if entry.kind is FiscalArchiveKind.AUTHORIZED_XML
+        ]
+    assert len(archived) == 1
+    assert archived[0].content == b"<nfeProc versao='4.00'/>"
+    restarted = FiscalApplicationService(SqliteFiscalDatabase(db.path))
+    replay = restarted.authorize_prepared_document(
+        document_id="doc-test",
+        request=request,
+        gateway=FiscalGatewayClient(provider),
+        occurred_at=NOW,
+    )
+    assert replay.replay
+    assert provider.calls == 1

@@ -57,7 +57,10 @@ from .ai_secrets import build_production_openai_key_readers
 from .alert_rules import InternalAlertMonitor, OperationalSignals
 from .api_staging_gsm_probe import staging_probe_verifier
 from .cakto import build_cakto_webhook_router
-from .canonical_fiscal_composition import build_runtime_fiscal_handler_factory
+from .canonical_fiscal_composition import (
+    build_runtime_fiscal_handler_factory,
+    fiscal_external_dependency_snapshot,
+)
 from .composition import (
     FiscalOperationHandlerFactory,
     RuntimeComposition,
@@ -203,6 +206,7 @@ def create_runtime_app(
     fiscal_operation_handlers: Mapping[str, FiscalOperationHandler] | None = None,
     fiscal_operation_handler_factory: FiscalOperationHandlerFactory | None = None,
     certificate_vault: EncryptedA1Vault | None = None,
+    fiscal_dependency_probe: Callable[[], Mapping[str, bool]] | None = None,
 ) -> FastAPI:
     resolved = settings or RuntimeSettings.from_environ()
     runtime_metrics = metrics or MetricsRegistry()
@@ -563,10 +567,13 @@ def create_runtime_app(
             # P1 certification must distinguish internal ingress composition from
             # external fiscal execution dependencies. These remain false until
             # their concrete adapters are composed in the owning phases.
-            "fiscal_provider_transport_real_configured": False,
-            "fiscal_external_secret_client_configured": False,
-            "fiscal_signer_configured": False,
-            "fiscal_runtime_external_execution_ready": False,
+            # These are dependency-configuration indicators, not a declaration
+            # that any tenant's real fiscal documents are officially homologated.
+            **(
+                fiscal_dependency_probe()
+                if fiscal_dependency_probe is not None
+                else fiscal_external_dependency_snapshot(certificate_vault=certificate_vault)
+            ),
             "password_recovery_configured": composition is not None,
             "password_reset_delivery_configured": password_reset_delivery is not None,
             "commercial_activation_configured": (
@@ -902,6 +909,9 @@ app = create_runtime_app(
     _entrypoint_settings,
     password_reset_delivery=build_activation_delivery_from_environ(),
     certificate_vault=_entrypoint_certificate_vault,
+    fiscal_dependency_probe=lambda: fiscal_external_dependency_snapshot(
+        certificate_vault=_entrypoint_certificate_vault
+    ),
     command_secret_resolver=development_command_resolver(
         _entrypoint_settings, os.environ
     ),

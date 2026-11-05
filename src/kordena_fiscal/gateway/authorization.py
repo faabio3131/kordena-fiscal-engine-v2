@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Protocol
 
@@ -81,6 +81,9 @@ class AuthorizationResult:
     protocol_reference: str | None = None
     rejection_code: str | None = None
     rejection_message: str | None = None
+    # Provider-authenticated, protocol-bound XML evidence. Never log full
+    # fiscal content through dataclass repr; not every provider supplies it.
+    authorized_xml: bytes | None = field(default=None, repr=False)
 
     def __post_init__(self) -> None:
         if not isinstance(self.status, AuthorizationStatus):
@@ -114,6 +117,17 @@ class AuthorizationResult:
                     raise FiscalValidationError(f"{field_name} exceeds max length 512")
                 else:
                     object.__setattr__(self, field_name, normalized)
+
+        if self.authorized_xml is not None:
+            if (
+                not isinstance(self.authorized_xml, bytes)
+                or not self.authorized_xml
+                or len(self.authorized_xml) > 2_097_152
+                or self.status is not AuthorizationStatus.AUTHORIZED
+            ):
+                raise FiscalValidationError(
+                    "protocol XML evidence requires a bounded authorized result"
+                )
 
         if self.status is AuthorizationStatus.AUTHORIZED:
             if self.protocol_reference is None:

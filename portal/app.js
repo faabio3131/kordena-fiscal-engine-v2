@@ -558,7 +558,43 @@ function fiscalRowElement(row) {
   const primary = row.document_id || row.document_reference || row.source_id || row.entry_id || row.reference_id || row.binding_id || row.destination_id || row.module_id || row.policy_id || row.document_kind || "Registro";
   const state = row.readiness || row.state || row.status || row.kind || "registrado";
   const display = {registro: primary, escopo: `${text(row.unit_id)} · ${text(row.environment)} · ${text(row.record_type || row.code || "capability")}`, state};
-  return appendRecordDetails(rowElement(display), row);
+  const wrapper = appendRecordDetails(rowElement(display), row);
+  // Render artifact actions only when this authorized scope actually contains
+  // an immutable PDF or XML entry. An issuance attempt is not an authorized note.
+  const kind = String(row.kind || "");
+  const reference = String(row.document_reference || "");
+  const unit = String(row.unit_id || "");
+  const environment = String(row.environment || "");
+  if (row.record_type === "archive" && reference && unit
+      && ["homologation", "production"].includes(environment)
+      && ["authorized_xml", "danfe"].includes(kind)) {
+    const artifact = document.createElement("a");
+    artifact.className = "ghost";
+    artifact.href = `/v1/portal/documents/${encodeURIComponent(reference)}/artifacts/${kind}?${new URLSearchParams({
+      unit_id: unit, environment,
+    })}`;
+    if (kind === "authorized_xml") {
+      artifact.textContent = "Baixar XML autorizado";
+      artifact.download = "nfcore-documento.xml";
+    } else {
+      artifact.textContent = "Visualizar DANFE/PDF";
+      artifact.target = "_blank";
+      artifact.rel = "noopener noreferrer";
+    }
+    wrapper.append(artifact);
+    if (kind === "authorized_xml") {
+      const danfe = document.createElement("a");
+      danfe.className = "ghost";
+      danfe.textContent = "Visualizar DANFE/PDF";
+      danfe.href = `/v1/portal/documents/${encodeURIComponent(reference)}/artifacts/danfe?${new URLSearchParams({
+        unit_id: unit, environment,
+      })}`;
+      danfe.target = "_blank";
+      danfe.rel = "noopener noreferrer";
+      wrapper.append(danfe);
+    }
+  }
+  return wrapper;
 }
 
 /** Show the complete authorized projection instead of dropping commercial fields. */
@@ -1604,6 +1640,7 @@ function appendRtcProfileRegistration(section) {
     ["legal_name", "Razão social", ""],
     ["primary_cnae", "CNAE principal (7 dígitos)", "[0-9]{7}"],
     ["state_registration", "Inscrição estadual (se aplicável)", ""],
+    ["municipal_registration", "Inscrição municipal (IM, se aplicável)", ""],
     ["street", "Logradouro", ""],
     ["number", "Número", ""],
     ["district", "Bairro", ""],
@@ -1617,7 +1654,7 @@ function appendRtcProfileRegistration(section) {
     const input = document.createElement("input");
     input.name = name;
     input.autocomplete = "off";
-    input.required = name !== "state_registration";
+    input.required = !["state_registration", "municipal_registration"].includes(name);
     if (pattern) input.pattern = pattern;
     label.append(input);
     fields[name] = input;
@@ -1662,6 +1699,7 @@ function appendRtcProfileRegistration(section) {
       crt: Number(crt.value),
       primary_cnae: fields.primary_cnae.value.trim(),
       state_registration: fields.state_registration.value.trim(),
+      municipal_registration: fields.municipal_registration.value.trim(),
       state_registration_exempt: exempt.checked,
       street: fields.street.value.trim(),
       number: fields.number.value.trim(),

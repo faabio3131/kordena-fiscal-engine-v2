@@ -148,16 +148,31 @@ jobs:
           test "$(docker image inspect nfcore-portal:test --format '{{.Config.User}}')" = "10001:10001"
 
       - name: Reject insecure production profile
+        timeout-minutes: 2
         run: |
-          if docker run --rm \
+          # Exercise the application startup guard with a single worker so
+          # Uvicorn's multi-worker supervisor cannot keep respawning a child.
+          # A timeout is a FAILURE, never evidence of fail-closed security.
+          set +e
+          timeout --signal=TERM --kill-after=5s 30s docker run --rm \
             -e NFCORE_ENVIRONMENT=production \
             -e NFCORE_PERSISTENCE_BACKEND=sqlite \
             -e NFCORE_SECRET_BACKEND=memory \
             -e NFCORE_REQUIRE_HTTPS=false \
-            nfcore-api:test; then
-            echo "insecure production profile unexpectedly started"
+            nfcore-api:test \
+            uvicorn kordena_fiscal.runtime.api:app \
+              --host 0.0.0.0 --port 8080 --no-proxy-headers --workers 1
+          exit_code=$?
+          set -e
+          if [ "$exit_code" -eq 0 ]; then
+            echo "FAIL: insecure production profile unexpectedly started"
             exit 1
           fi
+          if [ "$exit_code" -eq 124 ] || [ "$exit_code" -eq 137 ]; then
+            echo "FAIL: insecure production rejection timed out"
+            exit 1
+          fi
+          echo "PASS: insecure production profile rejected promptly"
 
       - name: API container smoke and readiness
         run: |

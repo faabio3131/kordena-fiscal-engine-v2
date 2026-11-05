@@ -297,3 +297,49 @@ def test_profile_registration_denies_operator_and_cross_unit_before_executor() -
     )
     assert cross_unit.status_code == 403
     assert executor.operation_authority is None
+
+
+class ArchivedArtifactExecutor(RecordingPortalExecutor):
+    def fiscal_artifact(
+        self, *, authority: AuthenticatedHuman, unit_id: str,
+        environment: object, document_reference: str, kind: object,
+    ) -> tuple[bytes, str]:
+        from kordena_fiscal.archive import FiscalArchiveKind
+
+        assert authority.tenant_id == "tenant-authoritative"
+        assert unit_id == "unit-a"
+        assert document_reference == "DOC-1"
+        if kind is FiscalArchiveKind.AUTHORIZED_XML:
+            return b"<nfeProc versao='4.00'/>", "application/xml"
+        if kind is FiscalArchiveKind.DANFE:
+            return b"%PDF-1.7\\nNFCore test\\n", "application/pdf"
+        raise AssertionError("Unapproved kind")
+
+
+def test_fiscal_artifact_download_is_authorized_by_session_and_unit() -> None:
+    client = logged_client(ArchivedArtifactExecutor())
+    endpoint = "/v1/portal/documents/DOC-1/artifacts/authorized_xml"
+    good = client.get(endpoint + "?unit_id=unit-a&environment=homologation")
+    assert good.status_code == 200
+    assert good.content == b"<nfeProc versao='4.00'/>"
+    assert good.headers["cache-control"] == "no-store"
+    assert "attachment" in good.headers["content-disposition"]
+    assert client.get(endpoint + "?unit_id=unit-b").status_code == 403
+    assert client.get(
+        "/v1/portal/documents/DOC-1/artifacts/prepared_xml?unit_id=unit-a"
+    ).status_code == 400
+    assert client.get(endpoint).status_code == 422
+    pdf = client.get("/v1/portal/documents/DOC-1/artifacts/danfe?unit_id=unit-a")
+    assert pdf.status_code == 200
+    assert pdf.headers["content-type"].startswith("application/pdf")
+    assert pdf.headers["content-disposition"].startswith("inline")
+
+
+def test_fiscal_artifact_download_fails_closed_without_session_or_reader() -> None:
+    url = "/v1/portal/documents/DOC-1/artifacts/danfe?unit_id=unit-a"
+    anonymous = TestClient(
+        create_app(human_identity=identity(), portal_executor=ArchivedArtifactExecutor()),
+        base_url="https://nfcore.test",
+    )
+    assert anonymous.get(url).status_code == 401
+    assert logged_client(RecordingPortalExecutor()).get(url).status_code == 503

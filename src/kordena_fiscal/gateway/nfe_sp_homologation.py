@@ -89,6 +89,37 @@ def _signed_homologation_xml(request: AuthorizationRequest, xml_bytes: bytes) ->
     return root
 
 
+
+def _authorized_nfe_proc(
+    signed_envi: etree._Element, reply: etree._Element, request: AuthorizationRequest
+) -> bytes:
+    """Only matching protocol 100 + signed NFe become an archiveable nfeProc."""
+    invoices = signed_envi.findall("{" + NFE_NAMESPACE + "}NFe")
+    protocols = reply.findall(".//{" + NFE_NAMESPACE + "}protNFe")
+    if len(invoices) != 1 or len(protocols) != 1:
+        raise OfficialNfeTransportError("Autorização requer uma NF-e e protocolo únicos")
+    protocol = protocols[0]
+    info = protocol.find("{" + NFE_NAMESPACE + "}infProt")
+    invoice_info = invoices[0].find("{" + NFE_NAMESPACE + "}infNFe")
+    if (
+        info is None or invoice_info is None
+        or invoice_info.get("Id") != "NFe" + request.access_key.value
+        or _text(info, "chNFe") != request.access_key.value
+        or _text(info, "tpAmb") != "2"
+        or _text(info, "cStat") != "100"
+        or not _text(info, "nProt")
+        or not _text(info, "digVal")
+    ):
+        raise OfficialNfeTransportError("Protocolo SEFAZ não corresponde à NF-e assinada")
+    proc = etree.Element("{" + NFE_NAMESPACE + "}nfeProc", nsmap={None: NFE_NAMESPACE},  # type: ignore[dict-item]
+                         versao="4.00")
+    proc.append(etree.fromstring(etree.tostring(invoices[0])))
+    proc.append(etree.fromstring(etree.tostring(protocol)))
+    data = etree.tostring(proc, encoding="utf-8", xml_declaration=True)
+    if len(data) > _MAX_RESPONSE_BYTES:
+        raise OfficialNfeTransportError("XML protocolado excede limite")
+    return data
+
 def _soap_envelope(invoice_batch: etree._Element) -> bytes:
     envelope = etree.Element(
         "{" + SOAP12_NAMESPACE + "}Envelope",
@@ -206,6 +237,7 @@ class SefazSpHomologationGateway:
             authorization_code = _text(protocol, "cStat") if protocol is not None else None
             protocol_no = _text(protocol, "nProt") if protocol is not None else None
             if authorization_code == "100" and protocol_no:
+                authorized_xml = _authorized_nfe_proc(xml, result, request)
                 return AuthorizationResult(
                     status=AuthorizationStatus.AUTHORIZED,
                     scope=request.scope,
@@ -215,6 +247,7 @@ class SefazSpHomologationGateway:
                     provider=_PROVIDER,
                     provider_request_id=receipt,
                     protocol_reference=protocol_no,
+                    authorized_xml=authorized_xml,
                 )
             if code in {"103", "105"}:
                 status = AuthorizationStatus.PENDING

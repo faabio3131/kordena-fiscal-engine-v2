@@ -10,7 +10,7 @@ from .binding import (
 )
 from .errors import FiscalDomainError, FiscalValidationError
 from .events import FiscalDomainEvent
-from .identifiers import CnaeCode, Cnpj
+from .identifiers import CnaeCode, Cnpj, Cpf
 from .primitives import (
     BrazilianJurisdiction,
     ElectronicInvoiceModel,
@@ -42,6 +42,7 @@ __all__ = [
     "CestCode",
     "CnaeCode",
     "Cnpj",
+    "Cpf",
     "ElectronicInvoiceModel",
     "ExecutionScope",
     "FiscalAccountBinding",

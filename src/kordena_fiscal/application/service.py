@@ -370,8 +370,9 @@ class FiscalApplicationService:
         occurred_at: datetime,
         reason: str,
         correlation_id: str,
+        archive_entry: FiscalArchiveEntry | None = None,
     ) -> FiscalStateSnapshot:
-        """Atomically couple terminal lifecycle authority and idempotency result."""
+        """Atomically couple terminal issuance and authenticated XML evidence."""
 
         with self._uow_factory() as uow:
             attempts = uow.idempotency.attempts(key)
@@ -391,6 +392,12 @@ class FiscalApplicationService:
                 reason=reason,
                 correlation_id=correlation_id,
             )
+            if archive_entry is not None:
+                if (archive_entry.document_reference != document_id
+                    or archive_entry.kind is not FiscalArchiveKind.AUTHORIZED_XML):
+                    raise PersistenceStateError("authorized XML archive is invalid")
+                uow.lifecycle.assert_scope(document_id, archive_entry.scope)
+                uow.archive.append(archive_entry)
             uow.idempotency.mark_authorized(key, generation, result_reference)
             uow.lifecycle.save(updated, expected_version=current.version)
             uow.commit()
@@ -691,7 +698,21 @@ class FiscalApplicationService:
                 else result.invoice_reference
             )
             assert reference is not None  # Validated by the canonical gateway boundary.
+            xml_evidence = (
+                FiscalArchiveEntry.build(
+                    scope=scope, document_reference=document_id,
+                    kind=FiscalArchiveKind.AUTHORIZED_XML,
+                    content=result.authorized_xml, media_type="application/xml",
+                    archived_at=occurred_at,
+                    retention=RetentionPolicyMetadata(
+                        policy_id="nfcore-fiscal-archive", policy_version=1
+                    ),
+                )
+                if isinstance(result, AuthorizationResult)
+                and result.authorized_xml is not None else None
+            )
             self.finalize_authorized(
+                archive_entry=xml_evidence,
                 key=attempt.key,
                 generation=attempt.generation,
                 document_id=document_id,
