@@ -26,6 +26,7 @@ from kordena_fiscal.domain import (
     ExecutionScope,
     FiscalDocumentKind,
     FiscalEnvironment,
+    FiscalValidationError,
 )
 from kordena_fiscal.gateway import (
     ConfiguredProviderAdapter,
@@ -516,3 +517,45 @@ def test_synthetic_transport_performs_no_network_and_persists_no_secret(tmp_path
             "SYNTHETIC-CSC-NOT-REAL",
         )
     )
+
+
+class _November2026Clock:
+    def now(self) -> datetime:
+        return datetime(2026, 11, 4, 16, 0, tzinfo=UTC)
+
+
+@pytest.mark.parametrize("kind", (FiscalDocumentKind.NFE, FiscalDocumentKind.NFCE))
+@pytest.mark.parametrize("municipality", ("3550308", "3509502"))
+def test_sp_obsolete_inutilization_blocked_before_secret_or_provider_io(
+    tmp_path, kind: FiscalDocumentKind, municipality: str,
+) -> None:
+    database, vault, transport, _, adapter = _runtime(tmp_path)
+    service = ProviderGatewayService(
+        registry=ProviderRegistry((adapter,)),
+        readiness=_readiness(),
+        clock=_November2026Clock(),
+    )
+    with pytest.raises(FiscalValidationError, match="no longer applies"):
+        service.execute(
+            _request(
+                kind=kind,
+                operation=ProviderOperation.INUTILIZE,
+                jurisdiction=BrazilianJurisdiction("SP", municipality),
+            ),
+            provider_id="synthetic-sp",
+        )
+    assert not transport.observations
+
+
+@pytest.mark.parametrize("operation", (ProviderOperation.QUERY, ProviderOperation.CANCEL))
+def test_sp_current_read_or_cancel_uses_existing_provider_gate(
+    tmp_path, operation: ProviderOperation,
+) -> None:
+    database, _, transport, _, adapter = _runtime(tmp_path)
+    service = ProviderGatewayService(
+        registry=ProviderRegistry((adapter,)),
+        readiness=_readiness(),
+        clock=_November2026Clock(),
+    )
+    service.execute(_request(operation=operation), provider_id="synthetic-sp")
+    assert len(transport.observations) == 1

@@ -4,6 +4,7 @@ from decimal import Decimal
 
 import pytest
 
+from kordena_fiscal.control_plane import SecretReference, SecretReferenceKind
 from kordena_fiscal.documents import (
     CanonicalFiscalDocument,
     FiscalLineSnapshot,
@@ -44,6 +45,7 @@ from kordena_fiscal.issuance import (
     build_nfse_issuance_key,
     build_nfse_request_fingerprint,
 )
+from kordena_fiscal.signing import FiscalSignatureRequest
 from kordena_fiscal.tax import TaxDecision, TaxRuleOutcome
 from kordena_fiscal.xml import AccessKeyInput, build_access_key
 
@@ -353,3 +355,41 @@ def test_nfse_legacy_unscoped_identity_is_preserved():
     assert build_nfse_request_fingerprint(document) == (
         "8f425055c0bcffaac72cf713696774c4a556e452769819d4d84c8b9c4bcdf76b"
     )
+
+
+
+def test_a1_signing_request_derives_cnpj_from_canonical_document() -> None:
+    document = _nfe_document()
+    bound_scope = replace(document.scope, host_namespace="fm.nfcore")
+    document = replace(
+        document,
+        scope=bound_scope,
+        issuer=replace(document.issuer, scope=bound_scope),
+        items=tuple(
+            replace(line, product=replace(line.product, scope=bound_scope))
+            for line in document.items
+        ),
+    )
+    certificate = SecretReference(
+        reference_id="ref:fm-fiscal/tenant-a/unit-a/hml-certificate",
+        kind=SecretReferenceKind.CERTIFICATE,
+        tenant_id=bound_scope.tenant_id,
+        unit_id=bound_scope.unit_id,
+        environment=bound_scope.environment,
+    )
+    request = FiscalSignatureRequest.from_canonical_document(
+        document=document,
+        canonical_content=b"<NFe Id='NFeSynthetic'>signed input</NFe>",
+        certificate_reference=certificate,
+        workload_id="fiscal-issuer-pilot",
+    )
+    assert request.issuer_cnpj == document.issuer.cnpj
+    assert request.scope.identity_partition_key == document.scope.identity_partition_key
+
+    with pytest.raises(FiscalValidationError, match="tenant"):
+        FiscalSignatureRequest.from_canonical_document(
+            document=document,
+            canonical_content=b"<NFe Id='NFeSynthetic'>signed input</NFe>",
+            certificate_reference=replace(certificate, tenant_id="tenant-other"),
+            workload_id="fiscal-issuer-pilot",
+        )

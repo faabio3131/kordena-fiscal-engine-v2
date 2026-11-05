@@ -30,6 +30,7 @@ from kordena_fiscal.runtime.observability import (
 )
 from kordena_fiscal.security.human_identity import HumanIdentityService
 from kordena_fiscal.security.human_recovery import PasswordRecoveryService
+from kordena_fiscal.vault.encrypted_a1 import EncryptedA1Vault
 from kordena_fiscal.web.cakto_checkout import create_cakto_checkout_router
 from kordena_fiscal.web.commercial_release import create_commercial_release_router
 from kordena_fiscal.web.human_auth import create_human_auth_router
@@ -263,6 +264,7 @@ def create_app(
     password_reset_delivery: PasswordResetDelivery | None = None,
     password_reset_completed: Callable[[str, datetime], None] | None = None,
     portal_executor: HumanPortalExecutor | None = None,
+    certificate_vault: EncryptedA1Vault | None = None,
     pricing_administration: CommercialPricingAdministrationService | None = None,
     commercial_release_administration: CommercialReleaseAdministrationService | None = None,
     commercial_checkout: CommercialCheckoutProjector | None = None,
@@ -370,6 +372,7 @@ def create_app(
                 human_identity,
                 portal_executor,
                 platform_surfaces=platform_surfaces,
+                certificate_vault=certificate_vault,
             )
         )
         if cognitive_router is not None:

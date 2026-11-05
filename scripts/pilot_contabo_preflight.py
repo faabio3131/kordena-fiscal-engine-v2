@@ -104,6 +104,19 @@ def assess_pilot(
         and any(item in ("issueFiscalDocument", "cancelFiscalDocument", "inutilizeFiscalRange")
                 for item in handlers)
     )
+    # Platform configuration only; per-tenant evidence and homologation stay separate.
+    required_ops = {"issueFiscalDocument", "queryFiscalDocument",
+                    "cancelFiscalDocument", "reconcileFiscalOperation"}
+    accountant_checks = {
+        "web_pilot": all(checks.values()),
+        "official_transport": profile.get("fiscal_provider_transport_real_configured") is True,
+        "external_vault": profile.get("fiscal_external_secret_client_configured") is True,
+        "signer": profile.get("fiscal_signer_configured") is True,
+        "external_runtime": profile.get("fiscal_runtime_external_execution_ready") is True,
+        "operations": isinstance(handlers, list)
+                      and all(isinstance(x, str) for x in handlers)
+                      and required_ops.issubset(handlers),
+    }
     billing = (
         profile.get("pricing_catalog_published") is True
         and profile.get("commercial_checkout_processing_configured") is True
@@ -116,6 +129,13 @@ def assess_pilot(
         "fiscal_provider_gate": "EXTERNAL_EVIDENCE_REQUIRED" if not (
             fiscal_provider and fiscal_handlers
         ) else "CONFIGURED_NOT_HOMOLOGATED",
+        "accountant_configuration_checks": accountant_checks,
+        "accountant_configuration_ready": all(accountant_checks.values()),
+        "accountant_gate": (
+            "PER_TENANT_HOMOLOGATION_REQUIRED"
+            if all(accountant_checks.values())
+            else "INTERNAL_FISCAL_INTEGRATION_INCOMPLETE"
+        ),
         "public_sales_ready": billing,
         "public_sales_gate": "CONFIGURATION_REQUIRED" if not billing else "CHECK_EXTERNALLY",
         "limitations": [
@@ -153,6 +173,7 @@ def main() -> int:
     parser.add_argument("--api", default="https://api.nfcore.com.br")
     parser.add_argument("--require-web", action="store_true")
     parser.add_argument("--require-fiscal-provider", action="store_true")
+    parser.add_argument("--require-accountant-configuration", action="store_true")
     args = parser.parse_args()
     try:
         result = run_preflight(args.portal, args.api)
@@ -162,6 +183,9 @@ def main() -> int:
     if args.require_web and result["web_pilot_ready"] is not True:
         return 1
     if args.require_fiscal_provider and result["fiscal_provider_ready"] is not True:
+        return 1
+    if (args.require_accountant_configuration
+            and result["accountant_configuration_ready"] is not True):
         return 1
     return 0
 

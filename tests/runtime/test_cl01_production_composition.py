@@ -379,3 +379,70 @@ def test_postgres_runtime_reports_composition_failure_separately(monkeypatch) ->
     response = client.get("/health/ready")
     assert response.status_code == 503
     assert response.json() == {"status": "not_ready", "reason": "composition_unavailable"}
+
+
+def test_fiscal_provider_handlers_bind_to_one_canonical_runtime_application(monkeypatch) -> None:
+    """Opt-in client uses the runtime-owned durable application, never a second one."""
+    from kordena_fiscal.application.service import FiscalApplicationService
+    from kordena_fiscal.operations import FakeFiscalOperationsGateway, FiscalOperationsClient
+    from kordena_fiscal.runtime.provider_operation_wiring import build_provider_operation_handlers
+
+    monkeypatch.setattr(runtime_api, "PostgresFiscalDatabase", _RuntimeDatabase)
+    observed: list[FiscalApplicationService] = []
+
+    def approved_handler_factory(
+        application: FiscalApplicationService,
+    ):
+        observed.append(application)
+        return build_provider_operation_handlers(
+            FiscalOperationsClient(FakeFiscalOperationsGateway())
+        )
+
+    with TestClient(
+        runtime_api.create_runtime_app(
+            _settings(), fiscal_operation_handler_factory=approved_handler_factory
+        ),
+        base_url="https://testserver",
+    ) as client:
+        assert client.get("/health/ready").status_code == 200
+        composition = client.app.state.nfcore_runtime_composition
+        assert len(observed) == 1
+        assert observed[0] is composition.fiscal_application
+        assert set(composition.fiscal_operation_path.configured_operations) == {
+            "queryArchiveReference",
+            "queryFiscalDocument",
+            "cancelFiscalDocument",
+            "inutilizeFiscalRange",
+        }
+        profile = client.get("/runtime/profile").json()
+        assert set(profile["fiscal_operation_handlers_configured"]) == set(
+            composition.fiscal_operation_path.configured_operations
+        )
+        # Synthetic client composition is not an official provider or a valid certificate.
+        assert profile["fiscal_provider_transport_real_configured"] is False
+        assert profile["fiscal_runtime_external_execution_ready"] is False
+        assert client.post("/v1/portal/operations/queryFiscalDocument", json={}).status_code == 401
+
+
+def test_duplicate_or_invalid_fiscal_factory_fails_closed(monkeypatch) -> None:
+    monkeypatch.setattr(runtime_api, "PostgresFiscalDatabase", _RuntimeDatabase)
+    for kwargs in (
+        {
+            "fiscal_operation_handlers": {},
+            "fiscal_operation_handler_factory": lambda _app: {},
+        },
+        {"fiscal_operation_handler_factory": lambda _app: ["invalid"]},
+        {"fiscal_operation_handler_factory": lambda _app: (_ for _ in ()).throw(
+            RuntimeError("configured dependency unavailable")
+        )},
+    ):
+        with TestClient(
+            runtime_api.create_runtime_app(_settings(), **kwargs),
+            base_url="https://testserver",
+        ) as client:
+            ready = client.get("/health/ready")
+            assert ready.status_code == 503
+            assert ready.json()["reason"] == "composition_unavailable"
+            assert client.get("/runtime/profile").json()[
+                "fiscal_operation_handlers_configured"
+            ] == []

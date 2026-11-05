@@ -153,3 +153,36 @@ def test_production_promotion_pr_gets_same_quality_gate_as_main() -> None:
     trigger = workflow.split("  pull_request:", 1)[1].split("  push:", 1)[0]
     assert "      - main" in trigger
     assert "      - production" in trigger
+
+
+def test_accountant_pilot_blocks_official_fiscal_when_only_web_ready() -> None:
+    report = _assess()
+    assert report["web_pilot_ready"] is True
+    assert report["accountant_configuration_ready"] is False
+    assert report["accountant_gate"] == "INTERNAL_FISCAL_INTEGRATION_INCOMPLETE"
+
+
+def test_accountant_configuration_never_certifies_per_tenant_homologation() -> None:
+    profile = _profile()
+    profile.update({
+        "fiscal_provider_transport_real_configured": True,
+        "fiscal_external_secret_client_configured": True,
+        "fiscal_signer_configured": True,
+        "fiscal_runtime_external_execution_ready": True,
+        "fiscal_operation_handlers_configured": [
+            "issueFiscalDocument", "queryFiscalDocument",
+            "cancelFiscalDocument", "reconcileFiscalOperation",
+        ],
+    })
+    result = _assess(profile)
+    assert result["accountant_configuration_ready"] is True
+    assert result["accountant_gate"] == "PER_TENANT_HOMOLOGATION_REQUIRED"
+    for field in (
+        "fiscal_provider_transport_real_configured",
+        "fiscal_external_secret_client_configured",
+        "fiscal_signer_configured",
+        "fiscal_runtime_external_execution_ready",
+    ):
+        invalid = dict(profile)
+        invalid.pop(field)
+        assert _assess(invalid)["accountant_configuration_ready"] is False

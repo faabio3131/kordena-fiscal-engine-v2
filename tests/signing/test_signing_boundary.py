@@ -11,7 +11,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.serialization import pkcs12
-from cryptography.x509.oid import NameOID
+from cryptography.x509.oid import NameOID, ObjectIdentifier
 
 from kordena_fiscal.control_plane import (
     AdminPrincipal,
@@ -27,6 +27,7 @@ from kordena_fiscal.domain import (
     FiscalEnvironment,
     FiscalValidationError,
 )
+from kordena_fiscal.domain.identifiers import Cnpj, _calculate_cnpj_dv
 from kordena_fiscal.persistence import SqliteFiscalDatabase
 from kordena_fiscal.signing import (
     CertificateUnavailableError,
@@ -52,6 +53,8 @@ CERT_REF = "ref:fm-fiscal/tenant-signer/unit-signer/hml-certificate"
 NOW = datetime(2026, 9, 13, 13, 0, tzinfo=UTC)
 CANONICAL_CONTENT = b"<SyntheticFiscalDocument Id='NFeSynthetic'>payload</SyntheticFiscalDocument>"
 PFX_PASSWORD = b"synthetic-test-only"
+ISSUER_CNPJ = Cnpj("11222333000181")
+OTHER_CNPJ = Cnpj("112223330002" + _calculate_cnpj_dv("112223330002"))
 
 
 class _FixedClock:
@@ -134,22 +137,41 @@ def _onboard_and_bind(database: SqliteFiscalDatabase) -> SecretReference:
     return reference
 
 
-def _synthetic_pkcs12() -> bytes:
+def _synthetic_pkcs12(
+    *,
+    valid_before_offset: timedelta = timedelta(minutes=-1),
+    valid_after_offset: timedelta = timedelta(days=1),
+    issuer_cnpj: Cnpj | None = None,
+) -> bytes:
     private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     subject = issuer = x509.Name(
         [x509.NameAttribute(NameOID.COMMON_NAME, "FM Fiscal Synthetic Signer Test")]
     )
     naive_now = NOW.replace(tzinfo=None)
-    certificate = (
+    builder = (
         x509.CertificateBuilder()
         .subject_name(subject)
         .issuer_name(issuer)
         .public_key(private_key.public_key())
         .serial_number(x509.random_serial_number())
-        .not_valid_before(naive_now - timedelta(minutes=1))
-        .not_valid_after(naive_now + timedelta(days=1))
-        .sign(private_key, hashes.SHA256())
+        .not_valid_before(naive_now + valid_before_offset)
+        .not_valid_after(naive_now + valid_after_offset)
     )
+    if issuer_cnpj is not None:
+        encoded = issuer_cnpj.value.encode("ascii")
+        builder = builder.add_extension(
+            x509.KeyUsage(
+                digital_signature=True, content_commitment=False, key_encipherment=False,
+                data_encipherment=False, key_agreement=False, key_cert_sign=False,
+                crl_sign=False, encipher_only=False, decipher_only=False,
+            ), critical=True
+        ).add_extension(
+            x509.SubjectAlternativeName([
+                x509.OtherName(ObjectIdentifier("2.16.76.1.3.3"),
+                               bytes([0x04, len(encoded)]) + encoded)
+            ]), critical=False
+        )
+    certificate = builder.sign(private_key, hashes.SHA256())
     return pkcs12.serialize_key_and_certificates(
         name=b"fm-fiscal-synthetic",
         key=private_key,
@@ -168,6 +190,7 @@ def _request(
     environment: FiscalEnvironment = FiscalEnvironment.HOMOLOGATION,
     document_kind: FiscalDocumentKind = FiscalDocumentKind.NFE,
     content: bytes = CANONICAL_CONTENT,
+    issuer_cnpj: Cnpj | None = None,
 ) -> FiscalSignatureRequest:
     return FiscalSignatureRequest(
         scope=ExecutionScope(
@@ -181,6 +204,7 @@ def _request(
         canonical_content=content,
         certificate_reference=reference,
         workload_id="fiscal-signer-runtime",
+        issuer_cnpj=issuer_cnpj,
     )
 
 
@@ -191,6 +215,7 @@ def _signer(
     pkcs12_bytes: bytes | None = None,
     vault_available: bool = True,
     signer_available: bool = True,
+    require_issuer_cnpj: bool = False,
 ) -> CryptographyFiscalDocumentSigner:
     vault = InMemorySyntheticFiscalSecretVault(available=vault_available)
     vault.register(
@@ -207,6 +232,7 @@ def _signer(
         secret_resolution=resolution,
         clock=_FixedClock(),
         available=signer_available,
+        require_issuer_cnpj=require_issuer_cnpj,
     )
 
 
@@ -417,3 +443,86 @@ def test_signer_has_no_readiness_authority_or_persistence_port() -> None:
     assert "unit_of_work_factory" not in constructor_parameters
     assert "readiness" not in result_fields
     assert "production_approved" not in result_fields
+
+
+def test_expired_certificate_rejected_before_signing(tmp_path) -> None:
+    database = _database(tmp_path)
+    reference = _onboard_and_bind(database)
+    old = _synthetic_pkcs12(
+        valid_before_offset=timedelta(days=-2),
+        valid_after_offset=timedelta(minutes=-1),
+    )
+    signer = _signer(database, reference, pkcs12_bytes=old)
+    with pytest.raises(InvalidCertificateMaterialError, match="validity period"):
+        signer.sign(_request(reference))
+
+
+def test_certificate_not_yet_valid_rejected_before_signing(tmp_path) -> None:
+    database = _database(tmp_path)
+    reference = _onboard_and_bind(database)
+    future = _synthetic_pkcs12(
+        valid_before_offset=timedelta(minutes=1),
+        valid_after_offset=timedelta(days=2),
+    )
+    signer = _signer(database, reference, pkcs12_bytes=future)
+    with pytest.raises(InvalidCertificateMaterialError, match="validity period"):
+        signer.sign(_request(reference))
+
+
+
+def test_issuer_bound_a1_signing_uses_same_vault_material(tmp_path) -> None:
+    database = _database(tmp_path)
+    reference = _onboard_and_bind(database)
+    signer = _signer(
+        database, reference,
+        pkcs12_bytes=_synthetic_pkcs12(issuer_cnpj=ISSUER_CNPJ),
+        require_issuer_cnpj=True,
+    )
+    request = _request(reference, issuer_cnpj=ISSUER_CNPJ)
+
+    signed = signer.sign(request)
+    signer.verify(request, signed)
+    assert signed.certificate_reference_id == reference.reference_id
+    assert len(signed.certificate_fingerprint_sha256) == 64
+
+
+def test_issuer_bound_a1_signing_denies_missing_or_foreign_cnpj(tmp_path) -> None:
+    database = _database(tmp_path)
+    reference = _onboard_and_bind(database)
+    signer = _signer(
+        database, reference,
+        pkcs12_bytes=_synthetic_pkcs12(issuer_cnpj=ISSUER_CNPJ),
+        require_issuer_cnpj=True,
+    )
+    with pytest.raises(InvalidCertificateMaterialError, match="issuer CNPJ"):
+        signer.sign(_request(reference))
+    with pytest.raises(InvalidCertificateMaterialError, match="CNPJ"):
+        signer.sign(_request(reference, issuer_cnpj=OTHER_CNPJ))
+
+
+def test_issuer_bound_signing_denies_cert_without_icp_cnpj_extension(tmp_path) -> None:
+    database = _database(tmp_path)
+    reference = _onboard_and_bind(database)
+    signer = _signer(
+        database, reference,
+        pkcs12_bytes=_synthetic_pkcs12(),
+        require_issuer_cnpj=True,
+    )
+    with pytest.raises(InvalidCertificateMaterialError, match="issuer identity"):
+        signer.sign(_request(reference, issuer_cnpj=ISSUER_CNPJ))
+
+
+def test_issuer_bound_signing_denies_cross_tenant_certificate(tmp_path) -> None:
+    database = _database(tmp_path)
+    reference = _onboard_and_bind(database)
+    signer = _signer(
+        database, reference,
+        pkcs12_bytes=_synthetic_pkcs12(issuer_cnpj=ISSUER_CNPJ),
+        require_issuer_cnpj=True,
+    )
+    foreign = _certificate_reference(
+        tenant="tenant-other",
+        reference_id="ref:fm-fiscal/tenant-other/unit-signer/hml-certificate",
+    )
+    with pytest.raises(CertificateUnavailableError, match="unavailable"):
+        signer.sign(_request(foreign, tenant="tenant-other", issuer_cnpj=ISSUER_CNPJ))

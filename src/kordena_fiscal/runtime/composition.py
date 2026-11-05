@@ -7,7 +7,7 @@ this composition root and fiscal production authority is injected independently.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -59,6 +59,10 @@ from .fiscal_runtime import (
 from .internal_archive_handler import build_archive_reference_handler
 from .observability import MetricsRegistry
 
+FiscalOperationHandlerFactory = Callable[
+    [FiscalApplicationService], Mapping[str, FiscalOperationHandler]
+]
+
 
 @dataclass(frozen=True, slots=True)
 class RuntimeComposition:
@@ -91,6 +95,7 @@ def build_postgres_runtime_composition(
     workload_credentials: tuple[WorkloadCredentialRecord, ...] = (),
     security_audit_sink: SecurityAuditSink | None = None,
     fiscal_operation_handlers: Mapping[str, FiscalOperationHandler] | None = None,
+    fiscal_operation_handler_factory: FiscalOperationHandlerFactory | None = None,
     capability_readiness: CapabilityReadinessService | None = None,
     enable_cakto_checkout: bool = False,
     metrics: MetricsRegistry | None = None,
@@ -169,8 +174,16 @@ def build_postgres_runtime_composition(
         cakto_checkout_administration = CaktoCheckoutAdministrationService(
             cakto_commercial_database
         )
+    if fiscal_operation_handlers is not None and fiscal_operation_handler_factory is not None:
+        raise ValueError("two independent fiscal handler authorities are prohibited")
     fiscal_application = FiscalApplicationService(database, metrics=metrics)
-    canonical_handlers = dict(fiscal_operation_handlers or {})
+    if fiscal_operation_handler_factory is None:
+        canonical_handlers = dict(fiscal_operation_handlers or {})
+    else:
+        provided = fiscal_operation_handler_factory(fiscal_application)
+        if not isinstance(provided, Mapping):
+            raise TypeError("fiscal handler factory must return an operation mapping")
+        canonical_handlers = dict(provided)
     canonical_handlers.setdefault(
         "queryArchiveReference", build_archive_reference_handler(database)
     )

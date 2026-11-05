@@ -25,6 +25,7 @@ from kordena_fiscal.vault import (
     SecretResolutionService,
     SecretUsagePurpose,
 )
+from kordena_fiscal.vault.a1_preflight import validate_a1_for_issuer
 
 from .contracts import (
     CertificateUnavailableError,
@@ -60,6 +61,7 @@ class CryptographyFiscalDocumentSigner:
         ),
         clock: SigningClock | None = None,
         available: bool = True,
+        require_issuer_cnpj: bool = False,
     ) -> None:
         if not isinstance(supported_document_kinds, frozenset):
             raise FiscalValidationError("supported_document_kinds must be frozenset")
@@ -71,13 +73,39 @@ class CryptographyFiscalDocumentSigner:
         self._supported_document_kinds = supported_document_kinds
         self._clock = clock or SystemSigningClock()
         self._available = available
+        if not isinstance(require_issuer_cnpj, bool):
+            raise FiscalValidationError("require_issuer_cnpj must be bool")
+        self._require_issuer_cnpj = require_issuer_cnpj
 
     def sign(self, request: FiscalSignatureRequest) -> FiscalSignatureResult:
         self._require_request(request)
         self._require_available()
         self._require_document_kind(request.document_kind)
+        if self._require_issuer_cnpj and request.issuer_cnpj is None:
+            raise InvalidCertificateMaterialError("issuer CNPJ is required for A1 signing")
         material = self._resolve_certificate(request)
         private_key, certificate = self._load_identity(material)
+        # Reject expired or not-yet-valid identities BEFORE using the private key.
+        # Do not apply this gate to verify(): historical signatures remain verifiable.
+        signed_at = self._clock.now()
+        if (
+            signed_at.tzinfo is None
+            or signed_at.utcoffset() is None
+            or not certificate.not_valid_before_utc <= signed_at
+            < certificate.not_valid_after_utc
+        ):
+            raise InvalidCertificateMaterialError(
+                "certificate validity period does not include signing time"
+            )
+        if request.issuer_cnpj is not None:
+            # Check the *same* Vault material used to sign; never preflight a
+            # separate version and then resolve a rotated key for signing.
+            validate_a1_for_issuer(
+                material.pkcs12_bytes,
+                material.password,
+                issuer_cnpj=request.issuer_cnpj,
+                at=signed_at,
+            )
 
         try:
             if isinstance(private_key, rsa.RSAPrivateKey):
@@ -108,7 +136,7 @@ class CryptographyFiscalDocumentSigner:
             algorithm=algorithm,
             certificate_reference_id=material.reference_id,
             certificate_fingerprint_sha256=certificate.fingerprint(hashes.SHA256()).hex(),
-            signed_at=self._clock.now(),
+            signed_at=signed_at,
             document_kind=request.document_kind,
         )
 

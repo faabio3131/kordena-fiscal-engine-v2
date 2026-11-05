@@ -37,6 +37,7 @@ from kordena_fiscal.security.s2s import (
     WorkloadCredentialRecord,
 )
 from kordena_fiscal.security.secrets import SecretResolver
+from kordena_fiscal.vault.encrypted_a1 import EncryptedA1Vault
 from kordena_fiscal.web.app import create_app
 from kordena_fiscal.web.command_commercial import create_command_commercial_router
 from kordena_fiscal.web.commercial_acquisition import (
@@ -56,7 +57,12 @@ from .ai_secrets import build_production_openai_key_readers
 from .alert_rules import InternalAlertMonitor, OperationalSignals
 from .api_staging_gsm_probe import staging_probe_verifier
 from .cakto import build_cakto_webhook_router
-from .composition import RuntimeComposition, build_postgres_runtime_composition
+from .canonical_fiscal_composition import build_runtime_fiscal_handler_factory
+from .composition import (
+    FiscalOperationHandlerFactory,
+    RuntimeComposition,
+    build_postgres_runtime_composition,
+)
 from .config import RuntimeConfigurationError, RuntimeSettings
 from .development_commercial_ingress import (
     development_command_resolver,
@@ -90,6 +96,7 @@ class RuntimeApi:
         workload_credentials: tuple[WorkloadCredentialRecord, ...] = (),
         security_audit_sink: SecurityAuditSink | None = None,
         fiscal_operation_handlers: Mapping[str, FiscalOperationHandler] | None = None,
+        fiscal_operation_handler_factory: FiscalOperationHandlerFactory | None = None,
         metrics: MetricsRegistry | None = None,
     ) -> None:
         self.settings = settings
@@ -118,6 +125,7 @@ class RuntimeApi:
                         workload_credentials=workload_credentials,
                         security_audit_sink=security_audit_sink,
                         fiscal_operation_handlers=fiscal_operation_handlers,
+                        fiscal_operation_handler_factory=fiscal_operation_handler_factory,
                         metrics=metrics,
                         enable_cakto_checkout=(
                             settings.commercial_checkout_provider == "cakto"
@@ -193,6 +201,8 @@ def create_runtime_app(
     workload_credentials: tuple[WorkloadCredentialRecord, ...] = (),
     security_audit_sink: SecurityAuditSink | None = None,
     fiscal_operation_handlers: Mapping[str, FiscalOperationHandler] | None = None,
+    fiscal_operation_handler_factory: FiscalOperationHandlerFactory | None = None,
+    certificate_vault: EncryptedA1Vault | None = None,
 ) -> FastAPI:
     resolved = settings or RuntimeSettings.from_environ()
     runtime_metrics = metrics or MetricsRegistry()
@@ -201,6 +211,7 @@ def create_runtime_app(
         workload_credentials=workload_credentials,
         security_audit_sink=security_audit_sink,
         fiscal_operation_handlers=fiscal_operation_handlers,
+        fiscal_operation_handler_factory=fiscal_operation_handler_factory,
         metrics=runtime_metrics,
     )
     runtime_logger = logger or StructuredLogger(
@@ -831,6 +842,7 @@ def create_runtime_app(
             password_reset_delivery=password_reset_delivery,
             password_reset_completed=commercial_activation_completed,
             portal_executor=portal_executor,
+            certificate_vault=certificate_vault,
             pricing_administration=pricing_administration,
             commercial_release_administration=commercial_release_administration,
             commercial_checkout=selected_checkout,
@@ -884,15 +896,24 @@ def create_runtime_app(
 
 
 _entrypoint_settings = RuntimeSettings.from_environ()
+_entrypoint_certificate_vault = EncryptedA1Vault.from_environ()
 _development_ingress = development_commercial_ingress(_entrypoint_settings, os.environ)
 app = create_runtime_app(
     _entrypoint_settings,
     password_reset_delivery=build_activation_delivery_from_environ(),
+    certificate_vault=_entrypoint_certificate_vault,
     command_secret_resolver=development_command_resolver(
         _entrypoint_settings, os.environ
     ),
-    fiscal_operation_handlers=development_fiscal_ingress(
-        _entrypoint_settings, os.environ
+    fiscal_operation_handlers=(
+        development_fiscal_ingress(_entrypoint_settings, os.environ)
+        if _entrypoint_settings.environment.value in {"development", "test"}
+        else None
+    ),
+    fiscal_operation_handler_factory=(
+        build_runtime_fiscal_handler_factory(certificate_vault=_entrypoint_certificate_vault)
+        if _entrypoint_settings.environment.value in {"staging", "production"}
+        else None
     ),
     commercial_acquisition_security=_development_ingress.get(
         "commercial_acquisition_security"

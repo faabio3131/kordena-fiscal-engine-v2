@@ -1,0 +1,276 @@
+"""Real SEFAZ-SP NF-e 4.00 homologation query, cancellation and inutilization.
+
+HTTPS/mTLS to fixed, government-published homologation endpoints; only
+tenant-bound A1 material is accepted. Responses are normalized strictly.
+"""
+from __future__ import annotations
+
+import ssl
+from collections.abc import Callable
+from datetime import UTC, datetime
+from urllib.error import HTTPError, URLError
+from urllib.request import HTTPSHandler, Request, build_opener
+
+from lxml import etree
+
+from kordena_fiscal.domain import Cnpj, ExecutionScope, FiscalEnvironment, FiscalValidationError
+from kordena_fiscal.gateway.authorization import GatewayProviderMetadata
+from kordena_fiscal.gateway.nfe_sp_homologation import (
+    NFE_NAMESPACE,
+    SOAP12_NAMESPACE,
+    _parse_xml,
+    _tls_context,
+)
+from kordena_fiscal.operations import (
+    CancellationRequest,
+    CancellationResult,
+    FiscalEventStatus,
+    FiscalQueryRequest,
+    FiscalQueryResult,
+    FiscalQueryStatus,
+    InutilizationRequest,
+    InutilizationResult,
+)
+from kordena_fiscal.signing.nfe_xmldsig import sign_nfe_event_xml
+from kordena_fiscal.vault import EphemeralCertificateMaterial
+from kordena_fiscal.vault.a1_preflight import validate_a1_for_issuer
+
+_SERVICE_ROOT = "http://www.portalfiscal.inf.br/nfe/wsdl/"
+_BASE_URL = "https://homologacao.nfe.fazenda.sp.gov.br/ws/"
+_PROVIDER = GatewayProviderMetadata("sefaz-sp-homologacao-nfe4", "1.0")
+_MAX_RESPONSE_BYTES = 2_097_152
+_SERVICES = {
+    "NFeConsultaProtocolo4": ("nfeconsultaprotocolo4.asmx", "nfeConsultaNF"),
+    "NFeRecepcaoEvento4": ("nferecepcaoevento4.asmx", "nfeRecepcaoEvento"),
+    "NFeInutilizacao4": ("nfeinutilizacao4.asmx", "nfeInutilizacaoNF"),
+}
+
+
+class OfficialNfeOperationsError(FiscalValidationError):
+    """Non-secret transport or provider response failure."""
+
+
+def _tag(parent: etree._Element, local: str, value: str) -> etree._Element:
+    child = etree.SubElement(parent, f"{{{NFE_NAMESPACE}}}{local}")
+    child.text = value
+    return child
+
+
+def _value(node: etree._Element, tag: str) -> str | None:
+    element = node.find(".//{" + NFE_NAMESPACE + "}" + tag)
+    return element.text.strip() if element is not None and element.text else None
+
+
+def _envelope(data: etree._Element, service: str) -> bytes:
+    parent = etree.Element(
+        f"{{{SOAP12_NAMESPACE}}}Envelope", nsmap={"soap12": SOAP12_NAMESPACE}
+    )
+    body = etree.SubElement(parent, f"{{{SOAP12_NAMESPACE}}}Body")
+    msg = etree.SubElement(body, f"{{{_SERVICE_ROOT}{service}}}nfeDadosMsg")
+    msg.append(data)
+    return etree.tostring(parent, encoding="utf-8", xml_declaration=True)
+
+
+def _post_official(
+    service: str, payload: bytes, context: ssl.SSLContext, timeout: float
+) -> bytes:
+    if service not in _SERVICES:
+        raise OfficialNfeOperationsError("Unsupported SP fiscal service")
+    path, operation = _SERVICES[service]
+    endpoint = _BASE_URL + path
+    request = Request(
+        endpoint, method="POST", data=payload,
+        headers={
+            "Content-Type": (
+                "application/soap+xml; charset=utf-8; "
+                f'action="{_SERVICE_ROOT}{service}/nfeDadosMsg"'
+            ),
+            "Accept": "application/soap+xml",
+        },
+    )
+    try:
+        with build_opener(HTTPSHandler(context=context)).open(request, timeout=timeout) as answer:
+            result = answer.read(_MAX_RESPONSE_BYTES + 1)
+        if len(result) > _MAX_RESPONSE_BYTES:
+            raise OfficialNfeOperationsError("Resposta SEFAZ excede limite")
+        return bytes(result)
+    except (HTTPError, URLError, TimeoutError, OSError, ssl.SSLError):
+        raise OfficialNfeOperationsError(
+            "SEFAZ-SP indisponível; consulte resultado antes de retransmitir"
+        ) from None
+
+
+class SefazSpHomologationOperationsGateway:
+    """Real operations adapter for query, cancel and inutilize in tpAmb=2."""
+
+    def __init__(
+        self,
+        *,
+        resolve_certificate: Callable[[ExecutionScope, str], EphemeralCertificateMaterial],
+        resolve_issuer: Callable[[ExecutionScope], str] | None = None,
+        exchange: Callable[[str, bytes, ssl.SSLContext, float], bytes] | None = None,
+        timeout_seconds: float = 15,
+    ) -> None:
+        if not callable(resolve_certificate) or not 0 < timeout_seconds <= 60:
+            raise ValueError("Fiscal operations require approved A1 resolver")
+        self._resolve_certificate = resolve_certificate
+        self._resolve_issuer = resolve_issuer
+        self._exchange = exchange or _post_official
+        self._timeout = timeout_seconds
+
+    def _certificate(
+        self, scope: ExecutionScope, issuer_cnpj: str
+    ) -> EphemeralCertificateMaterial:
+        if scope.environment is not FiscalEnvironment.HOMOLOGATION:
+            raise OfficialNfeOperationsError("Somente ambiente tpAmb=2 permitido")
+        material = self._resolve_certificate(scope, issuer_cnpj)
+        validate_a1_for_issuer(
+            material.pkcs12_bytes, material.password,
+            issuer_cnpj=Cnpj(issuer_cnpj), at=datetime.now(UTC),
+        )
+        return material
+
+    def _send(
+        self, service: str, root: etree._Element,
+        material: EphemeralCertificateMaterial,
+    ) -> etree._Element:
+        response = _parse_xml(self._exchange(
+            service, _envelope(root, service), _tls_context(material), self._timeout,
+        ))
+        if response.find(f".//{{{SOAP12_NAMESPACE}}}Fault") is not None:
+            raise OfficialNfeOperationsError("SEFAZ-SP retornou falha SOAP")
+        return response
+
+    def query(self, request: FiscalQueryRequest) -> FiscalQueryResult:
+        if request.access_key.value[:2] != "35":
+            raise OfficialNfeOperationsError("Apenas NF-e emitidas em SP são suportadas")
+        material = self._certificate(request.scope, request.access_key.issuer_identifier)
+        root = etree.Element(f"{{{NFE_NAMESPACE}}}consSitNFe", versao="4.00")
+        _tag(root, "tpAmb", "2")
+        _tag(root, "xServ", "CONS_SIT")
+        _tag(root, "chNFe", request.access_key.value)
+        answer = self._send("NFeConsultaProtocolo4", root, material)
+        response = answer.find(f".//{{{NFE_NAMESPACE}}}retConsSitNFe")
+        if response is None or _value(response, "tpAmb") != "2":
+            raise OfficialNfeOperationsError("Resposta de consulta não é homologação")
+        code = _value(response, "cStat")
+        if code == "100":
+            protocol = _value(response, "nProt")
+            if not protocol:
+                raise OfficialNfeOperationsError("Protocolo de autorização ausente")
+            status = FiscalQueryStatus.AUTHORIZED
+        elif code in {"101", "151"}:
+            protocol = None
+            status = FiscalQueryStatus.CANCELLED
+        elif code == "217":
+            protocol = None
+            status = FiscalQueryStatus.NOT_FOUND
+        elif code in {"105", "106", "108", "109"}:
+            protocol = None
+            status = FiscalQueryStatus.PENDING
+        else:
+            raise OfficialNfeOperationsError("Consulta fiscal rejeitada ou inconsistente")
+        return FiscalQueryResult(
+            status=status, scope=request.scope, access_key=request.access_key,
+            provider=_PROVIDER, protocol_reference=protocol,
+        )
+
+    def cancel(self, request: CancellationRequest) -> CancellationResult:
+        if request.access_key.value[:2] != "35":
+            raise OfficialNfeOperationsError("Cancelamento restrito a SEFAZ-SP")
+        issuer = request.access_key.issuer_identifier
+        material = self._certificate(request.scope, issuer)
+        root = etree.Element(f"{{{NFE_NAMESPACE}}}envEvento", versao="1.00")
+        _tag(root, "idLote", "1")
+        event = etree.SubElement(root, f"{{{NFE_NAMESPACE}}}evento", versao="1.00")
+        info = etree.SubElement(
+            event, f"{{{NFE_NAMESPACE}}}infEvento",
+            Id="ID110111" + request.access_key.value + "01",
+        )
+        for name, value in (
+            ("cOrgao", "35"), ("tpAmb", "2"), ("CNPJ", issuer),
+            ("chNFe", request.access_key.value),
+            ("dhEvento", datetime.now().astimezone().isoformat(timespec="seconds")),
+            ("tpEvento", "110111"), ("nSeqEvento", "1"), ("verEvento", "1.00"),
+        ):
+            _tag(info, name, value)
+        details = etree.SubElement(info, f"{{{NFE_NAMESPACE}}}detEvento", versao="1.00")
+        for name, value in (
+            ("descEvento", "Cancelamento"), ("nProt", request.authorization_protocol),
+            ("xJust", request.justification),
+        ):
+            _tag(details, name, value)
+        signed = sign_nfe_event_xml(
+            etree.tostring(root), material,
+            root_name="envEvento", signed_name="infEvento", parent_name="evento",
+        )
+        answer = self._send(
+            "NFeRecepcaoEvento4", _parse_xml(signed), material,
+        )
+        result = answer.find(f".//{{{NFE_NAMESPACE}}}retEvento/{{{NFE_NAMESPACE}}}infEvento")
+        if result is None or _value(result, "tpAmb") != "2":
+            raise OfficialNfeOperationsError("Resposta de cancelamento inconsistente")
+        code = _value(result, "cStat")
+        if code in {"135", "155"} and _value(result, "nProt"):
+            return CancellationResult(
+                status=FiscalEventStatus.ACCEPTED, scope=request.scope,
+                access_key=request.access_key, request_id=request.request_id,
+                provider=_PROVIDER, event_protocol_reference=_value(result, "nProt"),
+            )
+        if code is None:
+            raise OfficialNfeOperationsError("Status de cancelamento ausente")
+        return CancellationResult(
+            status=FiscalEventStatus.REJECTED, scope=request.scope,
+            access_key=request.access_key, request_id=request.request_id,
+            provider=_PROVIDER, rejection_code=code,
+            rejection_message=(_value(result, "xMotivo") or "Cancelamento rejeitado")[:512],
+        )
+
+    def inutilize(self, request: InutilizationRequest) -> InutilizationResult:
+        if self._resolve_issuer is None:
+            raise OfficialNfeOperationsError("Emitente da unidade não configurado")
+        issuer = self._resolve_issuer(request.scope)
+        material = self._certificate(request.scope, issuer)
+        if request.model.value != 55:
+            raise OfficialNfeOperationsError("NFC-e requer gateway de modelo 65")
+        year = datetime.now(UTC).strftime("%y")
+        identifier = (
+            "ID35" + year + issuer + "55" + f"{request.series:03}"
+            + f"{request.first_number:09}" + f"{request.last_number:09}"
+        )
+        root = etree.Element(f"{{{NFE_NAMESPACE}}}inutNFe", versao="4.00")
+        info = etree.SubElement(root, f"{{{NFE_NAMESPACE}}}infInut", Id=identifier)
+        for name, value in (
+            ("tpAmb", "2"), ("xServ", "INUTILIZAR"), ("cUF", "35"),
+            ("ano", year), ("CNPJ", issuer), ("mod", "55"),
+            ("serie", str(request.series)), ("nNFIni", str(request.first_number)),
+            ("nNFFin", str(request.last_number)), ("xJust", request.justification),
+        ):
+            _tag(info, name, value)
+        signed = sign_nfe_event_xml(
+            etree.tostring(root), material,
+            root_name="inutNFe", signed_name="infInut", parent_name="inutNFe",
+        )
+        answer = self._send("NFeInutilizacao4", _parse_xml(signed), material)
+        result = answer.find(f".//{{{NFE_NAMESPACE}}}retInutNFe/{{{NFE_NAMESPACE}}}infInut")
+        if result is None or _value(result, "tpAmb") != "2":
+            raise OfficialNfeOperationsError("Resposta de inutilização inconsistente")
+        code = _value(result, "cStat")
+        if code == "102" and _value(result, "nProt"):
+            return InutilizationResult(
+                status=FiscalEventStatus.ACCEPTED, scope=request.scope,
+                model=request.model, series=request.series,
+                first_number=request.first_number, last_number=request.last_number,
+                request_id=request.request_id, provider=_PROVIDER,
+                event_protocol_reference=_value(result, "nProt"),
+            )
+        if code is None:
+            raise OfficialNfeOperationsError("Status de inutilização ausente")
+        return InutilizationResult(
+            status=FiscalEventStatus.REJECTED, scope=request.scope,
+            model=request.model, series=request.series,
+            first_number=request.first_number, last_number=request.last_number,
+            request_id=request.request_id, provider=_PROVIDER,
+            rejection_code=code,
+            rejection_message=(_value(result, "xMotivo") or "Inutilização rejeitada")[:512],
+        )

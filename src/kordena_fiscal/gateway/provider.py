@@ -27,6 +27,8 @@ from kordena_fiscal.vault import (
     SecretUsagePurpose,
 )
 
+from .pilot_sp_jurisdiction import require_sp_jurisdiction_operation_policy
+
 
 class ProviderGatewayError(FiscalDomainError):
     """Base error for provider/gateway boundary failures."""
@@ -491,11 +493,18 @@ class ProviderGatewayService:
     ) -> ProviderResponse:
         if not isinstance(request, ProviderRequest):
             raise FiscalValidationError("request must be ProviderRequest")
+        now = self._clock.now()
+        require_sp_jurisdiction_operation_policy(
+            jurisdiction=request.jurisdiction,
+            document_kind=request.document_kind,
+            operation=request.operation,
+            requested_at=now,
+        )
         self._readiness.require_action(
             jurisdiction=request.jurisdiction,
             document_kind=request.document_kind,
             environment=request.scope.environment,
-            instant=self._clock.now(),
+            instant=now,
             action=_OPERATION_ACTION[request.operation],
         )
         selected_provider = provider_id
