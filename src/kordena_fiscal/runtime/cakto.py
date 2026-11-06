@@ -3,6 +3,25 @@
 The runtime deliberately accepts webhook secret material only by injection. Secret
 resolution belongs to the external secret boundary; this module never reads secrets
 from environment variables, persists them, or grants fiscal production authority.
+
+Operational note -- post-payment activation is currently MANUAL, not automatic
+--------------------------------------------------------------------------------
+``CaktoWebhookReceiver.receive()`` (built here) persists accepted Cakto events
+into the canonical commercial inbox. ``CaktoCommercialProcessor`` (also built
+here) later reconciles that inbox against canonical purchase/subscription
+state via ``CaktoCanonicalCommercialBridge``, when one is injected.
+
+Neither step calls ``CommercialClaimService.issue()``
+(``application/commercial_claim.py``). There is today no code path, webhook-
+triggered or otherwise, that turns a reconciled Cakto payment into a claim
+token the customer can redeem at ``POST /v1/commercial/claim`` -- and no admin
+tool to issue one manually either. Until that linkage is explicitly designed
+(when to issue, from which reconciled state, what idempotency boundary),
+operations must treat every Cakto payment as requiring a manual check against
+the reconciled purchase/subscription records and, if confirmed, a deliberate,
+individually-authorized provisioning action -- not an automated or inferred
+one. Do not read the mere existence of the webhook route or the claim route
+as proof that this pipeline is connected end to end.
 """
 
 from __future__ import annotations
