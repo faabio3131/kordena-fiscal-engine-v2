@@ -159,3 +159,17 @@ def test_national_envelope_refuses_an_abrasf_root():
         build_nfse_dps_request(
             b'<GerarNfseEnvio xmlns="http://www.abrasf.org.br/nfse.xsd"/>',
         )
+
+
+@pytest.mark.parametrize("issuer_ibge", ["3550308", "3106200", "3304557", "4106902", "5103403"])
+def test_scoped_dps_checks_issuer_municipality_before_envelope(issuer_ibge):
+    from kordena_fiscal.gateway.nfse_nacional_homologation import encode_signed_dps
+
+    material, _ = _ephemeral_certificate()
+    root = etree.fromstring(_unsigned_dps())
+    etree.SubElement(root[0], f"{{{_NS}}}cLocEmi").text = "5002704"
+    signed = sign_nfse_dps_xml(etree.tostring(root), material)
+    with pytest.raises(FiscalValidationError, match="issuer municipality"):
+        encode_signed_dps(
+            signed, issuer_cnpj="11222333000181", issuer_municipality_ibge=issuer_ibge,
+        )

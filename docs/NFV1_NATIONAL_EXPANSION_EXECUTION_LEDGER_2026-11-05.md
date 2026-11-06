@@ -171,6 +171,13 @@ Cenário positivo de NF-e completa assinada e nfeProc validado é sintético e
 comprova contrato estrutural/criptográfico; não comprova tributação ou homologação.
 
 
+## NFS-e Nacional — validação do município emissor na DPS (06/11/2026)
+
+- O gateway canônico de produção restrita passou a exigir o código IBGE do endereço do perfil fiscal do emitente e conferir o campo `infDPS/cLocEmi` antes do POST. O município de prestação é um dado distinto. A regra não habilita emissor nem substitui o vínculo durável.
+- A regressão exercita São Paulo, Belo Horizonte, Rio de Janeiro, Curitiba e Cuiabá contra um XML assinado com município emissor divergente. O builder confiável, a jornada Web por unidade e a homologação contábil continuam como dependências.
+- Campo Grande: em nova checagem, o portal municipal de homologação respondeu, mas o hostname de lotes do WSDL oficial ABRASF 2.03 retornou NXDOMAIN. O adaptador continua sem ativação. Fonte: [comunicado da prefeitura](https://cdn.campogrande.ms.gov.br/portal/prod/uploads/sites/29/2026/03/Comunicado-RPS-Integracao-Web-Service-2.pdf).
+- Jundiaí: a prefeitura confirma o uso do emissor nacional pelas empresas do Simples a partir de 01/11/2026. Evidência de canal e vigência, sem aprovação automática do provider. Fonte: [comunicado municipal](https://jundiai.sp.gov.br/noticias/2026/10/29/nota-fiscal-de-servicos-empresas-do-simples-nacional-devem-usar-emissor-nacional-a-partir-de-1o-de-novembro/).
+
 ## NAT-UF-MG-T04 — consulta NF-e 55 na composição canônica
 
 Em 05/11/2026, `main` estava em `b1769429d651ca58c94745904ea7378693b55652` e

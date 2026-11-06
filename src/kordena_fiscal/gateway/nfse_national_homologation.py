@@ -68,9 +68,15 @@ def parse_signed_dps_info(signed_dps_xml: bytes) -> etree._Element:
 
 def build_nfse_dps_request(
     signed_dps_xml: bytes, *, issuer_cnpj: str | None = None,
+    issuer_municipality_ibge: str | None = None,
 ) -> bytes:
     """Build the public Emissor Nacional API JSON envelope from signed DPS XML."""
     info = parse_signed_dps_info(signed_dps_xml)
+    if (
+        issuer_municipality_ibge is not None
+        and info.findtext(f"{{{_NFSE}}}cLocEmi") != issuer_municipality_ibge
+    ):
+        raise OfficialNfseTransportError("DPS issuer municipality differs from the fiscal profile")
     if issuer_cnpj is not None:
         if info.findtext(f"{{{_NFSE}}}prest/{{{_NFSE}}}CNPJ") != issuer_cnpj:
             raise OfficialNfseTransportError("DPS issuer disagrees with the scoped A1")
