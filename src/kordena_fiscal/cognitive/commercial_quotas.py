@@ -17,9 +17,10 @@ OUTPUT_QUOTA_METRIC = "cognitive.output_tokens"
 
 class TokenQuotaPlan(StrEnum):
     TRIAL = "trial"
-    ESSENCIAL = "essencial"
-    CRESCIMENTO = "crescimento"
-    ESCALA = "escala"
+    STARTER = "starter"
+    PRO = "pro"
+    BUSINESS = "business"
+    ENTERPRISE = "enterprise"
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,12 +33,18 @@ class TokenAllowance:
             raise ValueError("token allowance cannot be negative")
 
 
-# Approved by the owner on 2026-11-01; values apply per canonical billing period.
+# Existing approved ceilings from the 2026-11-01 three-tier policy are
+# conservatively mapped onto Starter/Pro/Business (v2). Enterprise defaults
+# to Business ceiling pending its explicit signed quota-policy version;
+# "unlimited documents" NEVER implies unlimited IA tokens or billing.
+# Actual allowance is still read from canonical subscription quotas_json,
+# cannot be inferred from marketing or plan ID alone.
 APPROVED_TOKEN_ALLOWANCES: dict[TokenQuotaPlan, TokenAllowance] = {
     TokenQuotaPlan.TRIAL: TokenAllowance(750_000, 210_000),
-    TokenQuotaPlan.ESSENCIAL: TokenAllowance(1_000_000, 300_000),
-    TokenQuotaPlan.CRESCIMENTO: TokenAllowance(3_000_000, 900_000),
-    TokenQuotaPlan.ESCALA: TokenAllowance(8_000_000, 2_400_000),
+    TokenQuotaPlan.STARTER: TokenAllowance(1_000_000, 300_000),
+    TokenQuotaPlan.PRO: TokenAllowance(3_000_000, 900_000),
+    TokenQuotaPlan.BUSINESS: TokenAllowance(8_000_000, 2_400_000),
+    TokenQuotaPlan.ENTERPRISE: TokenAllowance(8_000_000, 2_400_000),
 }
 
 
