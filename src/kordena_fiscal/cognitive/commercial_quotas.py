@@ -47,6 +47,16 @@ APPROVED_TOKEN_ALLOWANCES: dict[TokenQuotaPlan, TokenAllowance] = {
     TokenQuotaPlan.ENTERPRISE: TokenAllowance(8_000_000, 2_400_000),
 }
 
+# Backward-compatible read-side caps for EXISTING paid subscriptions.
+# New catalog v2 does not publish these legacy IDs, so they cannot be sold
+# to new customers. Removing this compatibility before durable migration
+# would silently deny already persisted subscriptions and break reservation.
+LEGACY_PAID_ALLOWANCES: dict[str, TokenAllowance] = {
+    "essencial": TokenAllowance(1_000_000, 300_000),
+    "crescimento": TokenAllowance(3_000_000, 900_000),
+    "escala": TokenAllowance(8_000_000, 2_400_000),
+}
+
 
 def allowance_for_subscription(*, plan_id: str, status: str) -> TokenAllowance | None:
     """A trial is a subscription status; never grant trial to a paid/unknown account."""
@@ -55,8 +65,11 @@ def allowance_for_subscription(*, plan_id: str, status: str) -> TokenAllowance |
         return APPROVED_TOKEN_ALLOWANCES[TokenQuotaPlan.TRIAL]
     if state not in {"active", "grace"}:
         return None
+    normalized_id = plan_id.strip().lower()
+    if normalized_id in LEGACY_PAID_ALLOWANCES:
+        return LEGACY_PAID_ALLOWANCES[normalized_id]
     try:
-        plan = TokenQuotaPlan(plan_id.strip().lower())
+        plan = TokenQuotaPlan(normalized_id)
     except ValueError:
         return None
     if plan is TokenQuotaPlan.TRIAL:
