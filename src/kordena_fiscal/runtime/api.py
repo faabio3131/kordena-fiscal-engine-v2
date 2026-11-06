@@ -57,6 +57,7 @@ from .ai_secrets import build_production_openai_key_readers
 from .alert_rules import InternalAlertMonitor, OperationalSignals
 from .api_staging_gsm_probe import staging_probe_verifier
 from .cakto import build_cakto_webhook_router, compose_postgres_cakto_commercial_runtime
+from .cakto_claim_email import build_cakto_claim_delivery_from_environ
 from .canonical_fiscal_composition import (
     build_runtime_fiscal_handler_factory,
     fiscal_external_dependency_snapshot,
@@ -137,6 +138,7 @@ class RuntimeApi:
                         password_reset_ttl=timedelta(
                             minutes=settings.password_reset_ttl_minutes
                         ),
+                        cakto_claim_delivery=build_cakto_claim_delivery_from_environ(),
                     )
                 except Exception:
                     self._composition_boot_error = True
@@ -266,6 +268,11 @@ def create_runtime_app(
                     fiscal_database=runtime.database,
                     webhook_secret=approved_cakto_webhook_secret,
                     metrics=runtime_metrics,
+                    canonical_bridge=(
+                        composition.cakto_canonical_bridge
+                        if composition is not None
+                        else None
+                    ),
                 ).receiver
     if resolved.environment.value == "staging" and runtime.database is not None:
         # Separate channel-specific GSM bindings, validated against the same
