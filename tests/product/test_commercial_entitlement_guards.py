@@ -24,7 +24,9 @@ def test_four_plan_limits(plan: str, docs: int | None, cnpjs: int | None,
     if rpm is not None:
         quota.require_request_reservation(observed_last_60_seconds=rpm-1, in_flight_reservations=0)
         with pytest.raises(CommercialPricingError, match="RPM limit"):
-            quota.require_request_reservation(observed_last_60_seconds=rpm-1, in_flight_reservations=1)
+            quota.require_request_reservation(
+                observed_last_60_seconds=rpm - 1, in_flight_reservations=1
+            )
 
 
 def test_trial_uses_50_document_hard_limit() -> None:
