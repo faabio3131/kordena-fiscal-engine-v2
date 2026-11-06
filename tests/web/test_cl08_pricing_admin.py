@@ -245,5 +245,6 @@ def test_candidate_pricing_preview_requires_platform_admin() -> None:
         assert body["status"] == "candidate_not_published"
         assert body["current_version"] is None
         assert len(body["catalog"]["plans"]) == 4
-        assert all(not plan["enabled"] for plan in body["catalog"]["plans"])
+        assert all(plan["enabled"] for plan in body["catalog"]["plans"])
+        assert body["catalog"]["version"] == 2
         assert web.get("/v1/commercial/pricing").json()["status"] == "unpriced"
