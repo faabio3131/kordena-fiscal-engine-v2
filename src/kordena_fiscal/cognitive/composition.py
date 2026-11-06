@@ -51,15 +51,24 @@ def build_cognitive_routers(
     quota_store: DurableTokenQuotaStore | None = None,
     model_key_readers: Mapping[str, Callable[[], str | None]] | None = None,
 ) -> list[APIRouter]:
-    """Portal advisory route plus the Command metrics route; empty unless explicitly enabled.
+    """Portal advisory route (opt-in) plus the Command read-only metrics route (always mounted).
 
     With a model configured, durable audit (control-plane ledger) is mandatory in the sense of
     the service rule "no audit, no model"; the log sink is only the non-durable dev fallback.
+
+    The Command metrics route (``/v1/command/cognitive/metrics``) is intentionally mounted
+    regardless of ``NFCORE_COGNITIVE_ENABLED``: it is a read-only, bearer-token-authenticated,
+    rate-limited facts endpoint that must let the Command control plane observe whether the
+    cognitive capability is operational and what ``aiEnabled`` currently is, even while the
+    advisory/AI feature itself stays off. Conflating "AI advisory is on" with "the read-only
+    status route exists" made the Command see a 404/connection failure instead of an honest
+    ``aiEnabled: false`` snapshot. The route's own token check is unaffected by this change.
     """
+    aggregates = CognitiveUsageAggregates()
     if environ.get(ENABLE_FLAG, "").strip().lower() != "true":
-        return []
+        return [create_command_metrics_router(aggregates, environ, ai_enabled=False)]
     if identity is None or portal_executor is None:
-        return []
+        return [create_command_metrics_router(aggregates, environ, ai_enabled=False)]
     try:
         catalog = cached_official_catalog()
     except OfficialTablesError:
@@ -100,7 +109,6 @@ def build_cognitive_routers(
             )
             ledger = InMemoryUsageLedger()
             entitlements = pilot_entitlement(ledger, daily_limit=_daily_limit(environ))
-    aggregates = CognitiveUsageAggregates()
     service = CognitiveAdviceService(
         baselines=default_baselines(classification_catalog=catalog),
         model=model,
