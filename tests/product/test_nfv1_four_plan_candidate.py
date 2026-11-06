@@ -35,14 +35,15 @@ def test_trial_is_not_fiscal_activation() -> None:
 
 
 def test_monthly_quote_uses_canonical_prices_not_new_billing_engine() -> None:
-    quote = estimate_monthly_charge("starter", 1100)
+    quote = estimate_monthly_charge("starter", 800)
+    assert quote["excess_documents"] == 0
     assert quote["included_documents"] == 1000
-    assert quote["excess_documents"] == 100
-    assert quote["monthly_equivalent_total"] == Decimal("124.00")
+    assert quote["monthly_equivalent_total"] == Decimal("99.00")
     assert quote["status"] == "ESTIMATE_ONLY_NOT_INVOICE"
-    assert estimate_monthly_charge("starter", 1100, annual_contract=True)[
-        "monthly_equivalent_total"
-    ] == Decimal("104.00")
+    with pytest.raises(CommercialPricingError, match="quota exceeded"):
+        estimate_monthly_charge("starter", 1100)
+    with pytest.raises(CommercialPricingError, match="cadence not currently approved"):
+        estimate_monthly_charge("starter", 800, annual_contract=True)
 
 
 @pytest.mark.parametrize("count", [-1, True, 1.5])
@@ -92,3 +93,11 @@ def test_commercial_catalog_cannot_activate_itself(tmp_path) -> None:
     path.write_text(json.dumps(document), encoding="utf-8")
     with pytest.raises(CommercialPricingError, match="cannot self-activate"):
         read_candidate(path)
+
+
+def test_unapproved_annual_and_overage_are_never_published() -> None:
+    candidate = build_canonical_candidate()
+    assert len(candidate.prices) == 8
+    assert sum(1 for price in candidate.prices if price.enabled) == 4
+    assert all(price.per_document_amount == Decimal("0.00") for price in candidate.prices)
+    assert all(price.cadence.value == "monthly" for price in candidate.prices if price.enabled)
