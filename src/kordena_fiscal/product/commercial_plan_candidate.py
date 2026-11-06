@@ -85,7 +85,11 @@ def read_candidate(path: Path = _DEFAULT) -> dict[str, object]:
     if publication.get("requires_commercial_release_authority") is not True:
         raise CommercialPricingError("release authority cannot be bypassed")
     policy = data.get("commercial_policy")
-    if not isinstance(policy, dict) or policy.get("annual_prices_enabled") is not False or policy.get("overage_charging_enabled") is not False:
+    if (
+        not isinstance(policy, dict)
+        or policy.get("annual_prices_enabled") is not False
+        or policy.get("overage_charging_enabled") is not False
+    ):
         raise CommercialPricingError("unapproved prices must remain disabled")
     return data
 
@@ -191,7 +195,11 @@ def estimate_monthly_charge(
     raw_plan = raw_plans[plan_key]
     assert isinstance(raw_plan, dict)
     included_raw = raw_plan["included_documents"]
-    included = None if included_raw is None and plan_key == "enterprise" else _positive_int(included_raw, "included documents")
+    included = (
+        None
+        if included_raw is None and plan_key == "enterprise"
+        else _positive_int(included_raw, "included documents")
+    )
     excess = 0 if included is None else max(0, docs_emitted - included)
     if excess:
         raise CommercialPricingError("document quota exceeded; overage billing is not approved")
