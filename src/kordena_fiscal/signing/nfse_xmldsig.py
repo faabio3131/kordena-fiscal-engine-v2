@@ -72,10 +72,11 @@ def append_nfse_signature(
     cert: x509.Certificate,
     *,
     legacy_abrasf: bool,
+    whole_document: bool = False,
 ) -> None:
-    """Insert a sibling XMLDSig under the final document namespace context."""
+    """Insert XMLDSig over an Id target or over the entire request document."""
     identifier = info.get("Id")
-    if not identifier:
+    if not identifier and not whole_document:
         raise FiscalValidationError("Missing NFS-e signature reference Id")
     canonical_info = etree.tostring(info, method="c14n", exclusive=False, with_comments=False)
     algorithm = hashes.SHA1() if legacy_abrasf else hashes.SHA256()
@@ -89,7 +90,8 @@ def append_nfse_signature(
     signed_info = etree.SubElement(signature, f"{{{_DS}}}SignedInfo")
     etree.SubElement(signed_info, f"{{{_DS}}}CanonicalizationMethod", Algorithm=_C14N)
     etree.SubElement(signed_info, f"{{{_DS}}}SignatureMethod", Algorithm=signature_method)
-    reference = etree.SubElement(signed_info, f"{{{_DS}}}Reference", URI="#" + identifier)
+    uri = "" if whole_document else f"#{identifier}"
+    reference = etree.SubElement(signed_info, f"{{{_DS}}}Reference", URI=uri)
     transforms = etree.SubElement(reference, f"{{{_DS}}}Transforms")
     etree.SubElement(transforms, f"{{{_DS}}}Transform", Algorithm=_ENVELOPED)
     etree.SubElement(transforms, f"{{{_DS}}}Transform", Algorithm=_C14N)

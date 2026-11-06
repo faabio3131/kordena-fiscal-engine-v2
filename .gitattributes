@@ -6,3 +6,4 @@ src/kordena_fiscal/xml/official/MG_LIFECYCLE_20261105/** -text
 
 src/kordena_fiscal/xml/official/ABRASF_203/*.xsd -text
 src/kordena_fiscal/xml/official/NFSE_NACIONAL_*/*.xsd -text
+src/kordena_fiscal/xml/official/NFSE_PAULISTANA_02_7/*.xsd -text
