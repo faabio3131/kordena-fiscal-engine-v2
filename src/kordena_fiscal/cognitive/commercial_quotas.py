@@ -17,9 +17,10 @@ OUTPUT_QUOTA_METRIC = "cognitive.output_tokens"
 
 class TokenQuotaPlan(StrEnum):
     TRIAL = "trial"
-    ESSENCIAL = "essencial"
-    CRESCIMENTO = "crescimento"
-    ESCALA = "escala"
+    STARTER = "starter"
+    PRO = "pro"
+    BUSINESS = "business"
+    ENTERPRISE = "enterprise"
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,12 +33,20 @@ class TokenAllowance:
             raise ValueError("token allowance cannot be negative")
 
 
-# Approved by the owner on 2026-11-01; values apply per canonical billing period.
+# Approved by the owner on 2026-11-01 for the legacy essencial/crescimento/escala
+# tiers; carried over unchanged under the renamed starter/pro/business identifiers
+# reconciled on 2026-11-06 (no new ceiling was authorized by that rename).
+#
+# PROVISIONAL: the "enterprise" tier has no prior approved ceiling — there was no
+# legacy plan above "escala"/business. The value below only repeats the business
+# ceiling so enterprise subscribers are not silently denied; it is NOT an approved
+# enterprise-specific allowance. Do not raise it without explicit owner sign-off.
 APPROVED_TOKEN_ALLOWANCES: dict[TokenQuotaPlan, TokenAllowance] = {
     TokenQuotaPlan.TRIAL: TokenAllowance(750_000, 210_000),
-    TokenQuotaPlan.ESSENCIAL: TokenAllowance(1_000_000, 300_000),
-    TokenQuotaPlan.CRESCIMENTO: TokenAllowance(3_000_000, 900_000),
-    TokenQuotaPlan.ESCALA: TokenAllowance(8_000_000, 2_400_000),
+    TokenQuotaPlan.STARTER: TokenAllowance(1_000_000, 300_000),
+    TokenQuotaPlan.PRO: TokenAllowance(3_000_000, 900_000),
+    TokenQuotaPlan.BUSINESS: TokenAllowance(8_000_000, 2_400_000),
+    TokenQuotaPlan.ENTERPRISE: TokenAllowance(8_000_000, 2_400_000),  # PROVISIONAL, see above
 }
 
 

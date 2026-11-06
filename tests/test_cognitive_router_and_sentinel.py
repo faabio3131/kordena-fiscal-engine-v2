@@ -32,8 +32,8 @@ class TestCanonicalCommercialCognitiveArchitecture(unittest.TestCase):
         )
         self.assertTrue(all(not plan.enabled for plan in catalog.plans))
         self.assertEqual(
-            estimate_monthly_charge("starter", 400)["monthly_equivalent_total"],
-            Decimal("124.00"),
+            estimate_monthly_charge("starter", 1400)["monthly_equivalent_total"],
+            Decimal("199.00"),
         )
 
     def test_multi_ai_routing_is_non_authoritative(self) -> None:

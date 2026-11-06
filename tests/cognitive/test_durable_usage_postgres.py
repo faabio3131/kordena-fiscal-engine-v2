@@ -47,7 +47,7 @@ def test_atomic_reservations_across_postgres_connections() -> None:
         conn.execute(
             "INSERT INTO fm_commercial_subscriptions VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
             (
-                "sub-a", "tenant-a", "essencial", "active",
+                "sub-a", "tenant-a", "starter", "active",
                 (now - timedelta(hours=1)).isoformat(),
                 (now + timedelta(days=30)).isoformat(),
                 now.isoformat(),

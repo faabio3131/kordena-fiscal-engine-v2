@@ -33,13 +33,13 @@ def test_trial_is_not_fiscal_activation() -> None:
 
 
 def test_monthly_quote_uses_canonical_prices_not_new_billing_engine() -> None:
-    quote = estimate_monthly_charge("starter", 400)
-    assert quote["excess_documents"] == 100
-    assert quote["monthly_equivalent_total"] == Decimal("124.00")
+    quote = estimate_monthly_charge("starter", 1400)
+    assert quote["excess_documents"] == 400
+    assert quote["monthly_equivalent_total"] == Decimal("199.00")
     assert quote["status"] == "ESTIMATE_ONLY_NOT_INVOICE"
-    assert estimate_monthly_charge("starter", 400, annual_contract=True)[
+    assert estimate_monthly_charge("starter", 1400, annual_contract=True)[
         "monthly_equivalent_total"
-    ] == Decimal("104.00")
+    ] == Decimal("179.00")
 
 
 @pytest.mark.parametrize("count", [-1, True, 1.5])

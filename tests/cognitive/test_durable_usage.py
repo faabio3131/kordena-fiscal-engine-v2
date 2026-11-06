@@ -39,10 +39,10 @@ def quota_db(tmp_path: Path) -> tuple[Path, datetime]:
         for ddl in COGNITIVE_QUOTA_SCHEMA:
             db.execute(ddl)
         for tenant, plan, status in (
-            ("tenant-a", "essencial", "active"),
-            ("tenant-b", "crescimento", "active"),
+            ("tenant-a", "starter", "active"),
+            ("tenant-b", "pro", "active"),
             ("tenant-trial", "anything", "trial"),
-            ("tenant-suspended", "escala", "suspended"),
+            ("tenant-suspended", "business", "suspended"),
         ):
             limits = allowance_for_subscription(plan_id=plan, status=status)
             quotas = [] if limits is None else [
@@ -83,25 +83,25 @@ def store(db: tuple[Path, datetime]) -> DurableTokenQuotaStore:
 def test_approved_allowances_and_unknown_plan() -> None:
     for plan_id, status, expected in (
         ("any", "trial", (750_000, 210_000)),
-        ("essencial", "active", (1_000_000, 300_000)),
-        ("crescimento", "active", (3_000_000, 900_000)),
-        ("escala", "active", (8_000_000, 2_400_000)),
+        ("starter", "active", (1_000_000, 300_000)),
+        ("pro", "active", (3_000_000, 900_000)),
+        ("business", "active", (8_000_000, 2_400_000)),
     ):
         allowance = allowance_for_subscription(plan_id=plan_id, status=status)
         assert allowance is not None
         assert (allowance.input_tokens, allowance.output_tokens) == expected
     assert configured_allowance(
-        plan_id="essencial", status="active", quotas_json="[]"
+        plan_id="starter", status="active", quotas_json="[]"
     ) is None
     assert configured_allowance(
-        plan_id="essencial", status="active",
+        plan_id="starter", status="active",
         quotas_json=json.dumps([
             {"metric_id": INPUT_QUOTA_METRIC, "limit": 1_000_001},
             {"metric_id": OUTPUT_QUOTA_METRIC, "limit": 300_000},
         ]),
     ) is None
     assert allowance_for_subscription(plan_id="unknown", status="active") is None
-    assert allowance_for_subscription(plan_id="escala", status="suspended") is None
+    assert allowance_for_subscription(plan_id="business", status="suspended") is None
 
 
 def test_reserve_replay_settle_and_exact_limit(quota_db: tuple[Path, datetime]) -> None:

@@ -18,9 +18,9 @@
       "name": "Starter",
       "monthly_price_brl": "99.00",
       "annual_monthly_price_brl": "79.00",
-      "included_documents": 300,
+      "included_documents": 1000,
       "overage_unit_price_brl": "0.25",
-      "max_cnpjs": 2,
+      "max_cnpjs": 1,
       "api_rate_limit_rpm": 120,
       "features": {
         "all_features_enabled": true
@@ -30,9 +30,9 @@
       "name": "Pro (Growth)",
       "monthly_price_brl": "249.00",
       "annual_monthly_price_brl": "199.00",
-      "included_documents": 1500,
+      "included_documents": 5000,
       "overage_unit_price_brl": "0.15",
-      "max_cnpjs": 5,
+      "max_cnpjs": 3,
       "api_rate_limit_rpm": 600,
       "features": {
         "all_features_enabled": true
@@ -42,9 +42,9 @@
       "name": "Business (Scale)",
       "monthly_price_brl": "590.00",
       "annual_monthly_price_brl": "490.00",
-      "included_documents": 6000,
+      "included_documents": 25000,
       "overage_unit_price_brl": "0.08",
-      "max_cnpjs": 20,
+      "max_cnpjs": 15,
       "api_rate_limit_rpm": 2400,
       "features": {
         "all_features_enabled": true
@@ -54,7 +54,7 @@
       "name": "Enterprise (Hub)",
       "monthly_price_brl": "1490.00",
       "annual_monthly_price_brl": "1190.00",
-      "included_documents": 25000,
+      "included_documents": 100000,
       "overage_unit_price_brl": "0.04",
       "max_cnpjs": null,
       "api_rate_limit_rpm": null,
