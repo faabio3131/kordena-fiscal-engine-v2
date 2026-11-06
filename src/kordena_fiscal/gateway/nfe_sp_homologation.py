@@ -28,7 +28,11 @@ from kordena_fiscal.domain import (
     FiscalEnvironment,
     FiscalValidationError,
 )
-from kordena_fiscal.signing.nfe_xmldsig import NfeSignatureProfile, sign_nfe_envi_xml
+from kordena_fiscal.signing.nfe_xmldsig import (
+    NfeSignatureProfile,
+    sign_nfe_envi_xml,
+    verify_official_nfe4_signature,
+)
 from kordena_fiscal.vault import EphemeralCertificateMaterial
 from kordena_fiscal.vault.a1_preflight import validate_a1_for_issuer
 
@@ -178,6 +182,9 @@ class _RejectFiscalRedirects(HTTPRedirectHandler):
         return None
 
 
+MG_NFE_HOMOLOGATION_PROVIDER_ID = "sefaz-mg-homologacao-nfe4"
+
+
 class HomologationAuthorizationTarget(StrEnum):
     """Engineering configuration only; never an HTTP/provider binding authority."""
 
@@ -192,8 +199,6 @@ def _validate_mg_authorization_scope(request: AuthorizationRequest) -> None:
     if request.access_key.value[:2] != "31" or request.access_key.value[20:22] != "55":
         raise OfficialNfeTransportError("MG authorization requires MG model 55 key")
     root = _parse_xml(request.signed_xml)
-    if root.find(".//{" + XMLDSIG_NAMESPACE + "}Signature") is not None:
-        raise OfficialNfeTransportError("MG requires unsigned XML for Vault-owned signing")
     invoices = root.findall(f"{{{NFE_NAMESPACE}}}NFe")
     if root.tag != f"{{{NFE_NAMESPACE}}}enviNFe" or root.get("versao") != "4.00":
         raise OfficialNfeTransportError("MG authorization requires enviNFe 4.00")
@@ -246,7 +251,7 @@ class SefazHomologationAuthorizationGateway:
                 environment=FiscalEnvironment.HOMOLOGATION,
                 operation=ConfiguredFiscalOperation.AUTHORIZE,
             ).url
-            self._provider = GatewayProviderMetadata("sefaz-mg-homologacao-nfe4", "1.0")
+            self._provider = GatewayProviderMetadata(MG_NFE_HOMOLOGATION_PROVIDER_ID, "1.0")
         self._resolve_certificate = resolve_certificate
         self._timeout = timeout_seconds
         self._exchange = exchange or self._https_exchange
@@ -308,6 +313,8 @@ class SefazHomologationAuthorizationGateway:
         xml = _signed_homologation_xml(request, signed_bytes)
         if self._validate_schema is not None:
             self._validate_schema(signed_bytes)
+        if self._target is HomologationAuthorizationTarget.MG_NFE:
+            verify_official_nfe4_signature(xml, material)
         context = _tls_context(material)
         response = _parse_xml(
             self._exchange(_soap_envelope(xml), context, self._timeout)

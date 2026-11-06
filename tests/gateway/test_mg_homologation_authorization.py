@@ -183,15 +183,30 @@ def test_fiscal_redirect_handler_never_follows_location():
     ) is None
 
 
-def test_mg_pre_signed_xml_is_not_accepted_without_signature_verification():
+@pytest.mark.parametrize("tamper", ["digest", "signature", "certificate", "reference"])
+def test_mg_rejects_tampered_prepared_xml_before_transport(material, tamper):
+    from kordena_fiscal.domain import FiscalValidationError
+    from kordena_fiscal.signing.nfe_xmldsig import NfeSignatureProfile, sign_nfe_envi_xml
+
     original = _request()
-    signed = original.signed_xml.replace(
-        b"</NFe>", b'<Signature xmlns="http://www.w3.org/2000/09/xmldsig#"/></NFe>'
+    signed = sign_nfe_envi_xml(
+        original.signed_xml, material, profile=NfeSignatureProfile.NFE4_OFFICIAL_RSA_SHA1,
     )
-    resolver, exchange = Mock(), Mock()
-    with pytest.raises(OfficialNfeTransportError, match="Vault-owned"):
-        _gateway(resolver, exchange).authorize(replace(original, signed_xml=signed))
-    resolver.assert_not_called()
+    root = etree.fromstring(signed)
+    fields = {
+        "digest": "DigestValue", "signature": "SignatureValue",
+        "certificate": "X509Certificate", "reference": "Reference",
+    }
+    node = root.find(".//{http://www.w3.org/2000/09/xmldsig#}" + fields[tamper])
+    if tamper == "reference":
+        node.set("URI", "#other-document")
+    else:
+        node.text = "YQ=="
+    exchange = Mock()
+    with pytest.raises(FiscalValidationError, match="Invalid NF-e signature|Incompatible"):
+        _gateway(Mock(return_value=material), exchange).authorize(
+            replace(original, signed_xml=etree.tostring(root))
+        )
     exchange.assert_not_called()
 
 

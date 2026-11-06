@@ -11,8 +11,10 @@ from enum import StrEnum
 from kordena_fiscal.archive import FiscalArchiveEntry, FiscalArchiveKind, RetentionPolicyMetadata
 from kordena_fiscal.contingency import FiscalOutboxEnqueueResult, FiscalOutboxEntry
 from kordena_fiscal.domain import (
+    BrazilianJurisdiction,
     ExecutionScope,
     FiscalAccountBinding,
+    FiscalDocumentKind,
     FiscalEnvironment,
     FiscalValidationError,
     HostScope,
@@ -177,6 +179,23 @@ class FiscalApplicationService:
         self._uow_factory = uow_factory
         self._state_machine = state_machine or FiscalStateMachine()
         self._reconciliation = reconciliation or FiscalReconciliationEngine()
+
+    def resolve_configured_provider_id(
+        self,
+        *,
+        scope: ExecutionScope,
+        document_kind: FiscalDocumentKind,
+        jurisdiction: BrazilianJurisdiction,
+        operation: str,
+    ) -> str:
+        from kordena_fiscal.control_plane.commercial import DurableProviderBindingResolver
+
+        return DurableProviderBindingResolver(self._uow_factory).resolve_provider_id(
+            scope=scope,
+            document_kind=document_kind,
+            jurisdiction=jurisdiction,
+            operation=operation,
+        )
 
     def register_binding(self, binding: FiscalAccountBinding) -> FiscalAccountBinding:
         with self._uow_factory() as uow:

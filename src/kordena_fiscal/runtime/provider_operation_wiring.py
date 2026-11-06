@@ -27,6 +27,7 @@ from .provider_event_handlers import (
     build_provider_inutilization_handler,
 )
 from .provider_issuance_handler import (
+    PreparedXmlGatewaySelector,
     build_provider_issuance_handler,
     build_provider_reconciliation_handler,
 )
@@ -38,6 +39,7 @@ def build_provider_operation_handlers(
     *,
     application: FiscalApplicationService | None = None,
     prepared_xml_gateway: FiscalGatewayClient | None = None,
+    select_xml_gateway: PreparedXmlGatewaySelector | None = None,
     prepared_nfse_gateway: NfseGatewayClient | None = None,
     prepared_nfse_query_client: NfseQueryClient | None = None,
     archive_retention: RetentionPolicyMetadata | None = None,
@@ -55,6 +57,7 @@ def build_provider_operation_handlers(
         for value in (
             application,
             prepared_xml_gateway,
+            select_xml_gateway,
             prepared_nfse_gateway,
             prepared_nfse_query_client,
             archive_retention,
@@ -63,6 +66,7 @@ def build_provider_operation_handlers(
         if (
             not isinstance(application, FiscalApplicationService)
             or not isinstance(archive_retention, RetentionPolicyMetadata)
+            or (select_xml_gateway is not None and prepared_xml_gateway is None)
             or (prepared_xml_gateway is not None
                 and not isinstance(prepared_xml_gateway, FiscalGatewayClient))
             or (prepared_nfse_gateway is not None
@@ -101,6 +105,7 @@ def build_provider_operation_handlers(
             resolve_prepared=application.load_prepared_document_authorization,
             gateway=primary_gateway,
             nfse_gateway=prepared_nfse_gateway,
+            select_xml_gateway=select_xml_gateway,
         )
         handlers["reconcileFiscalOperation"] = build_provider_reconciliation_handler(
             application,

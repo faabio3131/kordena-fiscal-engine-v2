@@ -9,6 +9,7 @@ import base64
 from enum import StrEnum
 from hashlib import sha1, sha256
 
+from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.hazmat.primitives.serialization import Encoding, pkcs12
@@ -108,6 +109,61 @@ def sign_nfe_envi_xml(
         cert.public_bytes(Encoding.DER)
     ).decode("ascii")
     return etree.tostring(root, encoding="utf-8", xml_declaration=True)
+
+
+def verify_official_nfe4_signature(
+    root: etree._Element, certificate_material: EphemeralCertificateMaterial,
+) -> None:
+    """Verify a schema-validated MG envelope against the scoped Vault certificate."""
+    ns = {"nfe": _NFE, "ds": _DS}
+    info = root.find("nfe:NFe/nfe:infNFe", ns)
+    signature = root.find("nfe:NFe/ds:Signature", ns)
+    if info is None or signature is None or len(root.findall(".//ds:Signature", ns)) != 1:
+        raise FiscalValidationError("Invalid NF-e XMLDSig placement")
+    signed_info = signature.find("ds:SignedInfo", ns)
+    if signed_info is None:
+        raise FiscalValidationError("Missing NF-e SignedInfo")
+    references = signed_info.findall("ds:Reference", ns)
+    if len(references) != 1:
+        raise FiscalValidationError("NF-e XMLDSig requires exactly one reference")
+    reference = references[0]
+    identifier = info.get("Id")
+    transforms = reference.findall("ds:Transforms/ds:Transform", ns)
+    canonicalization = signed_info.find("ds:CanonicalizationMethod", ns)
+    signature_method = signed_info.find("ds:SignatureMethod", ns)
+    digest_method = reference.find("ds:DigestMethod", ns)
+    if (
+        not identifier
+        or reference.get("URI") != "#" + identifier
+        or sum(element.get("Id") == identifier for element in root.iter()) != 1
+        or [item.get("Algorithm") for item in transforms] != [_ENVELOPED, _C14N]
+        or canonicalization is None or canonicalization.get("Algorithm") != _C14N
+        or signature_method is None or signature_method.get("Algorithm") != _DS + "rsa-sha1"
+        or digest_method is None or digest_method.get("Algorithm") != _DS + "sha1"
+    ):
+        raise FiscalValidationError("Incompatible NF-e XMLDSig profile or reference")
+
+    def decode(value: str | None) -> bytes:
+        return base64.b64decode("".join((value or "").split()), validate=True)
+
+    try:
+        _, cert, _ = pkcs12.load_key_and_certificates(
+            certificate_material.pkcs12_bytes, certificate_material.password,
+        )
+        embedded = decode(signature.findtext("ds:KeyInfo/ds:X509Data/ds:X509Certificate", None, ns))
+        if cert is None or embedded != cert.public_bytes(Encoding.DER):
+            raise ValueError
+        public_key = cert.public_key()
+        if not isinstance(public_key, rsa.RSAPublicKey):
+            raise ValueError
+        if decode(reference.findtext("ds:DigestValue", None, ns)) != sha1(_c14n(info)).digest():
+            raise ValueError
+        public_key.verify(
+            decode(signature.findtext("ds:SignatureValue", None, ns)),
+            _c14n(signed_info), padding.PKCS1v15(), hashes.SHA1(),
+        )
+    except (ValueError, InvalidSignature, etree.C14NError):
+        raise FiscalValidationError("Invalid NF-e signature for the scoped A1") from None
 
 
 def sign_nfe_event_xml(

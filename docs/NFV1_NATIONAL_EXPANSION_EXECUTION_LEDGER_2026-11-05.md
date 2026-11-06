@@ -169,3 +169,46 @@ Gate local da continuidade MG: **265 PASS em 97,55s**; Ruff global, Mypy dirigid
 (cinco módulos), plano de 59 tarefas e validação BUILD PASS. Wheel construída.
 Cenário positivo de NF-e completa assinada e nfeProc validado é sintético e
 comprova contrato estrutural/criptográfico; não comprova tributação ou homologação.
+
+
+## NAT-UF-MG-T04 — consulta NF-e 55 na composição canônica
+
+Em 05/11/2026, `main` estava em `b1769429d651ca58c94745904ea7378693b55652` e
+`production` em `a2efbe3242be1e0569fa6513020458e920badff5`, com #362 e #358
+integradas em suas respectivas bases. A última promoção tinha CI e Governança verdes.
+Branch do incremento `feat/nfcore-mg-runtime-pilot`. SHA e checks na PR da branch.
+
+A consulta direta e o cliente de consulta usado na recuperação de transmissão incerta
+passam pelo gateway MG somente para NF-e 55 de homologação com vínculo persistente
+habilitado para tenant, unidade, ambiente, UF e operação `query`, com provider
+`sefaz-mg-homologacao-nfe4`. A fronteira usa o resolvedor durável, o Vault por escopo
+e emitente e o adaptador MG com os XSD oficiais já congelados. O incremento cobre
+consulta interna, com o caminho legado de SP e a injeção de gateways preservados.
+
+Gates locais com 140 testes direcionados, Ruff global, Mypy dos módulos de aplicação
+e composição e os dois validadores de governança. O teste novo usa SQLite migrado,
+certificado A1 sintético, XSD real e resposta SOAP local. Exercita bloqueios antes
+do Vault e transporte e uma consulta aceita com o vínculo correto.
+A prova ponta a ponta autenticada em ambiente publicado e a homologação oficial
+permanecem pendentes.
+
+Próximo bloco interno de MG inclui seleção governada para autorização e cancelamento,
+preparação Web, emissor e ano explícitos na inutilização, NFC-e MG e NFS-e de Belo
+Horizonte. Em seguida, RJ, PR, MT e MS com seus municípios-piloto e expansão pelas
+demais UFs e municípios. NAT-UF-MG permanece em implementação.
+
+
+### NAT-UF-MG-T04 — autorização de NF-e 55 preparada
+
+A PR #364 registrou CI e Governança verdes em a25e0d7 antes deste incremento.
+A composição canônica seleciona MG para autorização somente com o vínculo
+persistente da operação authorize. A seleção ocorre antes de iniciar a
+transmissão durável. O gateway confere XSD, referência, algoritmos,
+digest, assinatura e correspondência com o certificado A1 do Vault antes do
+transporte. A preparação arquivada permanece no formato existente e a
+recuperação consulta o autorizador com seu próprio vínculo.
+
+A prova interna usa documento previamente assinado, SQLite migrado e
+resposta SOAP local. A jornada de criação e preparação pelo Portal, o
+teste autenticado em ambiente publicado e a homologação oficial permanecem
+pendentes. As evidências de CI para o novo SHA estão na PR #364.

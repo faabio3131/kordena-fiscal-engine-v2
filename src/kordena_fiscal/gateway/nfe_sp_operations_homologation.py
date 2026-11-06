@@ -16,6 +16,7 @@ from lxml import etree
 from kordena_fiscal.domain import Cnpj, ExecutionScope, FiscalEnvironment, FiscalValidationError
 from kordena_fiscal.gateway.authorization import GatewayProviderMetadata
 from kordena_fiscal.gateway.nfe_sp_homologation import (
+    MG_NFE_HOMOLOGATION_PROVIDER_ID,
     NFE_NAMESPACE,
     SOAP12_NAMESPACE,
     HomologationAuthorizationTarget,
@@ -132,7 +133,7 @@ class SefazHomologationOperationsGateway:
         self._target = target
         self._state = "31" if target is HomologationAuthorizationTarget.MG_NFE else "35"
         self._provider = (
-            GatewayProviderMetadata("sefaz-mg-homologacao-nfe4", "1.0")
+            GatewayProviderMetadata(MG_NFE_HOMOLOGATION_PROVIDER_ID, "1.0")
             if self._state == "31" else _PROVIDER
         )
         self._profile = (

@@ -27,6 +27,8 @@ from kordena_fiscal.persistence.ports import PersistenceConflictError, Persisten
 
 from .fiscal_runtime import FiscalOperationHandler, PreflightFiscalOperationHandler
 
+PreparedXmlGatewaySelector = Callable[[AuthorizationRequest], FiscalGatewayClient]
+
 PreparedIssuanceResolver = Callable[
     [ExecutionScope, str], AuthorizationRequest | NfseAuthorizationRequest
 ]
@@ -49,12 +51,17 @@ def build_provider_issuance_handler(
     resolve_prepared: PreparedIssuanceResolver,
     gateway: FiscalGatewayClient | NfseGatewayClient,
     nfse_gateway: NfseGatewayClient | None = None,
+    select_xml_gateway: PreparedXmlGatewaySelector | None = None,
 ) -> FiscalOperationHandler:
     """Bind one explicitly configured document family; never enable a default provider."""
 
     def resolve(
         scope: ExecutionScope, payload: Mapping[str, Any], key: str | None
-    ) -> tuple[str, AuthorizationRequest | NfseAuthorizationRequest]:
+    ) -> tuple[
+        str,
+        AuthorizationRequest | NfseAuthorizationRequest,
+        FiscalGatewayClient | NfseGatewayClient,
+    ]:
         document_id = _document_reference(payload, key)
         request = resolve_prepared(scope, document_id)
         request_scope = (
@@ -62,8 +69,7 @@ def build_provider_issuance_handler(
         )
         if request_scope.identity_partition_key != scope.identity_partition_key:
             raise FiscalValidationError("prepared issuance does not match execution scope")
-        select_gateway(request)
-        return document_id, request
+        return document_id, request, select_gateway(request)
 
     def select_gateway(
         request: AuthorizationRequest | NfseAuthorizationRequest,
@@ -73,6 +79,8 @@ def build_provider_issuance_handler(
             if not isinstance(selected, NfseGatewayClient):
                 raise FiscalValidationError("NFS-e provider gateway is not configured")
             return selected
+        if select_xml_gateway is not None:
+            return select_xml_gateway(request)
         if not isinstance(gateway, FiscalGatewayClient):
             raise FiscalValidationError("XML provider gateway is not configured")
         return gateway
@@ -89,8 +97,7 @@ def build_provider_issuance_handler(
         payload: Mapping[str, Any],
         idempotency_key: str | None,
     ) -> Mapping[str, Any]:
-        document_id, request = resolve(scope, payload, idempotency_key)
-        selected_gateway = select_gateway(request)
+        document_id, request, selected_gateway = resolve(scope, payload, idempotency_key)
         # HTTP intent keys remain distinct from the canonical fiscal request key.
         outcome = application.authorize_prepared_document(
             document_id=document_id,
