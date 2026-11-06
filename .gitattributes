@@ -3,3 +3,6 @@ src/kordena_fiscal/xml/official/PL_010g_v1.03/*.xsd -text
 src/kordena_fiscal/xml/official/PL_010g_v1.03/manifest.json -text
 
 src/kordena_fiscal/xml/official/MG_LIFECYCLE_20261105/** -text
+
+src/kordena_fiscal/xml/official/ABRASF_203/*.xsd -text
+src/kordena_fiscal/xml/official/NFSE_NACIONAL_*/*.xsd -text

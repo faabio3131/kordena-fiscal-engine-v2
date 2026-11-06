@@ -1,0 +1,178 @@
+"""Offline ABRASF 2.03 SOAP preparation using the association's base WSDL.
+
+Municipal WSDL and provider approval are still required before dispatch.
+"""
+from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from enum import Enum
+from functools import lru_cache
+from importlib.resources import files
+
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.serialization import pkcs12
+from lxml import etree
+
+from kordena_fiscal.domain import Cnpj, ExecutionScope, FiscalEnvironment, FiscalValidationError
+from kordena_fiscal.signing.nfse_xmldsig import append_nfse_signature
+from kordena_fiscal.vault import EphemeralCertificateMaterial
+from kordena_fiscal.vault.a1_preflight import validate_a1_for_issuer
+from kordena_fiscal.xml.schema import SchemaResource, SchemaSet, XmlSchemaValidator
+
+_ABRASF = "http://www.abrasf.org.br/nfse.xsd"
+_WSDL = "http://nfse.abrasf.org.br"
+_SOAP11 = "http://schemas.xmlsoap.org/soap/envelope/"
+_DS = "http://www.w3.org/2000/09/xmldsig#"
+_SCHEMA_SOURCE = "https://abrasf.org.br/biblioteca/arquivos-publicos/nfs-e/versao-2-03"
+_SCHEMA_HASHES = {
+    "nfse_v2-03.xsd": "7742fca4b417c4371519dff46912e16c445bc9e96002a66ffdda3b60462578d0",
+    "xmldsig-core-schema20020212.xsd":
+        "0f76f6de8dae190605a1a638f81a0a983e7ecd27a2aa6cc300828be1b48d2510",
+}
+
+
+class Abrasf203Operation(Enum):
+    GENERATE = ("GerarNfseEnvio", "GerarNfse")
+    SUBMIT_BATCH = ("EnviarLoteRpsEnvio", "RecepcionarLoteRps")
+    QUERY_BATCH = ("ConsultarLoteRpsEnvio", "ConsultarLoteRps")
+
+
+@dataclass(frozen=True, slots=True)
+class AbrasfServiceFacts:
+    competence: str
+    service_code: str
+    municipal_tax_code: str | None
+    service_municipality: str
+    incidence_municipality: str | None
+    iss_rate: str | None
+    iss_withheld: str
+
+
+@dataclass(frozen=True, slots=True)
+class Abrasf203Envelope:
+    body: bytes
+    soap_action: str
+    content_type: str = "text/xml; charset=utf-8"
+
+
+@lru_cache(maxsize=1)
+def _validator() -> XmlSchemaValidator:
+    directory = files("kordena_fiscal.xml").joinpath("official", "ABRASF_203")
+    return XmlSchemaValidator(SchemaSet(
+        version="ABRASF 2.03 normalized",
+        root_schema="nfse_v2-03.xsd",
+        resources=tuple(
+            SchemaResource(name, directory.joinpath(name).read_bytes(), digest)
+            for name, digest in _SCHEMA_HASHES.items()
+        ),
+        source_uri=_SCHEMA_SOURCE,
+    ))
+
+
+def prepare_abrasf203_soap(
+    *,
+    operation: Abrasf203Operation,
+    xml: bytes,
+    scope: ExecutionScope,
+    issuer_cnpj: Cnpj,
+    resolve_certificate: Callable[[ExecutionScope, str], EphemeralCertificateMaterial],
+    preaudit: Callable[[tuple[AbrasfServiceFacts, ...]], None],
+) -> Abrasf203Envelope:
+    """Validate, audit and sign RPS before lot, then serialize SOAP string parts."""
+    if scope.environment is not FiscalEnvironment.HOMOLOGATION:
+        raise FiscalValidationError("ABRASF preparation is restricted to homologation")
+    if not isinstance(operation, Abrasf203Operation):
+        raise FiscalValidationError("Unsupported ABRASF operation")
+    if not isinstance(xml, bytes) or not 0 < len(xml) <= 2_097_152:
+        raise FiscalValidationError("Invalid ABRASF payload size")
+    if not callable(preaudit) or not callable(resolve_certificate):
+        raise FiscalValidationError("Trusted audit and scoped A1 resolver are required")
+    root_name, method = operation.value
+    ns = {"a": _ABRASF}
+    try:
+        root: etree._Element = etree.fromstring(
+            xml, parser=etree.XMLParser(resolve_entities=False, no_network=True),
+        )
+    except etree.XMLSyntaxError:
+        raise FiscalValidationError("Invalid ABRASF XML") from None
+    if (
+        root.tag != f"{{{_ABRASF}}}{root_name}"
+        or getattr(root.getroottree().docinfo, "doctype", None)
+        or root.find(f".//{{{_DS}}}Signature") is not None
+    ):
+        raise FiscalValidationError("Unexpected ABRASF payload root or existing signature")
+    validator = _validator()
+    validator.validate_document(xml)
+
+    if operation is Abrasf203Operation.QUERY_BATCH:
+        if root.findtext("a:Prestador/a:CpfCnpj/a:Cnpj", namespaces=ns) != issuer_cnpj.value:
+            raise FiscalValidationError("ABRASF query issuer mismatch")
+    else:
+        rps_path = "a:Rps"
+        batch = root.find("a:LoteRps", ns)
+        if operation is Abrasf203Operation.SUBMIT_BATCH:
+            if (
+                batch is None
+                or batch.findtext("a:CpfCnpj/a:Cnpj", namespaces=ns) != issuer_cnpj.value
+            ):
+                raise FiscalValidationError("ABRASF batch issuer mismatch")
+            rps_path = "a:LoteRps/a:ListaRps/a:Rps"
+        items = root.findall(rps_path, ns)
+        if not items or (
+            batch is not None and int(batch.findtext("a:QuantidadeRps", "0", ns)) != len(items)
+        ):
+            raise FiscalValidationError("ABRASF RPS count mismatch")
+        facts = []
+        targets = []
+        for rps in items:
+            info = rps.find("a:InfDeclaracaoPrestacaoServico", ns)
+            if (
+                info is None
+                or info.findtext("a:Prestador/a:CpfCnpj/a:Cnpj", namespaces=ns) != issuer_cnpj.value
+            ):
+                raise FiscalValidationError("ABRASF RPS issuer mismatch")
+            targets.append((rps, info))
+            facts.append(AbrasfServiceFacts(
+                competence=info.findtext("a:Competencia", "", ns),
+                service_code=info.findtext("a:Servico/a:ItemListaServico", "", ns),
+                municipal_tax_code=info.findtext("a:Servico/a:CodigoTributacaoMunicipio", None, ns),
+                service_municipality=info.findtext("a:Servico/a:CodigoMunicipio", "", ns),
+                incidence_municipality=info.findtext("a:Servico/a:MunicipioIncidencia", None, ns),
+                iss_rate=info.findtext("a:Servico/a:Valores/a:Aliquota", None, ns),
+                iss_withheld=info.findtext("a:Servico/a:IssRetido", "", ns),
+            ))
+        if batch is not None:
+            targets.append((root, batch))
+        ids = [node.get("Id") for node in root.iter() if node.get("Id") is not None]
+        if len(ids) != len(set(ids)) or any(not node.get("Id") for _, node in targets):
+            raise FiscalValidationError("ABRASF signature Id missing or duplicated")
+        preaudit(tuple(facts))
+        material = resolve_certificate(scope, issuer_cnpj.value)
+        validate_a1_for_issuer(
+            material.pkcs12_bytes, material.password, issuer_cnpj=issuer_cnpj, at=datetime.now(UTC),
+        )
+        key, cert, _ = pkcs12.load_key_and_certificates(material.pkcs12_bytes, material.password)
+        if not isinstance(key, rsa.RSAPrivateKey) or cert is None:
+            raise FiscalValidationError("ABRASF signature requires an RSA A1")
+        for parent, target in targets:
+            append_nfse_signature(parent, target, key, cert, legacy_abrasf=True)
+
+    data = etree.tostring(root, encoding="utf-8")
+    validator.validate_document(data)
+    header = etree.Element(
+        f"{{{_ABRASF}}}cabecalho", nsmap={"a": _ABRASF}, versao="2.03",
+    )
+    etree.SubElement(header, f"{{{_ABRASF}}}versaoDados").text = "2.03"
+    header_xml = etree.tostring(header, encoding="utf-8")
+    validator.validate_document(header_xml)
+    envelope = etree.Element(f"{{{_SOAP11}}}Envelope", nsmap={"soap": _SOAP11})
+    body = etree.SubElement(envelope, f"{{{_SOAP11}}}Body")
+    wrapper = etree.SubElement(body, f"{{{_WSDL}}}{method}Request", nsmap={"ws": _WSDL})
+    etree.SubElement(wrapper, "nfseCabecMsg").text = header_xml.decode("utf-8")
+    etree.SubElement(wrapper, "nfseDadosMsg").text = data.decode("utf-8")
+    return Abrasf203Envelope(
+        etree.tostring(envelope, encoding="utf-8", xml_declaration=True),
+        f'"{_WSDL}/{method}"',
+    )

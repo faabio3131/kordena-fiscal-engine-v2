@@ -7,9 +7,9 @@ readiness must gate any future transport activation.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from urllib.parse import urlsplit
 
 from kordena_fiscal.control_plane.commercial import ConfiguredFiscalOperation
+from kordena_fiscal.control_plane.sefaz_endpoint_catalog import SefazService, resolve_sefaz_endpoint
 from kordena_fiscal.domain import (
     FiscalDocumentKind,
     FiscalEnvironment,
@@ -18,15 +18,6 @@ from kordena_fiscal.domain import (
 
 _MG_NFE_SOURCE = "https://portalsped.fazenda.mg.gov.br/spedmg/nfe/webservices/"
 _MG_NFCE_SOURCE = "https://portalsped.fazenda.mg.gov.br/spedmg/nfce/web-services/"
-
-_MG_OPERATION_SUFFIX: dict[ConfiguredFiscalOperation, str] = {
-    ConfiguredFiscalOperation.AUTHORIZE: "NFeAutorizacao4",
-    ConfiguredFiscalOperation.QUERY: "NFeConsultaProtocolo4",
-    ConfiguredFiscalOperation.CANCEL: "NFeRecepcaoEvento4",
-    ConfiguredFiscalOperation.INUTILIZE: "NFeInutilizacao4",
-    ConfiguredFiscalOperation.STATUS: "NFeStatusServico4",
-}
-
 
 @dataclass(frozen=True, slots=True)
 class OfficialHomologationEndpoint:
@@ -45,24 +36,15 @@ class OfficialHomologationEndpoint:
             raise FiscalValidationError("Only MG NF-e and NFC-e verified contracts belong here")
         if self.environment is not FiscalEnvironment.HOMOLOGATION:
             raise FiscalValidationError("Production endpoint activation requires a separate gate")
-        if self.operation not in _MG_OPERATION_SUFFIX:
+        if not isinstance(self.operation, ConfiguredFiscalOperation):
             raise FiscalValidationError("Unsupported fiscal endpoint operation")
-        expected_host = (
-            "hnfe.fazenda.mg.gov.br"
-            if self.document_kind is FiscalDocumentKind.NFE
-            else "hnfce.fazenda.mg.gov.br"
+        route = resolve_sefaz_endpoint(
+            state_ibge_code="31",
+            document_kind=self.document_kind,
+            environment=self.environment,
+            service=SefazService(self.operation.value),
         )
-        expected_path = (
-            f"/nfe2/services/{_MG_OPERATION_SUFFIX[self.operation]}"
-            if self.document_kind is FiscalDocumentKind.NFE
-            else f"/nfce/services/{_MG_OPERATION_SUFFIX[self.operation]}"
-        )
-        parts = urlsplit(self.url)
-        if (
-            parts.scheme != "https" or parts.hostname != expected_host
-            or parts.path != expected_path or parts.query or parts.fragment
-            or parts.username or parts.password or parts.port not in {None, 443}
-        ):
+        if self.url != route.url:
             raise FiscalValidationError("MG official homologation endpoint mismatch")
         if self.protocol_version != "4.00":
             raise FiscalValidationError("MG WS protocol 4.00 required")
@@ -80,14 +62,17 @@ MG_HOMOLOGATION_ENDPOINTS: tuple[OfficialHomologationEndpoint, ...] = tuple(
         document_kind=kind,
         environment=FiscalEnvironment.HOMOLOGATION,
         operation=operation,
-        url=f"https://{host}/{prefix}/{suffix}",
+        url=resolve_sefaz_endpoint(
+            state_ibge_code="31", document_kind=kind, environment=FiscalEnvironment.HOMOLOGATION,
+            service=SefazService(operation.value),
+        ).url,
         source_url=source,
     )
-    for kind, host, prefix, source in (
-        (FiscalDocumentKind.NFE, "hnfe.fazenda.mg.gov.br", "nfe2/services", _MG_NFE_SOURCE),
-        (FiscalDocumentKind.NFCE, "hnfce.fazenda.mg.gov.br", "nfce/services", _MG_NFCE_SOURCE),
+    for kind, source in (
+        (FiscalDocumentKind.NFE, _MG_NFE_SOURCE),
+        (FiscalDocumentKind.NFCE, _MG_NFCE_SOURCE),
     )
-    for operation, suffix in _MG_OPERATION_SUFFIX.items()
+    for operation in ConfiguredFiscalOperation
 )
 
 

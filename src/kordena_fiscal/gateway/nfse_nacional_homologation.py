@@ -5,8 +5,6 @@ preparation authority. Never builds a DPS from untrusted browser JSON.
 """
 from __future__ import annotations
 
-import base64
-import gzip
 import json
 import ssl
 from collections.abc import Callable
@@ -14,14 +12,16 @@ from datetime import UTC, datetime
 from urllib.error import HTTPError, URLError
 from urllib.request import HTTPSHandler, Request, build_opener
 
-from lxml import etree
-
 from kordena_fiscal.domain import Cnpj, ExecutionScope, FiscalEnvironment, FiscalValidationError
 from kordena_fiscal.gateway.authorization import (
     AuthorizationStatus,
     GatewayProviderMetadata,
 )
-from kordena_fiscal.gateway.nfe_sp_homologation import _tls_context
+from kordena_fiscal.gateway.fiscal_tls import RejectFiscalRedirects, build_fiscal_tls_context
+from kordena_fiscal.gateway.nfse_national_homologation import (
+    SEFIN_HOMOLOGATION_NFSE_URL,
+    build_nfse_dps_request,
+)
 from kordena_fiscal.issuance.nfe_nfse import (
     NfseAuthorizationRequest,
     NfseAuthorizationResult,
@@ -29,10 +29,7 @@ from kordena_fiscal.issuance.nfe_nfse import (
 from kordena_fiscal.vault import EphemeralCertificateMaterial
 from kordena_fiscal.vault.a1_preflight import validate_a1_for_issuer
 
-NACIONAL_HOMOLOGATION_NFSE_URL = (
-    "https://sefin.producaorestrita.nfse.gov.br/API/SefinNacional/nfse"
-)
-_MAX_DPS = 2_097_152
+NACIONAL_HOMOLOGATION_NFSE_URL = SEFIN_HOMOLOGATION_NFSE_URL
 _MAX_RESPONSE = 2_097_152
 _PROVIDER = GatewayProviderMetadata("nfse-nacional-producao-restrita", "1.0")
 
@@ -41,31 +38,12 @@ class OfficialNfseTransportError(FiscalValidationError):
     """Transport failure with secrets and upstream response stripped."""
 
 
-def encode_signed_dps(signed_dps: bytes) -> bytes:
+def encode_signed_dps(signed_dps: bytes, *, issuer_cnpj: str | None = None) -> bytes:
     """Strict DPS envelope for national NFS-e POST /nfse."""
-    if not isinstance(signed_dps, bytes) or not signed_dps or len(signed_dps) > _MAX_DPS:
-        raise OfficialNfseTransportError("DPS assinada inválida ou excede 2 MB")
     try:
-        root = etree.fromstring(
-            signed_dps,
-            parser=etree.XMLParser(resolve_entities=False, no_network=True),
-        )
-    except etree.XMLSyntaxError:
-        raise OfficialNfseTransportError("DPS XML inválida") from None
-    if etree.QName(root).localname != "DPS":
-        raise OfficialNfseTransportError("Documento não é DPS Nacional")
-    if not root.xpath(
-        ".//*[local-name()='tpAmb' and normalize-space(text())='2']"
-    ):
-        raise OfficialNfseTransportError("DPS exige tpAmb=2")
-    if not root.xpath(
-        ".//*[local-name()='Signature' and namespace-uri()='http://www.w3.org/2000/09/xmldsig#']"
-    ):
-        raise OfficialNfseTransportError("DPS exige XMLDSig")
-    return json.dumps(
-        {"dpsXmlGZipB64": base64.b64encode(gzip.compress(signed_dps)).decode("ascii")},
-        separators=(",", ":"),
-    ).encode("ascii")
+        return build_nfse_dps_request(signed_dps, issuer_cnpj=issuer_cnpj)
+    except FiscalValidationError as exc:
+        raise OfficialNfseTransportError(str(exc)) from None
 
 
 def _exchange_http(payload: bytes, context: ssl.SSLContext, timeout: float) -> bytes:
@@ -74,7 +52,8 @@ def _exchange_http(payload: bytes, context: ssl.SSLContext, timeout: float) -> b
         headers={"Content-Type": "application/json", "Accept": "application/json"},
     )
     try:
-        with build_opener(HTTPSHandler(context=context)).open(req, timeout=timeout) as response:
+        opener = build_opener(HTTPSHandler(context=context), RejectFiscalRedirects())
+        with opener.open(req, timeout=timeout) as response:
             data = response.read(_MAX_RESPONSE + 1)
         if len(data) > _MAX_RESPONSE:
             raise OfficialNfseTransportError("Resposta nacional excede limite")
@@ -118,8 +97,8 @@ class NfseNacionalHomologationGateway:
             at=datetime.now(UTC),
         )
         signed_dps = self._build_signed_dps(request, material)
-        payload = encode_signed_dps(signed_dps)
-        response = self._exchange(payload, _tls_context(material), self._timeout)
+        payload = encode_signed_dps(signed_dps, issuer_cnpj=issuer_cnpj)
+        response = self._exchange(payload, build_fiscal_tls_context(material), self._timeout)
         if not isinstance(response, bytes) or len(response) > _MAX_RESPONSE:
             raise OfficialNfseTransportError("Resposta SEFIN inválida")
         try:

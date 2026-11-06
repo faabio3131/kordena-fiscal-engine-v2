@@ -13,15 +13,22 @@ from urllib.request import HTTPSHandler, Request, build_opener
 
 from lxml import etree
 
-from kordena_fiscal.domain import Cnpj, ExecutionScope, FiscalEnvironment, FiscalValidationError
+from kordena_fiscal.control_plane.sefaz_endpoint_catalog import SefazService, resolve_sefaz_endpoint
+from kordena_fiscal.domain import (
+    Cnpj,
+    ExecutionScope,
+    FiscalDocumentKind,
+    FiscalEnvironment,
+    FiscalValidationError,
+)
 from kordena_fiscal.gateway.authorization import GatewayProviderMetadata
+from kordena_fiscal.gateway.fiscal_tls import RejectFiscalRedirects
 from kordena_fiscal.gateway.nfe_sp_homologation import (
     MG_NFE_HOMOLOGATION_PROVIDER_ID,
     NFE_NAMESPACE,
     SOAP12_NAMESPACE,
     HomologationAuthorizationTarget,
     _parse_xml,
-    _RejectFiscalRedirects,
     _tls_context,
 )
 from kordena_fiscal.operations import (
@@ -39,13 +46,12 @@ from kordena_fiscal.vault import EphemeralCertificateMaterial
 from kordena_fiscal.vault.a1_preflight import validate_a1_for_issuer
 
 _SERVICE_ROOT = "http://www.portalfiscal.inf.br/nfe/wsdl/"
-_BASE_URL = "https://homologacao.nfe.fazenda.sp.gov.br/ws/"
 _PROVIDER = GatewayProviderMetadata("sefaz-sp-homologacao-nfe4", "1.0")
 _MAX_RESPONSE_BYTES = 2_097_152
 _SERVICES = {
-    "NFeConsultaProtocolo4": ("nfeconsultaprotocolo4.asmx", "nfeConsultaNF"),
-    "NFeRecepcaoEvento4": ("nferecepcaoevento4.asmx", "nfeRecepcaoEvento"),
-    "NFeInutilizacao4": ("nfeinutilizacao4.asmx", "nfeInutilizacaoNF"),
+    "NFeConsultaProtocolo4": (SefazService.QUERY, "nfeConsultaNF"),
+    "NFeRecepcaoEvento4": (SefazService.CANCEL, "nfeRecepcaoEvento"),
+    "NFeInutilizacao4": (SefazService.INUTILIZE, "nfeInutilizacaoNF"),
 }
 
 
@@ -82,8 +88,11 @@ def _post_official(
 ) -> bytes:
     if service not in _SERVICES:
         raise OfficialNfeOperationsError("Unsupported SP fiscal service")
-    path, operation = _SERVICES[service]
-    endpoint = _BASE_URL + path
+    route_service, _ = _SERVICES[service]
+    endpoint = resolve_sefaz_endpoint(
+        state_ibge_code="35", document_kind=FiscalDocumentKind.NFE,
+        environment=FiscalEnvironment.HOMOLOGATION, service=route_service,
+    ).url
     return _post_xml(service, endpoint, payload, context, timeout)
 
 
@@ -102,7 +111,7 @@ def _post_xml(
         },
     )
     try:
-        opener = build_opener(HTTPSHandler(context=context), _RejectFiscalRedirects())
+        opener = build_opener(HTTPSHandler(context=context), RejectFiscalRedirects())
         with opener.open(request, timeout=timeout) as answer:
             result = answer.read(_MAX_RESPONSE_BYTES + 1)
         if len(result) > _MAX_RESPONSE_BYTES:
@@ -147,7 +156,6 @@ class SefazHomologationOperationsGateway:
             from kordena_fiscal.control_plane.mg_official_homologation_catalog import (
                 mg_homologation_endpoint,
             )
-            from kordena_fiscal.domain import FiscalDocumentKind
             from kordena_fiscal.xml.official_operation_schema import OfficialOperationXmlValidator
             self._validator = OfficialOperationXmlValidator(tuple(_SERVICES))
             for service, operation in (

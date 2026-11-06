@@ -340,7 +340,7 @@ def test_fixed_mg_destination_action_and_no_redirect_handler(
     import ssl
 
     import kordena_fiscal.gateway.nfe_sp_operations_homologation as module
-    from kordena_fiscal.gateway.nfe_sp_homologation import _RejectFiscalRedirects
+    from kordena_fiscal.gateway.fiscal_tls import RejectFiscalRedirects
     response = Mock()
     response.__enter__ = Mock(return_value=response)
     response.__exit__ = Mock(return_value=False)
@@ -354,7 +354,7 @@ def test_fixed_mg_destination_action_and_no_redirect_handler(
     request = opener.open.call_args.args[0]
     assert request.full_url == "https://hnfe.fazenda.mg.gov.br/nfe2/services/" + endpoint
     assert method in request.headers["Content-type"]
-    assert any(isinstance(handler, _RejectFiscalRedirects) for handler in build.call_args.args)
+    assert any(isinstance(handler, RejectFiscalRedirects) for handler in build.call_args.args)
 
 
 @pytest.mark.parametrize("prepared", [False, True])

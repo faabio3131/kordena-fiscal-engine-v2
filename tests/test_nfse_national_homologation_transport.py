@@ -105,3 +105,57 @@ def test_nfse_parses_offline_authorization_receipt() -> None:
 def test_nfse_rejects_invalid_response_without_secret_echo() -> None:
     with pytest.raises(OfficialNfseTransportError):
         parse_nfse_homologation_response(b'{"secret":"never echo"}')
+
+@pytest.mark.parametrize("canonical", [False, True])
+def test_nfse_mtls_exchange_refuses_redirect(monkeypatch, canonical):
+    import ssl
+    from email.message import Message
+    from unittest.mock import Mock
+    from urllib.error import HTTPError
+    from urllib.request import Request
+
+    from kordena_fiscal.gateway import nfse_nacional_homologation, nfse_national_homologation
+    from kordena_fiscal.gateway.fiscal_tls import RejectFiscalRedirects
+
+    module = nfse_nacional_homologation if canonical else nfse_national_homologation
+    exchange = (
+        nfse_nacional_homologation._exchange_http
+        if canonical else
+        nfse_national_homologation.NfseNationalHomologationTransport._https_exchange
+    )
+    opener = Mock()
+    opener.open.side_effect = HTTPError("https://sefin.example", 302, "redirect", Message(), None)
+    build = Mock(return_value=opener)
+    monkeypatch.setattr(module, "build_opener", build)
+    with pytest.raises(FiscalValidationError):
+        exchange(b"{}", ssl.create_default_context(), 1)
+    opener.open.assert_called_once()
+    guard = next(arg for arg in build.call_args.args if isinstance(arg, RejectFiscalRedirects))
+    request = opener.open.call_args.args[0]
+    assert request.full_url.startswith("https://sefin.producaorestrita.nfse.gov.br/")
+    assert guard.redirect_request(
+        Request(request.full_url), None, 302, "redirect", Message(), "https://external.example/",
+    ) is None
+
+@pytest.mark.parametrize("version", ["1.00", "1.01"])
+def test_national_schema_rejects_minimal_dps_at_scoped_dispatch(version):
+    from kordena_fiscal.gateway.nfse_nacional_homologation import encode_signed_dps
+    from kordena_fiscal.xml.schema import XmlSchemaValidationError
+
+    material, _ = _ephemeral_certificate()
+    root = etree.fromstring(_unsigned_dps())
+    root.set("versao", version)
+    provider = etree.SubElement(root[0], f"{{{_NS}}}prest")
+    etree.SubElement(provider, f"{{{_NS}}}CNPJ").text = "11222333000181"
+    signed = sign_nfse_dps_xml(etree.tostring(root), material)
+    with pytest.raises(FiscalValidationError, match="scoped A1"):
+        encode_signed_dps(signed, issuer_cnpj="00944029000100")
+    with pytest.raises(XmlSchemaValidationError):
+        encode_signed_dps(signed, issuer_cnpj="11222333000181")
+
+
+def test_national_envelope_refuses_an_abrasf_root():
+    with pytest.raises(FiscalValidationError, match="official DPS root"):
+        build_nfse_dps_request(
+            b'<GerarNfseEnvio xmlns="http://www.abrasf.org.br/nfse.xsd"/>',
+        )

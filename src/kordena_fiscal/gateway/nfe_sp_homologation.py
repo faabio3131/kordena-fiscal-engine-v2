@@ -5,22 +5,16 @@ scope-bound A1 identity. No synthetic responses or production endpoints.
 """
 from __future__ import annotations
 
-import os
 import ssl
-import tempfile
 from collections.abc import Callable
 from datetime import UTC, datetime
-from email.message import Message
 from enum import StrEnum
-from pathlib import Path
-from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.request import HTTPRedirectHandler, HTTPSHandler, Request, build_opener
+from urllib.request import HTTPSHandler, Request, build_opener
 
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.serialization import pkcs12
 from lxml import etree
 
+from kordena_fiscal.control_plane.sefaz_endpoint_catalog import SefazService, resolve_sefaz_endpoint
 from kordena_fiscal.domain import (
     Cnpj,
     ExecutionScope,
@@ -42,10 +36,12 @@ from .authorization import (
     AuthorizationStatus,
     GatewayProviderMetadata,
 )
+from .fiscal_tls import RejectFiscalRedirects, build_fiscal_tls_context
 
-NFE_SP_HOMOLOGATION_AUTHORIZATION_URL = (
-    "https://homologacao.nfe.fazenda.sp.gov.br/ws/nfeautorizacao4.asmx"
-)
+NFE_SP_HOMOLOGATION_AUTHORIZATION_URL = resolve_sefaz_endpoint(
+    state_ibge_code="35", document_kind=FiscalDocumentKind.NFE,
+    environment=FiscalEnvironment.HOMOLOGATION, service=SefazService.AUTHORIZE,
+).url
 SOAP12_NAMESPACE = "http://www.w3.org/2003/05/soap-envelope"
 NFE_NAMESPACE = "http://www.portalfiscal.inf.br/nfe"
 SERVICE_NAMESPACE = "http://www.portalfiscal.inf.br/nfe/wsdl/NFeAutorizacao4"
@@ -147,39 +143,10 @@ def _soap_envelope(invoice_batch: etree._Element) -> bytes:
 
 
 def _tls_context(material: EphemeralCertificateMaterial) -> ssl.SSLContext:
-    """Materialize mTLS keypair only inside a private temporary directory."""
-    key, cert, chain = pkcs12.load_key_and_certificates(
-        material.pkcs12_bytes, material.password
-    )
-    if key is None or cert is None:
-        raise OfficialNfeTransportError("Certificado A1 inválido ou incompleto")
-    context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
-    context.minimum_version = ssl.TLSVersion.TLSv1_2
-    with tempfile.TemporaryDirectory(prefix="nfcore-mtls-") as directory:
-        key_file = Path(directory) / "key.pem"
-        cert_file = Path(directory) / "cert.pem"
-        key_file.write_bytes(key.private_bytes(
-            serialization.Encoding.PEM,
-            serialization.PrivateFormat.PKCS8,
-            serialization.NoEncryption(),
-        ))
-        cert_file.write_bytes(cert.public_bytes(serialization.Encoding.PEM) + b"".join(
-            item.public_bytes(serialization.Encoding.PEM) for item in (chain or [])
-        ))
-        os.chmod(key_file, 0o600)
-        os.chmod(cert_file, 0o600)
-        context.load_cert_chain(str(cert_file), str(key_file))
-    return context
-
-
-class _RejectFiscalRedirects(HTTPRedirectHandler):
-    """Never forward an mTLS fiscal request to a redirected destination."""
-
-    def redirect_request(
-        self, req: Request, fp: Any, code: int, msg: str,
-        headers: Message, newurl: str,
-    ) -> None:
-        return None
+    try:
+        return build_fiscal_tls_context(material)
+    except FiscalValidationError as exc:
+        raise OfficialNfeTransportError(str(exc)) from None
 
 
 MG_NFE_HOMOLOGATION_PROVIDER_ID = "sefaz-mg-homologacao-nfe4"
@@ -269,7 +236,7 @@ class SefazHomologationAuthorizationGateway:
                 "Accept": "application/soap+xml",
             },
         )
-        opener = build_opener(HTTPSHandler(context=context), _RejectFiscalRedirects())
+        opener = build_opener(HTTPSHandler(context=context), RejectFiscalRedirects())
         try:
             with opener.open(req, timeout=timeout) as response:
                 raw = response.read(_MAX_RESPONSE_BYTES + 1)
@@ -336,7 +303,7 @@ class SefazHomologationAuthorizationGateway:
             protocol = result.find(".//{" + NFE_NAMESPACE + "}infProt")
             authorization_code = _text(protocol, "cStat") if protocol is not None else None
             protocol_no = _text(protocol, "nProt") if protocol is not None else None
-            if authorization_code == "100" and protocol_no:
+            if code == "104" and authorization_code == "100" and protocol_no:
                 if self._target is HomologationAuthorizationTarget.MG_NFE:
                     digest = xml.findtext(".//{" + XMLDSIG_NAMESPACE + "}DigestValue")
                     if not digest or protocol is None or _text(protocol, "digVal") != digest:
