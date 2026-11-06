@@ -17,9 +17,10 @@ OUTPUT_QUOTA_METRIC = "cognitive.output_tokens"
 
 class TokenQuotaPlan(StrEnum):
     TRIAL = "trial"
-    ESSENCIAL = "essencial"
-    CRESCIMENTO = "crescimento"
-    ESCALA = "escala"
+    STARTER = "starter"
+    PRO = "pro"
+    BUSINESS = "business"
+    ENTERPRISE = "enterprise"
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,12 +33,40 @@ class TokenAllowance:
             raise ValueError("token allowance cannot be negative")
 
 
-# Approved by the owner on 2026-11-01; values apply per canonical billing period.
+# Existing ceilings approved by the owner on 2026-11-01 for the legacy
+# essencial/crescimento/escala tiers are carried over unchanged under the
+# renamed starter/pro/business identifiers that actually match
+# config/commercial/plans.json and every canonical subscription's plan_id
+# (see LEGACY_PAID_ALLOWANCES below for why the rename alone was a live bug).
+# No new ceiling was authorized by this rename.
+#
+# PROVISIONAL: "enterprise" has no prior approved ceiling of its own -- there
+# was no legacy tier above escala/business. The value below only repeats the
+# business ceiling so enterprise subscribers are not silently denied; it is
+# NOT an approved enterprise-specific allowance. Do not raise it without
+# explicit owner sign-off, and never infer it from the catalog's document
+# quota (the published site/catalog document franchise and this cognitive
+# token budget are two unrelated approvals).
 APPROVED_TOKEN_ALLOWANCES: dict[TokenQuotaPlan, TokenAllowance] = {
     TokenQuotaPlan.TRIAL: TokenAllowance(750_000, 210_000),
-    TokenQuotaPlan.ESSENCIAL: TokenAllowance(1_000_000, 300_000),
-    TokenQuotaPlan.CRESCIMENTO: TokenAllowance(3_000_000, 900_000),
-    TokenQuotaPlan.ESCALA: TokenAllowance(8_000_000, 2_400_000),
+    TokenQuotaPlan.STARTER: TokenAllowance(1_000_000, 300_000),
+    TokenQuotaPlan.PRO: TokenAllowance(3_000_000, 900_000),
+    TokenQuotaPlan.BUSINESS: TokenAllowance(8_000_000, 2_400_000),
+    TokenQuotaPlan.ENTERPRISE: TokenAllowance(8_000_000, 2_400_000),  # PROVISIONAL, see above
+}
+
+# Read-side compatibility for subscriptions persisted before this rename.
+# config/commercial/plans.json and every real subscription's plan_id have
+# always used starter/pro/business/enterprise; nothing in this module or its
+# canonical catalog ever published essencial/crescimento/escala as a sellable
+# plan id. Keeping these names recognized here (read-only, never offered to
+# new customers) only protects whichever already-persisted subscription rows
+# predate the rename -- it must not be removed without a verified, audited,
+# non-automatic data migration of those rows to the real plan ids.
+LEGACY_PAID_ALLOWANCES: dict[str, TokenAllowance] = {
+    "essencial": TokenAllowance(1_000_000, 300_000),
+    "crescimento": TokenAllowance(3_000_000, 900_000),
+    "escala": TokenAllowance(8_000_000, 2_400_000),
 }
 
 
@@ -48,8 +77,11 @@ def allowance_for_subscription(*, plan_id: str, status: str) -> TokenAllowance |
         return APPROVED_TOKEN_ALLOWANCES[TokenQuotaPlan.TRIAL]
     if state not in {"active", "grace"}:
         return None
+    normalized_id = plan_id.strip().lower()
+    if normalized_id in LEGACY_PAID_ALLOWANCES:
+        return LEGACY_PAID_ALLOWANCES[normalized_id]
     try:
-        plan = TokenQuotaPlan(plan_id.strip().lower())
+        plan = TokenQuotaPlan(normalized_id)
     except ValueError:
         return None
     if plan is TokenQuotaPlan.TRIAL:
