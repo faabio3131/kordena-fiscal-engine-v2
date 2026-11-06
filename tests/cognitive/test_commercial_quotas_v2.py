@@ -40,10 +40,22 @@ def test_trial_is_fourteen_day_commercial_status_not_paid_entitlement() -> None:
 
 
 @pytest.mark.parametrize(
-    "plan_id", ["essencial", "crescimento", "escala", "free", "unknown", "trial"]
+    "plan_id", ["free", "unknown", "trial"]
 )
-def test_legacy_and_unknown_paid_ids_never_fall_back_to_unlimited(plan_id: str) -> None:
+def test_unknown_paid_ids_never_fall_back_to_unlimited(plan_id: str) -> None:
     assert allowance_for_subscription(plan_id=plan_id, status="active") is None
+
+
+@pytest.mark.parametrize("legacy,new", [
+    ("essencial","starter"), ("crescimento","pro"), ("escala","business"),
+])
+def test_existing_legacy_subscriptions_keep_durable_quota_only(
+    legacy: str, new: str
+) -> None:
+    previous = allowance_for_subscription(plan_id=legacy, status="active")
+    assert previous == allowance_for_subscription(plan_id=new, status="active")
+    assert configured_allowance(plan_id=legacy, status="active", quotas_json="[]") is None
+    assert allowance_for_subscription(plan_id=legacy, status="suspended") is None
 
 
 @pytest.mark.parametrize("snapshot", [
