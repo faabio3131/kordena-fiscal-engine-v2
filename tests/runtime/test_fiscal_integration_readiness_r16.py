@@ -44,14 +44,30 @@ def test_vault_configured_does_not_claim_nfse_execution_ready(tmp_path: object) 
     assert callable(build_runtime_fiscal_handler_factory(certificate_vault=vault))
 
 
+def _preaudit(_request: NfseAuthorizationRequest) -> None:
+    raise AssertionError("Configuration tests do not run the auditor")
+
+
+def test_trusted_signed_dps_requires_preaudit(tmp_path: object) -> None:
+    vault = EncryptedA1Vault(directory=str(tmp_path), master_key=b"k" * 32)
+    status = fiscal_external_dependency_snapshot(
+        certificate_vault=vault, trusted_signed_dps_builder=_builder,
+    )
+    assert status["fiscal_runtime_external_execution_ready"] is False
+    with pytest.raises(ValueError, match="pre-audit"):
+        build_runtime_fiscal_handler_factory(
+            certificate_vault=vault, trusted_signed_dps_builder=_builder,
+        )
+
+
 def test_trusted_signed_dps_port_can_be_composed(tmp_path: object) -> None:
     vault = EncryptedA1Vault(directory=cast("str", str(tmp_path)), master_key=b"k" * 32)
     status = fiscal_external_dependency_snapshot(
-        certificate_vault=vault, trusted_signed_dps_builder=_builder
+        certificate_vault=vault, trusted_signed_dps_builder=_builder, nfse_preaudit=_preaudit,
     )
     assert status["fiscal_runtime_external_execution_ready"]
     assert callable(build_runtime_fiscal_handler_factory(
-        certificate_vault=vault, trusted_signed_dps_builder=_builder
+        certificate_vault=vault, trusted_signed_dps_builder=_builder, nfse_preaudit=_preaudit,
     ))
 
 

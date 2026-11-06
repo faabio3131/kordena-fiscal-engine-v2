@@ -31,7 +31,8 @@ from kordena_fiscal.vault.a1_preflight import validate_a1_for_issuer
 
 NACIONAL_HOMOLOGATION_NFSE_URL = SEFIN_HOMOLOGATION_NFSE_URL
 _MAX_RESPONSE = 2_097_152
-_PROVIDER = GatewayProviderMetadata("nfse-nacional-producao-restrita", "1.0")
+NACIONAL_HOMOLOGATION_PROVIDER_ID = "nfse-nacional-producao-restrita"
+_PROVIDER = GatewayProviderMetadata(NACIONAL_HOMOLOGATION_PROVIDER_ID, "1.0")
 
 
 class OfficialNfseTransportError(FiscalValidationError):

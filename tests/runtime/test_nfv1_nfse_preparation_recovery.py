@@ -271,3 +271,48 @@ def test_nfse_uncertain_result_is_recovered_by_query_without_resend(
         )
         assert replay["replay"] is True
         assert query.calls == 1
+
+
+
+@pytest.mark.parametrize("case", ["missing", "other-provider", "denied", "approved"])
+def test_national_gateway_requires_binding_and_preaudit_before_dispatch(case):
+    from unittest.mock import Mock
+
+    from kordena_fiscal.control_plane.service import ControlPlaneNotFoundError
+    from kordena_fiscal.domain import FiscalDocumentKind
+    from kordena_fiscal.gateway.nfse_nacional_homologation import (
+        NACIONAL_HOMOLOGATION_PROVIDER_ID,
+    )
+    from kordena_fiscal.runtime.canonical_fiscal_composition import _GovernedNationalNfseGateway
+
+    request = NfseAuthorizationRequest.build(nfse_document())
+    calls = Mock()
+    resolver = calls.application.resolve_configured_provider_id
+    resolver.return_value = NACIONAL_HOMOLOGATION_PROVIDER_ID
+    if case == "missing":
+        resolver.side_effect = ControlPlaneNotFoundError("missing")
+    elif case == "other-provider":
+        resolver.return_value = "nota-paulistana"
+    elif case == "denied":
+        calls.audit.side_effect = FiscalValidationError("audit denied")
+    gateway = _GovernedNationalNfseGateway(
+        application=calls.application, preaudit=calls.audit, gateway=calls.transport,
+    )
+
+    if case == "approved":
+        assert gateway.authorize(request) is calls.transport.authorize.return_value
+        assert [call[0] for call in calls.mock_calls] == [
+            "application.resolve_configured_provider_id", "audit", "transport.authorize",
+        ]
+    else:
+        with pytest.raises(FiscalValidationError):
+            gateway.authorize(request)
+        calls.transport.authorize.assert_not_called()
+        if case != "denied":
+            calls.audit.assert_not_called()
+    resolver.assert_called_once_with(
+        scope=request.document.scope,
+        document_kind=FiscalDocumentKind.NFSE,
+        jurisdiction=request.document.issuer.address.jurisdiction,
+        operation="authorize",
+    )
