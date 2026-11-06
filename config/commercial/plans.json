@@ -71,5 +71,10 @@
     "requires_commercial_release_authority": true,
     "requires_checkout_readiness": true,
     "requires_fiscal_homologation_per_issuer": true
+  },
+  "commercial_policy": {
+    "annual_prices_enabled": false,
+    "overage_charging_enabled": false,
+    "monthly_fiscal_document_quota_enforced_before_transmission": true
   }
 }
