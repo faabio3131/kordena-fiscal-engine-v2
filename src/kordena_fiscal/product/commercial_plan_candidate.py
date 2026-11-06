@@ -1,6 +1,6 @@
-"""Versioned, unpublished plan candidate using existing pricing and quota authorities.
+"""Versioned, runtime-gated commercial catalog using existing pricing and quota authorities.
 
-Never publishes prices, invoices, grants or fiscal production operations.
+Git publication is not a pricing-admin database publication or commercial release.
 Actual invoices must use canonical metered usage, subscription and payment ledgers.
 """
 
@@ -60,7 +60,7 @@ def read_candidate(path: Path = _DEFAULT) -> dict[str, object]:
         raise CommercialPricingError("commercial candidate file unavailable or invalid") from exc
     if not isinstance(data, dict) or data.get("schema_version") != 1:
         raise CommercialPricingError("unsupported commercial candidate schema")
-    if data.get("status") != "APPROVED_PRODUCT_PROPOSAL_NOT_PUBLISHED":
+    if data.get("status") != "PUBLISHED_CATALOG_RUNTIME_GATED":
         raise CommercialPricingError("candidate status invalid")
     if data.get("policy") != "consumption_based_total_feature_parity":
         raise CommercialPricingError("candidate policy invalid")
@@ -79,6 +79,11 @@ def read_candidate(path: Path = _DEFAULT) -> dict[str, object]:
         raise CommercialPricingError("homologation limit is not a bypass to provider gates")
     if _positive_int(trial.get("production_docs_limit"), "trial documents") != 50:
         raise CommercialPricingError("trial documents differ from approved proposal")
+    publication = data.get("publication")
+    if not isinstance(publication, dict) or publication.get("runtime_activated") is not False:
+        raise CommercialPricingError("catalog publication cannot self-activate runtime")
+    if publication.get("requires_commercial_release_authority") is not True:
+        raise CommercialPricingError("release authority cannot be bypassed")
     return data
 
 
@@ -100,7 +105,11 @@ def build_canonical_candidate(
     for key, item in raw_plans.items():
         if not isinstance(item, dict) or not isinstance(item.get("name"), str):
             raise CommercialPricingError("plan entry invalid")
-        _positive_int(item.get("included_documents"), "included documents")
+        if key == "enterprise":
+            if item.get("included_documents") is not None:
+                raise CommercialPricingError("enterprise volume must be uncapped")
+        else:
+            _positive_int(item.get("included_documents"), "included documents")
         _money(item.get("overage_unit_price_brl"))
         cnpj_limit = item.get("max_cnpjs")
         if cnpj_limit is not None:
@@ -142,14 +151,14 @@ def build_canonical_candidate(
                     f"nfcore-{key}-annual-candidate",
                 ),
                 trial_days=14,
-                tags=("unpublished", "director-proposal-20261103"),
-                enabled=False,
+                tags=("catalog-v2", "activation-requires-pricing-admin-and-release"),
+                enabled=True,
                 periodic_quotas=(),
             )
         )
     return CommercialPricingConfiguration(
-        configuration_id="nfcore-four-plan-candidate-20261103",
-        version=1,
+        configuration_id="nfcore-four-plans-approved-2026-11-06",
+        version=2,
         prices=tuple(prices),
         plans=tuple(plans),
     )
@@ -175,8 +184,9 @@ def estimate_monthly_charge(
     assert isinstance(raw_plans, dict)
     raw_plan = raw_plans[plan_key]
     assert isinstance(raw_plan, dict)
-    included = _positive_int(raw_plan["included_documents"], "included documents")
-    excess = max(0, docs_emitted - included)
+    included_raw = raw_plan["included_documents"]
+    included = None if included_raw is None and plan_key == "enterprise" else _positive_int(included_raw, "included documents")
+    excess = 0 if included is None else max(0, docs_emitted - included)
     base = price.base_amount / 12 if annual_contract else price.base_amount
     charge = (Decimal(excess) * price.per_document_amount).quantize(_CENT, rounding=ROUND_HALF_UP)
     return {
