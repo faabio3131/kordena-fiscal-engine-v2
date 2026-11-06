@@ -34,6 +34,7 @@ from kordena_fiscal.issuance.nfe_nfse import (
 )
 from kordena_fiscal.issuance.nfse_dps_builder import build_signed_dps
 from kordena_fiscal.vault import EphemeralCertificateMaterial
+from kordena_fiscal.xml.nfse_nacional_schema import national_dps_validator
 
 _NFSE_NS = "http://www.sped.fazenda.gov.br/nfse"
 _INSTANT = datetime(2026, 11, 6, 12, 0, tzinfo=UTC)
@@ -126,19 +127,13 @@ def test_build_signed_dps_produces_schema_valid_and_signed_document() -> None:
     signed = build_signed_dps(_request(), _certificate())
 
     # The builder validates its own UNSIGNED XML against the pinned XSD
-    # before handing it to the existing sign_nfse_dps_xml() signer (see
-    # build_signed_dps's last two lines) -- that is this module's actual
-    # schema-correctness contract, and it is exercised by every test here.
-    #
-    # Re-validating the SIGNED document against the full pinned schema is
-    # deliberately NOT asserted: doing so surfaces a pre-existing, separate
-    # defect discovered while wiring this module end to end -- the pinned
-    # xml/official/NFSE_NACIONAL_1.00/xmldsig-core-schema.xsd fixes
-    # DigestMethod/SignatureMethod to SHA-1, while the existing
-    # sign_nfse_dps_xml() (not written as part of this change) signs with
-    # RSA-SHA256. See
-    # tests/runtime/test_nfv1_nfse_dps_builder_and_preaudit_wiring.py for a
-    # reproduction and the PR description for the flag to the repo owner.
+    # before handing it to sign_nfse_dps_xml() (see build_signed_dps's last
+    # two lines). Re-validating the SIGNED document against the full pinned
+    # schema (including xmldsig-core-schema.xsd's fixed RSA-SHA1
+    # SignatureMethod/DigestMethod) now also passes, since sign_nfse_dps_xml()
+    # signs the National DPS flow with RSA-SHA1 to match that constraint.
+    national_dps_validator("1.00").validate_document(signed)
+
     root = etree.fromstring(signed)
     assert root.tag == f"{{{_NFSE_NS}}}DPS"
     assert root.get("versao") == "1.00"
@@ -150,6 +145,11 @@ def test_build_signed_dps_produces_schema_valid_and_signed_document() -> None:
     assert info.findtext(f"{{{_NFSE_NS}}}cLocEmi") == "3550308"
     signature = root.find("{http://www.w3.org/2000/09/xmldsig#}Signature")
     assert signature is not None
+    signature_method = signature.find(
+        ".//{http://www.w3.org/2000/09/xmldsig#}SignatureMethod"
+    )
+    assert signature_method is not None
+    assert signature_method.get("Algorithm") == "http://www.w3.org/2000/09/xmldsig#rsa-sha1"
 
 
 def test_build_signed_dps_is_deterministic_for_the_same_request() -> None:

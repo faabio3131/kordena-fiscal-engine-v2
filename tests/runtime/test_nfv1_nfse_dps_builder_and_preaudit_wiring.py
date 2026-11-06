@@ -30,7 +30,6 @@ from kordena_fiscal.domain import (
     Cnpj,
     ExecutionScope,
     FiscalAddress,
-    FiscalDomainError,
     FiscalEnvironment,
     FiscalProfile,
     FiscalValidationError,
@@ -39,6 +38,7 @@ from kordena_fiscal.domain import (
     StateRegistration,
     TaxRegimeCode,
 )
+from kordena_fiscal.gateway.authorization import AuthorizationStatus
 from kordena_fiscal.gateway.nfse_nacional_homologation import (
     NACIONAL_HOMOLOGATION_PROVIDER_ID,
     NfseNacionalHomologationGateway,
@@ -159,27 +159,18 @@ def _governed_gateway(*, resolver_return: str = NACIONAL_HOMOLOGATION_PROVIDER_I
     )
 
 
-def test_real_builder_and_preaudit_pass_a_valid_document_through_signing() -> None:
-    """Preaudit passes, build_signed_dps produces a schema-valid unsigned DPS
-    and a cryptographically valid signature -- but the governed gateway's
-    own downstream re-validation of the SIGNED document against the full
-    pinned XSD then raises XmlSchemaValidationError.
-
-    This is NOT a defect in build_signed_dps or nfse_preaudit (both of this
-    change's new modules). It is a pre-existing mismatch between two
-    modules neither written nor modified here: the pinned
-    xml/official/NFSE_NACIONAL_1.00/xmldsig-core-schema.xsd fixes
-    DigestMethod/SignatureMethod to SHA-1, while the existing
-    signing.nfse_xmldsig.sign_nfse_dps_xml() signs with RSA-SHA256. Wiring
-    real functions through this gateway for the first time (this change's
-    purpose) is what surfaces it; it blocks every real DPS submission, not
-    just ones built by this module, and should be resolved by the repo
-    owner as its own, separate, security-sensitive decision (which SHA to
-    standardize on) rather than patched silently here.
+def test_real_builder_and_preaudit_authorize_a_valid_document_end_to_end() -> None:
+    """Preaudit passes, build_signed_dps produces a schema-valid unsigned DPS,
+    sign_nfse_dps_xml() signs it with RSA-SHA1 (matching the pinned
+    xml/official/NFSE_NACIONAL_1.00/xmldsig-core-schema.xsd's fixed
+    SignatureMethod/DigestMethod), and the governed gateway's own downstream
+    re-validation of the SIGNED document against the full pinned XSD now
+    passes -- so the fake homologation exchange authorizes the document.
     """
     gateway = _governed_gateway()
-    with pytest.raises(FiscalDomainError, match="sha1"):
-        gateway.authorize(_request())
+    result = gateway.authorize(_request())
+    assert result.status is AuthorizationStatus.AUTHORIZED
+    assert result.invoice_reference == "35" + "0" * 42
 
 
 def test_real_preaudit_blocks_before_any_signing_on_rate_divergence() -> None:
