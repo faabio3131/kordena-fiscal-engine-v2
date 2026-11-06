@@ -5,7 +5,9 @@ import json
 import pytest
 
 from kordena_fiscal.cognitive.commercial_quotas import (
-    APPROVED_TOKEN_ALLOWANCES, TokenQuotaPlan, allowance_for_subscription,
+    APPROVED_TOKEN_ALLOWANCES,
+    TokenQuotaPlan,
+    allowance_for_subscription,
     configured_allowance,
 )
 
@@ -32,11 +34,14 @@ def test_four_plans_have_conservative_approved_caps(
 
 
 def test_trial_is_fourteen_day_commercial_status_not_paid_entitlement() -> None:
-    assert allowance_for_subscription(plan_id="starter", status="trial") == APPROVED_TOKEN_ALLOWANCES[TokenQuotaPlan.TRIAL]
+    trial = allowance_for_subscription(plan_id="starter", status="trial")
+    assert trial == APPROVED_TOKEN_ALLOWANCES[TokenQuotaPlan.TRIAL]
     assert allowance_for_subscription(plan_id="enterprise", status="expired") is None
 
 
-@pytest.mark.parametrize("plan_id", ["essencial", "crescimento", "escala", "free", "unknown", "trial"])
+@pytest.mark.parametrize(
+    "plan_id", ["essencial", "crescimento", "escala", "free", "unknown", "trial"]
+)
 def test_legacy_and_unknown_paid_ids_never_fall_back_to_unlimited(plan_id: str) -> None:
     assert allowance_for_subscription(plan_id=plan_id, status="active") is None
 
