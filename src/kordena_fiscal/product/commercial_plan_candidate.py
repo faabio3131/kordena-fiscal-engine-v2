@@ -84,6 +84,9 @@ def read_candidate(path: Path = _DEFAULT) -> dict[str, object]:
         raise CommercialPricingError("catalog publication cannot self-activate runtime")
     if publication.get("requires_commercial_release_authority") is not True:
         raise CommercialPricingError("release authority cannot be bypassed")
+    policy = data.get("commercial_policy")
+    if not isinstance(policy, dict) or policy.get("annual_prices_enabled") is not False or policy.get("overage_charging_enabled") is not False:
+        raise CommercialPricingError("unapproved prices must remain disabled")
     return data
 
 
@@ -134,7 +137,8 @@ def build_canonical_candidate(
                     currency="BRL",
                     cadence=cadence,
                     base_amount=base,
-                    per_document_amount=_money(item.get("overage_unit_price_brl")),
+                    per_document_amount=Decimal("0.00"),
+                    enabled=cadence is BillingCadence.MONTHLY,
                 )
             )
         # Included volume and per-minute throttling are NOT period-hard quotas:
@@ -180,6 +184,8 @@ def estimate_monthly_charge(
         raise CommercialPricingError("unknown plan")
     cadence = BillingCadence.ANNUAL if annual_contract else BillingCadence.MONTHLY
     price = next(p for p in config.prices if p.price_id in plan.price_ids and p.cadence == cadence)
+    if not price.enabled:
+        raise CommercialPricingError("cadence not currently approved")
     raw_plans = read_candidate(path)["plans"]
     assert isinstance(raw_plans, dict)
     raw_plan = raw_plans[plan_key]
@@ -187,6 +193,8 @@ def estimate_monthly_charge(
     included_raw = raw_plan["included_documents"]
     included = None if included_raw is None and plan_key == "enterprise" else _positive_int(included_raw, "included documents")
     excess = 0 if included is None else max(0, docs_emitted - included)
+    if excess:
+        raise CommercialPricingError("document quota exceeded; overage billing is not approved")
     base = price.base_amount / 12 if annual_contract else price.base_amount
     charge = (Decimal(excess) * price.per_document_amount).quantize(_CENT, rounding=ROUND_HALF_UP)
     return {
