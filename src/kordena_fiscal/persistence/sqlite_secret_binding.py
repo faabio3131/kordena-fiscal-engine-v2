@@ -58,6 +58,39 @@ class SqliteSecretBindingStore:
                 found.append(binding)
         return tuple(found)
 
+    def list_active_certificates(
+        self, *, tenant_id: str, unit_id: str, fiscal_environment: str
+    ) -> tuple[SecretBinding, ...]:
+        """Governed lookup of the certificate binding(s) on file for a tenant/unit.
+
+        Mirrors ``list_active_signatures``: reads the single canonical
+        ``fm_secret_bindings`` table, never a second tenant-certificate registry.
+        Callers use this to answer "does this company already have a certificate
+        reference registered" without needing to already know its reference_id.
+        Returns metadata only; no private key or password material is stored here.
+        """
+        rows = self._connection.execute(
+            "SELECT reference_id, revision, metadata_json FROM fm_secret_bindings "
+            "ORDER BY reference_id"
+        ).fetchall()
+        found = []
+        for reference_id, revision, payload in rows:
+            try:
+                binding = SecretBinding.from_metadata(json.loads(payload))
+                if binding.reference_id != reference_id or binding.revision != revision:
+                    raise ValueError
+            except Exception:
+                raise PersistenceStateError("external secret binding registry invalid") from None
+            if (
+                binding.kind == "certificate"
+                and binding.state == "active"
+                and binding.tenant_id == tenant_id
+                and binding.unit_id == unit_id
+                and binding.fiscal_environment == fiscal_environment
+            ):
+                found.append(binding)
+        return tuple(found)
+
     def put(self, binding: SecretBinding, *, expected_revision: int) -> None:
         if type(expected_revision) is not int or expected_revision < 0:
             raise PersistenceConflictError("invalid binding expected revision")
