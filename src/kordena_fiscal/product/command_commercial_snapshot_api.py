@@ -20,6 +20,7 @@ money. Reading plans.json uses the same validated parser as the rest of the prod
 
 from __future__ import annotations
 
+import hashlib
 import hmac
 import json
 from collections.abc import Callable, Mapping, Sequence
@@ -179,18 +180,68 @@ class CommandCommercialSnapshotReader:
             if isinstance(definition, dict)
         ]
 
+    @staticmethod
+    def _subscription_status_summary(subscriptions: list[dict[str, object]]) -> dict[str, int]:
+        """Counts derived strictly from each row's own persisted ``status``.
+
+        Uses the real ``SubscriptionStatus`` values (trial/active/grace/suspended/
+        canceled, see ``product.billing``); never invents a label the domain enum
+        does not have, and never infers a financial meaning (paid/unpaid) from it.
+        """
+        counts = {"trial": 0, "active": 0, "grace": 0, "suspended": 0, "canceled": 0}
+        for row in subscriptions:
+            status = row.get("status")
+            if isinstance(status, str) and status in counts:
+                counts[status] += 1
+        return {
+            "trial_subscriptions": counts["trial"],
+            "active_subscriptions": counts["active"],
+            "grace_subscriptions": counts["grace"],
+            "suspended_subscriptions": counts["suspended"],
+            "canceled_subscriptions": counts["canceled"],
+        }
+
     def snapshot(self, *, as_of: datetime) -> dict[str, object]:
+        customers = self.customers()
+        product_accounts = self.product_accounts()
+        trials = self.trials()
+        subscriptions = self.subscriptions()
+        billing_transactions = self.billing_transactions()
+        entitlements = self.entitlements()
+        catalog = self.catalog()
+        summary = {
+            "customers": len(customers),
+            **self._subscription_status_summary(subscriptions),
+        }
+        # Deterministic, non-PII digest of the summary only (never the raw
+        # collections) so Command can record exactly one reportable fact per
+        # snapshot, mirroring the single hashed fact already emitted by the
+        # cognitive metrics route for this same product.
+        clean_payload = {"as_of": as_of.isoformat(), **summary}
+        stable_id = hashlib.sha256(
+            json.dumps(clean_payload, sort_keys=True).encode("utf-8")
+        ).hexdigest()
         return {
             "schema_version": SCHEMA_VERSION,
             "product_code": PRODUCT_CODE,
             "as_of": as_of.isoformat(),
-            "customers": self.customers(),
-            "product_accounts": self.product_accounts(),
-            "trials": self.trials(),
-            "subscriptions": self.subscriptions(),
-            "billing_transactions": self.billing_transactions(),
-            "entitlements": self.entitlements(),
-            "catalog": self.catalog(),
+            "customers": customers,
+            "product_accounts": product_accounts,
+            "trials": trials,
+            "subscriptions": subscriptions,
+            "billing_transactions": billing_transactions,
+            "entitlements": entitlements,
+            "catalog": catalog,
+            "summary": summary,
+            # billing_transactions carries no amount: the Command/gateway ledger
+            # is -- and stays -- the sole financial authority for this product.
+            "coverage": {"billing_transactions": "FM_COMMAND_AUTHORITY"},
+            "facts": [{
+                "external_id": "nfcore-commercial-v1:" + stable_id,
+                "fact_type": "nfcore.commercial.snapshot",
+                "payload": clean_payload,
+                "source_timestamp": as_of.isoformat(),
+            }],
         }
 
 

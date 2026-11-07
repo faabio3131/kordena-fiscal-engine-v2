@@ -108,6 +108,22 @@ def test_snapshot_envelope_reports_real_rows_and_never_an_amount() -> None:
     dumped = json.dumps(body)
     assert "amount" not in dumped and "price_brl" not in dumped and "mrr" not in dumped.lower()
     assert TOKEN not in dumped
+    # Generic Command-side coverage projection (shared with Kordena/Iron) needs
+    # these three fields: a single reportable fact, a coverage disclosure that
+    # never claims NFCore is the billing authority, and a status-derived summary.
+    assert body["coverage"] == {"billing_transactions": "FM_COMMAND_AUTHORITY"}
+    assert body["summary"]["customers"] == 1
+    assert body["summary"]["active_subscriptions"] == 1
+    assert body["summary"]["trial_subscriptions"] == 1
+    assert body["summary"]["grace_subscriptions"] == 0
+    assert body["summary"]["suspended_subscriptions"] == 0
+    assert body["summary"]["canceled_subscriptions"] == 0
+    assert len(body["facts"]) == 1
+    fact = body["facts"][0]
+    assert fact["external_id"].startswith("nfcore-commercial-v1:")
+    assert fact["fact_type"] == "nfcore.commercial.snapshot"
+    assert fact["source_timestamp"] == body["as_of"]
+    assert fact["payload"]["active_subscriptions"] == 1
 
 
 def test_snapshot_security_matches_the_already_proven_command_pattern() -> None:
