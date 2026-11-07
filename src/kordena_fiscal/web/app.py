@@ -278,6 +278,7 @@ def create_app(
     cakto_checkout_administration: CaktoCheckoutAdministrationService | None = None,
     runtime_metrics: MetricsRegistry | None = None,
     cognitive_router: APIRouter | None = None,
+    command_commercial_router: APIRouter | None = None,
 ) -> FastAPI:
     """Create the web adapter without granting fiscal authority by default."""
 
@@ -357,6 +358,12 @@ def create_app(
         # app even though build_cognitive_router built it. The advisory sub-route
         # keeps its own internal gating untouched.
         app.include_router(cognitive_router)
+
+    if command_commercial_router is not None:
+        # Same rationale as cognitive_router above: this router fails closed
+        # per-request (503) when its reader isn't wired, and must stay routable
+        # regardless of human_identity so Command never sees a 404.
+        app.include_router(command_commercial_router)
 
     if human_identity is not None:
         app.include_router(

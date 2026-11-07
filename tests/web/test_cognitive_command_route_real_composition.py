@@ -44,3 +44,17 @@ def test_advisory_route_still_absent_from_real_app_without_human_identity() -> N
     response = client.post("/v1/portal/cognitive/advise", json={})
 
     assert response.status_code == 404
+
+
+def test_command_commercial_route_survives_real_app_composition_without_identity() -> None:
+    from kordena_fiscal.product.command_commercial_snapshot_api import (
+        create_command_commercial_snapshot_router,
+    )
+
+    commercial_router = create_command_commercial_snapshot_router(None, {})
+    app = create_app(human_identity=None, command_commercial_router=commercial_router)
+    client = TestClient(app)
+
+    response = client.get("/v1/command/commercial/snapshot")
+
+    assert response.status_code != 404

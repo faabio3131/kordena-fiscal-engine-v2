@@ -29,6 +29,10 @@ from kordena_fiscal.product.checkout import (
     CommercialCheckoutProjector,
     CommercialCheckoutStarter,
 )
+from kordena_fiscal.product.command_commercial_snapshot_api import (
+    CommandCommercialSnapshotReader,
+    create_command_commercial_snapshot_router,
+)
 from kordena_fiscal.product.commercial_readiness import CommercialDeliveryPathReadiness
 from kordena_fiscal.security.s2s import (
     FixedWindowRateLimiter,
@@ -896,6 +900,11 @@ def create_runtime_app(
                     )
                     else None
                 ),
+            ),
+            command_commercial_router=create_command_commercial_snapshot_router(
+                CommandCommercialSnapshotReader(runtime.database.connection)
+                if runtime.database is not None else None,
+                os.environ,
             ),
         ),
     )
