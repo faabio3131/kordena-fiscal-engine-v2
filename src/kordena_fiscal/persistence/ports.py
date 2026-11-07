@@ -355,6 +355,10 @@ class SecretBindingStore(Protocol):
 
     def put(self, binding: SecretBinding, *, expected_revision: int) -> None: ...
 
+    def list_active_certificates(
+        self, *, tenant_id: str, unit_id: str, fiscal_environment: str
+    ) -> tuple[SecretBinding, ...]: ...
+
 
 class FiscalUnitOfWork(Protocol):
     """One atomic local transaction spanning all durable fiscal repositories."""

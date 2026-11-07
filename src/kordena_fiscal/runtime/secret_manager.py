@@ -48,6 +48,28 @@ class SecretBindingAdministration:
         with self._uow() as uow:
             return uow.secret_bindings.get(reference_id)
 
+    def active_certificate_for_scope(
+        self, *, tenant_id: str, unit_id: str, fiscal_environment: str
+    ) -> SecretBinding | None:
+        """Governed query: which certificate reference, if any, is on file for a scope.
+
+        Returns metadata only (reference_id, expiry, state); no private key or
+        password material. Used to drive certificate-registration UX (has this
+        company already registered a certificate for this environment, and is it
+        expired/expiring) without requiring the caller to already know a
+        reference_id. More than one active row for the same scope indicates a
+        registration-discipline violation upstream and is rejected, not guessed at.
+        """
+        with self._uow() as uow:
+            matches = uow.secret_bindings.list_active_certificates(
+                tenant_id=tenant_id, unit_id=unit_id, fiscal_environment=fiscal_environment
+            )
+        if len(matches) > 1:
+            raise SecretResolutionError(
+                "more than one active certificate binding for the same scope"
+            )
+        return matches[0] if matches else None
+
     def put(
         self,
         *,

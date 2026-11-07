@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import re
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from .secrets import SecretReference, SecretResolutionError, SecretScope
+from .signing import CertificateStatus
 
 _RESOURCE = re.compile(r"projects/[a-z0-9][a-z0-9-]{4,62}/secrets/[A-Za-z0-9_-]{1,255}\Z")
 _REF = re.compile(r"ref:[a-z0-9][a-z0-9:/_.-]{0,251}\Z")
@@ -112,3 +113,31 @@ class SecretBinding:
         if expiry is not None:
             data["not_after"] = datetime.fromisoformat(expiry)
         return cls(**data)
+
+
+def certificate_binding_status(
+    binding: SecretBinding,
+    instant: datetime,
+    *,
+    expiring_within: timedelta = timedelta(days=30),
+) -> CertificateStatus:
+    """Expiry status of a governed certificate binding, metadata-only.
+
+    ``SecretBinding`` carries no ``not_before`` (unlike the signing boundary's
+    ``CertificateReference``), so ``NOT_YET_VALID`` cannot be derived here; a
+    binding with no recorded expiry is treated as ``VALID`` and relies on
+    registration discipline, not this check, to keep that honest.
+    """
+    if binding.kind != "certificate":
+        raise SecretResolutionError("certificate status requires a certificate binding")
+    if instant.tzinfo is None or instant.utcoffset() is None:
+        raise SecretResolutionError("instant must be timezone-aware")
+    if expiring_within < timedelta(0):
+        raise SecretResolutionError("expiring_within must be non-negative")
+    if binding.not_after is None:
+        return CertificateStatus.VALID
+    if instant >= binding.not_after:
+        return CertificateStatus.EXPIRED
+    if binding.not_after - instant <= expiring_within:
+        return CertificateStatus.EXPIRING
+    return CertificateStatus.VALID
