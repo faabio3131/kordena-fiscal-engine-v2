@@ -345,6 +345,19 @@ def create_app(
         )
         return response
 
+    if cognitive_router is not None:
+        # Mounted unconditionally: the Command read-only metrics sub-route inside
+        # cognitive_router does not depend on human_identity (see
+        # kordena_fiscal.cognitive.composition.build_cognitive_router, which already
+        # returns a metrics-only router when human_identity/portal_executor are
+        # absent or the AI advisory flag is off). Gating the whole router behind
+        # human_identity here would re-introduce the same 404 the PR fixed: in any
+        # composition where human_identity ends up None (e.g. no PostgreSQL
+        # composition), GET /v1/command/cognitive/metrics would vanish from the real
+        # app even though build_cognitive_router built it. The advisory sub-route
+        # keeps its own internal gating untouched.
+        app.include_router(cognitive_router)
+
     if human_identity is not None:
         app.include_router(
             create_human_auth_router(
@@ -375,8 +388,6 @@ def create_app(
                 certificate_vault=certificate_vault,
             )
         )
-        if cognitive_router is not None:
-            app.include_router(cognitive_router)
         if pricing_administration is not None:
             app.include_router(
                 create_pricing_router(human_identity, pricing_administration)
