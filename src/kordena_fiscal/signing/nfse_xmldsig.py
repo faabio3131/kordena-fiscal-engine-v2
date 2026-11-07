@@ -1,7 +1,13 @@
-"""Enveloped XMLDSig RSA/SHA-256 for official National NFS-e DPS XML.
+"""Enveloped XMLDSig RSA/SHA-1 for official National NFS-e DPS XML.
 
 The caller supplies an authorized tenant-bound A1 from the existing Vault.
 No taxpayer information is inferred or inserted in this signing boundary.
+
+The pinned official schema package for both the National DPS
+(``xml/official/NFSE_NACIONAL_1.0x/xmldsig-core-schema.xsd``) and the
+legacy ABRASF municipal protocols fixes ``SignatureMethod``/``DigestMethod``
+to RSA-SHA1; neither accepts SHA-256. This module signs with SHA-1
+everywhere for that reason, not because the National flow is "legacy".
 """
 from __future__ import annotations
 
@@ -61,7 +67,10 @@ def sign_nfse_dps_xml(
     if not isinstance(key, rsa.RSAPrivateKey) or cert is None:
         raise FiscalValidationError("Assinatura DPS exige identidade A1 RSA")
 
-    append_nfse_signature(root, info, key, cert, legacy_abrasf=False)
+    # The pinned official National DPS XSD fixes SignatureMethod/DigestMethod
+    # to RSA-SHA1 (see module docstring); legacy_abrasf=True selects that
+    # algorithm pair, matching what the ABRASF municipal flows already use.
+    append_nfse_signature(root, info, key, cert, legacy_abrasf=True)
     return etree.tostring(root, encoding="utf-8", xml_declaration=True)
 
 
@@ -72,10 +81,11 @@ def append_nfse_signature(
     cert: x509.Certificate,
     *,
     legacy_abrasf: bool,
+    whole_document: bool = False,
 ) -> None:
-    """Insert a sibling XMLDSig under the final document namespace context."""
+    """Insert XMLDSig over an Id target or over the entire request document."""
     identifier = info.get("Id")
-    if not identifier:
+    if not identifier and not whole_document:
         raise FiscalValidationError("Missing NFS-e signature reference Id")
     canonical_info = etree.tostring(info, method="c14n", exclusive=False, with_comments=False)
     algorithm = hashes.SHA1() if legacy_abrasf else hashes.SHA256()
@@ -89,7 +99,8 @@ def append_nfse_signature(
     signed_info = etree.SubElement(signature, f"{{{_DS}}}SignedInfo")
     etree.SubElement(signed_info, f"{{{_DS}}}CanonicalizationMethod", Algorithm=_C14N)
     etree.SubElement(signed_info, f"{{{_DS}}}SignatureMethod", Algorithm=signature_method)
-    reference = etree.SubElement(signed_info, f"{{{_DS}}}Reference", URI="#" + identifier)
+    uri = "" if whole_document else f"#{identifier}"
+    reference = etree.SubElement(signed_info, f"{{{_DS}}}Reference", URI=uri)
     transforms = etree.SubElement(reference, f"{{{_DS}}}Transforms")
     etree.SubElement(transforms, f"{{{_DS}}}Transform", Algorithm=_ENVELOPED)
     etree.SubElement(transforms, f"{{{_DS}}}Transform", Algorithm=_C14N)

@@ -31,9 +31,14 @@ from kordena_fiscal.gateway.nfe_sp_operations_homologation import (
     SefazSpHomologationOperationsGateway,
 )
 from kordena_fiscal.gateway.nfse_nacional_homologation import (
+    NACIONAL_HOMOLOGATION_PROVIDER_ID,
     NfseNacionalHomologationGateway,
 )
-from kordena_fiscal.issuance import NfseAuthorizationRequest, NfseGatewayClient
+from kordena_fiscal.issuance import (
+    NfseAuthorizationRequest,
+    NfseAuthorizationResult,
+    NfseGatewayClient,
+)
 from kordena_fiscal.operations import (
     CancellationRequest,
     CancellationResult,
@@ -58,6 +63,7 @@ def fiscal_external_dependency_snapshot(
     trusted_signed_dps_builder: Callable[
         [NfseAuthorizationRequest, EphemeralCertificateMaterial], bytes
     ] | None = None,
+    nfse_preaudit: Callable[[NfseAuthorizationRequest], None] | None = None,
 ) -> dict[str, bool]:
     """Configuration status only; never assert taxpayer-specific issuance readiness.
 
@@ -67,7 +73,9 @@ def fiscal_external_dependency_snapshot(
     """
     vault_ready = isinstance(certificate_vault, EncryptedA1Vault)
     nfe_transport_ready = vault_ready
-    nfse_transport_ready = vault_ready and callable(trusted_signed_dps_builder)
+    nfse_transport_ready = (
+        vault_ready and callable(trusted_signed_dps_builder) and callable(nfse_preaudit)
+    )
     # Python signer and A1 mTLS are imported at composition time, but a signing
     # capability is only configured when an A1 Vault exists.
     signer_ready = vault_ready
@@ -128,6 +136,45 @@ def _require_mg_binding(
         raise FiscalValidationError(f"Provedor do vínculo de {label} incompatível")
 
 
+class _GovernedNationalNfseGateway:
+    """Enforce a durable unit binding and fiscal audit before accessing A1."""
+
+    def __init__(
+        self,
+        *,
+        application: FiscalApplicationService,
+        preaudit: Callable[[NfseAuthorizationRequest], None],
+        gateway: NfseNacionalHomologationGateway,
+    ) -> None:
+        self._application = application
+        self._preaudit = preaudit
+        self._gateway = gateway
+
+    def authorize(self, request: NfseAuthorizationRequest) -> NfseAuthorizationResult:
+        document = request.document
+        scope = document.scope
+        jurisdiction = document.issuer.address.jurisdiction
+        if (
+            scope.environment is not FiscalEnvironment.HOMOLOGATION
+            or scope.host_namespace is None
+            or jurisdiction.municipality_ibge_code is None
+        ):
+            raise FiscalValidationError("NFS-e Nacional exige escopo de homologacao e municipio")
+        try:
+            provider_id = self._application.resolve_configured_provider_id(
+                scope=scope,
+                document_kind=FiscalDocumentKind.NFSE,
+                jurisdiction=jurisdiction,
+                operation=ConfiguredFiscalOperation.AUTHORIZE.value,
+            )
+        except ControlPlaneNotFoundError as exc:
+            raise FiscalValidationError("Vinculo fiscal NFS-e Nacional indisponivel") from exc
+        if provider_id != NACIONAL_HOMOLOGATION_PROVIDER_ID:
+            raise FiscalValidationError("Provedor do vinculo NFS-e Nacional incompativel")
+        self._preaudit(request)
+        return self._gateway.authorize(request)
+
+
 class _GovernedMgQueryGateway:
     def __init__(
         self,
@@ -164,6 +211,7 @@ def build_runtime_fiscal_handler_factory(
     trusted_signed_dps_builder: Callable[
         [NfseAuthorizationRequest, EphemeralCertificateMaterial], bytes
     ] | None = None,
+    nfse_preaudit: Callable[[NfseAuthorizationRequest], None] | None = None,
 ) -> Any:
     """Register all four canonical operations without granting fiscal readiness.
 
@@ -191,19 +239,15 @@ def build_runtime_fiscal_handler_factory(
     # port; never derive its contents from browser payloads or send unsigned XML.
     if nfse_gateway is not None and trusted_signed_dps_builder is not None:
         raise ValueError("configure either an NFS-e gateway or a trusted DPS builder")
-    selected_nfse = nfse_gateway
-    if (
-        selected_nfse is None
-        and certificate_vault is not None
-        and trusted_signed_dps_builder is not None
-    ):
-        selected_nfse = NfseGatewayClient(
-            NfseNacionalHomologationGateway(
-                resolve_certificate=lambda scope, cnpj: certificate_vault.resolve(
-                    scope=scope, issuer_cnpj=cnpj
-                ),
-                build_signed_dps=trusted_signed_dps_builder,
-            )
+    if trusted_signed_dps_builder is not None and not callable(nfse_preaudit):
+        raise ValueError("NFS-e signed DPS composition requires fiscal pre-audit")
+    national_nfse = None
+    if certificate_vault is not None and trusted_signed_dps_builder is not None:
+        national_nfse = NfseNacionalHomologationGateway(
+            resolve_certificate=lambda scope, cnpj: certificate_vault.resolve(
+                scope=scope, issuer_cnpj=cnpj
+            ),
+            build_signed_dps=trusted_signed_dps_builder,
         )
     retention = RetentionPolicyMetadata(
         policy_id="nfcore-fiscal-archive", policy_version=1
@@ -252,6 +296,13 @@ def build_runtime_fiscal_handler_factory(
                 return mg_authorization
 
             selector = select_xml_gateway
+        selected_nfse = nfse_gateway
+        if national_nfse is not None and nfse_preaudit is not None:
+            selected_nfse = NfseGatewayClient(_GovernedNationalNfseGateway(
+                application=application,
+                preaudit=nfse_preaudit,
+                gateway=national_nfse,
+            ))
         handlers = build_provider_operation_handlers(
             FiscalOperationsClient(gateway),
             application=application,

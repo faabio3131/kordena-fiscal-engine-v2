@@ -186,7 +186,9 @@ class ControlPlaneAuditSinkStub:
         return None
 
 
-def test_composition_mounts_both_routes_only_when_enabled(database) -> None:  # type: ignore[no-untyped-def]
+def test_composition_mounts_metrics_always_and_advisory_only_when_enabled(
+    database,  # type: ignore[no-untyped-def]
+) -> None:
     from kordena_fiscal.cognitive.composition import build_cognitive_router
 
     class Reader:
@@ -196,7 +198,15 @@ def test_composition_mounts_both_routes_only_when_enabled(database) -> None:  # 
     identity = object.__new__(__import__(
         "kordena_fiscal.security.human_identity", fromlist=["HumanIdentityService"]
     ).HumanIdentityService)
-    assert build_cognitive_router(identity, Reader(), {}) is None  # type: ignore[arg-type]
+    # The Command read-only metrics route must stay routable even with the advisory
+    # feature off; only the AI advisory route is gated by NFCORE_COGNITIVE_ENABLED.
+    disabled_router = build_cognitive_router(identity, Reader(), {})  # type: ignore[arg-type]
+    assert disabled_router is not None
+    disabled_app = FastAPI()
+    disabled_app.include_router(disabled_router)
+    disabled_paths = set(disabled_app.openapi()["paths"])
+    assert "/v1/command/cognitive/metrics" in disabled_paths
+    assert "/v1/portal/cognitive/advise" not in disabled_paths
     env = {"NFCORE_COGNITIVE_ENABLED": "true", TOKEN_ENV: TOKEN}
     router = build_cognitive_router(identity, Reader(), env, audit_uow_factory=database)  # type: ignore[arg-type]
     assert router is not None

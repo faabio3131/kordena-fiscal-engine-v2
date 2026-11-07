@@ -17,7 +17,9 @@ from kordena_fiscal.application.command_commercial import CommandCommercialRecei
 from kordena_fiscal.application.commercial_acquisition import CommercialAcquisitionService
 from kordena_fiscal.cognitive.composition import build_cognitive_router
 from kordena_fiscal.cognitive.durable_usage import DurableTokenQuotaStore
+from kordena_fiscal.compliance.nfse_preaudit import nfse_preaudit
 from kordena_fiscal.gateway.production_activation import ProductionExecutionAuthority
+from kordena_fiscal.issuance.nfse_dps_builder import build_signed_dps
 from kordena_fiscal.persistence.command_commercial import CommandCommercialStore
 from kordena_fiscal.persistence.commercial_fulfillment import (
     postgres_canonical_commercial_database,
@@ -28,6 +30,14 @@ from kordena_fiscal.product.cakto import CaktoWebhookReceiver
 from kordena_fiscal.product.checkout import (
     CommercialCheckoutProjector,
     CommercialCheckoutStarter,
+)
+from kordena_fiscal.product.command_commercial_snapshot_api import (
+    CommandCommercialSnapshotReader,
+    create_command_commercial_snapshot_router,
+)
+from kordena_fiscal.product.command_operational_usage_snapshot_api import (
+    CommandOperationalUsageSnapshotReader,
+    create_command_operational_usage_snapshot_router,
 )
 from kordena_fiscal.product.commercial_readiness import CommercialDeliveryPathReadiness
 from kordena_fiscal.security.s2s import (
@@ -43,6 +53,7 @@ from kordena_fiscal.web.command_commercial import create_command_commercial_rout
 from kordena_fiscal.web.commercial_acquisition import (
     create_commercial_acquisition_router,
 )
+from kordena_fiscal.web.commercial_claim import create_commercial_claim_router
 from kordena_fiscal.web.commercial_trial import create_commercial_trial_router
 from kordena_fiscal.web.human_recovery import PasswordResetDelivery
 from kordena_fiscal.web.production_gsm_binding_admin import create_production_gsm_binding_router
@@ -56,7 +67,8 @@ from .activation_email import build_activation_delivery_from_environ
 from .ai_secrets import build_production_openai_key_readers
 from .alert_rules import InternalAlertMonitor, OperationalSignals
 from .api_staging_gsm_probe import staging_probe_verifier
-from .cakto import build_cakto_webhook_router
+from .cakto import build_cakto_webhook_router, compose_postgres_cakto_commercial_runtime
+from .cakto_claim_email import build_cakto_claim_delivery_from_environ
 from .canonical_fiscal_composition import (
     build_runtime_fiscal_handler_factory,
     fiscal_external_dependency_snapshot,
@@ -81,6 +93,7 @@ from .observability import (
     TraceContext,
 )
 from .otel_trace_sink import build_trace_sink
+from .production_cakto_ingress import production_cakto_webhook_secret
 from .production_command_ingress import production_command_resolver
 from .production_gsm import production_api_verifier
 from .public_trial_abuse import PostgresPublicTrialAbuseGate
@@ -136,6 +149,7 @@ class RuntimeApi:
                         password_reset_ttl=timedelta(
                             minutes=settings.password_reset_ttl_minutes
                         ),
+                        cakto_claim_delivery=build_cakto_claim_delivery_from_environ(),
                     )
                 except Exception:
                     self._composition_boot_error = True
@@ -250,6 +264,27 @@ def create_runtime_app(
                         "duplicate production Command secret authority"
                     )
                 command_secret_resolver = approved_command
+            # Separate, explicitly approved Cakto webhook signing scope. A
+            # configured production secret may never downgrade to a caller-
+            # supplied receiver or guessed/default material.
+            approved_cakto_webhook_secret = production_cakto_webhook_secret(
+                runtime.database
+            )
+            if approved_cakto_webhook_secret is not None:
+                if cakto_receiver is not None:
+                    raise RuntimeConfigurationError(
+                        "duplicate production Cakto webhook authority"
+                    )
+                cakto_receiver = compose_postgres_cakto_commercial_runtime(
+                    fiscal_database=runtime.database,
+                    webhook_secret=approved_cakto_webhook_secret,
+                    metrics=runtime_metrics,
+                    canonical_bridge=(
+                        composition.cakto_canonical_bridge
+                        if composition is not None
+                        else None
+                    ),
+                ).receiver
     if resolved.environment.value == "staging" and runtime.database is not None:
         # Separate channel-specific GSM bindings, validated against the same
         # canonical external vault and existing nfcore-api identity.
@@ -730,6 +765,25 @@ def create_runtime_app(
             )
         )
 
+    # Self-service claim: lets a paying customer, who already received a
+    # one-time claim link by email after an upstream checkout provider (e.g.
+    # Cakto) confirmed payment, activate their own canonical purchase. Gated on
+    # the same composition/delivery used by every other activation path so no
+    # second provisioning or account-creation authority is introduced here.
+    if (
+        composition is not None
+        and composition.commercial_claim is not None
+        and composition.commercial_activation is not None
+        and password_reset_delivery is not None
+    ):
+        app.include_router(
+            create_commercial_claim_router(
+                composition.commercial_claim,
+                activation=composition.commercial_activation,
+                delivery=password_reset_delivery,
+            )
+        )
+
     # Public intake is strictly opt-in and requires externally governed rate
     # limiting, explicit origins, durable commercial state and activation delivery.
     # It is not a fallback for the signed server-to-server commercial route.
@@ -837,6 +891,14 @@ def create_runtime_app(
         None if composition is None else mark_commercial_active
     )
 
+    # Single reader instance shared by the commercial snapshot router and the
+    # operational-usage router below: the latter only projects fields out of
+    # rows the former already fetches, never a second query/connection.
+    _command_commercial_reader = (
+        CommandCommercialSnapshotReader(runtime.database.connection)
+        if runtime.database is not None else None
+    )
+
     # Fiscal production stays false unless a governed authority is explicitly injected.
     app.mount(
         "/",
@@ -897,6 +959,15 @@ def create_runtime_app(
                     else None
                 ),
             ),
+            command_commercial_router=create_command_commercial_snapshot_router(
+                _command_commercial_reader,
+                os.environ,
+            ),
+            command_operational_usage_router=create_command_operational_usage_snapshot_router(
+                CommandOperationalUsageSnapshotReader(_command_commercial_reader)
+                if _command_commercial_reader is not None else None,
+                os.environ,
+            ),
         ),
     )
     return app
@@ -910,7 +981,9 @@ app = create_runtime_app(
     password_reset_delivery=build_activation_delivery_from_environ(),
     certificate_vault=_entrypoint_certificate_vault,
     fiscal_dependency_probe=lambda: fiscal_external_dependency_snapshot(
-        certificate_vault=_entrypoint_certificate_vault
+        certificate_vault=_entrypoint_certificate_vault,
+        trusted_signed_dps_builder=build_signed_dps,
+        nfse_preaudit=nfse_preaudit,
     ),
     command_secret_resolver=development_command_resolver(
         _entrypoint_settings, os.environ
@@ -921,7 +994,11 @@ app = create_runtime_app(
         else None
     ),
     fiscal_operation_handler_factory=(
-        build_runtime_fiscal_handler_factory(certificate_vault=_entrypoint_certificate_vault)
+        build_runtime_fiscal_handler_factory(
+            certificate_vault=_entrypoint_certificate_vault,
+            trusted_signed_dps_builder=build_signed_dps,
+            nfse_preaudit=nfse_preaudit,
+        )
         if _entrypoint_settings.environment.value in {"staging", "production"}
         else None
     ),

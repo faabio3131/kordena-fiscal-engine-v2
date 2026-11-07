@@ -4,6 +4,7 @@ from collections.abc import Mapping, Sequence
 from datetime import timedelta
 from typing import Any
 
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from kordena_fiscal.cognitive import CognitiveAdviceService, default_baselines
@@ -185,11 +186,41 @@ def test_malicious_row_content_cannot_override_the_baseline() -> None:
     assert data["status"] == "insufficient_basis"  # not a catalog code: nothing invented
 
 
-def test_composition_is_off_unless_explicitly_enabled() -> None:
+def test_command_metrics_route_is_always_mounted_but_advisory_is_opt_in() -> None:
+    """The read-only Command status route must survive even with the AI advisory off.
+
+    Command needs an honest ``aiEnabled: false`` snapshot instead of a 404/connection
+    failure when the advisory feature is disabled or its dependencies are absent; only
+    the ``/v1/portal/cognitive/advise`` advisory endpoint stays opt-in behind the flag
+    and valid identity/portal dependencies. Probed through a real ASGI client so the
+    assertion reflects actually-routable paths, not router internals.
+    """
     ident = identity(PortalRole.OWNER)
     executor = Executor()
-    assert build_cognitive_router(ident, executor, {}) is None
-    assert build_cognitive_router(ident, executor, {"NFCORE_COGNITIVE_ENABLED": "false"}) is None
-    assert build_cognitive_router(None, executor, {"NFCORE_COGNITIVE_ENABLED": "true"}) is None
-    assert build_cognitive_router(ident, None, {"NFCORE_COGNITIVE_ENABLED": "true"}) is None
-    assert build_cognitive_router(ident, executor, {"NFCORE_COGNITIVE_ENABLED": "true"}) is not None
+    metrics_path = "/v1/command/cognitive/metrics"
+
+    def mounted_paths(router: Any) -> tuple[bool, bool]:
+        app = FastAPI()
+        app.include_router(router)
+        probe = TestClient(app)
+        metrics_mounted = probe.get(metrics_path).status_code != 404
+        advisory_mounted = probe.post(ROUTE, json={}).status_code != 404
+        return metrics_mounted, advisory_mounted
+
+    for env, ident_arg, executor_arg in (
+        ({}, ident, executor),
+        ({"NFCORE_COGNITIVE_ENABLED": "false"}, ident, executor),
+        ({"NFCORE_COGNITIVE_ENABLED": "true"}, None, executor),
+        ({"NFCORE_COGNITIVE_ENABLED": "true"}, ident, None),
+    ):
+        router = build_cognitive_router(ident_arg, executor_arg, env)
+        assert router is not None
+        metrics_mounted, advisory_mounted = mounted_paths(router)
+        assert metrics_mounted
+        assert not advisory_mounted
+
+    full = build_cognitive_router(ident, executor, {"NFCORE_COGNITIVE_ENABLED": "true"})
+    assert full is not None
+    metrics_mounted, advisory_mounted = mounted_paths(full)
+    assert metrics_mounted
+    assert advisory_mounted

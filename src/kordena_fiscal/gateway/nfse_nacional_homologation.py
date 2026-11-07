@@ -31,17 +31,24 @@ from kordena_fiscal.vault.a1_preflight import validate_a1_for_issuer
 
 NACIONAL_HOMOLOGATION_NFSE_URL = SEFIN_HOMOLOGATION_NFSE_URL
 _MAX_RESPONSE = 2_097_152
-_PROVIDER = GatewayProviderMetadata("nfse-nacional-producao-restrita", "1.0")
+NACIONAL_HOMOLOGATION_PROVIDER_ID = "nfse-nacional-producao-restrita"
+_PROVIDER = GatewayProviderMetadata(NACIONAL_HOMOLOGATION_PROVIDER_ID, "1.0")
 
 
 class OfficialNfseTransportError(FiscalValidationError):
     """Transport failure with secrets and upstream response stripped."""
 
 
-def encode_signed_dps(signed_dps: bytes, *, issuer_cnpj: str | None = None) -> bytes:
+def encode_signed_dps(
+    signed_dps: bytes, *, issuer_cnpj: str | None = None,
+    issuer_municipality_ibge: str | None = None,
+) -> bytes:
     """Strict DPS envelope for national NFS-e POST /nfse."""
     try:
-        return build_nfse_dps_request(signed_dps, issuer_cnpj=issuer_cnpj)
+        return build_nfse_dps_request(
+            signed_dps, issuer_cnpj=issuer_cnpj,
+            issuer_municipality_ibge=issuer_municipality_ibge,
+        )
     except FiscalValidationError as exc:
         raise OfficialNfseTransportError(str(exc)) from None
 
@@ -91,13 +98,18 @@ class NfseNacionalHomologationGateway:
         if document.scope.environment is not FiscalEnvironment.HOMOLOGATION:
             raise OfficialNfseTransportError("NFS-e disponível apenas com tpAmb=2")
         issuer_cnpj = document.issuer.cnpj.value
+        issuer_municipality = document.issuer.address.jurisdiction.municipality_ibge_code
+        if issuer_municipality is None:
+            raise OfficialNfseTransportError("DPS requires an issuer municipality")
         material = self._resolve_certificate(document.scope, issuer_cnpj)
         validate_a1_for_issuer(
             material.pkcs12_bytes, material.password, issuer_cnpj=Cnpj(issuer_cnpj),
             at=datetime.now(UTC),
         )
         signed_dps = self._build_signed_dps(request, material)
-        payload = encode_signed_dps(signed_dps, issuer_cnpj=issuer_cnpj)
+        payload = encode_signed_dps(
+            signed_dps, issuer_cnpj=issuer_cnpj, issuer_municipality_ibge=issuer_municipality,
+        )
         response = self._exchange(payload, build_fiscal_tls_context(material), self._timeout)
         if not isinstance(response, bytes) or len(response) > _MAX_RESPONSE:
             raise OfficialNfseTransportError("Resposta SEFIN inválida")

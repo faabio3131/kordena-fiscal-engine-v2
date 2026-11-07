@@ -171,6 +171,13 @@ Cenário positivo de NF-e completa assinada e nfeProc validado é sintético e
 comprova contrato estrutural/criptográfico; não comprova tributação ou homologação.
 
 
+## NFS-e Nacional — validação do município emissor na DPS (06/11/2026)
+
+- O gateway canônico de produção restrita passou a exigir o código IBGE do endereço do perfil fiscal do emitente e conferir o campo `infDPS/cLocEmi` antes do POST. O município de prestação é um dado distinto. A regra não habilita emissor nem substitui o vínculo durável.
+- A regressão exercita São Paulo, Belo Horizonte, Rio de Janeiro, Curitiba e Cuiabá contra um XML assinado com município emissor divergente. O builder confiável, a jornada Web por unidade e a homologação contábil continuam como dependências.
+- Campo Grande: em nova checagem, o portal municipal de homologação respondeu, mas o hostname de lotes do WSDL oficial ABRASF 2.03 retornou NXDOMAIN. O adaptador continua sem ativação. Fonte: [comunicado da prefeitura](https://cdn.campogrande.ms.gov.br/portal/prod/uploads/sites/29/2026/03/Comunicado-RPS-Integracao-Web-Service-2.pdf).
+- Jundiaí: a prefeitura confirma o uso do emissor nacional pelas empresas do Simples a partir de 01/11/2026. Evidência de canal e vigência, sem aprovação automática do provider. Fonte: [comunicado municipal](https://jundiai.sp.gov.br/noticias/2026/10/29/nota-fiscal-de-servicos-empresas-do-simples-nacional-devem-usar-emissor-nacional-a-partir-de-1o-de-novembro/).
+
 ## NAT-UF-MG-T04 — consulta NF-e 55 na composição canônica
 
 Em 05/11/2026, `main` estava em `b1769429d651ca58c94745904ea7378693b55652` e
@@ -310,3 +317,22 @@ Fontes conferidas:
 - https://lp.curitiba.pr.gov.br/notanacional/
 - https://cuiaba.mt.gov.br/noticias/cuiaba-prorroga-prazo-para-emissao-de-nfs-e-pelo-emissor-nacional
 - https://cdn.campogrande.ms.gov.br/portal/prod/uploads/sites/29/2026/03/Comunicado-RPS-Integracao-Web-Service-2.pdf
+
+
+## Nota Paulistana — preparação interna do teste de lote (06/11/2026)
+
+- Base de execução: `main@c4f8023fca5174199afa1b4af132d6d710fe2d14`. Produção observada antes da alteração: `e1ee6f0ea4c9206029441175f945e5807057c5e5`.
+- Entrega: `prepare_paulistana_test_batch` prepara somente a operação municipal `TesteEnvioLoteRPS`, que não gera nota. Recebe lote versão 2, valida remetente e CCM, oferece fatos fiscais à pré-auditoria e exige A1 resolvido pelo escopo. Aplica a assinatura RSA/SHA-1 de cada RPS e depois XMLDSig no pedido inteiro. O algoritmo legado segue o manual municipal e fica restrito a esse contrato e aos contratos legados preexistentes.
+- XSDs oficiais imutáveis do pacote 02-7, ZIP SHA-256 `b38ea1361c76f49f848de2b4840a6ee7b2b929d063744afbf0bbb11e46ed4ad5`, usados offline. Os testes extraem a mensagem do SOAP e verificam digest e as duas assinaturas com chave sintética. O manual exemplifica SOAP 1.1 nas mensagens síncronas e menciona SOAP 1.2 no resumo técnico. A forma SOAP 1.1 segue o exemplo síncrono e permanece candidata até confirmar o binding no WSDL oficial. O GET público de WSDL respondeu HTTP 403 sem certificado.
+- A prefeitura avisa que o pacote 02-7 publicado ainda não reflete o ambiente produtivo. O preparador não registra provider, não faz POST, não ativa emissão, não escolhe automaticamente emissor por regime e não afirma homologação.
+- Integração seguinte: confirmar WSDL com credencial de homologação e compor o cliente municipal com A1/mTLS, Sentinela, vínculo durável por unidade e jornada Web. Para os pilotos do Ambiente Nacional, conectar o builder confiável de DPS à composição canônica antes dos testes da contabilidade. Para Campo Grande, confirmar a publicação atual do WSDL municipal antes de compor o adaptador.
+- Evidência paulista adicional: Campinas confirma Ambiente Nacional para ME/EPP do Simples a partir da competência de 01/11/2026 e canal municipal para competências anteriores, com regras específicas para os demais grupos. Barueri documenta o canal nacional para o Simples desde 01/11 e layouts próprios PMB para os casos municipais. A página de Barueri apresenta data de transição inválida (31/11/2026), portanto nenhum cutoff do PMB 003 foi codificado. O catálogo paulista continua consultivo.
+- Fontes oficiais: [manual 3.4](https://notadomilhao.sf.prefeitura.sp.gov.br/nfe_web_service-12/), [comunicado XSD 02-7](https://notadomilhao.sf.prefeitura.sp.gov.br/noticias/nova-versao-do-manual-de-utilizacao-do-webservice-de-nfs-e/), [migração paulistana](https://notadomilhao.sf.prefeitura.sp.gov.br/noticias/migracao-de-contribuintes-do-simples-nacional-para-o-ambiente-nacional/), [Campinas](https://campinas.sp.gov.br/noticia/151237), [Barueri](https://portal.barueri.sp.gov.br/secretarias/secretaria-de-financas/nota-fiscal).
+
+## NFS-e na jornada Web ? v?nculo e pr?-auditoria antes do cofre (06/11/2026)
+
+- Base: `main@0cb93a337e360d991206a502db781e4b5bfb07ad`. PR #369 integrada em `8a987ff47a039782f7fd69d4d263bab8407d7d8d`. Ambas as PRs passaram em CI e Governan?a antes da integra??o.
+- A composi??o Portal/Bridge exige uma pr?-auditoria expl?cita ao configurar o builder confi?vel de DPS. Antes de acessar o cofre, confere o v?nculo dur?vel do emitente por tenant, unidade, namespace, ambiente, IBGE e opera??o. Um v?nculo municipal incompat?vel n?o pode cair no gateway nacional.
+- Testes cobrem composi??o sem auditor, v?nculo ausente, provedor divergente, veto da auditoria e ordem de execu??o do caminho aprovado. A porta de pr?-auditoria ainda depende da composi??o com o Sentinela real no entrypoint.
+- Pend?ncias internas: gerar DPS a partir dos dados fiscais confi?veis e da numera??o persistente; ligar o Sentinela real ? porta de pr?-auditoria; conectar o teste paulistano ? jornada Web de homologa??o sem reaproveitar o handler de emiss?o.
+- Pend?ncias externas: confirma??o do contrato SOAP municipal, valida??o com A1 da contabilidade e homologa??o. Este bloco n?o ativa provider, n?o modifica a Contabo e n?o transmite documentos.

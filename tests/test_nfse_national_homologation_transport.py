@@ -68,11 +68,15 @@ def test_dps_signature_is_verifiable_and_envelope_is_gzipped() -> None:
     key.public_key().verify(
         base64.b64decode(signature_value),
         etree.tostring(signed_info, method="c14n", exclusive=False, with_comments=False),
-        padding.PKCS1v15(), hashes.SHA256(),
+        padding.PKCS1v15(), hashes.SHA1(),  # noqa: S303 -- pinned National DPS XSD fixes RSA-SHA1
     )
+    signature_method = signed_info.find(f".//{{{_DS}}}SignatureMethod")
+    digest_method = signature.find(f".//{{{_DS}}}DigestMethod")
+    assert signature_method is not None and signature_method.get("Algorithm") == f"{_DS}rsa-sha1"
+    assert digest_method is not None and digest_method.get("Algorithm") == f"{_DS}sha1"
     digest = signature.findtext(f".//{{{_DS}}}DigestValue")
     assert digest == base64.b64encode(
-        hashlib.sha256(
+        hashlib.sha1(  # noqa: S324 -- pinned National DPS XSD fixes SHA-1 digests
             etree.tostring(info, method="c14n", exclusive=False, with_comments=False)
         ).digest()
     ).decode("ascii")
@@ -158,4 +162,18 @@ def test_national_envelope_refuses_an_abrasf_root():
     with pytest.raises(FiscalValidationError, match="official DPS root"):
         build_nfse_dps_request(
             b'<GerarNfseEnvio xmlns="http://www.abrasf.org.br/nfse.xsd"/>',
+        )
+
+
+@pytest.mark.parametrize("issuer_ibge", ["3550308", "3106200", "3304557", "4106902", "5103403"])
+def test_scoped_dps_checks_issuer_municipality_before_envelope(issuer_ibge):
+    from kordena_fiscal.gateway.nfse_nacional_homologation import encode_signed_dps
+
+    material, _ = _ephemeral_certificate()
+    root = etree.fromstring(_unsigned_dps())
+    etree.SubElement(root[0], f"{{{_NS}}}cLocEmi").text = "5002704"
+    signed = sign_nfse_dps_xml(etree.tostring(root), material)
+    with pytest.raises(FiscalValidationError, match="issuer municipality"):
+        encode_signed_dps(
+            signed, issuer_cnpj="11222333000181", issuer_municipality_ibge=issuer_ibge,
         )
