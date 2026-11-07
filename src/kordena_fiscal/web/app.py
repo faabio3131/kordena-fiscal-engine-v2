@@ -279,6 +279,7 @@ def create_app(
     runtime_metrics: MetricsRegistry | None = None,
     cognitive_router: APIRouter | None = None,
     command_commercial_router: APIRouter | None = None,
+    command_operational_usage_router: APIRouter | None = None,
 ) -> FastAPI:
     """Create the web adapter without granting fiscal authority by default."""
 
@@ -364,6 +365,11 @@ def create_app(
         # per-request (503) when its reader isn't wired, and must stay routable
         # regardless of human_identity so Command never sees a 404.
         app.include_router(command_commercial_router)
+
+    if command_operational_usage_router is not None:
+        # Same rationale as command_commercial_router above: read-only,
+        # fails closed per-request, mounted regardless of human_identity.
+        app.include_router(command_operational_usage_router)
 
     if human_identity is not None:
         app.include_router(

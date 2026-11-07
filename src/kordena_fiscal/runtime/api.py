@@ -33,6 +33,10 @@ from kordena_fiscal.product.command_commercial_snapshot_api import (
     CommandCommercialSnapshotReader,
     create_command_commercial_snapshot_router,
 )
+from kordena_fiscal.product.command_operational_usage_snapshot_api import (
+    CommandOperationalUsageSnapshotReader,
+    create_command_operational_usage_snapshot_router,
+)
 from kordena_fiscal.product.commercial_readiness import CommercialDeliveryPathReadiness
 from kordena_fiscal.security.s2s import (
     FixedWindowRateLimiter,
@@ -841,6 +845,14 @@ def create_runtime_app(
         None if composition is None else mark_commercial_active
     )
 
+    # Single reader instance shared by the commercial snapshot router and the
+    # operational-usage router below: the latter only projects fields out of
+    # rows the former already fetches, never a second query/connection.
+    _command_commercial_reader = (
+        CommandCommercialSnapshotReader(runtime.database.connection)
+        if runtime.database is not None else None
+    )
+
     # Fiscal production stays false unless a governed authority is explicitly injected.
     app.mount(
         "/",
@@ -902,8 +914,12 @@ def create_runtime_app(
                 ),
             ),
             command_commercial_router=create_command_commercial_snapshot_router(
-                CommandCommercialSnapshotReader(runtime.database.connection)
-                if runtime.database is not None else None,
+                _command_commercial_reader,
+                os.environ,
+            ),
+            command_operational_usage_router=create_command_operational_usage_snapshot_router(
+                CommandOperationalUsageSnapshotReader(_command_commercial_reader)
+                if _command_commercial_reader is not None else None,
                 os.environ,
             ),
         ),
