@@ -16,10 +16,8 @@ from kordena_fiscal.product.commercial_fulfillment import (
 from kordena_fiscal.security.human_identity import InMemoryHumanAccountRepository
 from kordena_fiscal.security.human_recovery import IssuedPasswordReset
 from kordena_fiscal.web.commercial_claim import create_commercial_claim_router
-from tests.application.test_cl11_secure_commercial_claim import (
-    MemoryClaimDatabase,
-    purchase,
-)
+
+from .conftest import MemoryClaimDatabase, purchase
 
 NOW = datetime(2026, 9, 28, 5, 0, tzinfo=UTC)
 
