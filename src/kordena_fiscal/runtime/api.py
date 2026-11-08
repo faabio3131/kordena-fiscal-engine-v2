@@ -730,9 +730,9 @@ def create_runtime_app(
         app.include_router(create_controlled_pilot_admin_router(
             composition.human_identity,
             ControlledPilotGovernanceService(
-                postgres_canonical_commercial_database(runtime.database),
+                runtime.database,
                 readiness=DurableHomologationEnvironmentReadinessService(
-                    postgres_canonical_commercial_database(runtime.database),
+                    runtime.database,
                     provider_catalog=build_controlled_pilot_provider_catalog(),
                 ),
             ),
