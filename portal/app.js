@@ -1804,7 +1804,7 @@ async function renderControlledPilots() {
   article.append(warning);
   const form = document.createElement("form");
   form.className = "panel-form";
-  /** @type {Record<string, HTMLInputElement|HTMLSelectElement>} */
+  /** @type {Record<string, HTMLInputElement>} */
   const fields = {};
   function field(id, title, initial = "") {
     const label = document.createElement("label");
@@ -1833,7 +1833,6 @@ async function renderControlledPilots() {
   }
   documentLabel.append(documentSelect);
   form.append(documentLabel);
-  fields.document_kind = documentSelect;
   field("state_code", "UF", "SP").maxLength = 2;
   const municipality = field("municipality_ibge_code", "Código IBGE do município (NFS-e)");
   municipality.required = false;
@@ -1874,6 +1873,7 @@ async function renderControlledPilots() {
   article.append(form, result);
   let lastValidatedPayload = "";
   function payload() {
+    /** @type {{state_code:string, municipality_ibge_code?:string}} */
     const jurisdiction = { state_code: fields.state_code.value.trim().toUpperCase() };
     const city = fields.municipality_ibge_code.value.trim();
     if (city) jurisdiction.municipality_ibge_code = city;
@@ -1915,7 +1915,7 @@ async function renderControlledPilots() {
       status.textContent = error instanceof Error ? error.message : "Não foi possível verificar.";
     } finally { assess.disabled = false; }
   });
-  for (const [button, action] of [[activate, "activate"], [deactivate, "deactivate"]]) {
+  for (const {button, action} of [{button: activate, action: "activate"}, {button: deactivate, action: "deactivate"}]) {
     button.addEventListener("click", async () => {
       if (!form.reportValidity()) return;
       const body = payload();
