@@ -389,12 +389,23 @@ def create_runtime_app(
                 or composition.commercial_activation is None
                 or password_reset_delivery is None
                 or selected_checkout is None
-                or selected_checkout.provider_id != "command"
-                or command_product_id != "nfcore"
-                or command_receiver is None
             ):
                 return False
-            return command_receiver.ready(now=now)
+            if selected_checkout.provider_id == "command":
+                if command_product_id != "nfcore" or command_receiver is None:
+                    return False
+                return command_receiver.ready(now=now)
+            if selected_checkout.provider_id == "cakto":
+                # Cakto has no rotating S2S binding to revalidate live, unlike
+                # Command. Its one static, governed webhook secret is resolved
+                # once at process startup (compose_postgres_cakto_commercial_runtime);
+                # a non-None cakto_receiver is proof that resolution already
+                # succeeded and the receiver is wired to the same canonical
+                # bridge that drives fulfillment/activation for Command. There
+                # is nothing further to revalidate per-request.
+                return cakto_receiver is not None
+            # No recognized channel has an operational-readiness probe.
+            return False
         except Exception:
             return False
 
