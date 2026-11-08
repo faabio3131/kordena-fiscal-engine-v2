@@ -40,6 +40,11 @@ from kordena_fiscal.product.command_operational_usage_snapshot_api import (
     create_command_operational_usage_snapshot_router,
 )
 from kordena_fiscal.product.commercial_readiness import CommercialDeliveryPathReadiness
+from kordena_fiscal.runtime.controlled_pilot_catalog import build_controlled_pilot_provider_catalog
+from kordena_fiscal.runtime.controlled_pilots import ControlledPilotGovernanceService
+from kordena_fiscal.runtime.homologation_readiness import (
+    DurableHomologationEnvironmentReadinessService,
+)
 from kordena_fiscal.security.s2s import (
     FixedWindowRateLimiter,
     SecurityAuditSink,
@@ -55,6 +60,7 @@ from kordena_fiscal.web.commercial_acquisition import (
 )
 from kordena_fiscal.web.commercial_claim import create_commercial_claim_router
 from kordena_fiscal.web.commercial_trial import create_commercial_trial_router
+from kordena_fiscal.web.controlled_pilot_admin import create_controlled_pilot_admin_router
 from kordena_fiscal.web.human_recovery import PasswordResetDelivery
 from kordena_fiscal.web.production_gsm_binding_admin import create_production_gsm_binding_router
 from kordena_fiscal.web.production_gsm_tenant_admin import create_production_gsm_tenant_router
@@ -713,6 +719,23 @@ def create_runtime_app(
             composition.human_identity,
             SecretBindingAdministration(runtime.database),
             runtime.database,
+        ))
+        # Self-service admin surface for the certified V2-15 B5 Controlled
+        # Pilot gate: lets an existing platform admin activate/deactivate a
+        # HOMOLOGATION-only pilot cell for an exact tenant/unit/provider,
+        # reusing the portal's own session/CSRF authority, with no engineer
+        # writing or running code per client. Never touches real fiscal
+        # production (gateway/production_activation.py remains the separate,
+        # still-unexposed authority for that).
+        app.include_router(create_controlled_pilot_admin_router(
+            composition.human_identity,
+            ControlledPilotGovernanceService(
+                postgres_canonical_commercial_database(runtime.database),
+                readiness=DurableHomologationEnvironmentReadinessService(
+                    postgres_canonical_commercial_database(runtime.database),
+                    provider_catalog=build_controlled_pilot_provider_catalog(),
+                ),
+            ),
         ))
 
     if staging_probe_security is not None:
