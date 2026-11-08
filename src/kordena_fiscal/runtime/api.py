@@ -96,6 +96,9 @@ from .otel_trace_sink import build_trace_sink
 from .production_cakto_ingress import production_cakto_webhook_secret
 from .production_cakto_webhook_env import production_cakto_webhook_secret_from_env
 from .production_command_ingress import production_command_resolver
+from .production_commercial_acquisition_env import (
+    production_commercial_acquisition_security_from_env,
+)
 from .production_gsm import production_api_verifier
 from .public_trial_abuse import PostgresPublicTrialAbuseGate
 from .secret_manager import SecretBindingAdministration
@@ -292,6 +295,19 @@ def create_runtime_app(
                         else None
                     ),
                 ).receiver
+            # Separate, explicitly approved commercial-acquisition signing
+            # scope. The first-party offer must not advertise a purchase
+            # without this signed route; a configured production secret may
+            # never downgrade to development/staging HMAC material.
+            approved_commercial_acquisition_security = (
+                production_commercial_acquisition_security_from_env()
+            )
+            if approved_commercial_acquisition_security is not None:
+                if commercial_acquisition_security is not None:
+                    raise RuntimeConfigurationError(
+                        "duplicate production commercial acquisition authority"
+                    )
+                commercial_acquisition_security = approved_commercial_acquisition_security
     if resolved.environment.value == "staging" and runtime.database is not None:
         # Separate channel-specific GSM bindings, validated against the same
         # canonical external vault and existing nfcore-api identity.
