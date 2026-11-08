@@ -1806,6 +1806,7 @@ async function renderControlledPilots() {
   form.className = "panel-form";
   /** @type {Record<string, HTMLInputElement>} */
   const fields = {};
+  /** @param {string} id @param {string} title @param {string} [initial] */
   function field(id, title, initial = "") {
     const label = document.createElement("label");
     label.textContent = title;
@@ -1887,6 +1888,7 @@ async function renderControlledPilots() {
       allowed_operations: [operation.value],
     };
   }
+  /** @param {Record<string, unknown>} response */
   function showResult(response) {
     result.replaceChildren();
     for (const [key, value] of Object.entries(response)) {
