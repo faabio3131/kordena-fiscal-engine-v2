@@ -16,9 +16,11 @@ from kordena_fiscal.control_plane.models import (
 )
 from kordena_fiscal.domain import FiscalEnvironment
 from kordena_fiscal.persistence.cakto import SqliteCaktoCommercialDatabase
+from kordena_fiscal.persistence.commercial_period_schema import COMMERCIAL_PERIOD_VERSION
 from kordena_fiscal.product.cakto import CaktoWebhookReceiver, CaktoWebhookVerifier
 from kordena_fiscal.product.pricing import CommercialPricingRegistry
 from kordena_fiscal.runtime import api as runtime_api
+from kordena_fiscal.runtime import composition as composition_module
 from kordena_fiscal.runtime.config import RuntimeSettings
 from kordena_fiscal.security.human_identity import (
     HumanAccount,
@@ -31,6 +33,7 @@ from kordena_fiscal.security.human_recovery import (
     InMemoryPasswordResetRepository,
     IssuedPasswordReset,
 )
+from kordena_fiscal.security.s2s import InMemoryWebhookKeyRing, WebhookSecurity
 from kordena_fiscal.web.human_auth import CSRF_COOKIE, CSRF_HEADER
 
 PASSWORD = "commercial-runtime-password-2026"
@@ -145,6 +148,14 @@ class _RuntimeDatabase:
                     password_hash=hasher.hash(PASSWORD),
                     tenant_id="tenant-a",
                     role=PortalRole.OWNER,
+                ),
+                HumanAccount(
+                    account_id="platform-admin-a",
+                    email="platform-admin@example.com",
+                    password_hash=hasher.hash(PASSWORD),
+                    tenant_id="fm-platform",
+                    role=PortalRole.OWNER,
+                    platform_admin=True,
                 ),
             )
         )
@@ -406,6 +417,157 @@ def test_postgres_runtime_treats_cakto_as_authoritative_processing_channel(
         # a fully configured direct Cakto channel still reported unconfigured
         # and never exposed a real checkout_url to anonymous buyers.
         assert profile["commercial_checkout_processing_configured"] is True
+
+
+def test_postgres_runtime_exposes_real_cakto_checkout_url_to_anonymous_buyers(
+    monkeypatch, tmp_path
+) -> None:
+    """Regression for the second Cakto-authority gap: even with
+    commercial_checkout_processing_configured=True (the PR #391 fix), the
+    public /v1/commercial/offer endpoint gates purchase_enabled through a
+    SEPARATE operational_readiness probe (commercial_operational_readiness in
+    runtime/api.py) that, before this fix, only ever returned True for the
+    "command" provider -- unconditionally returning False for Cakto regardless
+    of how fully configured pricing/release/checkout were.
+
+    This test supplies commercial_acquisition_security so the signed
+    first-party acquisition route is wired (a separate, intentional gate: the
+    public offer must not advertise a purchase without it -- see the comment
+    at the create_app(...) call site in runtime/api.py). That isolates the
+    one behavior this fix changes: operational_readiness no longer hard-codes
+    "command" as the only viable provider."""
+    class _FullyMigratedRuntimeDatabase(_RuntimeDatabase):
+        """commercial_operational_readiness additionally requires every
+        commercial-period migration to be applied before probing any
+        provider's channel; the base fixture reports only migration 1
+        applied (sufficient for the other tests in this module, which do
+        not exercise that function), so give this test a database that
+        reports the real, full commercial schema version."""
+
+        def applied_migrations(self) -> tuple[int, ...]:
+            return tuple(range(1, COMMERCIAL_PERIOD_VERSION + 1))
+
+    monkeypatch.setattr(runtime_api, "PostgresFiscalDatabase", _FullyMigratedRuntimeDatabase)
+    cakto_bindings_database = SqliteCaktoCommercialDatabase(
+        tmp_path / "cakto-public-offer-bindings.sqlite3"
+    )
+    cakto_bindings_database.initialize()
+    # _RuntimeDatabase is a thin fiscal/control-plane fake (see _Connection /
+    # _Cursor above); it never implements real Cakto plan-binding storage. The
+    # production code path is identical regardless of which backing store
+    # postgres_cakto_commercial_database wraps, so give the admin service a
+    # real, persistent SQLite-backed store instead of faking raw SQL rows.
+    monkeypatch.setattr(
+        composition_module,
+        "postgres_cakto_commercial_database",
+        lambda _database: cakto_bindings_database,
+    )
+    settings = RuntimeSettings.from_mapping(
+        {
+            "NFCORE_ENVIRONMENT": "staging",
+            "NFCORE_PERSISTENCE_BACKEND": "postgres",
+            "DATABASE_URL": "postgresql://user:password@db:5432/nfcore",
+            "NFCORE_SECRET_BACKEND": "external",
+            "NFCORE_REQUIRE_HTTPS": "true",
+            "NFCORE_COMMERCIAL_CHECKOUT_PROVIDER": "cakto",
+        }
+    )
+    cakto_database = SqliteCaktoCommercialDatabase(tmp_path / "cakto-public-offer.sqlite3")
+    cakto_database.initialize()
+    receiver = CaktoWebhookReceiver(
+        verifier=CaktoWebhookVerifier(b"test-only-webhook-authority-key"),
+        unit_of_work_factory=cakto_database,
+    )
+    acquisition_security = WebhookSecurity(
+        key_resolver=InMemoryWebhookKeyRing(
+            active_key_id="synthetic-acquisition-key",
+            keys={"synthetic-acquisition-key": b"synthetic-acquisition-secret-0001"},
+        ),
+        signing_key_id="synthetic-acquisition-key",
+    )
+
+    with TestClient(
+        runtime_api.create_runtime_app(
+            settings,
+            cakto_receiver=receiver,
+            password_reset_delivery=_ResetDelivery(),
+            commercial_acquisition_security=acquisition_security,
+        ),
+        base_url="https://testserver",
+    ) as client:
+        login = client.post(
+            "/v1/auth/login",
+            json={"email": "platform-admin@example.com", "password": PASSWORD},
+        )
+        assert login.status_code == 200
+        csrf = client.cookies.get(CSRF_COOKIE)
+        assert csrf
+
+        publish = client.post(
+            "/v1/admin/pricing",
+            headers={CSRF_HEADER: csrf},
+            json={
+                "configuration": {
+                    "configuration_id": "nfcore-public-offer",
+                    "version": 1,
+                    "prices": [
+                        {
+                            "price_id": "nfcore-monthly",
+                            "currency": "BRL",
+                            "cadence": "monthly",
+                            "base_amount": "123.45",
+                            "external_price_reference": "cakto://product-nfcore/offer-monthly",
+                        }
+                    ],
+                    "plans": [
+                        {
+                            "plan_id": "nfcore-pro",
+                            "display_name": "NFCore Pro",
+                            "edition_id": "pro",
+                            "price_ids": ["nfcore-monthly"],
+                        }
+                    ],
+                },
+                "expected_version": None,
+            },
+        )
+        assert publish.status_code == 200
+
+        release = client.post(
+            "/v1/admin/commercial-release",
+            headers={CSRF_HEADER: csrf},
+            json={
+                "decision": {
+                    "version": 1,
+                    "status": "commercial_approved",
+                    "public_message": "Oferta sintética aprovada.",
+                    "human_decision_reference": "synthetic-human-release-evidence",
+                },
+                "expected_version": None,
+            },
+        )
+        assert release.status_code == 200
+
+        binding = client.post(
+            "/v1/admin/checkout/cakto",
+            headers={CSRF_HEADER: csrf},
+            json={
+                "external_product_id": "product-nfcore",
+                "external_offer_id": "offer-monthly",
+                "plan_id": "nfcore-pro",
+                "entitlement_ids": ["portal", "fiscal-core"],
+                "enabled": True,
+            },
+        )
+        assert binding.status_code == 200
+
+        offer = client.get("/v1/commercial/offer")
+        assert offer.status_code == 200
+        body = offer.json()
+        assert body["checkout"]["status"] == "configured"
+        # This is the fix under test: previously always False for Cakto.
+        assert body["purchase_enabled"] is True
+        assert body["checkout"]["items"][0]["checkout_url"] is not None
 
 
 def test_postgres_runtime_reports_composition_failure_separately(monkeypatch) -> None:

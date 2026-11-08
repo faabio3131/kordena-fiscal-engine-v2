@@ -94,6 +94,7 @@ from .observability import (
 )
 from .otel_trace_sink import build_trace_sink
 from .production_cakto_ingress import production_cakto_webhook_secret
+from .production_cakto_webhook_env import production_cakto_webhook_secret_from_env
 from .production_command_ingress import production_command_resolver
 from .production_gsm import production_api_verifier
 from .public_trial_abuse import PostgresPublicTrialAbuseGate
@@ -270,6 +271,12 @@ def create_runtime_app(
             approved_cakto_webhook_secret = production_cakto_webhook_secret(
                 runtime.database
             )
+            if approved_cakto_webhook_secret is None:
+                # Lightweight fallback, mirroring EncryptedA1Vault.from_environ():
+                # a deployment-owned secret supplied out of band via env var for
+                # deployments that have not bootstrapped GSM yet. Fail-closed,
+                # never guessed/derived; GSM takes precedence when configured.
+                approved_cakto_webhook_secret = production_cakto_webhook_secret_from_env()
             if approved_cakto_webhook_secret is not None:
                 if cakto_receiver is not None:
                     raise RuntimeConfigurationError(
@@ -382,12 +389,23 @@ def create_runtime_app(
                 or composition.commercial_activation is None
                 or password_reset_delivery is None
                 or selected_checkout is None
-                or selected_checkout.provider_id != "command"
-                or command_product_id != "nfcore"
-                or command_receiver is None
             ):
                 return False
-            return command_receiver.ready(now=now)
+            if selected_checkout.provider_id == "command":
+                if command_product_id != "nfcore" or command_receiver is None:
+                    return False
+                return command_receiver.ready(now=now)
+            if selected_checkout.provider_id == "cakto":
+                # Cakto has no rotating S2S binding to revalidate live, unlike
+                # Command. Its one static, governed webhook secret is resolved
+                # once at process startup (compose_postgres_cakto_commercial_runtime);
+                # a non-None cakto_receiver is proof that resolution already
+                # succeeded and the receiver is wired to the same canonical
+                # bridge that drives fulfillment/activation for Command. There
+                # is nothing further to revalidate per-request.
+                return cakto_receiver is not None
+            # No recognized channel has an operational-readiness probe.
+            return False
         except Exception:
             return False
 
