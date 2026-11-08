@@ -3,6 +3,8 @@
 from contextlib import contextmanager
 from datetime import UTC, datetime
 
+import pytest
+
 from kordena_fiscal.runtime.public_trial_abuse import SCHEMA, PostgresPublicTrialAbuseGate
 
 
@@ -57,3 +59,29 @@ def test_shared_limiter_denies_storage_failure_and_invalid_identity() -> None:
     assert not limiter.allow("", now)
     store.broken = True
     assert not limiter.allow("198.51.100.3", now)
+
+
+def test_scope_prefix_isolates_distinct_purposes_sharing_one_identity() -> None:
+    """Public trial and public commercial acquisition reuse this gate and its
+    table, so the same visitor IP must not share one quota between the two
+    unrelated flows -- each purpose gets its own scope_prefix and therefore its
+    own hashed bucket key."""
+    store = Store()
+    trial_limiter = PostgresPublicTrialAbuseGate(
+        store.connection, max_requests=1, scope_prefix="public-trial"
+    )
+    acquisition_limiter = PostgresPublicTrialAbuseGate(
+        store.connection, max_requests=1, scope_prefix="public-acquisition"
+    )
+    now = datetime(2026, 10, 20, 15, tzinfo=UTC)
+    assert trial_limiter.allow("198.51.100.9", now)
+    assert not trial_limiter.allow("198.51.100.9", now)
+    # A separate purpose for the same identity is not exhausted by the above.
+    assert acquisition_limiter.allow("198.51.100.9", now)
+    assert not acquisition_limiter.allow("198.51.100.9", now)
+
+
+def test_scope_prefix_must_be_non_blank() -> None:
+    store = Store()
+    with pytest.raises(ValueError):
+        PostgresPublicTrialAbuseGate(store.connection, scope_prefix="")
