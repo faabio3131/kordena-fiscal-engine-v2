@@ -15,6 +15,8 @@ from kordena_fiscal.control_plane.models import (
     FiscalUnitRegistration,
 )
 from kordena_fiscal.domain import FiscalEnvironment
+from kordena_fiscal.persistence.cakto import SqliteCaktoCommercialDatabase
+from kordena_fiscal.product.cakto import CaktoWebhookReceiver, CaktoWebhookVerifier
 from kordena_fiscal.product.pricing import CommercialPricingRegistry
 from kordena_fiscal.runtime import api as runtime_api
 from kordena_fiscal.runtime.config import RuntimeSettings
@@ -365,6 +367,45 @@ def test_postgres_runtime_activates_cakto_checkout_only_by_explicit_provider_con
         assert profile["commercial_checkout_processing_configured"] is False
         assert profile["cakto_checkout_admin_configured"] is True
         assert profile["cakto_webhook_configured"] is False
+
+
+def test_postgres_runtime_treats_cakto_as_authoritative_processing_channel(
+    monkeypatch, tmp_path
+) -> None:
+    """A pessoa-física seller has no Command counterpart: a real, explicitly
+    injected Cakto webhook receiver must be treated as an equally authoritative
+    processing/fulfillment/activation channel as Command, not a degraded one."""
+    monkeypatch.setattr(runtime_api, "PostgresFiscalDatabase", _RuntimeDatabase)
+    settings = RuntimeSettings.from_mapping(
+        {
+            "NFCORE_ENVIRONMENT": "staging",
+            "NFCORE_PERSISTENCE_BACKEND": "postgres",
+            "DATABASE_URL": "postgresql://user:password@db:5432/nfcore",
+            "NFCORE_SECRET_BACKEND": "external",
+            "NFCORE_REQUIRE_HTTPS": "true",
+            "NFCORE_COMMERCIAL_CHECKOUT_PROVIDER": "cakto",
+        }
+    )
+    cakto_database = SqliteCaktoCommercialDatabase(tmp_path / "cakto-authority.sqlite3")
+    cakto_database.initialize()
+    receiver = CaktoWebhookReceiver(
+        verifier=CaktoWebhookVerifier(b"test-only-webhook-authority-key"),
+        unit_of_work_factory=cakto_database,
+    )
+
+    with TestClient(
+        runtime_api.create_runtime_app(settings, cakto_receiver=receiver),
+        base_url="https://testserver",
+    ) as client:
+        profile = client.get("/runtime/profile").json()
+        assert profile["commercial_checkout_provider_configured"] == "cakto"
+        assert profile["commercial_checkout_provider_active"] == "cakto"
+        assert profile["cakto_checkout_admin_configured"] is True
+        assert profile["cakto_webhook_configured"] is True
+        # This is the fix: previously only "command" ever set this flag, so
+        # a fully configured direct Cakto channel still reported unconfigured
+        # and never exposed a real checkout_url to anonymous buyers.
+        assert profile["commercial_checkout_processing_configured"] is True
 
 
 def test_postgres_runtime_reports_composition_failure_separately(monkeypatch) -> None:
