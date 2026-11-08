@@ -338,9 +338,20 @@ def create_runtime_app(
         )
     if selected_checkout is not None and selected_checkout.provider_id == "command":
         selected_checkout_processing = command_receiver is not None
+    elif selected_checkout is not None and selected_checkout.provider_id == "cakto":
+        # The Cakto webhook receiver only exists when a real, governed webhook
+        # secret was resolved (production_cakto_webhook_secret / explicit dev
+        # config), and it is always composed with the same canonical bridge
+        # (composition.cakto_canonical_bridge) that drives fulfillment and
+        # activation for Command. Cakto is therefore an equally authoritative
+        # direct-sale channel, not a degraded one — required for an individual
+        # (pessoa física) seller who has no Command counterpart to process
+        # through.
+        selected_checkout_processing = cakto_receiver is not None
     else:
-        # The launch channel is Command. A legacy inbox receiver or a caller's
-        # boolean does not compose canonical processing/fulfillment/activation.
+        # No recognized processing/fulfillment/activation pipeline is bound to
+        # this provider; a legacy inbox receiver or a caller's boolean does
+        # not compose canonical processing/fulfillment/activation.
         selected_checkout_processing = False
 
     commercial_delivery_readiness = CommercialDeliveryPathReadiness(
