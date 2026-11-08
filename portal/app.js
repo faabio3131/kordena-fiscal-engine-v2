@@ -6,7 +6,7 @@
 const navigation = [
   { label: "Operação", items: [["overview", "Visão geral"], ["documents", "Documentos"], ["issuances", "Emissões"], ["inutilizations", "Inutilização"], ["errors", "Erros"], ["reconciliation", "Conciliação"], ["tax-reform", "Reforma Tributária"]] },
   { label: "Configuração", items: [["onboarding", "Configuração inicial"], ["companies", "Empresas"], ["units", "Unidades"], ["environments", "Ambientes"], ["capabilities", "Capacidades"], ["certificates", "Certificados"], ["providers", "Provedores"], ["users", "Usuários"]] },
-  { label: "Plataforma", items: [["webhooks", "Webhooks"], ["webhook-egress", "Aprovação de saída"], ["integrations", "Integrações"], ["usage", "Uso"], ["billing", "Cobrança"], ["plans", "Planos"], ["pricing-admin", "Catálogo comercial"], ["commercial-release", "Liberação comercial"], ["checkout-admin", "Canais de venda e pagamento"], ["audit", "Auditoria"], ["support", "Suporte"], ["settings", "Configurações"]] },
+  { label: "Plataforma", items: [["webhooks", "Webhooks"], ["webhook-egress", "Aprovação de saída"], ["integrations", "Integrações"], ["usage", "Uso"], ["billing", "Cobrança"], ["plans", "Planos"], ["pricing-admin", "Catálogo comercial"], ["commercial-release", "Liberação comercial"], ["checkout-admin", "Canais de venda e pagamento"], ["controlled-pilots", "Pilotos fiscais"], ["audit", "Auditoria"], ["support", "Suporte"], ["settings", "Configurações"]] },
 ];
 
 const supportedDocumentLabels = ["NF-e", "NFC-e", "NFS-e"];
@@ -42,6 +42,7 @@ const descriptions = {
   "pricing-admin": "Catálogo comercial versionado, durável e restrito à administração da plataforma.",
   "commercial-release": "Decisão humana versionada que governa a disponibilidade comercial pública do NFCore.",
   "checkout-admin": "Canais de venda governados por adaptadores. O provedor configurado traduz o pagamento e os eventos sem virar autoridade comercial do NFCore.",
+  "controlled-pilots": "Pilotos fiscais de homologação, com autorização de plataforma e sem ativação de produção real.",
   audit: "Auditoria administrativa e operacional.",
   support: "Configuração autorizada e limites do suporte operacional.",
   settings: "Políticas e configurações autorizadas.",
@@ -1785,6 +1786,156 @@ function appendRtcIssuerSummary(article, rows) {
   article.append(section);
 }
 
+async function renderControlledPilots() {
+  workspace.replaceChildren();
+  const article = panel("Piloto fiscal controlado", "Somente administração da plataforma · Homologação");
+  const status = document.createElement("p");
+  status.setAttribute("role", "status");
+  status.setAttribute("aria-live", "polite");
+  article.append(status);
+  workspace.append(article);
+  if (!bootstrapState?.platform_admin) {
+    status.textContent = "Somente o administrador da plataforma pode administrar pilotos.";
+    return;
+  }
+  const warning = document.createElement("p");
+  warning.className = "empty-state";
+  warning.textContent = "Esta ação NÃO autoriza produção fiscal. A conta comercial e a configuração do cliente funcionam independentemente deste painel. Homologação oficial depende de evidências e credenciais válidas.";
+  article.append(warning);
+  const form = document.createElement("form");
+  form.className = "panel-form";
+  /** @type {Record<string, HTMLInputElement|HTMLSelectElement>} */
+  const fields = {};
+  function field(id, title, initial = "") {
+    const label = document.createElement("label");
+    label.textContent = title;
+    const input = document.createElement("input");
+    input.name = id;
+    input.value = initial;
+    input.required = true;
+    input.autocomplete = "off";
+    label.append(input);
+    form.append(label);
+    fields[id] = input;
+    return input;
+  }
+  field("tenant_id", "Tenant ID da conta cadastrada");
+  field("unit_id", "Unidade ID da empresa");
+  field("pilot_id", "Identificador do piloto", "piloto-contabilidade-01");
+  const documentLabel = document.createElement("label");
+  documentLabel.textContent = "Documento fiscal";
+  const documentSelect = document.createElement("select");
+  for (const [value, label] of [["nfe", "NF-e"], ["nfce", "NFC-e"], ["nfse", "NFS-e"]]) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    documentSelect.append(option);
+  }
+  documentLabel.append(documentSelect);
+  form.append(documentLabel);
+  fields.document_kind = documentSelect;
+  field("state_code", "UF", "SP").maxLength = 2;
+  const municipality = field("municipality_ibge_code", "Código IBGE do município (NFS-e)");
+  municipality.required = false;
+  const provider = field("provider_id", "Provedor homologado", "sefaz-sp-homologacao-nfe4");
+  const operationsLabel = document.createElement("label");
+  operationsLabel.textContent = "Operação autorizada";
+  const operation = document.createElement("select");
+  for (const [value, name] of [["authorize", "Autorizar"], ["query", "Consultar"], ["cancel", "Cancelar"], ["inutilize", "Inutilizar"]]) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = name;
+    operation.append(option);
+  }
+  operationsLabel.append(operation);
+  form.append(operationsLabel);
+  documentSelect.addEventListener("change", () => {
+    const nfse = documentSelect.value === "nfse";
+    municipality.required = nfse;
+    provider.value = nfse ? "nfse-nacional-producao-restrita" : "sefaz-sp-homologacao-nfe4";
+  });
+  const actions = document.createElement("div");
+  actions.className = "form-actions";
+  const assess = document.createElement("button");
+  assess.type = "button";
+  assess.textContent = "Verificar prontidão";
+  const activate = document.createElement("button");
+  activate.type = "button";
+  activate.className = "primary";
+  activate.textContent = "Autorizar piloto de homologação";
+  activate.disabled = true;
+  const deactivate = document.createElement("button");
+  deactivate.type = "button";
+  deactivate.textContent = "Desativar piloto";
+  actions.append(assess, activate, deactivate);
+  form.append(actions);
+  const result = document.createElement("div");
+  result.className = "grid-list";
+  article.append(form, result);
+  let lastValidatedPayload = "";
+  function payload() {
+    const jurisdiction = { state_code: fields.state_code.value.trim().toUpperCase() };
+    const city = fields.municipality_ibge_code.value.trim();
+    if (city) jurisdiction.municipality_ibge_code = city;
+    return {
+      tenant_id: fields.tenant_id.value.trim(),
+      unit_id: fields.unit_id.value.trim(),
+      pilot_id: fields.pilot_id.value.trim(),
+      document_kind: documentSelect.value,
+      jurisdiction,
+      provider_id: provider.value.trim(),
+      allowed_operations: [operation.value],
+    };
+  }
+  function showResult(response) {
+    result.replaceChildren();
+    for (const [key, value] of Object.entries(response)) {
+      result.append(rowElement({ item: fieldLabel(key), value: Array.isArray(value) ? value.join("; ") : value }));
+    }
+  }
+  form.addEventListener("input", () => { activate.disabled = true; lastValidatedPayload = ""; });
+  form.addEventListener("change", () => { activate.disabled = true; lastValidatedPayload = ""; });
+  assess.addEventListener("click", async () => {
+    if (!form.reportValidity()) return;
+    assess.disabled = true;
+    activate.disabled = true;
+    status.textContent = "Verificando a célula fiscal...";
+    try {
+      const body = payload();
+      const response = await api("/admin/controlled-pilots/assess", {
+        method: "POST", headers: { "X-CSRF-Token": csrfToken() }, body: JSON.stringify(body),
+      });
+      showResult(response);
+      lastValidatedPayload = JSON.stringify(body);
+      activate.disabled = response.internal_ready !== true;
+      status.textContent = response.internal_ready
+        ? "Prontidão interna confirmada. Evidência externa continua sendo verificada separadamente."
+        : "Piloto bloqueado: complete a configuração e revise os motivos.";
+    } catch (error) {
+      status.textContent = error instanceof Error ? error.message : "Não foi possível verificar.";
+    } finally { assess.disabled = false; }
+  });
+  for (const [button, action] of [[activate, "activate"], [deactivate, "deactivate"]]) {
+    button.addEventListener("click", async () => {
+      if (!form.reportValidity()) return;
+      const body = payload();
+      if (action === "activate" && (activate.disabled || JSON.stringify(body) !== lastValidatedPayload)) return;
+      if (action === "activate" && !window.confirm("Autorizar SOMENTE o piloto de homologação desta célula? Isso não habilita produção fiscal real.")) return;
+      button.disabled = true;
+      status.textContent = "Registrando decisão...";
+      try {
+        const response = await api("/admin/controlled-pilots/" + action, {
+          method: "POST", headers: { "X-CSRF-Token": csrfToken() }, body: JSON.stringify(body),
+        });
+        showResult(response);
+        status.textContent = action === "activate" ? "Piloto de homologação ativado. Produção fiscal permanece independente." : "Piloto desativado.";
+      } catch (error) {
+        status.textContent = error instanceof Error ? error.message : "Decisão não confirmada.";
+      } finally { activate.disabled = true; lastValidatedPayload = ""; if (action === "deactivate") button.disabled = false; }
+    });
+  }
+}
+
 /** @param {string} viewId */
 async function renderSurface(viewId) {
   const generation = ++surfaceGeneration;
@@ -1823,6 +1974,10 @@ async function renderSurface(viewId) {
   }
   if (viewId === "checkout-admin") {
     await renderCheckoutAdmin();
+    return;
+  }
+  if (viewId === "controlled-pilots") {
+    await renderControlledPilots();
     return;
   }
   workspace.replaceChildren();
@@ -1927,7 +2082,9 @@ function buildNavigation() {
   nav.replaceChildren();
   const allowed = availableSurfaces();
   for (const group of navigation) {
-    const visibleItems = group.items.filter(([id]) => allowed === null || allowed.has(id));
+    const visibleItems = group.items.filter(([id]) => id === "controlled-pilots"
+      ? bootstrapState?.platform_admin === true
+      : allowed === null || allowed.has(id));
     if (!visibleItems.length) continue;
     const section = document.createElement("section");
     section.className = "nav-group";
