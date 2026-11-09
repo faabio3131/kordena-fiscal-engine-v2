@@ -56,12 +56,12 @@ class BlingInstallationRepository:
             health_code="ready" if row[7] == "connected" else str(row[7]),
             credential_status="configured" if row[7] == "connected" else "unavailable",
             updated_at=datetime.fromisoformat(str(row[10])),
-            revision=int(row[8]),
+            revision=int(str(row[8])),
         )
 
     @staticmethod
     def _require_scope(scope: ExecutionScope) -> None:
-        if scope.host_namespace != HostNamespace("bling"):
+        if scope.host_namespace != "bling":
             raise FiscalValidationError("Bling host namespace required")
 
     def create(
