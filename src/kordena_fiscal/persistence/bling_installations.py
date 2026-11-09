@@ -194,6 +194,23 @@ class BlingInstallationRepository:
             continuation = base64.urlsafe_b64encode(cursor_bytes).decode().rstrip("=")
         return views, continuation
 
+    def scan_connected(
+        self, *, after: str = "", limit: int = 100,
+    ) -> tuple[BlingInstallationView, ...]:
+        """Internal Worker registry scan, never exposed as an unscoped HTTP API."""
+        if type(limit) is not int or not 1 <= limit <= 100:
+            raise FiscalValidationError("invalid Bling worker scan limit")
+        if after and (len(after) != 32 or not all(x in "0123456789abcdef" for x in after)):
+            raise FiscalValidationError("invalid Bling registry scan cursor")
+        with self.database.connection() as connection:
+            rows = connection.execute(
+                f"SELECT {_FIELDS} FROM fm_bling_installations "
+                "WHERE state = ? AND installation_id > ? "
+                "ORDER BY installation_id LIMIT ?",
+                (BlingInstallationState.CONNECTED.value, after, limit),
+            ).fetchall()
+        return tuple(self._row(row) for row in rows)
+
     def transition(
         self, scope: ExecutionScope, installation_id: str, *,
         expected_revision: int, state: BlingInstallationState,
