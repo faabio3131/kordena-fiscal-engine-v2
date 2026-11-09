@@ -1,5 +1,5 @@
 {
-  "contract_version": 1,
+  "contract_version": 2,
   "provider": "bling",
   "official_openapi_url": "https://developer.bling.com.br/build/assets/openapi-CR5QY_N1.json",
   "official_openapi_sha256": "acadd51a045644fd8f87577f3f89cfdfaef9449c8372d93b78173f35536486bb",
@@ -40,10 +40,20 @@
   },
   "fiscal_handoff": {
     "document_model": "55",
-    "prepared_document_required": true,
+    "prepared_document_required": false,
     "snapshot_approval_required": true,
     "supported_environment": "homologation",
-    "automatic_order_to_signed_document": false
+    "automatic_order_to_signed_document": false,
+    "reviewed_order_to_signed_document": true,
+    "preparation_path": "/v1/portal/integrations/bling/orders/{order_id}/prepare",
+    "preparation_authentication": "portal session + CSRF + integration.manage + document.issue",
+    "preparation_body": [
+      "snapshot_sha256",
+      "policy_sha256",
+      "issued_at",
+      "recipient"
+    ],
+    "policy_example": "bling-fiscal-policy.example.json"
   },
   "result": {
     "query_path": "/v1/integrations/bling/orders/{order_id}",

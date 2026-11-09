@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-from kordena_fiscal.domain import FiscalProductProfile, FiscalProfile, Money
+from kordena_fiscal.domain import Cnpj, FiscalProductProfile, FiscalProfile, Money
 from kordena_fiscal.tax import RestaurantSupplyDecision, TaxDecision
 
 from .models import CanonicalFiscalDocument, FiscalLineSnapshot, FiscalPaymentSnapshot
@@ -96,7 +96,7 @@ def _product(profile: FiscalProductProfile) -> dict[str, Any]:
 
 def _tax_decision(decision: TaxDecision) -> dict[str, Any]:
     outcome = decision.outcome
-    return {
+    payload: dict[str, Any] = {
         "rule_id": decision.rule_id,
         "rule_version": decision.rule_version,
         "source_normative": decision.source_normative,
@@ -110,6 +110,17 @@ def _tax_decision(decision: TaxDecision) -> dict[str, Any]:
             "legal_notes": list(outcome.legal_notes),
         },
     }
+
+    rates = outcome.nfe_rates
+    if rates is not None:
+        payload["outcome"]["nfe_rates"] = {
+            "icms_rate": _decimal_text(rates.icms_rate),
+            "pis_rate": _decimal_text(rates.pis_rate),
+            "cofins_rate": _decimal_text(rates.cofins_rate),
+            "pis_base": rates.pis_base,
+            "cofins_base": rates.cofins_base,
+        }
+    return payload
 
 
 def _restaurant_decision(
@@ -131,7 +142,7 @@ def _restaurant_decision(
 
 
 def _line(line: FiscalLineSnapshot) -> dict[str, Any]:
-    return {
+    payload = {
         "line_number": line.line_number,
         "product": _product(line.product),
         "quantity": _decimal_text(line.quantity),
@@ -143,6 +154,10 @@ def _line(line: FiscalLineSnapshot) -> dict[str, Any]:
         "tax_decision": _tax_decision(line.tax_decision),
         "restaurant_decision": _restaurant_decision(line.restaurant_decision),
     }
+
+    if line.freight_amount.amount:
+        payload["freight_amount"] = _money(line.freight_amount)
+    return payload
 
 
 def _payment(payment: FiscalPaymentSnapshot) -> dict[str, Any]:
@@ -165,7 +180,7 @@ def to_canonical_payload(document: CanonicalFiscalDocument) -> dict[str, Any]:
     }
     if document.scope.host_namespace is not None:
         scope_payload["host_namespace"] = document.scope.host_namespace
-    return {
+    payload = {
         "schema_version": document.schema_version,
         "document_id": document.document_id,
         "scope": scope_payload,
@@ -187,6 +202,39 @@ def to_canonical_payload(document: CanonicalFiscalDocument) -> dict[str, Any]:
             "change_amount": _money(totals.change_amount),
         },
     }
+
+    # Preserve existing v1 fingerprints when no recipient was captured. New
+    # documents bind recipient identity/address and tax-relevant facts to their hash.
+    recipient = document.recipient
+    if recipient is not None:
+        address = recipient.address
+        payload["recipient"] = {
+            "document_type": "cnpj" if isinstance(recipient.document, Cnpj) else "cpf",
+            "document": recipient.document.value,
+            "name": recipient.name,
+            "ie_indicator": recipient.ie_indicator,
+            "final_consumer": recipient.final_consumer,
+            "state_registration": (
+                {
+                    "number": recipient.state_registration.number,
+                    "exempt": recipient.state_registration.exempt,
+                }
+                if recipient.state_registration is not None
+                else None
+            ),
+            "address": {
+                "street": address.street,
+                "number": address.number,
+                "district": address.district,
+                "complement": address.complement,
+                "municipality_name": address.municipality_name,
+                "municipality_ibge_code": address.jurisdiction.municipality_ibge_code,
+                "state_code": address.jurisdiction.state_code,
+                "country_code": address.jurisdiction.country_code,
+                "postal_code": address.postal_code,
+            },
+        }
+    return payload
 
 
 def to_canonical_json(document: CanonicalFiscalDocument) -> str:

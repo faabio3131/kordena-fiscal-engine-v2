@@ -16,7 +16,10 @@ from kordena_fiscal.domain import (
     TaxRegimeCode,
 )
 
+from .nfe_calculation import NfeRateParameters
+
 _CODE = re.compile(r"^[A-Z0-9._/-]+$")
+
 _DIGITS = re.compile(r"^\d+$")
 
 
@@ -113,9 +116,7 @@ class TaxRuleSelector:
             object.__setattr__(self, "state_code", state_code)
         if municipality_code is not None:
             if state_code is None:
-                raise FiscalValidationError(
-                    "municipality selector requires an explicit state_code"
-                )
+                raise FiscalValidationError("municipality selector requires an explicit state_code")
             jurisdiction = BrazilianJurisdiction(state_code, municipality_code)
             object.__setattr__(
                 self,
@@ -128,29 +129,21 @@ class TaxRuleSelector:
             self.document_kind,
             FiscalDocumentKind,
         ):
-            raise FiscalValidationError(
-                "document_kind selector must be a FiscalDocumentKind"
-            )
+            raise FiscalValidationError("document_kind selector must be a FiscalDocumentKind")
         if self.operation_type is not None and not isinstance(
             self.operation_type,
             TaxOperationType,
         ):
-            raise FiscalValidationError(
-                "operation_type selector must be a TaxOperationType"
-            )
+            raise FiscalValidationError("operation_type selector must be a TaxOperationType")
         if self.recipient_profile is not None and not isinstance(
             self.recipient_profile,
             RecipientTaxProfile,
         ):
-            raise FiscalValidationError(
-                "recipient_profile selector must be a RecipientTaxProfile"
-            )
+            raise FiscalValidationError("recipient_profile selector must be a RecipientTaxProfile")
         if self.ncm_prefix is not None:
             prefix = self.ncm_prefix.strip()
             if not 2 <= len(prefix) <= 8 or not _DIGITS.fullmatch(prefix):
-                raise FiscalValidationError(
-                    "ncm_prefix must contain between 2 and 8 digits"
-                )
+                raise FiscalValidationError("ncm_prefix must contain between 2 and 8 digits")
             object.__setattr__(self, "ncm_prefix", prefix)
 
     @property
@@ -175,8 +168,7 @@ class TaxRuleSelector:
             return False
         if (
             self.municipality_ibge_code is not None
-            and self.municipality_ibge_code
-            != context.jurisdiction.municipality_ibge_code
+            and self.municipality_ibge_code != context.jurisdiction.municipality_ibge_code
         ):
             return False
         if self.tax_regime is not None and self.tax_regime != context.tax_regime:
@@ -210,8 +202,13 @@ class TaxRuleOutcome:
     # RTC metadata is opt-in: legacy TaxRule outcomes keep their original contract.
     ibs_cbs_cst_code: str | None = None
     ibs_cbs_classification_table_version: str | None = None
+    nfe_rates: NfeRateParameters | None = None
 
     def __post_init__(self) -> None:
+        if self.nfe_rates is not None and not isinstance(self.nfe_rates, NfeRateParameters):
+            raise FiscalValidationError(
+                "NF-e calculation requires immutable approved rate parameters"
+            )
         cfop = self.cfop.strip()
         if len(cfop) != 4 or not cfop.isdigit():
             raise FiscalValidationError("cfop must contain exactly 4 digits")
@@ -291,9 +288,7 @@ class TaxRule:
             if self.effective_to.tzinfo is None or self.effective_to.utcoffset() is None:
                 raise FiscalValidationError("rule effective_to must be timezone-aware")
             if self.effective_to <= self.effective_from:
-                raise FiscalValidationError(
-                    "rule effective_to must be after effective_from"
-                )
+                raise FiscalValidationError("rule effective_to must be after effective_from")
         if self.priority < 0:
             raise FiscalValidationError("rule priority must be >= 0")
 

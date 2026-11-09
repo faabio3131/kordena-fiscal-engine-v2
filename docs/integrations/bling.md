@@ -1,4 +1,4 @@
-# Bling — ingresso durável e handoff fiscal
+# Bling — pedido revisado até NF-e preparada e retorno ao ERP
 
 Estado: **IMPLEMENTED_CANDIDATE / bloco original EM EXECUÇÃO / NOT_DEPLOYED**.
 
@@ -17,9 +17,12 @@ quando o hash do token muda; token de outra empresa não acessa pedidos nem escr
 situações. A inicialização local não exige comunicação com o Bling. Pedidos incompletos ficam em
 revisão. A normalização consultiva nunca determina impostos nem produz XML.
 
-Um operador vincula o hash revisado a um documento modelo 55 **já preparado pela
-aplicação fiscal canônica**, no mesmo namespace, tenant, unidade e ambiente.
-Essa aprovação e o job de emissão são atômicos. Um documento não pode atender a
+O operador revisa o snapshot e os dados fiscais do destinatário. A ação `prepare`
+resolve os perfis versionados do emitente e dos produtos, aplica o `TaxRuleEngine`,
+reconcilia itens/ajustes/pagamentos, reserva numeração, gera XML modelo 55, assina
+com o cofre A1 e valida o XSD oficial e a assinatura. Documento, numeração, arquivo
+assinado, vínculo do pedido e job de emissão são gravados na mesma transação.
+O handoff `approve-prepared` continua disponível para documentos canônicos existentes. Um documento não pode atender a
 pedidos diferentes. A aplicação canônica reserva a transmissão antes de chamar o
 provedor: timeout ou retomada exige reconciliação, sem retransmitir automaticamente.
 
@@ -59,6 +62,8 @@ rejeitada. A instalação precisa de um binding canônico no namespace `bling`.
 | `NFCORE_BLING_ACCESS_TOKEN_FILE` | Arquivo montado com access token OAuth; relido por requisição para rotação |
 | `NFCORE_BLING_AUTHORIZED_STATUS_ID` | Situação Bling escolhida para autorização fiscal |
 | `NFCORE_BLING_REJECTED_STATUS_ID` | Situação Bling escolhida para rejeição fiscal; distinta da anterior |
+| `NFCORE_BLING_FISCAL_POLICY_FILE` | Arquivo JSON de política fiscal da instalação |
+| `NFCORE_BLING_FISCAL_POLICY_SHA256` | SHA-256 dos bytes exatos da política revisada |
 | `NFCORE_A1_VAULT_DIR` / `NFCORE_A1_VAULT_KEY_BASE64` | Cofre A1 existente; cadastro do certificado segue sua autoridade |
 
 Sem cofre configurado, o Worker não reivindica jobs de emissão. Sem ambos os IDs de
@@ -115,38 +120,78 @@ Cenários: replay, conflito, segregação, pedido incompleto, alteração de sna
 exclusão fora de ordem, timeout após autorização/escrita, retomada, resultado final,
 retorno recusado, reprocessamento auditável e ausência de configuração externa.
 
-O aceite original de `agentes.md` permanece aberto: faltam a transformação completa
-do pedido em documento fiscal preparado. Não é dependência externa. O CLI e a vinculação a documento preparado não devem ser
-anunciados como emissão automática do pedido. CI/Docker/PostgreSQL da candidata
-precisam de evidência no SHA publicado. Homologação com Bling/SEFAZ, credenciais reais
-e deploy permanecem separados. Não iniciar Tiny nem promover este bloco incompleto.
+A preparação nativa está implementada e integrada ao portal/CLI. A certificação
+interna exige os testes no HEAD desta entrega, inclusive PostgreSQL e navegador;
+resultados anteriores não certificam código novo. Certificado sintético é gerado
+apenas nos testes: o código de produto usa exclusivamente o cofre configurado.
+
+### Escopo fiscal executável
+
+Esta entrega implementa venda nacional normal de mercadorias, modelo 55, em
+homologação, com cadastro fiscal governado. Não usa as sugestões NCM/CFOP do ERP
+como autoridade. Grupos executáveis: CSOSN 102/103/300/400; ICMS 00/40/41/50;
+PIS/COFINS 01/02/04/06/07/08/09. Alíquotas e bases são parâmetros explícitos da
+regra vencedora, com fonte normativa e vigência. Não existem alíquotas legais padrão.
+A configuração sintética de exemplo NÃO é recomendação tributária.
+
+IPI, ST, DIFAL, FCP, RTC, conversão de unidades e cartões integrados exigem seus
+próprios dados e cálculo canônico; esta preparação não os implementa. Não habilitar
+uma política para operações que os exijam. Grupos não suportados são bloqueados;
+a ausência de metadados não constitui prova de dispensa tributária. A cobertura
+integral desses cenários continua uma pendência interna fiscal, não um certificado
+ou cliente ausente. Produção fiscal não é ativada por esta entrega.
+
+### Configuração fiscal reproduzível
+
+O exemplo `contracts/integrations/bling-fiscal-policy.example.json` documenta as
+chaves exatas. Substituir identificadores sintéticos por perfis existentes e regras
+revisadas, fixar suas versões e calcular `sha256sum ARQUIVO`. O namespace do binding
+e dos perfis deve ser `bling`. `products` mapeia código do ERP para ID/versão do
+perfil fiscal; `payment_methods` mapeia ID da forma de pagamento do ERP para método
+canônico. `sale_options` explicita natureza, presença e modalidade de frete;
+venda remota exige indicador de intermediador, e marketplace exige CNPJ e cadastro.
+
+Cada política é arquivada integralmente. Reutilizar ID/versão com outro conteúdo é
+conflito; revisão exige nova versão e novo hash. O formulário envia o hash que foi
+apresentado na consulta: troca da política durante revisão bloqueia a preparação.
+Não há fallback de regra, perfil, destinatário ou assinatura.
+
+```bash
+PYTHONPATH=src python scripts/admin/bling_order.py prepare 9001 \
+  --review-file REVISAO.json --actor-id OPERADOR
+```
+
+`REVISAO.json` usa as mesmas quatro chaves da API abaixo. Repetir a preparação com
+os mesmos fatos recupera o documento e não consome outra numeração. Mudança de
+snapshot durante a transação desfaz preparação e reserva; após transmissão incerta,
+a recuperação continua por reconciliação do documento original.
 
 ### Evidência da candidata
 
-PR de construção: https://github.com/faabio3131/nf-core-v001/pull/403 (Draft).
-A regressão local executada durante esta entrega teve **3140 PASS / 477 SKIP**;
-os skips não são contabilizados como certificação. Depois foi acrescentado teste
-de aprovação concorrente e a matriz Bling foi parametrizada para PostgreSQL com
-schema descartável exclusivo. Essa variante usa o banco provisionado pela CI;
-a máquina local não possui PostgreSQL/Docker. Ruff e Mypy strict passaram.
-A CI no HEAD da PR é a autoridade para PostgreSQL, imagem e checks remotos.
-
+PR de construção: https://github.com/faabio3131/nf-core-v001/pull/403.
+`tests/test_bling_canonical.py` cobre mapeamento, arredondamento, regras, assinatura
+A1 sintética, XSD oficial, replay, rollback e jornada sessão/CSRF → preparação →
+Worker fiscal → retorno oficial, com transportes externos substituídos nos testes.
+As transações são parametrizadas em SQLite e PostgreSQL (banco isolado da CI).
+`tests/e2e/bling_review.spec.js` cobre revisão e envio dos fatos fiscais no navegador.
 
 ### Revisão autenticada no portal
 
 Em **Integrações → Revisão de pedidos Bling**, informe o identificador interno do
 pedido. A tela consulta os snapshots imutáveis selecionado e atualizado, mostra
 seus dados como texto e permite selecionar a atualização antes de qualquer vínculo.
-O envio exige referência a documento preparado e confirmação explícita de revisão.
+A preparação nativa exige destinatário, enquadramento IE/consumidor final explícitos
+e confirmação de revisão. O formulário aparece quando a política está configurada.
 O backend deriva empresa, unidade e ator da instalação e da sessão; exige
 `integration.manage` para consulta e também `document.issue` e CSRF para mutações.
 Nenhuma credencial OAuth ou certificado é necessário para consultar e revisar.
 
 - `GET /v1/portal/integrations/bling/orders/{id}` — snapshots e estado, `no-store`.
 - `POST .../{id}/select-snapshot` — corpo exclusivo `snapshot_sha256`.
+- `POST .../{id}/prepare` — `snapshot_sha256`, `policy_sha256`, `issued_at`, `recipient`.
 - `POST .../{id}/approve-prepared` — `snapshot_sha256` e `document_id`.
 
 Atualização concorrente retorna conflito; a tela deve consultar novamente. A
 aprovação repetida do mesmo vínculo é idempotente. Dados de outra organização ou
-unidade não são expostos. Esta tela fecha a revisão do handoff preparado, mas não
-substitui o preparador fiscal do pedido ainda em construção.
+unidade não são expostos. A tela utiliza o preparador canônico real, sem receber
+segredos ou permitir que o navegador determine tenant, unidade, regras ou alíquotas.

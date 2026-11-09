@@ -364,6 +364,8 @@ async function api(path, options = {}) {
   if (!response.ok) {
     const detail = body && typeof body === "object" ? body.detail : null;
     const messages = {
+      BLING_PREPARATION_NOT_CONFIGURED: "A política fiscal da integração ainda não foi configurada.",
+      BLING_PREPARATION_BLOCKED: "Preparação bloqueada. Confira destinatário, perfis fiscais, regras, pagamentos e certificado; nenhum envio foi iniciado por esta tentativa.",
       BLING_NOT_CONFIGURED: "Integração Bling ainda não configurada para revisão.",
       BLING_REVIEW_CONFLICT: "O pedido mudou ou o documento não está preparado neste escopo. Consulte novamente antes de aprovar.",
       BLING_ORDER_NOT_FOUND: "Pedido ainda não recebido nesta instalação Bling.",
@@ -1961,6 +1963,7 @@ function appendBlingReview(article) {
         }
       }
       if (!result.order?.document_id && !result.order?.changed_snapshot_sha256 && !result.order?.deleted) {
+        if (result.preparation?.configured) appendBlingPreparation(output, result, path, () => form.requestSubmit());
         const documentLabel = document.createElement("label"); documentLabel.textContent = "Documento fiscal preparado no NFCore";
         const documentId = document.createElement("input"); documentId.type = "text"; documentLabel.append(documentId);
         const confirmLabel = document.createElement("label");
@@ -1980,6 +1983,57 @@ function appendBlingReview(article) {
     finally { if (current === generation) lookup.disabled = false; }
   });
   order.addEventListener("input", () => { generation++; output.replaceChildren(); lookup.disabled = false; });
+}
+
+/** @param {HTMLElement} output @param {any} result @param {string} path @param {()=>void} refresh */
+function appendBlingPreparation(output, result, path, refresh) {
+  const box = document.createElement("fieldset");
+  const legend = document.createElement("legend"); legend.textContent = "Preparar NF-e a partir do pedido"; box.append(legend);
+  const notice = document.createElement("p"); notice.textContent = `Política fiscal ${result.preparation.policy_id}, versão ${result.preparation.version}. Confira o destinatário antes de preparar e enviar.`; box.append(notice);
+  const raw = result.snapshots?.find((/** @type {any} */ snapshot) => snapshot.sha256 === result.order.snapshot_sha256)?.content?.raw || {};
+  const contact = raw.contato || {}; const address = contact.endereco || {};
+  /** @type {Record<string, unknown>} */
+  const defaults = {document: contact.numeroDocumento, name: contact.nome, street: address.endereco,
+    number: address.numero, district: address.bairro, municipality_name: address.municipio,
+    municipality_ibge_code: address.codigoMunicipio, state: address.uf, postal_code: address.cep,
+    complement: address.complemento, state_registration: contact.ie};
+  /** @type {Record<string, HTMLInputElement>} */
+  const inputs = {};
+  for (const [key, label] of [["document", "CPF/CNPJ do destinatário"], ["name", "Nome do destinatário"],
+    ["street", "Logradouro"], ["number", "Número do endereço"], ["district", "Bairro"],
+    ["municipality_name", "Município"], ["municipality_ibge_code", "Código IBGE do município"],
+    ["state", "UF"], ["postal_code", "CEP"], ["complement", "Complemento (opcional)"],
+    ["state_registration", "Inscrição estadual (quando aplicável)"]]) {
+    const wrapper = document.createElement("label"); wrapper.textContent = label;
+    const input = document.createElement("input"); input.type = "text";
+    input.value = String(defaults[key] || ""); inputs[key] = input;
+    wrapper.append(input); box.append(wrapper);
+  }
+  const ieLabel = document.createElement("label"); ieLabel.textContent = "Condição da inscrição estadual";
+  const ie = document.createElement("select");
+  for (const [value, text] of [["", "Selecione"], ["1", "Contribuinte"], ["2", "Isento"], ["9", "Não contribuinte"]]) {
+    const option = document.createElement("option"); option.value = value; option.textContent = text; ie.append(option);
+  } ieLabel.append(ie); box.append(ieLabel);
+  const finalLabel = document.createElement("label"); finalLabel.textContent = "Consumidor final";
+  const final = document.createElement("select");
+  for (const [value, text] of [["", "Selecione"], ["true", "Sim"], ["false", "Não"]]) {
+    const option = document.createElement("option"); option.value = value; option.textContent = text; final.append(option);
+  } finalLabel.append(final); box.append(finalLabel);
+  const confirmLabel = document.createElement("label"); const confirm = document.createElement("input"); confirm.type = "checkbox";
+  confirmLabel.append(confirm, "Revisei o pedido, o destinatário e a política fiscal indicada."); box.append(confirmLabel);
+  const status = document.createElement("p"); status.setAttribute("role", "status");
+  const prepare = document.createElement("button"); prepare.type = "button"; prepare.textContent = "Preparar e enviar NF-e";
+  prepare.addEventListener("click", async () => {
+    if (!confirm.checked || !ie.value || !final.value || Object.entries(inputs).some(([key, input]) => !["complement", "state_registration"].includes(key) && !input.value.trim())) {
+      status.textContent = "Preencha os dados do destinatário e confirme a revisão."; return;
+    }
+    const recipient = {...Object.fromEntries(Object.entries(inputs).map(([key, input]) => [key, input.value.trim()])), ie_indicator: Number(ie.value), final_consumer: final.value === "true"};
+    prepare.disabled = true; status.textContent = "Preparando documento fiscal...";
+    try {
+      await api(`${path}/prepare`, {method: "POST", headers: {"X-CSRF-Token": csrfToken()}, body: JSON.stringify({snapshot_sha256: result.order.snapshot_sha256, policy_sha256: result.preparation.sha256, issued_at: result.preparation.issued_at, recipient})});
+      refresh();
+    } catch (error) { status.textContent = error instanceof Error ? error.message : "Falha na preparação fiscal."; prepare.disabled = false; }
+  }); box.append(prepare, status); output.append(box);
 }
 
 function availableSurfaces() {

@@ -8,8 +8,9 @@ from fastapi import APIRouter, Body, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from kordena_fiscal.application.bling_orders import BlingOrders
-from kordena_fiscal.domain import FiscalValidationError
+from kordena_fiscal.domain import FiscalDomainError, FiscalValidationError
 from kordena_fiscal.persistence.ports import PersistenceConflictError, PersistenceStateError
+from kordena_fiscal.runtime.bling_preparation import BlingSalePreparer
 from kordena_fiscal.runtime.config import RuntimeConfigurationError
 from kordena_fiscal.security.human_identity import HumanIdentityService, PortalPermission
 from kordena_fiscal.web.portal_api import _authenticated, _authorized, _csrf
@@ -18,6 +19,7 @@ from kordena_fiscal.web.portal_api import _authenticated, _authorized, _csrf
 def build_bling_review_router(
     identity: HumanIdentityService,
     orders_factory: Callable[[], BlingOrders],
+    preparer: BlingSalePreparer | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/v1/portal/integrations/bling")
 
@@ -47,7 +49,26 @@ def build_bling_review_router(
         if row is None:
             raise HTTPException(404, detail={"code": "BLING_ORDER_NOT_FOUND"})
         # Only immutable snapshots belonging to this installation and this order.
-        return response({"order": row, "snapshots": orders.review_snapshots(order_id)})
+        preparation: dict[str, Any] = {"configured": False}
+        if preparer is not None:
+            try:
+                policy, digest = preparer.policy(orders)
+                preparation = {
+                    "configured": True,
+                    "policy_id": policy["policy_id"],
+                    "version": policy["version"],
+                    "sha256": digest,
+                    "issued_at": datetime.now(UTC).isoformat(),
+                }
+            except FiscalValidationError:
+                pass
+        return response(
+            {
+                "order": row,
+                "snapshots": orders.review_snapshots(order_id),
+                "preparation": preparation,
+            }
+        )
 
     @router.post("/orders/{order_id}/{action}")
     def decide(
@@ -59,6 +80,16 @@ def build_bling_review_router(
         orders, actor = context(request, mutate=True)
         if order_id <= 0:
             raise HTTPException(422, detail={"code": "INVALID_ORDER_ID"})
+        if action == "prepare":
+            if preparer is None:
+                raise HTTPException(503, detail={"code": "BLING_PREPARATION_NOT_CONFIGURED"})
+            try:
+                document_id = preparer.prepare(orders, order_id, payload, actor)
+            except (PersistenceConflictError, PersistenceStateError, FiscalDomainError):
+                raise HTTPException(409, detail={"code": "BLING_PREPARATION_BLOCKED"}) from None
+            return response(
+                {"document_id": document_id, "state": (orders.get(order_id) or {}).get("state")}
+            )
         expected = {"snapshot_sha256"}
         if action == "approve-prepared":
             expected.add("document_id")
@@ -72,15 +103,20 @@ def build_bling_review_router(
         try:
             if action == "select-snapshot":
                 result = orders.select_snapshot(
-                    order_id, snapshot_sha256=payload["snapshot_sha256"],
-                    actor_id=actor, now=datetime.now(UTC),
+                    order_id,
+                    snapshot_sha256=payload["snapshot_sha256"],
+                    actor_id=actor,
+                    now=datetime.now(UTC),
                 )
             else:
                 result = orders.approve_prepared(
-                    order_id, snapshot_sha256=payload["snapshot_sha256"],
-                    document_id=payload["document_id"], actor_id=actor, now=datetime.now(UTC),
+                    order_id,
+                    snapshot_sha256=payload["snapshot_sha256"],
+                    document_id=payload["document_id"],
+                    actor_id=actor,
+                    now=datetime.now(UTC),
                 )
-        except (PersistenceConflictError, PersistenceStateError, FiscalValidationError):
+        except (PersistenceConflictError, PersistenceStateError, FiscalDomainError):
             raise HTTPException(409, detail={"code": "BLING_REVIEW_CONFLICT"}) from None
         return response({"order": result})
 

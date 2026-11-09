@@ -8,9 +8,11 @@ import argparse
 import json
 import os
 from datetime import UTC, datetime
+from pathlib import Path
 
 from kordena_fiscal.application.bling_processing import BlingProcessingHandler
 from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
+from kordena_fiscal.runtime.bling_preparation import BlingSalePreparer
 from kordena_fiscal.runtime.bling_worker import build_bling_orders, build_bling_worker
 from kordena_fiscal.runtime.config import RuntimeSettings
 
@@ -21,6 +23,7 @@ def main() -> int:
         "action",
         choices=(
             "status",
+            "prepare",
             "approve-prepared",
             "select-snapshot",
             "retry-event",
@@ -31,6 +34,7 @@ def main() -> int:
     )
     parser.add_argument("reference", help="order ID, or inbox entry ID for retry-event")
     parser.add_argument("--request-id")
+    parser.add_argument("--review-file", help="reviewed preparation JSON, no secret material")
     parser.add_argument("--snapshot-sha256")
     parser.add_argument("--document-id")
     parser.add_argument("--actor-id")
@@ -61,6 +65,18 @@ def main() -> int:
             print(json.dumps({"job_id": job_id}))
             return 0
         order_id = int(args.reference)
+        if args.action == "prepare":
+            if not args.review_file or not args.actor_id:
+                parser.error("preparation requires --review-file and --actor-id")
+            with Path(args.review_file).open("rb") as stream:
+                raw = stream.read(65_537)
+            if len(raw) > 65_536:
+                parser.error("review file exceeds 64 KiB")
+            document_id = BlingSalePreparer(os.environ).prepare(
+                orders, order_id, json.loads(raw), args.actor_id,
+            )
+            print(json.dumps({"document_id": document_id}))
+            return 0
         if args.action in {"retry-status", "retry-issuance"}:
             if not args.request_id or not args.actor_id:
                 parser.error("retry requires --request-id and --actor-id")

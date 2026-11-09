@@ -17,14 +17,18 @@ from kordena_fiscal.application.service import FiscalApplicationService
 from kordena_fiscal.archive import FiscalArchiveEntry, FiscalArchiveKind, RetentionPolicyMetadata
 from kordena_fiscal.connectors.erp_pme import ConnectorValidationError, normalize_erp_order
 from kordena_fiscal.contingency import FiscalOutboxService
+from kordena_fiscal.documents import CanonicalFiscalDocument
 from kordena_fiscal.domain import ElectronicInvoiceModel, ExecutionScope, FiscalValidationError
 from kordena_fiscal.gateway import AuthorizationRequest
+from kordena_fiscal.issuance.nfe_builder import NfeSaleOptions
 from kordena_fiscal.lifecycle import FiscalDocumentState
 from kordena_fiscal.persistence.ports import (
+    FiscalUnitOfWork,
     FiscalUnitOfWorkFactory,
     PersistenceConflictError,
     PersistenceStateError,
 )
+from kordena_fiscal.vault import EphemeralCertificateMaterial
 
 PROCESS_ORDER = "process_bling_order"
 ISSUE_ORDER = "issue_bling_order"
@@ -263,6 +267,84 @@ class BlingOrders:
             )
             uow.commit()
             return job.entry_id
+
+    def prepare_sale(
+        self,
+        order_id: int,
+        document: CanonicalFiscalDocument,
+        *,
+        snapshot_sha256: str,
+        actor_id: str,
+        now: datetime,
+        options: NfeSaleOptions,
+        series: int,
+        certificate: EphemeralCertificateMaterial | None,
+    ) -> str:
+        """Prepare, bind and queue in one transaction; changed snapshots roll back everything."""
+        from .nfe_preparation import prepare_nfe_sale
+
+        if not actor_id.strip() or len(actor_id) > 128:
+            raise FiscalValidationError("preparation actor is required")
+        if (
+            document.scope.identity_partition_key != self.scope.identity_partition_key
+            or document.source.source_type != "bling"
+            or document.source.source_id != f"{self.company_id}:{order_id}"
+        ):
+            raise FiscalValidationError("canonical document differs from Bling order authority")
+
+        def bind(uow: FiscalUnitOfWork, document_id: str) -> None:
+            key = self.key(order_id)
+            row = uow.commercial.configuration_receipt(self.scope, key)
+            if (
+                row is None
+                or row.get("snapshot_sha256") != snapshot_sha256
+                or row.get("changed_snapshot_sha256")
+                or row.get("deleted")
+            ):
+                raise PersistenceConflictError("Bling snapshot changed during preparation")
+            if row.get("document_id") == document_id:
+                return
+            if row.get("document_id") is not None:
+                raise PersistenceConflictError("Bling order already has a fiscal document")
+            updated = {
+                **row,
+                "document_id": document_id,
+                "state": "queued",
+                "approved_by": actor_id,
+                "approved_at": now.isoformat(),
+                "preparation_kind": "canonical",
+                "normalization_ready": True,
+                "review_required": False,
+            }
+            if not uow.commercial.replace_configuration_receipt(self.scope, key, row, updated):
+                raise PersistenceConflictError("Bling preparation changed concurrently")
+            document_key = (
+                "bling-document:"
+                + hashlib.sha256(
+                    json.dumps([*self.scope.identity_material, document_id]).encode()
+                ).hexdigest()
+            )
+            uow.commercial.reserve_configuration_command(self.scope, document_key, key)
+            uow.commercial.complete_configuration_command(
+                self.scope, document_key, {"order_key": key}
+            )
+            FiscalOutboxService(uow.outbox).enqueue(
+                scope=self.scope,
+                operation=ISSUE_ORDER,
+                deduplication_key=key,
+                payload=str(order_id).encode("ascii"),
+                created_at=now,
+            )
+
+        return prepare_nfe_sale(
+            self.factory,
+            document,
+            options=options,
+            series=series,
+            certificate=certificate,
+            now=now,
+            commit_preparation=bind,
+        )
 
     def approve_prepared(
         self,

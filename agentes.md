@@ -128,11 +128,14 @@ não substituem testes internos nem justificam deixar etapas de software por faz
   e retorno de situação pela API oficial. Ver `docs/integrations/bling.md`.
 - A fila de retorno é independente da emissão. Ausência de configuração de
   situações ou do cofre deixa os respectivos jobs pendentes, sem consumir tentativas.
-- **Bloco Bling continua EM EXECUÇÃO:** a vinculação atual exige documento já
-  preparado. A transformação completa do pedido bruto em documento fiscal preparado
-  continua sendo uma lacuna interna; não classificá-la como falta de A1 nem declarar
-  emissão automática de pedidos concluída. A interface de revisão agora consulta snapshots, seleciona atualização e aprova
-  o vínculo preparado com sessão, CSRF e escopo por empresa/unidade. A preparação
-  fiscal a partir do pedido ainda precisa integrar esta jornada antes do fechamento.
+- **Preparação fiscal nativa implementada; certificação do HEAD em execução:** pedido
+  revisado → perfis versionados → TaxRuleEngine → reconciliação → numeração → XML
+  assinado/XSD → arquivo/vínculo/fila atômicos. Portal e CLI usam a mesma aplicação.
+  Política fixada por SHA-256 e versão imutável; destinatário faz parte do snapshot.
+  Não depende de cliente ou certificado real para testar internamente.
+- Cobertura fiscal e limites explícitos em `docs/integrations/bling.md`. Grupos
+  tributários fora da cobertura (IPI/ST/DIFAL/FCP/RTC), cartões integrados e conversão
+  de unidades continuam pendências internas fiscais. Não declarar cobertura fiscal
+  universal nem eliminar essas pendências por documentação ou falta de credenciais.
 - Tiny permanece na sequência, depois do Bling. Nenhuma redução do aceite original,
   implantação, promoção ou homologação externa decorre desta atualização.

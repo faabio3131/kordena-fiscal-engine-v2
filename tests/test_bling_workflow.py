@@ -856,7 +856,7 @@ def test_signed_http_event_through_worker_issuance_and_official_return(installat
         assert worker.run_once(now=datetime.now(UTC)) == ()
 
 
-def review_client(orders, *, tenant="tenant", unit="unit", role="owner"):
+def review_client(orders, *, tenant="tenant", unit="unit", role="owner", preparer=None):
     from kordena_fiscal.runtime.bling_review import build_bling_review_router
     from kordena_fiscal.security.human_identity import (
         HumanAccount,
@@ -879,7 +879,7 @@ def review_client(orders, *, tenant="tenant", unit="unit", role="owner"):
         sessions=InMemoryWebSessionRepository(), password_hasher=hasher,
     )
     app = create_app(human_identity=identity)
-    app.include_router(build_bling_review_router(identity, lambda: orders))
+    app.include_router(build_bling_review_router(identity, lambda: orders, preparer=preparer))
     client = TestClient(app, base_url="https://nfcore.test")
     assert client.post("/v1/auth/login", json={
         "email": "review@example.test", "password": password,
