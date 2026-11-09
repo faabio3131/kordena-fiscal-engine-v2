@@ -71,6 +71,7 @@ from .activation_email import build_activation_delivery_from_environ
 from .ai_secrets import build_production_openai_key_readers
 from .alert_rules import InternalAlertMonitor, OperationalSignals
 from .api_staging_gsm_probe import staging_probe_verifier
+from .bridge_credentials import load_bridge_credentials
 from .cakto import build_cakto_webhook_router, compose_postgres_cakto_commercial_runtime
 from .cakto_claim_email import build_cakto_claim_delivery_from_environ
 from .canonical_fiscal_composition import (
@@ -82,7 +83,6 @@ from .composition import (
     RuntimeComposition,
     build_postgres_runtime_composition,
 )
-from .bridge_credentials import load_bridge_credentials
 from .config import RuntimeConfigurationError, RuntimeSettings
 from .development_commercial_ingress import (
     development_command_resolver,
