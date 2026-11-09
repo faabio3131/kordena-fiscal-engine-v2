@@ -496,7 +496,7 @@ class SqliteCommercialConfigurationStore:
                 FROM fm_commercial_product_profiles
                 WHERE tenant_id = ? AND unit_id = ? AND environment = ?
                   AND product_id = ?
-                  AND (? IS NULL OR effective_from < ?)
+                  AND (CAST(? AS TEXT) IS NULL OR effective_from < ?)
                   AND (effective_to IS NULL OR effective_to > ?)
                 LIMIT 1
                 """,
