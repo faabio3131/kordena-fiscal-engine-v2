@@ -136,7 +136,8 @@ def test_unconfigured_installation_rejects_signed_event(tmp_path: Path) -> None:
     )
     app = FastAPI()
     app.include_router(build_multitenant_bling_ingress(
-        FiscalApplicationService(db), store, FakeSecrets({row.installation_id: b"long-secret-123456"}),
+        FiscalApplicationService(db), store,
+        FakeSecrets({row.installation_id: b"long-secret-123456"}),
     ))
     with TestClient(app) as client:
         assert client.post(
