@@ -71,6 +71,7 @@ from .activation_email import build_activation_delivery_from_environ
 from .ai_secrets import build_production_openai_key_readers
 from .alert_rules import InternalAlertMonitor, OperationalSignals
 from .api_staging_gsm_probe import staging_probe_verifier
+from .bridge_credentials import load_bridge_credentials
 from .cakto import build_cakto_webhook_router, compose_postgres_cakto_commercial_runtime
 from .cakto_claim_email import build_cakto_claim_delivery_from_environ
 from .canonical_fiscal_composition import (
@@ -1095,6 +1096,7 @@ _entrypoint_certificate_vault = EncryptedA1Vault.from_environ()
 _development_ingress = development_commercial_ingress(_entrypoint_settings, os.environ)
 app = create_runtime_app(
     _entrypoint_settings,
+    workload_credentials=load_bridge_credentials(os.environ),
     password_reset_delivery=build_activation_delivery_from_environ(),
     certificate_vault=_entrypoint_certificate_vault,
     fiscal_dependency_probe=lambda: fiscal_external_dependency_snapshot(
