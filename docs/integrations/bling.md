@@ -112,3 +112,13 @@ são dependências externas. O CLI e a vinculação a documento preparado não d
 anunciados como emissão automática do pedido. CI/Docker/PostgreSQL da candidata
 precisam de evidência no SHA publicado. Homologação com Bling/SEFAZ, credenciais reais
 e deploy permanecem separados. Não iniciar Tiny nem promover este bloco incompleto.
+
+### Evidência da candidata
+
+PR de construção: https://github.com/faabio3131/nf-core-v001/pull/403 (Draft).
+A regressão local executada durante esta entrega teve **3140 PASS / 477 SKIP**;
+os skips não são contabilizados como certificação. Depois foi acrescentado teste
+de aprovação concorrente e a matriz Bling foi parametrizada para PostgreSQL com
+schema descartável exclusivo. Essa variante usa o banco provisionado pela CI;
+a máquina local não possui PostgreSQL/Docker. Ruff e Mypy strict passaram.
+A CI no HEAD da PR é a autoridade para PostgreSQL, imagem e checks remotos.

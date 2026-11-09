@@ -1,9 +1,13 @@
 """Real database/worker/HTTP/fiscal lifecycle, simulated external transport only."""
 
 import hashlib
+import os
+from contextlib import contextmanager
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from unittest.mock import Mock, patch
+from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
+from uuid import uuid4
 
 import pytest
 from fastapi import FastAPI
@@ -59,10 +63,47 @@ NOW = datetime.now(UTC)
 RAW = {"id": 9001, "contato": {"nome": "Synthetic customer"}, "itens": []}
 
 
-@pytest.fixture
-def installation(tmp_path):
-    db = SqliteFiscalDatabase(tmp_path / "bling-workflow.sqlite")
-    db.initialize()
+@contextmanager
+def workflow_database(tmp_path, backend):
+    if backend == "sqlite":
+        database = SqliteFiscalDatabase(tmp_path / "bling-workflow.sqlite")
+        database.initialize()
+        yield database
+        return
+    import psycopg
+    from psycopg.sql import SQL, Identifier
+
+    from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
+
+    dsn = os.environ.get("NFCORE_TEST_POSTGRES_DSN", "").strip()
+    if not dsn:
+        pytest.skip("isolated PostgreSQL provided by CI")
+    schema = "bling_test_" + uuid4().hex
+    with psycopg.connect(dsn, autocommit=True) as connection:
+        connection.execute(SQL("CREATE SCHEMA {}").format(Identifier(schema)))
+    uri = urlsplit(dsn)
+    query = dict(parse_qsl(uri.query))
+    query["options"] = f"-c search_path={schema}"
+    isolated = urlunsplit(uri._replace(query=urlencode(query, quote_via=quote)))
+    database = None
+    try:
+        database = PostgresFiscalDatabase(isolated, min_pool_size=1, max_pool_size=8)
+        database.initialize()
+        yield database
+    finally:
+        if database is not None:
+            database.close()
+        with psycopg.connect(dsn, autocommit=True) as connection:
+            connection.execute(SQL("DROP SCHEMA {} CASCADE").format(Identifier(schema)))
+
+
+@pytest.fixture(params=["sqlite", "postgres"])
+def installation(tmp_path, request):
+    with workflow_database(tmp_path, request.param) as db:
+        yield create_installation(db)
+
+
+def create_installation(db):
     host = HostScope(HostNamespace("bling"), "host-tenant", "host-unit")
     with db() as uow:
         uow.bindings.add(
@@ -81,7 +122,7 @@ def installation(tmp_path):
         correlation_id="synthetic-test",
     )
     orders = BlingOrders(db, scope, "synthetic-company")
-    yield db, application, orders
+    return db, application, orders
 
 
 def prepare(application, scope, document_id="doc-test"):
@@ -630,3 +671,34 @@ def test_writeback_does_not_overwrite_intervening_business_status(installation):
     assert job.status is FiscalOutboxStatus.DEAD_LETTER
     update.assert_not_called()
     assert orders.get(9001)["state"] == "authorized"
+
+
+def test_concurrent_approval_creates_only_one_fiscal_job(installation):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    db, application, orders = installation
+    row = orders.stage(9001, RAW, event_id="original", now=NOW)
+    prepare(application, orders.scope)
+    barrier = Barrier(4)
+
+    def approve_concurrently(_):
+        barrier.wait(timeout=10)
+        try:
+            return orders.approve_prepared(
+                9001,
+                snapshot_sha256=row["snapshot_sha256"],
+                document_id="doc-test",
+                actor_id="operator",
+                now=NOW,
+            )
+        except PersistenceConflictError:
+            return None
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        outcomes = list(pool.map(approve_concurrently, range(4)))
+    assert any(result is not None for result in outcomes)
+    with db() as uow:
+        jobs = uow.outbox.list_for_scope(orders.scope, operations=frozenset({ISSUE_ORDER}))
+        assert len(jobs) == 1
+    assert orders.get(9001)["document_id"] == "doc-test"
