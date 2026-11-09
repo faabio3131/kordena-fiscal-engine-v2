@@ -130,19 +130,21 @@ apenas nos testes: o código de produto usa exclusivamente o cofre configurado.
 Esta candidata prepara vendas de mercadorias NF-e modelo 55 em **homologação**,
 usando regras fiscais versionadas por empresa, unidade, NCM, regime e destinatário.
 Não usa sugestões do ERP como autoridade; não define alíquotas legais padrão.
-Grupos legados: CSOSN 102/103/300/400; ICMS 00/10/40/41/50;
-PIS/COFINS 01/02/04/06/07/08/09.
+Grupos legados: CSOSN 102/103/300/400; ICMS 00/10/20/30/40/41/50/70;
+PIS/COFINS 01/02/03/04/06/07/08/09/49/99.
 
-**ICMS-ST e FCP-ST (CST 10):** exigem `st_rate`, `st_mva_rate` e
+**ICMS-ST e FCP-ST (CST 10/30/70):** exigem `st_rate`, `st_mva_rate` e
 `st_base_mode` (`net_mva` ou `net_plus_ipi_mva`); `fcp_st_rate` é opcional
 somente com ST. O motor calcula a base ST por MVA, subtrai o ICMS próprio do
 ICMS-ST e inclui `vST` e `vFCPST` no total da NF-e e nas parcelas conferidas.
+CST 30 não apura ICMS próprio; CST 70 reduz a base própria.
+CST 20/70 exigem `icms_reduction_rate` aprovado para XML `pRedBC`.
 A base/percentual da operação devem ser aprovados pela regra fiscal local.
 Outras modalidades de base (pauta, tabelado, redução), CSTs de ST e regimes
 específicos não devem usar indevidamente esse caminho: exigem implementação
 especializada e permanecem bloqueados.
 
-**FCP próprio e DIFAL de destino:** `fcp_rate` exige ICMS 00/10;
+**FCP próprio e DIFAL de destino:** `fcp_rate` exige ICMS 00/10/20/70;
 o grupo ICMS10 informa também `vBCFCP`. Para destinatário final não
 contribuinte em outra UF, ICMS 00 exige `difal_destination_rate`,
 `difal_interstate_rate` (4, 7 ou 12) e `difal_destination_share`
@@ -152,16 +154,16 @@ o FCP específico do destino. O XML informa ICMSUFDest, e os totais
 Aplicações de DIFAL em outros CSTs/regimes, bases duplas ou benefícios
 precisam de política e caminho próprio.
 
-**IPI:** além de saída tributada CST 50 por alíquota (`ipi_rate`,
+**IPI:** além de saída tributada CST 50/99 por alíquota (`ipi_rate`,
 `ipi_enquiry_code` e `ipi_calculation_mode: net_icms_excluded`),
-o CST 50 aceita valor fixo por unidade tributável (`ipi_unit_amount`,
+o CST 50/99 aceita valor fixo por unidade tributável (`ipi_unit_amount`,
 `ipi_cst: 50` e `ipi_calculation_mode: per_taxable_unit`) com quantidade
 tributável exata. CSTs de saída 51/52/53/54/55 geram IPINT, exigindo
 `ipi_cst`, `ipi_enquiry_code` e `ipi_calculation_mode: non_taxed`.
 O IPI devido integra o `vNF` e a conciliação de pedido/pagamento.
 Cálculos mistos, entradas ou outras bases não são inferidos.
 
-**RTC (IBS/CBS de 2026):** caminho inicialmente restrito a tributação
+**RTC (IBS/CBS de 2026):** caminho parametrizado para tributação
 plena CST IBS/CBS `000` com `ibs_cbs_classification_code` de seis dígitos,
 `ibs_cbs_classification_table_version`, e as três alíquotas explícitas
 `rtc_uf_rate`, `rtc_municipal_rate`, `rtc_cbs_rate`. Exige
@@ -170,7 +172,12 @@ plena CST IBS/CBS `000` com `ibs_cbs_classification_code` de seis dígitos,
 por item, `IBSCBSTot` e `vNFTot`; preserva conciliação comercial com
 o `vNF` legado, sem presumir recolhimento. Só aceita data de emissão
 em 2026. A versão informada da tabela é proveniência de configuração,
-**não** uma homologação automática da classificação legal.
+**não** uma homologação automática da classificação legal. Também suporta
+CST `200` com reduções explícitas de IBS UF/Mun e CBS (gRed), e CST `410`
+com base `non_taxed`, sem grupo gIBSCBS; cClassTrib deve começar com o CST.
+CST 200 exige as três reduções percentuais e a alíquota efetiva.
+PIS/COFINS CST 03 usam quantidade tributável e alíquota fixa por unidade;
+CST 49/99 exigem modos explícitos zero, percentage ou per_unit.
 Regimes monofásicos, redução, diferimento, suspensão, créditos, IS,
 desonerações e demais CSTs/combinações continuam exigindo sua própria
 modelagem e validação normativa. O sistema falha fechado nesses caminhos.
@@ -250,3 +257,11 @@ Atualização concorrente retorna conflito; a tela deve consultar novamente. A
 aprovação repetida do mesmo vínculo é idempotente. Dados de outra organização ou
 unidade não são expostos. A tela utiliza o preparador canônico real, sem receber
 segredos ou permitir que o navegador determine tenant, unidade, regras ou alíquotas.
+
+## Matriz fiscal de construção 2026-11-09
+
+O detalhamento por CST/CSOSN, cenários assinados/XSD, bloqueios
+fail-closed e itens fora do suporte consta em
+**docs/integrations/bling-tax-matrix-2026-11-09.md**. Esta ampliação não
+representa todos os regimes, CSTs ou benefícios fiscais brasileiros.
+PRs #403 e #404 exigem reconciliação e gates no HEAD publicado.

@@ -117,6 +117,14 @@ def _rule(data: Mapping[str, Any]) -> TaxRule:
         "rtc_cbs_rate",
         "rtc_base_mode",
         "rtc_financial_mode",
+        "icms_reduction_rate",
+        "pis_unit_amount",
+        "cofins_unit_amount",
+        "rtc_uf_reduction_rate",
+        "rtc_municipal_reduction_rate",
+        "rtc_cbs_reduction_rate",
+        "pis_other_mode",
+        "cofins_other_mode",
     }:
         raise FiscalValidationError("unsupported fiscal calculation parameters")
     return TaxRule(
@@ -195,6 +203,36 @@ def _rule(data: Mapping[str, Any]) -> TaxRule:
                 else None,
                 rtc_base_mode=rates.get("rtc_base_mode"),
                 rtc_financial_mode=rates.get("rtc_financial_mode"),
+                icms_reduction_rate=(
+                    Decimal(str(rates["icms_reduction_rate"]))
+                    if "icms_reduction_rate" in rates
+                    else None
+                ),
+                pis_unit_amount=(
+                    Decimal(str(rates["pis_unit_amount"])) if "pis_unit_amount" in rates else None
+                ),
+                cofins_unit_amount=(
+                    Decimal(str(rates["cofins_unit_amount"]))
+                    if "cofins_unit_amount" in rates
+                    else None
+                ),
+                rtc_uf_reduction_rate=(
+                    Decimal(str(rates["rtc_uf_reduction_rate"]))
+                    if "rtc_uf_reduction_rate" in rates
+                    else None
+                ),
+                rtc_municipal_reduction_rate=(
+                    Decimal(str(rates["rtc_municipal_reduction_rate"]))
+                    if "rtc_municipal_reduction_rate" in rates
+                    else None
+                ),
+                rtc_cbs_reduction_rate=(
+                    Decimal(str(rates["rtc_cbs_reduction_rate"]))
+                    if "rtc_cbs_reduction_rate" in rates
+                    else None
+                ),
+                pis_other_mode=rates.get("pis_other_mode"),
+                cofins_other_mode=rates.get("cofins_other_mode"),
             ),
         ),
     )

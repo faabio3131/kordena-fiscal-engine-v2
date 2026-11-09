@@ -316,14 +316,9 @@ def build_nfe_sale(
         "vNF",
     ):
         _element(totals, key, _money(values.get(key, Decimal(0))))
-    rtc_lines = [
-        tax
-        for tax in taxes
-        if tax.rtc_base != 0
-        or any((tax.rtc_ibs_uf_amount, tax.rtc_ibs_municipal_amount, tax.rtc_cbs_amount))
-    ]
-    if any(line.tax_decision.outcome.ibs_cbs_cst_code is not None for line in document.items):
-        if len(rtc_lines) != len(taxes):
+    classified = [line.tax_decision.outcome.ibs_cbs_cst_code is not None for line in document.items]
+    if any(classified):
+        if not all(classified):
             raise FiscalValidationError("RTC requires coherent classification on all lines")
         rtc_total = _element(total_node, "IBSCBSTot")
         _element(rtc_total, "vBCIBSCBS", _money(sum((t.rtc_base for t in taxes), Decimal(0))))
@@ -417,43 +412,54 @@ def _taxes(parent: etree._Element, outcome: object, origin: int, tax: NfeCalcula
     assert isinstance(outcome, TaxRuleOutcome) and outcome.nfe_rates is not None
     rates = outcome.nfe_rates
     code = outcome.icms_code
-    group = ("ICMS" + code) if code in {"00", "10"} else "ICMSSN102" if len(code) == 3 else "ICMS40"
+    group = (
+        "ICMS" + code
+        if code in {"00", "10", "20", "30", "70"}
+        else "ICMSSN102"
+        if len(code) == 3
+        else "ICMS40"
+    )
     icms = _element(_element(parent, "ICMS"), group)
     _element(icms, "orig", origin)
     _element(icms, "CSOSN" if len(code) == 3 else "CST", code)
-    if code in {"00", "10"}:
+    if code in {"00", "10", "20", "70"}:
         for key, value in (
             ("modBC", "3"),
+            *(
+                (("pRedBC", format(rates.icms_reduction_rate, ".4f")),)
+                if rates.icms_reduction_rate is not None
+                else ()
+            ),
             ("vBC", _money(tax.icms_base)),
             ("pICMS", format(rates.icms_rate, ".4f")),
             ("vICMS", _money(tax.icms_amount)),
         ):
             _element(icms, key, value)
         if rates.fcp_rate is not None:
-            if code == "10":
+            if code in {"10", "20", "70"}:
                 _element(icms, "vBCFCP", _money(tax.icms_base))
             _element(icms, "pFCP", format(rates.fcp_rate, ".4f"))
             _element(icms, "vFCP", _money(tax.fcp_amount))
-        if code == "10":
-            assert rates.st_mva_rate is not None and rates.st_rate is not None
-            for key, value in (
-                ("modBCST", "4"),
-                ("pMVAST", format(rates.st_mva_rate, ".4f")),
-                ("vBCST", _money(tax.st_base)),
-                ("pICMSST", format(rates.st_rate, ".4f")),
-                ("vICMSST", _money(tax.st_amount)),
-            ):
-                _element(icms, key, value)
-            if rates.fcp_st_rate is not None:
-                _element(icms, "vBCFCPST", _money(tax.st_base))
-                _element(icms, "pFCPST", format(rates.fcp_st_rate, ".4f"))
-                _element(icms, "vFCPST", _money(tax.fcp_st_amount))
+    if code in {"10", "30", "70"}:
+        assert rates.st_mva_rate is not None and rates.st_rate is not None
+        for key, value in (
+            ("modBCST", "4"),
+            ("pMVAST", format(rates.st_mva_rate, ".4f")),
+            ("vBCST", _money(tax.st_base)),
+            ("pICMSST", format(rates.st_rate, ".4f")),
+            ("vICMSST", _money(tax.st_amount)),
+        ):
+            _element(icms, key, value)
+        if rates.fcp_st_rate is not None:
+            _element(icms, "vBCFCPST", _money(tax.st_base))
+            _element(icms, "pFCPST", format(rates.fcp_st_rate, ".4f"))
+            _element(icms, "vFCPST", _money(tax.fcp_st_amount))
     if rates.ipi_enquiry_code is not None:
         ipi = _element(parent, "IPI")
         _element(ipi, "cEnq", rates.ipi_enquiry_code)
         taxable = rates.ipi_rate is not None or rates.ipi_unit_amount is not None
         group_ipi = _element(ipi, "IPITrib" if taxable else "IPINT")
-        _element(group_ipi, "CST", "50" if taxable else rates.ipi_cst)
+        _element(group_ipi, "CST", (rates.ipi_cst or "50") if taxable else rates.ipi_cst)
         if rates.ipi_rate is not None:
             _element(group_ipi, "vBC", _money(tax.ipi_base))
             _element(group_ipi, "pIPI", format(rates.ipi_rate, ".4f"))
@@ -466,12 +472,26 @@ def _taxes(parent: etree._Element, outcome: object, origin: int, tax: NfeCalcula
         ("PIS", outcome.pis_cst, rates.pis_rate, tax.pis_base, tax.pis_amount),
         ("COFINS", outcome.cofins_cst, rates.cofins_rate, tax.cofins_base, tax.cofins_amount),
     ):
-        taxed = code in {"01", "02"}
-        group_el = _element(_element(parent, name), name + ("Aliq" if taxed else "NT"))
+        other_mode = rates.pis_other_mode if name == "PIS" else rates.cofins_other_mode
+        other = code in {"49", "99"}
+        taxed = code in {"01", "02"} or (other and other_mode == "percentage")
+        per_unit = code == "03" or (other and other_mode == "per_unit")
+        group_el = _element(
+            _element(parent, name),
+            name + ("Outr" if other else "Aliq" if taxed else "Qtde" if per_unit else "NT"),
+        )
         _element(group_el, "CST", code)
         if taxed:
             _element(group_el, "vBC", _money(base))
             _element(group_el, "p" + name, format(rate, ".4f"))
+            _element(group_el, "v" + name, _money(amount))
+        elif per_unit or other:
+            unit_amount = rates.pis_unit_amount if name == "PIS" else rates.cofins_unit_amount
+            quantity = tax.contribution_taxable_quantity if per_unit else Decimal("0.0000")
+            amount_per_unit = unit_amount if per_unit else Decimal("0.0000")
+            assert amount_per_unit is not None
+            _element(group_el, "qBCProd", format(quantity, ".4f"))
+            _element(group_el, "vAliqProd", format(amount_per_unit, ".4f"))
             _element(group_el, "v" + name, _money(amount))
     if rates.difal_destination_rate is not None:
         assert rates.difal_interstate_rate is not None
@@ -488,20 +508,30 @@ def _taxes(parent: etree._Element, outcome: object, origin: int, tax: NfeCalcula
             _element(uf, "vFCPUFDest", _money(tax.fcp_destination_amount))
         _element(uf, "vICMSUFDest", _money(tax.difal_amount))
         _element(uf, "vICMSUFRemet", "0.00")
-    if rates.rtc_uf_rate is not None:
-        if outcome.ibs_cbs_cst_code != "000":
+    if outcome.ibs_cbs_cst_code is not None:
+        if outcome.ibs_cbs_cst_code not in {"000", "200", "410"}:
             raise FiscalValidationError("RTC XML requires supported approved CST")
         rtc = _element(parent, "IBSCBS")
         _element(rtc, "CST", outcome.ibs_cbs_cst_code)
         _element(rtc, "cClassTrib", outcome.ibs_cbs_classification_code)
+        if outcome.ibs_cbs_cst_code == "410":
+            return  # CST 410 explicitly forbids gIBSCBS.
         rtc_group = _element(rtc, "gIBSCBS")
         _element(rtc_group, "vBC", _money(tax.rtc_base))
-        for name, rtc_rate, rtc_value, rate_tag, value_tag in (
-            ("gIBSUF", rates.rtc_uf_rate, tax.rtc_ibs_uf_amount, "pIBSUF", "vIBSUF"),
+        for name, rtc_rate, rtc_value, reduction, rate_tag, value_tag in (
+            (
+                "gIBSUF",
+                rates.rtc_uf_rate,
+                tax.rtc_ibs_uf_amount,
+                rates.rtc_uf_reduction_rate,
+                "pIBSUF",
+                "vIBSUF",
+            ),
             (
                 "gIBSMun",
                 rates.rtc_municipal_rate,
                 tax.rtc_ibs_municipal_amount,
+                rates.rtc_municipal_reduction_rate,
                 "pIBSMun",
                 "vIBSMun",
             ),
@@ -509,9 +539,35 @@ def _taxes(parent: etree._Element, outcome: object, origin: int, tax: NfeCalcula
             assert rtc_rate is not None
             part = _element(rtc_group, name)
             _element(part, rate_tag, format(rtc_rate, ".4f"))
+            if reduction is not None:
+                reduction_node = _element(part, "gRed")
+                _element(reduction_node, "pRedAliq", format(reduction, ".4f"))
+                _element(
+                    reduction_node,
+                    "pAliqEfet",
+                    format(
+                        (rtc_rate * (100 - reduction) / 100).quantize(
+                            Decimal("0.0001"), rounding="ROUND_HALF_UP"
+                        ),
+                        ".4f",
+                    ),
+                )
             _element(part, value_tag, _money(rtc_value))
         _element(rtc_group, "vIBS", _money(tax.rtc_ibs_uf_amount + tax.rtc_ibs_municipal_amount))
         cbs = _element(rtc_group, "gCBS")
         assert rates.rtc_cbs_rate is not None
         _element(cbs, "pCBS", format(rates.rtc_cbs_rate, ".4f"))
+        if rates.rtc_cbs_reduction_rate is not None:
+            reduction_node = _element(cbs, "gRed")
+            _element(reduction_node, "pRedAliq", format(rates.rtc_cbs_reduction_rate, ".4f"))
+            _element(
+                reduction_node,
+                "pAliqEfet",
+                format(
+                    (rates.rtc_cbs_rate * (100 - rates.rtc_cbs_reduction_rate) / 100).quantize(
+                        Decimal("0.0001"), rounding="ROUND_HALF_UP"
+                    ),
+                    ".4f",
+                ),
+            )
         _element(cbs, "vCBS", _money(tax.rtc_cbs_amount))

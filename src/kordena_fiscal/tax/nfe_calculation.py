@@ -43,6 +43,14 @@ class NfeRateParameters:
     rtc_cbs_rate: Decimal | None = None
     rtc_base_mode: str | None = None
     rtc_financial_mode: str | None = None
+    icms_reduction_rate: Decimal | None = None
+    pis_unit_amount: Decimal | None = None
+    cofins_unit_amount: Decimal | None = None
+    rtc_uf_reduction_rate: Decimal | None = None
+    rtc_municipal_reduction_rate: Decimal | None = None
+    rtc_cbs_reduction_rate: Decimal | None = None
+    pis_other_mode: str | None = None
+    cofins_other_mode: str | None = None
 
     def __post_init__(self) -> None:
         rates: tuple[Decimal, ...] = (self.icms_rate, self.pis_rate, self.cofins_rate)
@@ -58,6 +66,10 @@ class NfeRateParameters:
             self.rtc_uf_rate,
             self.rtc_municipal_rate,
             self.rtc_cbs_rate,
+            self.icms_reduction_rate,
+            self.rtc_uf_reduction_rate,
+            self.rtc_municipal_reduction_rate,
+            self.rtc_cbs_reduction_rate,
         ):
             if candidate is not None:
                 rates += (candidate,)
@@ -74,6 +86,17 @@ class NfeRateParameters:
             "net_less_icms",
         }:
             raise FiscalValidationError("explicit NF-e contribution base policy is required")
+        for name, value in (
+            ("PIS unit amount", self.pis_unit_amount),
+            ("COFINS unit amount", self.cofins_unit_amount),
+        ):
+            if value is not None and (
+                not isinstance(value, Decimal)
+                or not value.is_finite()
+                or not 0 <= value <= Decimal("9999999999.9999")
+                or value != value.quantize(Decimal("0.0001"))
+            ):
+                raise FiscalValidationError(f"{name} requires a valid 4-decimal amount")
         if self.ipi_rate is not None and self.ipi_unit_amount is not None:
             raise FiscalValidationError("IPI cannot mix ad valorem and per-unit modes")
         ipi_taxed = self.ipi_rate is not None or self.ipi_unit_amount is not None
@@ -84,8 +107,8 @@ class NfeRateParameters:
             expected_mode = "net_icms_excluded" if self.ipi_rate is not None else "per_taxable_unit"
             if self.ipi_calculation_mode != expected_mode:
                 raise FiscalValidationError("IPI calculation mode must be explicitly reviewed")
-            if self.ipi_cst not in {None, "50"}:
-                raise FiscalValidationError("taxed output IPI requires CST 50")
+            if self.ipi_cst not in {None, "50", "99"}:
+                raise FiscalValidationError("taxed output IPI requires CST 50 or 99")
         elif ipi_non_taxed:
             if self.ipi_enquiry_code is None or self.ipi_calculation_mode != "non_taxed":
                 raise FiscalValidationError(
@@ -152,13 +175,29 @@ class NfeRateParameters:
             self.rtc_base_mode,
             self.rtc_financial_mode,
         )
-        if any(v is not None for v in rtc_facts) and not all(v is not None for v in rtc_facts):
+        non_taxed = self.rtc_base_mode == "non_taxed"
+        if non_taxed:
+            if any(v is not None for v in rtc_facts[:3]) or self.rtc_financial_mode is None:
+                raise FiscalValidationError(
+                    "non-taxed RTC forbids rates and requires approved mode"
+                )
+        elif any(v is not None for v in rtc_facts) and not all(v is not None for v in rtc_facts):
             raise FiscalValidationError("RTC requires complete explicit 2026 calculation policy")
         if self.rtc_base_mode is not None and self.rtc_base_mode not in {
             "net",
             "net_less_icms_pis_cofins",
+            "non_taxed",
         }:
             raise FiscalValidationError("unsupported RTC base mode")
+        reductions = (
+            self.rtc_uf_reduction_rate,
+            self.rtc_municipal_reduction_rate,
+            self.rtc_cbs_reduction_rate,
+        )
+        if any(r is not None for r in reductions) and not all(r is not None for r in reductions):
+            raise FiscalValidationError("RTC reduced rates require three explicit reductions")
+        if any(r is not None and r <= 0 for r in reductions):
+            raise FiscalValidationError("RTC reduction must be positive")
         if self.rtc_financial_mode is not None and self.rtc_financial_mode != "informational_2026":
             raise FiscalValidationError("RTC financial mode requires a 2026 authoritative rule")
 
@@ -185,6 +224,7 @@ class NfeCalculatedTaxes:
     rtc_ibs_uf_amount: Decimal = Decimal("0.00")
     rtc_ibs_municipal_amount: Decimal = Decimal("0.00")
     rtc_cbs_amount: Decimal = Decimal("0.00")
+    contribution_taxable_quantity: Decimal = Decimal("0.0000")
 
 
 def calculate_nfe_line(
@@ -212,39 +252,119 @@ def calculate_nfe_line(
     )
     if any(v is not None for v in rtc_fields) and not all(v is not None for v in rtc_fields):
         raise FiscalValidationError("RTC classification, CST and table version are mandatory")
-    if (policy.rtc_uf_rate is None) != (outcome.ibs_cbs_cst_code is None):
+    rtc_cst = outcome.ibs_cbs_cst_code
+    if (rtc_cst is None) != (policy.rtc_financial_mode is None):
         raise FiscalValidationError("RTC tax rule and calculation parameters must agree")
-    if policy.rtc_uf_rate is not None:
+    reductions = (
+        policy.rtc_uf_reduction_rate,
+        policy.rtc_municipal_reduction_rate,
+        policy.rtc_cbs_reduction_rate,
+    )
+    if rtc_cst is not None:
         classification = outcome.ibs_cbs_classification_code
         if (
-            outcome.ibs_cbs_cst_code != "000"
+            rtc_cst not in {"000", "200", "410"}
             or classification is None
             or len(classification) != 6
             or not classification.isascii()
             or not classification.isdigit()
+            or not classification.startswith(rtc_cst)
         ):
-            raise FiscalValidationError("only explicitly classified RTC CST 000 is supported")
+            raise FiscalValidationError("RTC CST and classification must be approved and aligned")
+        if rtc_cst == "410":
+            if policy.rtc_base_mode != "non_taxed" or policy.rtc_uf_rate is not None:
+                raise FiscalValidationError("RTC CST 410 forbids standard taxation groups")
+            if any(r is not None for r in reductions):
+                raise FiscalValidationError("RTC CST 410 forbids tax reductions")
+        elif policy.rtc_uf_rate is None or policy.rtc_base_mode == "non_taxed":
+            raise FiscalValidationError("taxed RTC requires complete approved base and rates")
+        elif rtc_cst == "200" and not all(r is not None for r in reductions):
+            raise FiscalValidationError("RTC CST 200 requires explicit reductions")
+        elif rtc_cst == "000" and any(r is not None for r in reductions):
+            raise FiscalValidationError("RTC CST 000 forbids reduced-rate groups")
+    elif any(r is not None for r in reductions):
+        raise FiscalValidationError("RTC reductions require an approved classification")
     code = outcome.icms_code
     simple = regime in {TaxRegimeCode.SIMPLES_NACIONAL, TaxRegimeCode.MEI}
     if simple and code not in {"102", "103", "300", "400"}:
         raise FiscalValidationError("unsupported Simples NF-e calculation group")
-    if not simple and code not in {"00", "10", "40", "41", "50"}:
+    if not simple and code not in {"00", "10", "20", "30", "40", "41", "50", "70"}:
         raise FiscalValidationError("unsupported regular NF-e calculation group")
-    taxable_icms = code in {"00", "10"}
+    taxable_icms = code in {"00", "10", "20", "70"}
     if policy.fcp_rate is not None and not taxable_icms:
-        raise FiscalValidationError("FCP configuration requires supported ICMS 00/10 group")
-    if (policy.st_rate is None) != (code != "10"):
-        raise FiscalValidationError("ICMS 10 requires ST policy and other groups forbid it")
+        raise FiscalValidationError("FCP configuration requires taxable ICMS group")
+    if code in {"20", "70"}:
+        if policy.icms_reduction_rate is None or not 0 < policy.icms_reduction_rate < 100:
+            raise FiscalValidationError("reduced ICMS group requires approved reduction")
+    elif policy.icms_reduction_rate is not None:
+        raise FiscalValidationError("ICMS reduction belongs only to CST 20/70")
+    if (policy.st_rate is None) != (code not in {"10", "30", "70"}):
+        raise FiscalValidationError("ICMS 10/30/70 requires ST policy and other groups forbid it")
     if interstate_final_consumer and (code != "00" or policy.difal_destination_rate is None):
         raise FiscalValidationError("interstate final consumer requires approved DIFAL for ICMS 00")
     if not interstate_final_consumer and policy.difal_destination_rate is not None:
         raise FiscalValidationError("DIFAL policy requires interstate final consumer")
     if not taxable_icms and policy.icms_rate != 0:
         raise FiscalValidationError("non-taxed ICMS group conflicts with nonzero rate")
-    icms_base = net_amount if taxable_icms else Decimal("0.00")
+    icms_base = (
+        (net_amount * (100 - (policy.icms_reduction_rate or 0)) / 100).quantize(
+            _CENT, rounding=ROUND_HALF_UP
+        )
+        if taxable_icms
+        else Decimal("0.00")
+    )
     icms = (icms_base * policy.icms_rate / 100).quantize(_CENT, rounding=ROUND_HALF_UP)
 
-    def contribution(code: str, rate: Decimal, base_policy: str) -> tuple[Decimal, Decimal]:
+    contribution_quantity = Decimal("0.0000")
+    if (
+        outcome.pis_cst == "03"
+        or outcome.cofins_cst == "03"
+        or (outcome.pis_cst in {"49", "99"} and policy.pis_other_mode == "per_unit")
+        or (outcome.cofins_cst in {"49", "99"} and policy.cofins_other_mode == "per_unit")
+    ):
+        if (
+            not isinstance(taxable_quantity, Decimal)
+            or not taxable_quantity.is_finite()
+            or taxable_quantity <= 0
+            or taxable_quantity != taxable_quantity.quantize(Decimal("0.0001"))
+        ):
+            raise FiscalValidationError("contribution by quantity requires exact taxable quantity")
+        contribution_quantity = taxable_quantity
+
+    def contribution(
+        code: str,
+        rate: Decimal,
+        base_policy: str,
+        unit_amount: Decimal | None,
+        other_mode: str | None,
+    ) -> tuple[Decimal, Decimal]:
+        if code in {"49", "99"}:
+            if other_mode not in {"zero", "percentage", "per_unit"}:
+                raise FiscalValidationError("other contributions require explicit calculation mode")
+            if other_mode == "zero":
+                if unit_amount is not None or rate != 0:
+                    raise FiscalValidationError("zero other contribution forbids nonzero tax")
+                return Decimal("0.00"), Decimal("0.00")
+            if other_mode == "percentage":
+                if unit_amount is not None:
+                    raise FiscalValidationError("other percentage contribution forbids unit amount")
+                base = net_amount - icms if base_policy == "net_less_icms" else net_amount
+                return base, (base * rate / 100).quantize(_CENT, rounding=ROUND_HALF_UP)
+            if unit_amount is None or rate != 0:
+                raise FiscalValidationError("other per-unit contribution requires exclusive amount")
+            return Decimal("0.00"), (contribution_quantity * unit_amount).quantize(
+                _CENT, rounding=ROUND_HALF_UP
+            )
+        if other_mode is not None:
+            raise FiscalValidationError("other calculation mode requires CST 49 or 99")
+        if code == "03":
+            if unit_amount is None or rate != 0:
+                raise FiscalValidationError("CST 03 requires exclusive approved unit amount")
+            return Decimal("0.00"), (contribution_quantity * unit_amount).quantize(
+                _CENT, rounding=ROUND_HALF_UP
+            )
+        if unit_amount is not None:
+            raise FiscalValidationError("unit contribution requires CST 03 or other per-unit mode")
         if code in {"01", "02"}:
             base = net_amount - icms if base_policy == "net_less_icms" else net_amount
             return base, (base * rate / 100).quantize(_CENT, rounding=ROUND_HALF_UP)
@@ -254,8 +374,20 @@ def calculate_nfe_line(
             raise FiscalValidationError("non-taxed contribution group conflicts with nonzero rate")
         return Decimal("0.00"), Decimal("0.00")
 
-    pis_base, pis = contribution(outcome.pis_cst, policy.pis_rate, policy.pis_base)
-    cofins_base, cofins = contribution(outcome.cofins_cst, policy.cofins_rate, policy.cofins_base)
+    pis_base, pis = contribution(
+        outcome.pis_cst,
+        policy.pis_rate,
+        policy.pis_base,
+        policy.pis_unit_amount,
+        policy.pis_other_mode,
+    )
+    cofins_base, cofins = contribution(
+        outcome.cofins_cst,
+        policy.cofins_rate,
+        policy.cofins_base,
+        policy.cofins_unit_amount,
+        policy.cofins_other_mode,
+    )
     fcp = (icms_base * (policy.fcp_rate or 0) / 100).quantize(_CENT, rounding=ROUND_HALF_UP)
     ipi = (net_amount * (policy.ipi_rate or 0) / 100).quantize(_CENT, rounding=ROUND_HALF_UP)
     if policy.ipi_unit_amount is not None:
@@ -301,11 +433,23 @@ def calculate_nfe_line(
         if rtc_base < 0:
             raise FiscalValidationError("RTC base became negative under approved exclusions")
         assert policy.rtc_municipal_rate is not None and policy.rtc_cbs_rate is not None
-        rtc_ibs_uf = (rtc_base * policy.rtc_uf_rate / 100).quantize(_CENT, rounding=ROUND_HALF_UP)
-        rtc_ibs_mun = (rtc_base * policy.rtc_municipal_rate / 100).quantize(
-            _CENT, rounding=ROUND_HALF_UP
-        )
-        rtc_cbs = (rtc_base * policy.rtc_cbs_rate / 100).quantize(_CENT, rounding=ROUND_HALF_UP)
+
+        def reduced_rate(rate: Decimal, reduction: Decimal | None) -> Decimal:
+            return (rate * (100 - (reduction or 0)) / 100).quantize(
+                Decimal("0.0001"), rounding=ROUND_HALF_UP
+            )
+
+        rtc_ibs_uf = (
+            rtc_base * reduced_rate(policy.rtc_uf_rate, policy.rtc_uf_reduction_rate) / 100
+        ).quantize(_CENT, rounding=ROUND_HALF_UP)
+        rtc_ibs_mun = (
+            rtc_base
+            * reduced_rate(policy.rtc_municipal_rate, policy.rtc_municipal_reduction_rate)
+            / 100
+        ).quantize(_CENT, rounding=ROUND_HALF_UP)
+        rtc_cbs = (
+            rtc_base * reduced_rate(policy.rtc_cbs_rate, policy.rtc_cbs_reduction_rate) / 100
+        ).quantize(_CENT, rounding=ROUND_HALF_UP)
     return NfeCalculatedTaxes(
         icms_base=icms_base,
         icms_amount=icms,
@@ -331,4 +475,5 @@ def calculate_nfe_line(
         rtc_ibs_uf_amount=rtc_ibs_uf,
         rtc_ibs_municipal_amount=rtc_ibs_mun,
         rtc_cbs_amount=rtc_cbs,
+        contribution_taxable_quantity=contribution_quantity,
     )
