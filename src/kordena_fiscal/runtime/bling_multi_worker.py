@@ -97,6 +97,16 @@ class BlingMultiInstallationWorkerComposition:
             raise RuntimeConfigurationError("Bling installation no longer connected")
 
         local = dict(self._source)
+        # No global single-company status IDs, token or fiscal policy may
+        # silently bleed into a different installation's work queue.
+        for key in (
+            "NFCORE_BLING_ACCESS_TOKEN_FILE",
+            "NFCORE_BLING_AUTHORIZED_STATUS_ID",
+            "NFCORE_BLING_REJECTED_STATUS_ID",
+            "NFCORE_BLING_FISCAL_POLICY_FILE",
+            "NFCORE_BLING_FISCAL_POLICY_SHA256",
+        ):
+            local.pop(key, None)
         local.update({
             "NFCORE_BLING_COMPANY_ID": view.company_id,
             "NFCORE_BLING_TENANT_ID": host.tenant_id,
@@ -104,8 +114,6 @@ class BlingMultiInstallationWorkerComposition:
             "NFCORE_BLING_ENVIRONMENT": view.environment.value,
         })
         config = self._settings.get(scope, view.installation_id)
-        # The only possible policy path is an opaque, bounded installation ID
-        # beneath a deployment-owned read-only root. No path from user JSON.
         if config is not None:
             if (
                 config.authorized_status_id is not None
@@ -117,16 +125,22 @@ class BlingMultiInstallationWorkerComposition:
                 local["NFCORE_BLING_REJECTED_STATUS_ID"] = str(config.rejected_status_id)
             if config.fiscal_policy_sha256:
                 policy_root = self._source.get("NFCORE_BLING_POLICY_MOUNT", "")
-                if not policy_root.startswith("/run/nfcore/bling/policies"):
+                if policy_root != "/run/nfcore/bling/policies":
                     raise RuntimeConfigurationError("Bling fiscal policy mount is untrusted")
                 local["NFCORE_BLING_FISCAL_POLICY_FILE"] = (
-                    policy_root.rstrip("/") + "/" + view.installation_id + ".json"
+                    policy_root + "/" + view.installation_id + ".json"
                 )
                 local["NFCORE_BLING_FISCAL_POLICY_SHA256"] = config.fiscal_policy_sha256
-        local.pop("NFCORE_BLING_ACCESS_TOKEN_FILE", None)
+
+        def validate_installation() -> None:
+            fresh = self._installations.get_for_scope(scope, view.installation_id)
+            if fresh is None or fresh.state is not BlingInstallationState.CONNECTED:
+                raise RuntimeConfigurationError("Bling installation authorization revoked")
+
         handlers = build_bling_worker(
             self._db, local,
             token_provider=lambda: self._oauth.access_token(scope, view.installation_id),
+            installation_validator=validate_installation,
         )
         return build_production_worker_runtime(
             uow_factory=self._db,
@@ -141,8 +155,10 @@ class BlingMultiInstallationWorkerComposition:
         claimed = succeeded = retry_wait = dead_letter = 0
         failures = 0
         after = ""
+        discovered = 0
         while True:
             records = self._installations.scan_connected(after=after, limit=100)
+            discovered += len(records)
             if not records:
                 break
             for view in records:
@@ -158,7 +174,7 @@ class BlingMultiInstallationWorkerComposition:
             after = records[-1].installation_id
             if len(records) < 100:
                 break
-        if failures:
+        if failures or not discovered:
             self._observer.cycle_failed(
                 error_type="BlingScopeUnavailable", elapsed_seconds=0.0,
             )
