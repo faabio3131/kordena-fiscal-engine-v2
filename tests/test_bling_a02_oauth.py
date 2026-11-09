@@ -22,7 +22,6 @@ from kordena_fiscal.domain import (
 )
 from kordena_fiscal.integrations.bling_contracts import BlingInstallationState
 from kordena_fiscal.persistence.bling_installations import BlingInstallationRepository
-from kordena_fiscal.persistence.ports import PersistenceConflictError
 from kordena_fiscal.persistence.sqlite import SqliteFiscalDatabase
 from kordena_fiscal.runtime.bling_oauth_service import (
     BlingOAuthService,
@@ -126,7 +125,10 @@ def test_state_is_one_use_and_bound_to_session_and_company(tmp_path: Path) -> No
     )
     assert client.exchange_calls == 1
     assert seen == [("access-one", "expected-company")]
-    assert store.get_for_scope(scope, record.installation_id).state is BlingInstallationState.CONNECTED
+    assert (
+        store.get_for_scope(scope, record.installation_id).state
+        is BlingInstallationState.CONNECTED
+    )
     assert svc.access_token(scope, record.installation_id) == "access-one"
     assert svc.webhook_secret(record.installation_id) == b"synthetic-app-secret-123456"
     with pytest.raises(BlingOAuthUnavailable):
@@ -146,7 +148,9 @@ def test_state_is_one_use_and_bound_to_session_and_company(tmp_path: Path) -> No
 
 def test_refresh_uses_one_lease_and_rotates_without_leaking(tmp_path: Path) -> None:
     db, _, record, scope, client, svc, _ = installation(tmp_path)
-    state = svc.begin(scope, record.installation_id, actor_id="a", session_id="s").split("state=")[1]
+    state = svc.begin(
+        scope, record.installation_id, actor_id="a", session_id="s"
+    ).split("state=")[1]
     svc.complete(scope, state=state, code="approved", actor_id="a", session_id="s")
     past = (datetime.now(UTC) - timedelta(seconds=20)).isoformat()
     with db.connection() as connection:
@@ -163,7 +167,9 @@ def test_refresh_uses_one_lease_and_rotates_without_leaking(tmp_path: Path) -> N
 
 def test_concurrent_refresh_lease_fails_closed(tmp_path: Path) -> None:
     db, _, record, scope, client, svc, _ = installation(tmp_path)
-    state = svc.begin(scope, record.installation_id, actor_id="a", session_id="s").split("state=")[1]
+    state = svc.begin(
+        scope, record.installation_id, actor_id="a", session_id="s"
+    ).split("state=")[1]
     svc.complete(scope, state=state, code="approved", actor_id="a", session_id="s")
     with db.connection() as connection:
         connection.execute(
@@ -185,7 +191,9 @@ def test_concurrent_refresh_lease_fails_closed(tmp_path: Path) -> None:
 
 def test_refresh_invalid_grant_sets_needs_reauth(tmp_path: Path) -> None:
     db, store, record, scope, client, svc, _ = installation(tmp_path)
-    state = svc.begin(scope, record.installation_id, actor_id="a", session_id="s").split("state=")[1]
+    state = svc.begin(
+        scope, record.installation_id, actor_id="a", session_id="s"
+    ).split("state=")[1]
     svc.complete(scope, state=state, code="approved", actor_id="a", session_id="s")
     with db.connection() as connection:
         connection.execute(
@@ -197,7 +205,10 @@ def test_refresh_invalid_grant_sets_needs_reauth(tmp_path: Path) -> None:
     client.fail_refresh = BlingOAuthError(retryable=False, needs_reauth=True)
     with pytest.raises(BlingOAuthUnavailable):
         svc.access_token(scope, record.installation_id)
-    assert store.get_for_scope(scope, record.installation_id).state is BlingInstallationState.NEEDS_REAUTH
+    assert (
+        store.get_for_scope(scope, record.installation_id).state
+        is BlingInstallationState.NEEDS_REAUTH
+    )
 
 
 def test_oauth_transport_validates_access_and_expires() -> None:
