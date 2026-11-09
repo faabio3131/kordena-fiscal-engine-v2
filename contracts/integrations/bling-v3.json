@@ -1,0 +1,65 @@
+{
+  "contract_version": 2,
+  "provider": "bling",
+  "official_openapi_url": "https://developer.bling.com.br/build/assets/openapi-CR5QY_N1.json",
+  "official_openapi_sha256": "acadd51a045644fd8f87577f3f89cfdfaef9449c8372d93b78173f35536486bb",
+  "verified_at": "2026-11-09",
+  "base_url": "https://api.bling.com.br/Api/v3",
+  "operations": {
+    "fetch_order": {
+      "method": "GET",
+      "path": "/pedidos/vendas/{idPedidoVenda}",
+      "success": 200
+    },
+    "set_status": {
+      "method": "PATCH",
+      "path": "/pedidos/vendas/{idPedidoVenda}/situacoes/{idSituacao}",
+      "success": 204
+    },
+    "verify_oauth_company": {
+      "method": "GET",
+      "path": "/empresas/me/dados-basicos",
+      "success": 200
+    }
+  },
+  "ingress": {
+    "path": "/webhooks/bling",
+    "method": "POST",
+    "success": 202,
+    "signature_header": "X-Bling-Signature-256",
+    "signature": "sha256=<hex HMAC-SHA256 of raw body using client secret>",
+    "version": "v1",
+    "events": [
+      "order.created",
+      "order.updated",
+      "order.deleted"
+    ],
+    "max_body_bytes": 1048576,
+    "company_id_type": "string",
+    "order_id_type": "positive integer"
+  },
+  "fiscal_handoff": {
+    "document_model": "55",
+    "prepared_document_required": false,
+    "snapshot_approval_required": true,
+    "supported_environment": "homologation",
+    "automatic_order_to_signed_document": false,
+    "reviewed_order_to_signed_document": true,
+    "preparation_path": "/v1/portal/integrations/bling/orders/{order_id}/prepare",
+    "preparation_authentication": "portal session + CSRF + integration.manage + document.issue",
+    "preparation_body": [
+      "snapshot_sha256",
+      "policy_sha256",
+      "issued_at",
+      "recipient"
+    ],
+    "policy_example": "bling-fiscal-policy.example.json"
+  },
+  "result": {
+    "query_path": "/v1/integrations/bling/orders/{order_id}",
+    "query_authentication": "canonical S2S fiscal.query",
+    "signed_webhook_event": "bling.fiscal_result",
+    "provider_status_mapping": "installation configuration",
+    "provider_xml_import": false
+  }
+}

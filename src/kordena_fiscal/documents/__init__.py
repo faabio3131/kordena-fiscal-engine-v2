@@ -7,6 +7,7 @@ from .models import (
     FiscalPaymentSnapshot,
     PaymentMethodKind,
 )
+from .recipient import FiscalRecipientSnapshot
 from .serialization import canonical_sha256, to_canonical_json, to_canonical_payload
 
 __all__ = [
@@ -14,6 +15,7 @@ __all__ = [
     "FiscalDocumentTotals",
     "FiscalLineSnapshot",
     "FiscalPaymentSnapshot",
+    "FiscalRecipientSnapshot",
     "PaymentMethodKind",
     "canonical_sha256",
     "to_canonical_json",
