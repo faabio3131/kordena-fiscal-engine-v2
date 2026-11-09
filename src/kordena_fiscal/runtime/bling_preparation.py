@@ -52,6 +52,8 @@ def _unique(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 
 def _rule(data: Mapping[str, Any]) -> TaxRule:
+    if not isinstance(data, dict):
+        raise FiscalValidationError("fiscal rule must be an object")
     allowed = {
         "rule_id",
         "version",
@@ -66,7 +68,21 @@ def _rule(data: Mapping[str, Any]) -> TaxRule:
         raise FiscalValidationError("invalid or unknown fiscal rule fields")
     selector = data["selector"]
     outcome = data["outcome"]
+    if not isinstance(selector, dict) or not isinstance(outcome, dict):
+        raise FiscalValidationError("rule selector and outcome must be objects")
+    if any(
+        not isinstance(data.get(key), str)
+        for key in ("rule_id", "source_normative", "effective_from")
+    ):
+        raise FiscalValidationError("rule identity, source and validity must be explicit")
+    if any(
+        not isinstance(outcome.get(key), str)
+        for key in ("cfop", "icms_code", "pis_cst", "cofins_cst")
+    ):
+        raise FiscalValidationError("rule fiscal codes must be strings")
     rates = outcome["nfe_rates"]
+    if not isinstance(rates, dict):
+        raise FiscalValidationError("rate parameters must be an object")
     if set(selector) != {"state_code", "tax_regime", "recipient_profile", "ncm_prefix"}:
         raise FiscalValidationError("invalid fiscal rule selector fields")
     if set(outcome) - {
@@ -117,6 +133,26 @@ def _rule(data: Mapping[str, Any]) -> TaxRule:
 
 
 def recipient_from_review(data: Mapping[str, Any]) -> FiscalRecipientSnapshot:
+    if not isinstance(data, dict):
+        raise FiscalValidationError("recipient review must be an object")
+    required_text = {
+        "document",
+        "name",
+        "street",
+        "number",
+        "district",
+        "municipality_name",
+        "municipality_ibge_code",
+        "state",
+        "postal_code",
+    }
+    if any(not isinstance(data.get(key), str) for key in required_text):
+        raise FiscalValidationError("recipient review requires complete string facts")
+    if any(
+        data.get(key) is not None and not isinstance(data[key], str)
+        for key in ("complement", "state_registration")
+    ):
+        raise FiscalValidationError("invalid optional recipient fact")
     allowed = {
         "document",
         "name",
@@ -243,7 +279,10 @@ class BlingSalePreparer:
                 )
             recipient = recipient_from_review(payload["recipient"])
             raw = orders.snapshot(order_id)["raw"]
-            provider_document = raw.get("contato", {}).get("numeroDocumento")
+            contact = raw.get("contato", {})
+            if not isinstance(contact, dict):
+                raise FiscalValidationError("Bling contact is invalid")
+            provider_document = contact.get("numeroDocumento")
             if (
                 provider_document
                 and re.sub(r"[.\-/]", "", provider_document) != recipient.document.value

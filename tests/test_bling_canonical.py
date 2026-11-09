@@ -639,3 +639,92 @@ def test_snapshot_conflict_rolls_back_signed_preparation_and_number(
         doc.scope, doc.document_id
     )
     assert request.access_key.value[25:34] == "000000001"
+
+
+def test_concurrent_native_preparation_has_one_number_document_and_job(
+    mapping, signing_material, preparation_database
+):
+    from concurrent.futures import ThreadPoolExecutor
+    from threading import Barrier
+
+    from kordena_fiscal.application.bling_orders import ISSUE_ORDER, BlingOrders
+    from kordena_fiscal.application.service import FiscalApplicationService
+    from kordena_fiscal.issuance.nfe_builder import NfeSaleOptions
+
+    database = preparation_database
+    document = sale_document(mapping)
+    orders = BlingOrders(database, document.scope, "company")
+    row = orders.stage(123, order(), event_id="concurrent-native", now=NOW)
+
+    barrier = Barrier(4)
+
+    def prepare(_):
+        barrier.wait(timeout=10)
+        return orders.prepare_sale(
+            123,
+            document,
+            snapshot_sha256=row["snapshot_sha256"],
+            actor_id="actor",
+            options=NfeSaleOptions("VENDA", 1, 9),
+            series=1,
+            certificate=signing_material,
+            now=datetime.now(UTC),
+        )
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        results = list(pool.map(prepare, range(4)))
+    assert results == [document.document_id] * 4
+    prepared = FiscalApplicationService(database).load_prepared_document_authorization(
+        document.scope, document.document_id
+    )
+    assert prepared.access_key.value[25:34] == "000000001"
+    with database() as uow:
+        entries = uow.archive.list_for_document(document.scope, document.document_id)
+        assert len(entries) == 2
+        jobs = uow.outbox.list_for_scope(document.scope, operations=frozenset({ISSUE_ORDER}))
+        assert len(jobs) == 1
+
+
+def test_policy_pin_scope_and_versions_are_enforced(mapping, tmp_path):
+    import hashlib
+    import json
+    from pathlib import Path
+
+    from kordena_fiscal.application.bling_orders import BlingOrders
+    from kordena_fiscal.persistence import SqliteFiscalDatabase
+    from kordena_fiscal.runtime.bling_preparation import BlingSalePreparer
+
+    database = SqliteFiscalDatabase(tmp_path / "policy.sqlite")
+    database.initialize()
+    orders = BlingOrders(database, mapping["issuer"].scope, "company")
+    example = json.loads(
+        Path("contracts/integrations/bling-fiscal-policy.example.json").read_text()
+    )
+    example["company_id"] = "company"
+    path = tmp_path / "policy.json"
+
+    def configured(policy):
+        path.write_text(json.dumps(policy))
+        return BlingSalePreparer(
+            {
+                "NFCORE_BLING_FISCAL_POLICY_FILE": str(path),
+                "NFCORE_BLING_FISCAL_POLICY_SHA256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            }
+        )
+
+    preparer = configured(example)
+    assert preparer.policy(orders)[0]["version"] == 1
+    path.write_text(path.read_text() + " ")
+    with pytest.raises(FiscalValidationError):
+        preparer.policy(orders)
+    for changes in (
+        {"tenant_id": "other"},
+        {"environment": "production"},
+        {"version": True},
+        {"issuer_profile_version": True},
+        {"schema_version": True},
+        {"unknown": "field"},
+        {"products": {"SKU": {"product_id": "p1", "version": True}}},
+    ):
+        with pytest.raises(FiscalValidationError):
+            configured({**example, **changes}).policy(orders)
