@@ -1,0 +1,8 @@
+/* Reuse the canonical Portal identity and authentication layout. */
+.login-card { max-width: 540px; width: 100%; }
+#checkout-fields { border: 0; padding: 0; margin: 0; display: grid; gap: 16px; min-width: 0; }
+#checkout-fields label { display: grid; gap: 8px; }
+#checkout-fields input, #checkout-fields select { width: 100%; min-width: 0; }
+#checkout-status, #checkout-result, #checkout-offer { overflow-wrap: anywhere; }
+#checkout-result:empty { display: none; }
+#checkout-fields:disabled { opacity: .65; }
