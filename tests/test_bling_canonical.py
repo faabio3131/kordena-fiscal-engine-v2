@@ -561,8 +561,9 @@ def test_atomic_preparation_replays_without_certificate_and_rolls_back_number(
         assert len(uow.archive.list_for_document(document.scope, result)) == 2
 
 
+@pytest.mark.parametrize("ipi_enabled", [False, True])
 def test_configured_native_preparer_queues_signed_document_atomically(
-    mapping, signing_material, tmp_path, monkeypatch, preparation_database
+    mapping, signing_material, tmp_path, monkeypatch, preparation_database, ipi_enabled
 ):
     import base64
     import hashlib
@@ -577,7 +578,7 @@ def test_configured_native_preparer_queues_signed_document_atomically(
 
     database = preparation_database
     _db, application, orders = create_installation(database)
-    sale_document(mapping)
+    sale_document(mapping, normal=ipi_enabled)
     mapping["products_by_code"]["SKU"] = replace(
         mapping["products_by_code"]["SKU"], taxable_unit=FiscalUnitCode("KG")
     )
@@ -596,8 +597,11 @@ def test_configured_native_preparer_queues_signed_document_atomically(
     raw = {
         **order(),
         "situacao": {"id": 1},
-        "parcelas": [{"valor": "1.00", "formaPagamento": {"id": 7}}],
+        "parcelas": [{"valor": "1.10" if ipi_enabled else "1.00", "formaPagamento": {"id": 7}}],
     }
+    if ipi_enabled:
+        raw["total"] = "1.10"
+        raw["itens"][0]["aliquotaIPI"] = "10"
     row = orders.stage(123, raw, event_id="native-test", now=NOW)
     policy = {
         "schema_version": 1,
@@ -627,13 +631,13 @@ def test_configured_native_preparer_queues_signed_document_atomically(
                 "priority": 1,
                 "selector": {
                     "state_code": "SP",
-                    "tax_regime": 1,
+                    "tax_regime": 3 if ipi_enabled else 1,
                     "recipient_profile": "consumer_final",
                     "ncm_prefix": "2106",
                 },
                 "outcome": {
                     "cfop": "5102",
-                    "icms_code": "102",
+                    "icms_code": "00" if ipi_enabled else "102",
                     "pis_cst": "07",
                     "cofins_cst": "07",
                     "nfe_rates": {
@@ -647,6 +651,14 @@ def test_configured_native_preparer_queues_signed_document_atomically(
             }
         ],
     }
+    if ipi_enabled:
+        policy["rules"][0]["outcome"]["nfe_rates"].update(
+            {
+                "ipi_rate": "10",
+                "ipi_enquiry_code": "999",
+                "ipi_calculation_mode": "net_icms_excluded",
+            }
+        )
     path = tmp_path / "policy.json"
     path.write_text(json.dumps(policy))
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
