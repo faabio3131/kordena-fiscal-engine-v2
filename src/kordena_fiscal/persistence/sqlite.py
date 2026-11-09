@@ -18,6 +18,11 @@ from .bling_installation_schema import (
     BLING_INSTALLATION_SCHEMA,
     BLING_INSTALLATION_VERSION,
 )
+from .bling_runtime_schema import (
+    BLING_RUNTIME_NAME,
+    BLING_RUNTIME_SCHEMA,
+    BLING_RUNTIME_VERSION,
+)
 from .cognitive_quota_schema import (
     COGNITIVE_QUOTA_NAME,
     COGNITIVE_QUOTA_SCHEMA,
@@ -819,6 +824,16 @@ class SqliteFiscalDatabase:
                      datetime.now().astimezone().isoformat()),
                 )
                 new_versions.append(BLING_INSTALLATION_VERSION)
+            if BLING_RUNTIME_VERSION not in applied:
+                for statement in BLING_RUNTIME_SCHEMA:
+                    connection.execute(statement)
+                connection.execute(
+                    "INSERT INTO fm_schema_migrations (version, name, applied_at) "
+                    "VALUES (?, ?, ?)",
+                    (BLING_RUNTIME_VERSION, BLING_RUNTIME_NAME,
+                     datetime.now().astimezone().isoformat()),
+                )
+                new_versions.append(BLING_RUNTIME_VERSION)
             connection.commit()
             return tuple(new_versions)
         except Exception:
