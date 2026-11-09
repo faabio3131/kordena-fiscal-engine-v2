@@ -157,6 +157,9 @@ def _line(line: FiscalLineSnapshot) -> dict[str, Any]:
 
     if line.freight_amount.amount:
         payload["freight_amount"] = _money(line.freight_amount)
+    if line.taxable_quantity is not None and line.taxable_unit_price is not None:
+        payload["taxable_quantity"] = _decimal_text(line.taxable_quantity)
+        payload["taxable_unit_price"] = _decimal_text(line.taxable_unit_price)
     return payload
 
 

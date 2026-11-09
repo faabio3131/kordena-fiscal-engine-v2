@@ -72,6 +72,8 @@ class FiscalLineSnapshot:
     surcharge_amount: Money = Money.zero()
     restaurant_decision: RestaurantSupplyDecision | None = None
     freight_amount: Money = Money.zero()
+    taxable_quantity: Decimal | None = None
+    taxable_unit_price: Decimal | None = None
 
     def __post_init__(self) -> None:
         if self.line_number < 1:
@@ -82,6 +84,17 @@ class FiscalLineSnapshot:
             raise FiscalValidationError("quantity must be a finite Decimal")
         if self.quantity <= 0:
             raise FiscalValidationError("quantity must be greater than zero")
+        if (self.taxable_quantity is None) != (self.taxable_unit_price is None):
+            raise FiscalValidationError("taxable quantity and unit price must be supplied together")
+        for value in (self.taxable_quantity, self.taxable_unit_price):
+            if value is not None and (
+                not isinstance(value, Decimal) or not value.is_finite() or value < 0
+            ):
+                raise FiscalValidationError(
+                    "taxable conversion values must be non-negative decimals"
+                )
+        if self.taxable_quantity is not None and self.taxable_quantity == 0:
+            raise FiscalValidationError("taxable quantity must be positive")
         monetary_values = (
             self.unit_price,
             self.gross_amount,

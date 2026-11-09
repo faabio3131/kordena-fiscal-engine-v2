@@ -250,11 +250,25 @@ class BlingSalePreparer:
             for binding in policy["products"].values():
                 if (
                     not isinstance(binding, dict)
-                    or set(binding) != {"product_id", "version"}
+                    or set(binding)
+                    not in (
+                        {"product_id", "version"},
+                        {"product_id", "version", "taxable_factor"},
+                    )
                     or type(binding["version"]) is not int
                     or binding["version"] < 1
                     or not isinstance(binding["product_id"], str)
                     or not binding["product_id"]
+                    or (
+                        "taxable_factor" in binding
+                        and (
+                            not isinstance(binding["taxable_factor"], str)
+                            or not re.fullmatch(
+                                r"[0-9]{1,12}(?:\.[0-9]{1,10})?", binding["taxable_factor"]
+                            )
+                            or Decimal(binding["taxable_factor"]) <= 0
+                        )
+                    )
                 ):
                     raise FiscalValidationError("invalid product profile binding")
             return policy, expected, raw
@@ -334,6 +348,11 @@ class BlingSalePreparer:
                 products_by_code=products,
                 rules=tuple(_rule(r) for r in policy["rules"]),
                 payments=payments,
+                taxable_factors={
+                    code: Decimal(str(binding["taxable_factor"]))
+                    for code, binding in policy["products"].items()
+                    if "taxable_factor" in binding
+                },
             )
             # A version is immutable even if the deployment file is replaced later.
             policy_key = (

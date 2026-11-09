@@ -199,8 +199,23 @@ def build_nfe_sale(
             line.unit_price.amount != line.unit_price.amount.quantize(Decimal("0.0000000001"))
         ):
             raise FiscalValidationError("line precision exceeds supported XML precision")
-        if product.commercial_unit != product.taxable_unit or product.gtin is None:
-            raise FiscalValidationError("taxable unit conversion and GTIN must be explicit")
+        if product.gtin is None:
+            raise FiscalValidationError("GTIN must be explicit")
+        taxable_quantity = line.taxable_quantity
+        taxable_price = line.taxable_unit_price
+        if taxable_quantity is None or taxable_price is None:
+            if product.commercial_unit != product.taxable_unit:
+                raise FiscalValidationError("taxable unit conversion must be explicit")
+            taxable_quantity, taxable_price = line.quantity, line.unit_price.amount
+        if (
+            taxable_quantity != taxable_quantity.quantize(Decimal("0.0001"))
+            or taxable_price != taxable_price.quantize(Decimal("0.0000000001"))
+            or (taxable_quantity * taxable_price).quantize(
+                Decimal("0.01"), rounding="ROUND_HALF_UP"
+            )
+            != line.gross_amount.amount
+        ):
+            raise FiscalValidationError("taxable unit conversion does not reconcile")
         if line.tax_decision.outcome.cfop[0] != ("5" if destination == "1" else "6"):
             raise FiscalValidationError("CFOP differs from destination jurisdiction")
         det = _element(info, "det")
@@ -223,8 +238,8 @@ def build_nfe_sale(
             ("vProd", _money(line.gross_amount.amount)),
             ("cEANTrib", product.gtin.value),
             ("uTrib", product.taxable_unit.value),
-            ("qTrib", format(line.quantity, ".4f")),
-            ("vUnTrib", format(line.unit_price.amount, ".10f")),
+            ("qTrib", format(taxable_quantity, ".4f")),
+            ("vUnTrib", format(taxable_price, ".10f")),
             ("vFrete", _money(line.freight_amount.amount)),
             ("vDesc", _money(line.discount_amount.amount)),
             ("vOutro", _money(line.surcharge_amount.amount - line.freight_amount.amount)),

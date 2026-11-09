@@ -134,13 +134,20 @@ PIS/COFINS 01/02/04/06/07/08/09. Alíquotas e bases são parâmetros explícitos
 regra vencedora, com fonte normativa e vigência. Não existem alíquotas legais padrão.
 A configuração sintética de exemplo NÃO é recomendação tributária.
 
-IPI, ST, DIFAL, FCP, RTC, conversão de unidades e cartões integrados exigem seus
+IPI, ST, DIFAL, FCP, RTC e cartões integrados exigem seus
 próprios dados e cálculo canônico; esta preparação não os implementa. Venda interestadual a consumidor final e metadados especiais de benefício/RTC
 são bloqueados explicitamente neste preparador. Não habilitar uma política para
 operações que exijam grupos tributários fora da cobertura. Grupos não suportados são bloqueados;
 a ausência de metadados não constitui prova de dispensa tributária. A cobertura
 integral desses cenários continua uma pendência interna fiscal, não um certificado
 ou cliente ausente. Produção fiscal não é ativada por esta entrega.
+
+Para um produto cuja unidade tributável difere da comercial, a vinculação de
+produto da política pode incluir `taxable_factor` como decimal positivo em texto.
+O fator é a quantidade tributável por unidade comercial; por exemplo, `"2"`
+converte 3 unidades comerciais em 6 unidades tributáveis. O fator é versionado e
+arquivado com a política, e quantidade e valor tributáveis são fixados no snapshot.
+Precisão incompatível ou valores que não reconciliem bloqueiam a preparação.
 
 ### Configuração fiscal reproduzível
 

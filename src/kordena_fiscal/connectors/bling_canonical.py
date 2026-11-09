@@ -87,6 +87,7 @@ def map_bling_document(
     products_by_code: Mapping[str, FiscalProductProfile],
     rules: Sequence[TaxRule],
     payments: tuple[FiscalPaymentSnapshot, ...],
+    taxable_factors: Mapping[str, Decimal] | None = None,
 ) -> CanonicalFiscalDocument:
     """Resolve each line from scoped profiles/rules and reconcile commercial totals.
 
@@ -168,6 +169,25 @@ def map_bling_document(
         )
         if not decision.outcome.cfop.startswith(expected_cfop_prefix):
             raise FiscalValidationError("resolved CFOP conflicts with recipient jurisdiction")
+        taxable_quantity = taxable_price = None
+        factor = (taxable_factors or {}).get(code.strip())
+        if factor is not None:
+            if not isinstance(factor, Decimal) or not factor.is_finite() or factor <= 0:
+                raise FiscalValidationError("taxable conversion factor must be positive")
+            with localcontext() as context:
+                context.prec = 48
+                taxable_quantity = quantity * factor
+                if taxable_quantity > _LIMIT or taxable_quantity != taxable_quantity.quantize(
+                    Decimal("0.0001")
+                ):
+                    raise FiscalValidationError("taxable quantity exceeds XML precision")
+                taxable_price = (unit_value / factor).quantize(
+                    Decimal("0.0000000001"), rounding=ROUND_HALF_UP
+                )
+                if (taxable_quantity * taxable_price).quantize(
+                    _CENT, rounding=ROUND_HALF_UP
+                ) != gross:
+                    raise FiscalValidationError("taxable conversion does not reconcile")
         lines.append(
             FiscalLineSnapshot(
                 line_number=index,
@@ -176,6 +196,8 @@ def map_bling_document(
                 unit_price=Money(unit_value),
                 gross_amount=Money(gross),
                 tax_decision=decision,
+                taxable_quantity=taxable_quantity,
+                taxable_unit_price=taxable_price,
             )
         )
     gross_total = sum(line.gross_amount.amount for line in lines)

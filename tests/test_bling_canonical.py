@@ -320,6 +320,49 @@ def test_real_order_to_signed_official_schema_and_crypto(mapping, signing_materi
     verify_official_nfe4_signature(etree.fromstring(signed), signing_material)
 
 
+def test_taxable_conversion_is_explicit_reconciled_and_signed(mapping, signing_material):
+    from lxml import etree
+
+    from kordena_fiscal.domain import ElectronicInvoiceModel
+    from kordena_fiscal.issuance.nfe_builder import NfeSaleOptions, build_nfe_sale
+    from kordena_fiscal.signing.nfe_xmldsig import (
+        NfeSignatureProfile,
+        sign_nfe_envi_xml,
+    )
+    from kordena_fiscal.xml import AccessKeyInput, build_access_key
+    from kordena_fiscal.xml.official_nfe_schema import OfficialNfeEnvelopeValidator
+
+    sale_document(mapping)
+    product = mapping["products_by_code"]["SKU"]
+    mapping["products_by_code"] = {"SKU": replace(product, taxable_unit=FiscalUnitCode("KG"))}
+    document = map_bling_document(order(), **mapping, taxable_factors={"SKU": Decimal("2")})
+    line = document.items[0]
+    assert line.taxable_quantity == Decimal("6")
+    assert line.taxable_unit_price == Decimal("0.1666666667")
+    assert canonical_sha256(document) != canonical_sha256(sale_document(mapping))
+    key = build_access_key(
+        AccessKeyInput(
+            "35", NOW, document.issuer.cnpj, ElectronicInvoiceModel.NFE, 1, 1, 1, 12345678
+        )
+    )
+    xml = build_nfe_sale(document, key, NfeSaleOptions("VENDA", 1, 9))
+    root = etree.fromstring(xml)
+    assert root.xpath("string(//*[local-name()='qTrib'])") == "6.0000"
+    assert root.xpath("string(//*[local-name()='vUnTrib'])") == "0.1666666667"
+    signed = sign_nfe_envi_xml(
+        xml, signing_material, profile=NfeSignatureProfile.NFE4_OFFICIAL_RSA_SHA1
+    )
+    OfficialNfeEnvelopeValidator()(signed)
+    with pytest.raises(FiscalValidationError, match="conversion"):
+        build_nfe_sale(
+            replace(document, items=(replace(line, taxable_unit_price=Decimal("1")),)),
+            key,
+            NfeSaleOptions("VENDA", 1, 9),
+        )
+    with pytest.raises(FiscalValidationError, match="precision"):
+        map_bling_document(order(), **mapping, taxable_factors={"SKU": Decimal("0.00001")})
+
+
 def test_atomic_preparation_replays_without_certificate_and_rolls_back_number(
     mapping, signing_material, tmp_path, preparation_database
 ):
@@ -372,6 +415,9 @@ def test_configured_native_preparer_queues_signed_document_atomically(
     database = preparation_database
     _db, application, orders = create_installation(database)
     sale_document(mapping)
+    mapping["products_by_code"]["SKU"] = replace(
+        mapping["products_by_code"]["SKU"], taxable_unit=FiscalUnitCode("KG")
+    )
     from kordena_fiscal.control_plane.models import FiscalOrganization, FiscalUnitRegistration
 
     with database() as uow:
@@ -400,7 +446,7 @@ def test_configured_native_preparer_queues_signed_document_atomically(
         "environment": "homologation",
         "issuer_profile_id": "issuer",
         "issuer_profile_version": 1,
-        "products": {"SKU": {"product_id": "p1", "version": 1}},
+        "products": {"SKU": {"product_id": "p1", "version": 1, "taxable_factor": "2"}},
         "payment_methods": {"7": "pix"},
         "series": 1,
         "sale_options": {"nature": "VENDA", "presence": 1, "freight_mode": 9},
