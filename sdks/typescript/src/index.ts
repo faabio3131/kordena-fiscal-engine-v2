@@ -70,7 +70,7 @@ export class FmFiscalClient {
       "X-FM-Host-Namespace": this.scope.hostNamespace,
       "X-FM-Tenant-Id": this.scope.tenantId,
       "X-FM-Unit-Id": this.scope.unitId,
-      "X-FM-Environment": this.scope.environment,
+      "X-FM-Environment": this.scope.environment.toLowerCase(),
       "X-Correlation-Id": correlationId,
       "Content-Type": "application/json",
     };

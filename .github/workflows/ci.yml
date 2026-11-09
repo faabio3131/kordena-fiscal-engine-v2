@@ -141,6 +141,11 @@ jobs:
           docker build -f Dockerfile.worker -t nfcore-worker:test .
           docker build -f Dockerfile.portal -t nfcore-portal:test .
 
+      - name: Validate Bling worker runtime dependencies
+        run: |
+          docker run --rm nfcore-worker:test python -c \
+            "from kordena_fiscal.runtime.bling_worker import build_bling_worker; from kordena_fiscal.application.bling_status_delivery import BlingStatusPublisher"
+
       - name: Validate non-root images
         run: |
           test "$(docker image inspect nfcore-api:test --format '{{.Config.User}}')" = "10001:10001"
@@ -176,7 +181,33 @@ jobs:
 
       - name: API container smoke and readiness
         run: |
+          bridge_credentials="$(mktemp)"
+          trap 'rm -f "$bridge_credentials"' EXIT
+          python - "$bridge_credentials" <<'PYTHON'
+          import hashlib
+          import json
+          import sys
+          from datetime import UTC, datetime, timedelta
+          from pathlib import Path
+
+          now = datetime.now(UTC)
+          Path(sys.argv[1]).write_text(json.dumps([{
+              "credential_id": "ci-bridge",
+              "caller_id": "ci-bridge",
+              "host_namespace": "ci-bridge",
+              "capabilities": ["fiscal.capabilities.read"],
+              "scope_grants": [{"tenant_id": "ci-tenant", "unit_id": "ci-unit"}],
+              "environments": ["homologation"],
+              "secret_sha256": hashlib.sha256(b"synthetic-ci-token-for-bridge-smoke").hexdigest(),
+              "valid_from": (now - timedelta(minutes=1)).isoformat(),
+              "expires_at": (now + timedelta(hours=1)).isoformat(),
+              "revoked": False,
+          }]))
+          PYTHON
+          chmod 0444 "$bridge_credentials"
           docker run -d --name nfcore-api-smoke --network host \
+            -v "$bridge_credentials:/tmp/bridge-credentials.json:ro" \
+            -e NFCORE_BRIDGE_CREDENTIALS_FILE=/tmp/bridge-credentials.json \
             -e NFCORE_ENVIRONMENT=staging \
             -e NFCORE_PERSISTENCE_BACKEND=postgres \
             -e DATABASE_URL="$NFCORE_TEST_POSTGRES_DSN" \
@@ -189,6 +220,25 @@ jobs:
           done
           curl --fail http://127.0.0.1:8080/health/live
           curl --fail http://127.0.0.1:8080/health/ready
+          curl --fail --silent http://127.0.0.1:8080/runtime/profile |
+            jq -e '.bridge_workload_identity_configured == true'
+          bridge_headers=(
+            -H 'X-FM-Workload-Credential-Id: ci-bridge'
+            -H 'X-FM-Host-Namespace: ci-bridge'
+            -H 'X-FM-Tenant-Id: ci-tenant'
+            -H 'X-FM-Unit-Id: ci-unit'
+            -H 'X-Correlation-Id: ci-bridge-smoke'
+            -H 'Content-Type: application/json'
+          )
+          bridge_call() {
+            curl --silent --show-error "${bridge_headers[@]}" \
+              -H "Authorization: Bearer $1" -H "X-FM-Environment: $2" \
+              -d '{}' http://127.0.0.1:8080/v1/capabilities/query |
+              jq -e --arg code "$3" '.code == $code'
+          }
+          bridge_call invalid homologation WORKLOAD_AUTHENTICATION_FAILED
+          bridge_call synthetic-ci-token-for-bridge-smoke production WORKLOAD_AUTHORIZATION_FAILED
+          bridge_call synthetic-ci-token-for-bridge-smoke homologation FISCAL_BINDING_REQUIRED
           curl --fail http://127.0.0.1:8080/internal/metrics >/tmp/nfcore-metrics.json
           ! grep -Eqi 'password|authorization|private key|begin certificate|csc=' /tmp/nfcore-metrics.json
           test "$(docker inspect nfcore-api-smoke --format '{{.State.Running}}')" = "true"

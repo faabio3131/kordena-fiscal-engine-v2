@@ -71,6 +71,12 @@ from .activation_email import build_activation_delivery_from_environ
 from .ai_secrets import build_production_openai_key_readers
 from .alert_rules import InternalAlertMonitor, OperationalSignals
 from .api_staging_gsm_probe import staging_probe_verifier
+from .bling_ingress import build_bling_ingress
+from .bling_preparation import BlingSalePreparer
+from .bling_review import build_bling_review_router
+from .bling_status import build_bling_status_router
+from .bling_worker import build_bling_orders
+from .bridge_credentials import load_bridge_credentials
 from .cakto import build_cakto_webhook_router, compose_postgres_cakto_commercial_runtime
 from .cakto_claim_email import build_cakto_claim_delivery_from_environ
 from .canonical_fiscal_composition import (
@@ -786,6 +792,24 @@ def create_runtime_app(
     if cakto_receiver is not None:
         app.include_router(build_cakto_webhook_router(cakto_receiver))
 
+    bling_router = build_bling_ingress(
+        composition.fiscal_application if composition is not None else None,
+        os.environ,
+    )
+    if bling_router is not None:
+        app.include_router(bling_router)
+        if composition is not None and runtime.database is not None:
+            bling_database = runtime.database
+            app.include_router(build_bling_review_router(
+                composition.human_identity,
+                lambda: build_bling_orders(bling_database, os.environ),
+                preparer=BlingSalePreparer(os.environ),
+            ))
+            app.include_router(build_bling_status_router(
+                runtime.database, os.environ["NFCORE_BLING_COMPANY_ID"].strip(),
+                composition.bridge_security,
+            ))
+
     if commercial_acquisition is not None and commercial_acquisition_security is not None:
         app.include_router(
             create_commercial_acquisition_router(
@@ -1095,6 +1119,7 @@ _entrypoint_certificate_vault = EncryptedA1Vault.from_environ()
 _development_ingress = development_commercial_ingress(_entrypoint_settings, os.environ)
 app = create_runtime_app(
     _entrypoint_settings,
+    workload_credentials=load_bridge_credentials(os.environ),
     password_reset_delivery=build_activation_delivery_from_environ(),
     certificate_vault=_entrypoint_certificate_vault,
     fiscal_dependency_probe=lambda: fiscal_external_dependency_snapshot(

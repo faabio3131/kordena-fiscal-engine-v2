@@ -123,6 +123,7 @@ class CallerIdentity:
     host_namespace: HostNamespace
     capabilities: frozenset[FiscalCapability]
     scope_grants: tuple[HostScopeGrant, ...]
+    environments: frozenset[FiscalEnvironment] = frozenset(FiscalEnvironment)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "caller_id", _required(self.caller_id, "caller_id", 128))
@@ -132,6 +133,10 @@ class CallerIdentity:
             isinstance(capability, FiscalCapability) for capability in self.capabilities
         ):
             raise FiscalValidationError("capabilities must contain FiscalCapability values")
+        if not self.environments or not all(
+            isinstance(environment, FiscalEnvironment) for environment in self.environments
+        ):
+            raise FiscalValidationError("environments must contain FiscalEnvironment values")
         if not self.scope_grants or not all(
             isinstance(grant, HostScopeGrant) for grant in self.scope_grants
         ):
@@ -426,6 +431,9 @@ class S2SAuthorizer:
         if identity.host_namespace != host_scope.namespace:
             self._deny(caller, host_scope, capability, correlation, now, "host_namespace_mismatch")
             raise WorkloadAuthorizationError("caller cannot act for another host namespace")
+        if environment not in identity.environments:
+            self._deny(caller, host_scope, capability, correlation, now, "environment_denied")
+            raise WorkloadAuthorizationError("caller is not authorized for this environment")
         if capability not in identity.capabilities:
             self._deny(caller, host_scope, capability, correlation, now, "capability_denied")
             raise WorkloadAuthorizationError("caller does not have the required capability")

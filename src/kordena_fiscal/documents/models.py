@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 
 from kordena_fiscal.domain import (
+    Cnpj,
     ExecutionScope,
     FiscalDocumentKind,
     FiscalProductProfile,
@@ -18,6 +20,8 @@ from kordena_fiscal.domain import (
 )
 from kordena_fiscal.tax import RestaurantSupplyDecision, TaxDecision
 
+from .recipient import FiscalRecipientSnapshot
+
 
 class PaymentMethodKind(StrEnum):
     """Canonical payment families; provider/SEFAZ codes are adapter concerns."""
@@ -27,6 +31,7 @@ class PaymentMethodKind(StrEnum):
     DEBIT_CARD = "debit_card"
     PIX = "pix"
     VOUCHER = "voucher"
+    BOLETO = "boleto"
     OTHER = "other"
 
 
@@ -37,6 +42,9 @@ class FiscalPaymentSnapshot:
     method: PaymentMethodKind
     amount: Money
     provider_reference: str | None = None
+    card_acquirer_cnpj: str | None = None
+    card_brand: str | None = None
+    card_authorization: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.method, PaymentMethodKind):
@@ -45,6 +53,20 @@ class FiscalPaymentSnapshot:
             raise FiscalValidationError("payment amount must be Money")
         if self.amount.amount <= 0:
             raise FiscalValidationError("payment amount must be greater than zero")
+        card_facts = (self.card_acquirer_cnpj, self.card_brand, self.card_authorization)
+        if any(value is not None for value in card_facts):
+            if self.method not in {PaymentMethodKind.CREDIT_CARD, PaymentMethodKind.DEBIT_CARD}:
+                raise FiscalValidationError("card facts require a card payment")
+            if not all(isinstance(value, str) and value for value in card_facts):
+                raise FiscalValidationError("integrated card facts must be complete")
+            assert self.card_acquirer_cnpj is not None
+            assert self.card_brand is not None
+            assert self.card_authorization is not None
+            Cnpj(self.card_acquirer_cnpj)
+            if not re.fullmatch(r"[0-9]{2}", self.card_brand):
+                raise FiscalValidationError("card brand must contain two digits")
+            if not re.fullmatch(r"[A-Za-z0-9-]{1,128}", self.card_authorization):
+                raise FiscalValidationError("invalid card authorization")
         if self.provider_reference is not None:
             normalized = self.provider_reference.strip()
             if not normalized:
@@ -68,6 +90,9 @@ class FiscalLineSnapshot:
     discount_amount: Money = Money.zero()
     surcharge_amount: Money = Money.zero()
     restaurant_decision: RestaurantSupplyDecision | None = None
+    freight_amount: Money = Money.zero()
+    taxable_quantity: Decimal | None = None
+    taxable_unit_price: Decimal | None = None
 
     def __post_init__(self) -> None:
         if self.line_number < 1:
@@ -78,6 +103,17 @@ class FiscalLineSnapshot:
             raise FiscalValidationError("quantity must be a finite Decimal")
         if self.quantity <= 0:
             raise FiscalValidationError("quantity must be greater than zero")
+        if (self.taxable_quantity is None) != (self.taxable_unit_price is None):
+            raise FiscalValidationError("taxable quantity and unit price must be supplied together")
+        for value in (self.taxable_quantity, self.taxable_unit_price):
+            if value is not None and (
+                not isinstance(value, Decimal) or not value.is_finite() or value < 0
+            ):
+                raise FiscalValidationError(
+                    "taxable conversion values must be non-negative decimals"
+                )
+        if self.taxable_quantity is not None and self.taxable_quantity == 0:
+            raise FiscalValidationError("taxable quantity must be positive")
         monetary_values = (
             self.unit_price,
             self.gross_amount,
@@ -88,10 +124,12 @@ class FiscalLineSnapshot:
             raise FiscalValidationError("line monetary values must be Money")
         if any(value.amount < 0 for value in monetary_values):
             raise FiscalValidationError("line monetary values must be non-negative")
-        if self.discount_amount.amount > (
-            self.gross_amount.amount + self.surcharge_amount.amount
-        ):
+        if self.discount_amount.amount > (self.gross_amount.amount + self.surcharge_amount.amount):
             raise FiscalValidationError("discount cannot exceed gross plus surcharge")
+        if not isinstance(self.freight_amount, Money) or not (
+            0 <= self.freight_amount.amount <= self.surcharge_amount.amount
+        ):
+            raise FiscalValidationError("freight must be included in line surcharges")
         if not isinstance(self.tax_decision, TaxDecision):
             raise FiscalValidationError("tax_decision must be TaxDecision")
         if self.restaurant_decision is not None and not isinstance(
@@ -105,9 +143,7 @@ class FiscalLineSnapshot:
     @property
     def net_amount(self) -> Money:
         return Money(
-            self.gross_amount.amount
-            - self.discount_amount.amount
-            + self.surcharge_amount.amount
+            self.gross_amount.amount - self.discount_amount.amount + self.surcharge_amount.amount
         )
 
 
@@ -137,6 +173,7 @@ class CanonicalFiscalDocument:
     payments: tuple[FiscalPaymentSnapshot, ...] = ()
     change_amount: Money = Money.zero()
     schema_version: int = 1
+    recipient: FiscalRecipientSnapshot | None = None
 
     def __post_init__(self) -> None:
         document_id = self.document_id.strip()
@@ -179,9 +216,7 @@ class CanonicalFiscalDocument:
                 )
 
         if not all(isinstance(payment, FiscalPaymentSnapshot) for payment in self.payments):
-            raise FiscalValidationError(
-                "payments must contain FiscalPaymentSnapshot values"
-            )
+            raise FiscalValidationError("payments must contain FiscalPaymentSnapshot values")
         if not isinstance(self.change_amount, Money):
             raise FiscalValidationError("change_amount must be Money")
         if self.change_amount.amount < 0:
@@ -192,6 +227,8 @@ class CanonicalFiscalDocument:
         )
         if self.change_amount.amount > payment_total:
             raise FiscalValidationError("change_amount cannot exceed payment amount")
+        if self.recipient is not None and not isinstance(self.recipient, FiscalRecipientSnapshot):
+            raise FiscalValidationError("recipient must be an immutable fiscal snapshot")
         if self.schema_version < 1:
             raise FiscalValidationError("schema_version must be >= 1")
 
