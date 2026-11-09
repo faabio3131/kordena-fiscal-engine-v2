@@ -363,6 +363,46 @@ def test_taxable_conversion_is_explicit_reconciled_and_signed(mapping, signing_m
         map_bling_document(order(), **mapping, taxable_factors={"SKU": Decimal("0.00001")})
 
 
+def test_integrated_card_binds_transaction_to_xml_and_fingerprint(mapping, signing_material):
+    from lxml import etree
+
+    from kordena_fiscal.domain import ElectronicInvoiceModel
+    from kordena_fiscal.issuance.nfe_builder import NfeSaleOptions, build_nfe_sale
+    from kordena_fiscal.signing.nfe_xmldsig import NfeSignatureProfile, sign_nfe_envi_xml
+    from kordena_fiscal.xml import AccessKeyInput, build_access_key
+    from kordena_fiscal.xml.official_nfe_schema import OfficialNfeEnvelopeValidator
+
+    document = sale_document(mapping)
+    payment = FiscalPaymentSnapshot(
+        PaymentMethodKind.CREDIT_CARD,
+        Money(Decimal("1.00")),
+        card_acquirer_cnpj="12345678000195",
+        card_brand="01",
+        card_authorization="TEST123",
+    )
+    document = replace(document, payments=(payment,))
+    assert canonical_sha256(document) != canonical_sha256(
+        replace(document, payments=(replace(payment, card_authorization="TEST456"),))
+    )
+    key = build_access_key(
+        AccessKeyInput(
+            "35", NOW, document.issuer.cnpj, ElectronicInvoiceModel.NFE, 1, 1, 1, 12345678
+        )
+    )
+    xml = build_nfe_sale(document, key, NfeSaleOptions("VENDA", 1, 9, card_integration_type=1))
+    root = etree.fromstring(xml)
+    assert root.xpath("string(//*[local-name()='card']/*[local-name()='cAut'])") == "TEST123"
+    assert root.xpath("string(//*[local-name()='card']/*[local-name()='CNPJ'])") == "12345678000195"
+    signed = sign_nfe_envi_xml(
+        xml, signing_material, profile=NfeSignatureProfile.NFE4_OFFICIAL_RSA_SHA1
+    )
+    OfficialNfeEnvelopeValidator()(signed)
+    with pytest.raises(FiscalValidationError, match="conflict"):
+        build_nfe_sale(document, key, NfeSaleOptions("VENDA", 1, 9, card_integration_type=2))
+    with pytest.raises(FiscalValidationError, match="complete"):
+        replace(payment, card_brand=None)
+
+
 def test_atomic_preparation_replays_without_certificate_and_rolls_back_number(
     mapping, signing_material, tmp_path, preparation_database
 ):
@@ -447,9 +487,14 @@ def test_configured_native_preparer_queues_signed_document_atomically(
         "issuer_profile_id": "issuer",
         "issuer_profile_version": 1,
         "products": {"SKU": {"product_id": "p1", "version": 1, "taxable_factor": "2"}},
-        "payment_methods": {"7": "pix"},
+        "payment_methods": {"7": "credit_card"},
         "series": 1,
-        "sale_options": {"nature": "VENDA", "presence": 1, "freight_mode": 9},
+        "sale_options": {
+            "nature": "VENDA",
+            "presence": 1,
+            "freight_mode": 9,
+            "card_integration_type": 1,
+        },
         "rules": [
             {
                 "rule_id": "synthetic-rule",
@@ -486,6 +531,9 @@ def test_configured_native_preparer_queues_signed_document_atomically(
         {"NFCORE_BLING_FISCAL_POLICY_FILE": str(path), "NFCORE_BLING_FISCAL_POLICY_SHA256": digest}
     )
     payload = {
+        "card_payments": {
+            "0": {"acquirer_cnpj": "12345678000195", "brand": "01", "authorization": "TEST123"}
+        },
         "snapshot_sha256": row["snapshot_sha256"],
         "policy_sha256": digest,
         "issued_at": NOW.isoformat(),

@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 
 from kordena_fiscal.domain import (
+    Cnpj,
     ExecutionScope,
     FiscalDocumentKind,
     FiscalProductProfile,
@@ -40,6 +42,9 @@ class FiscalPaymentSnapshot:
     method: PaymentMethodKind
     amount: Money
     provider_reference: str | None = None
+    card_acquirer_cnpj: str | None = None
+    card_brand: str | None = None
+    card_authorization: str | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.method, PaymentMethodKind):
@@ -48,6 +53,20 @@ class FiscalPaymentSnapshot:
             raise FiscalValidationError("payment amount must be Money")
         if self.amount.amount <= 0:
             raise FiscalValidationError("payment amount must be greater than zero")
+        card_facts = (self.card_acquirer_cnpj, self.card_brand, self.card_authorization)
+        if any(value is not None for value in card_facts):
+            if self.method not in {PaymentMethodKind.CREDIT_CARD, PaymentMethodKind.DEBIT_CARD}:
+                raise FiscalValidationError("card facts require a card payment")
+            if not all(isinstance(value, str) and value for value in card_facts):
+                raise FiscalValidationError("integrated card facts must be complete")
+            assert self.card_acquirer_cnpj is not None
+            assert self.card_brand is not None
+            assert self.card_authorization is not None
+            Cnpj(self.card_acquirer_cnpj)
+            if not re.fullmatch(r"[0-9]{2}", self.card_brand):
+                raise FiscalValidationError("card brand must contain two digits")
+            if not re.fullmatch(r"[A-Za-z0-9-]{1,128}", self.card_authorization):
+                raise FiscalValidationError("invalid card authorization")
         if self.provider_reference is not None:
             normalized = self.provider_reference.strip()
             if not normalized:

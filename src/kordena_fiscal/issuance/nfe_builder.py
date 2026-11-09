@@ -52,9 +52,9 @@ class NfeSaleOptions:
         elif self.intermediary_cnpj is not None or self.intermediary_registration is not None:
             raise FiscalValidationError("intermediary facts conflict with absence of intermediary")
         if self.card_integration_type is not None and (
-            type(self.card_integration_type) is not int or self.card_integration_type != 2
+            type(self.card_integration_type) is not int or self.card_integration_type not in {1, 2}
         ):
-            raise FiscalValidationError("integrated cards require per-transaction acquirer facts")
+            raise FiscalValidationError("invalid card integration type")
 
 
 def _element(parent: etree._Element, name: str, value: object = None) -> etree._Element:
@@ -304,9 +304,20 @@ def build_nfe_sale(
         if payment.amount.amount != payment.amount.amount.quantize(Decimal("0.01")):
             raise FiscalValidationError("payment precision exceeds cents")
         if payment.method in {PaymentMethodKind.CREDIT_CARD, PaymentMethodKind.DEBIT_CARD}:
-            if options.card_integration_type != 2:
+            if options.card_integration_type not in {1, 2}:
                 raise FiscalValidationError("card payment requires reviewed integration facts")
-            _element(_element(det_pag, "card"), "tpIntegra", 2)
+            card = _element(det_pag, "card")
+            _element(card, "tpIntegra", options.card_integration_type)
+            if options.card_integration_type == 1:
+                if not all(
+                    (payment.card_acquirer_cnpj, payment.card_brand, payment.card_authorization)
+                ):
+                    raise FiscalValidationError("integrated card requires per-transaction facts")
+                _element(card, "CNPJ", payment.card_acquirer_cnpj)
+                _element(card, "tBand", payment.card_brand)
+                _element(card, "cAut", payment.card_authorization)
+            elif payment.card_acquirer_cnpj is not None:
+                raise FiscalValidationError("card facts conflict with non-integrated payment")
     if options.intermediary_indicator == 1:
         intermediary = _element(info, "infIntermed")
         _element(intermediary, "CNPJ", Cnpj(str(options.intermediary_cnpj)).value)

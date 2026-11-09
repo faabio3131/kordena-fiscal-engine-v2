@@ -278,7 +278,8 @@ class BlingSalePreparer:
     def prepare(
         self, orders: BlingOrders, order_id: int, payload: Mapping[str, Any], actor: str
     ) -> str:
-        if set(payload) != {"snapshot_sha256", "issued_at", "recipient", "policy_sha256"}:
+        required = {"snapshot_sha256", "issued_at", "recipient", "policy_sha256"}
+        if not required <= set(payload) or set(payload) - required - {"card_payments"}:
             raise FiscalValidationError(
                 "Bling preparation requires the reviewed snapshot and policy"
             )
@@ -328,14 +329,34 @@ class BlingSalePreparer:
                     products[code] = product
             if issuer.scope.identity_partition_key != orders.scope.identity_partition_key:
                 raise FiscalValidationError("issuer belongs to a different installation")
+            card_payments = payload.get("card_payments", {})
+            if not isinstance(card_payments, dict):
+                raise FiscalValidationError("card payment review must be an object")
+            parcels = raw["parcelas"]
+            if not isinstance(parcels, list):
+                raise FiscalValidationError("order payments must be a list")
+            if any(
+                not isinstance(index, str)
+                or not index.isascii()
+                or not index.isdigit()
+                or str(int(index)) != index
+                or int(index) >= len(parcels)
+                or not isinstance(facts, dict)
+                or set(facts) != {"acquirer_cnpj", "brand", "authorization"}
+                for index, facts in card_payments.items()
+            ):
+                raise FiscalValidationError("invalid card payment review")
             payments = tuple(
                 FiscalPaymentSnapshot(
                     method=PaymentMethodKind(
                         policy["payment_methods"][str(parcel["formaPagamento"]["id"])]
                     ),
                     amount=Money(Decimal(str(parcel["valor"]))),
+                    card_acquirer_cnpj=card_payments.get(str(index), {}).get("acquirer_cnpj"),
+                    card_brand=card_payments.get(str(index), {}).get("brand"),
+                    card_authorization=card_payments.get(str(index), {}).get("authorization"),
                 )
-                for parcel in raw["parcelas"]
+                for index, parcel in enumerate(parcels)
             )
             options = NfeSaleOptions(**policy["sale_options"])
             document = map_bling_document(

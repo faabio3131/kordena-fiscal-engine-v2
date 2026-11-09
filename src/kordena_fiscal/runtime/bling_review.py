@@ -60,6 +60,16 @@ def build_bling_review_router(
                     "sha256": digest,
                     "issued_at": datetime.now(UTC).isoformat(),
                 }
+                if policy.get("sale_options", {}).get("card_integration_type") == 1:
+                    raw = orders.snapshot(order_id)["raw"]
+                    preparation["integrated_card_indexes"] = [
+                        index
+                        for index, parcel in enumerate(raw.get("parcelas", []))
+                        if policy.get("payment_methods", {}).get(
+                            str(parcel.get("formaPagamento", {}).get("id"))
+                        )
+                        in {"credit_card", "debit_card"}
+                    ]
             except FiscalValidationError:
                 pass
         return response(

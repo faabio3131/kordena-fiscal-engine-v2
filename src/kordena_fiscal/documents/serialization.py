@@ -164,11 +164,16 @@ def _line(line: FiscalLineSnapshot) -> dict[str, Any]:
 
 
 def _payment(payment: FiscalPaymentSnapshot) -> dict[str, Any]:
-    return {
+    payload = {
         "method": payment.method.value,
         "amount": _money(payment.amount),
         "provider_reference": payment.provider_reference,
     }
+    if payment.card_acquirer_cnpj is not None:
+        payload["card_acquirer_cnpj"] = payment.card_acquirer_cnpj
+        payload["card_brand"] = payment.card_brand
+        payload["card_authorization"] = payment.card_authorization
+    return payload
 
 
 def to_canonical_payload(document: CanonicalFiscalDocument) -> dict[str, Any]:

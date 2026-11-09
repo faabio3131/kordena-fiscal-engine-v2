@@ -56,7 +56,8 @@ test("native preparation reviews recipient and posts only scoped fiscal facts", 
       expect(route.request().url()).toMatch(/\/prepare$/);
       expect(route.request().headers()["x-csrf-token"]).toBe("native-csrf");
       const body = route.request().postDataJSON();
-      expect(Object.keys(body).sort()).toEqual(["issued_at", "policy_sha256", "recipient", "snapshot_sha256"]);
+      expect(Object.keys(body).sort()).toEqual(["card_payments", "issued_at", "policy_sha256", "recipient", "snapshot_sha256"]);
+      expect(body.card_payments).toEqual({"0": {acquirer_cnpj: "12345678000195", brand: "01", authorization: "TEST123"}});
       expect(body.recipient.document).toBe("12345678000195");
       expect(body.recipient.ie_indicator).toBe(9);
       expect(body.recipient.final_consumer).toBe(true);
@@ -67,7 +68,7 @@ test("native preparation reviews recipient and posts only scoped fiscal facts", 
     return route.fulfill({json: {
       order: {state: queued ? "queued" : "review_required", snapshot_sha256: "snapshot-hash", document_id: queued ? "native-doc" : null},
       snapshots: [{sha256: "snapshot-hash", content: {raw: {contato: {nome: "Synthetic buyer", numeroDocumento: "12345678000195"}}}}],
-      preparation: {configured: true, policy_id: "synthetic", version: 1, sha256: "policy-hash", issued_at: "2026-11-09T00:00:00+00:00"},
+      preparation: {configured: true, policy_id: "synthetic", version: 1, sha256: "policy-hash", issued_at: "2026-11-09T00:00:00+00:00", integrated_card_indexes: [0]},
     }});
   });
   await page.goto("/");
@@ -81,6 +82,9 @@ test("native preparation reviews recipient and posts only scoped fiscal facts", 
   }
   await page.getByLabel("Condição da inscrição estadual").selectOption("9");
   await page.getByLabel("Consumidor final", {exact: true}).selectOption("true");
+  await page.getByLabel("CNPJ da instituição de pagamento — pagamento 1").fill("12345678000195");
+  await page.getByLabel("Código da bandeira — pagamento 1").fill("01");
+  await page.getByLabel("Autorização da operação — pagamento 1").fill("TEST123");
   await page.getByLabel("Revisei o pedido, o destinatário e a política fiscal indicada.").check();
   await page.getByRole("button", {name: "Preparar e enviar NF-e"}).click();
   await expect(page.getByText("Situação: queued", {exact: true})).toBeVisible();

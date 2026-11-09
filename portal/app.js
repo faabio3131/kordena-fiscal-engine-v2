@@ -2019,18 +2019,33 @@ function appendBlingPreparation(output, result, path, refresh) {
   for (const [value, text] of [["", "Selecione"], ["true", "Sim"], ["false", "Não"]]) {
     const option = document.createElement("option"); option.value = value; option.textContent = text; final.append(option);
   } finalLabel.append(final); box.append(finalLabel);
+  /** @type {Record<string, Record<string, HTMLInputElement>>} */
+  const cardInputs = {};
+  for (const index of result.preparation.integrated_card_indexes || []) {
+    const group = document.createElement("fieldset");
+    const title = document.createElement("legend"); title.textContent = `Pagamento ${index + 1}: cartão integrado`; group.append(title);
+    cardInputs[String(index)] = {};
+    for (const [key, label] of [["acquirer_cnpj", "CNPJ da instituição de pagamento"], ["brand", "Código da bandeira"], ["authorization", "Autorização da operação"]]) {
+      const wrapper = document.createElement("label"); wrapper.textContent = `${label} — pagamento ${index + 1}`;
+      const input = document.createElement("input"); input.type = "text"; input.autocomplete = "off";
+      cardInputs[String(index)][key] = input; wrapper.append(input); group.append(wrapper);
+    }
+    box.append(group);
+  }
   const confirmLabel = document.createElement("label"); const confirm = document.createElement("input"); confirm.type = "checkbox";
   confirmLabel.append(confirm, "Revisei o pedido, o destinatário e a política fiscal indicada."); box.append(confirmLabel);
   const status = document.createElement("p"); status.setAttribute("role", "status");
   const prepare = document.createElement("button"); prepare.type = "button"; prepare.textContent = "Preparar e enviar NF-e";
   prepare.addEventListener("click", async () => {
-    if (!confirm.checked || !ie.value || !final.value || Object.entries(inputs).some(([key, input]) => !["complement", "state_registration"].includes(key) && !input.value.trim())) {
+    if (!confirm.checked || !ie.value || !final.value || Object.entries(inputs).some(([key, input]) => !["complement", "state_registration"].includes(key) && !input.value.trim()) || Object.values(cardInputs).some(fields => Object.values(fields).some(input => !input.value.trim()))) {
       status.textContent = "Preencha os dados do destinatário e confirme a revisão."; return;
     }
     const recipient = {...Object.fromEntries(Object.entries(inputs).map(([key, input]) => [key, input.value.trim()])), ie_indicator: Number(ie.value), final_consumer: final.value === "true"};
+    const cardPayments = Object.fromEntries(Object.entries(cardInputs).map(([index, fields]) => [index, Object.fromEntries(Object.entries(fields).map(([key, input]) => [key, input.value.trim()]))]));
     prepare.disabled = true; status.textContent = "Preparando documento fiscal...";
     try {
-      await api(`${path}/prepare`, {method: "POST", headers: {"X-CSRF-Token": csrfToken()}, body: JSON.stringify({snapshot_sha256: result.order.snapshot_sha256, policy_sha256: result.preparation.sha256, issued_at: result.preparation.issued_at, recipient})});
+      const cardReview = Object.keys(cardPayments).length ? {card_payments: cardPayments} : {};
+      await api(`${path}/prepare`, {method: "POST", headers: {"X-CSRF-Token": csrfToken()}, body: JSON.stringify({snapshot_sha256: result.order.snapshot_sha256, policy_sha256: result.preparation.sha256, issued_at: result.preparation.issued_at, recipient, ...cardReview})});
       refresh();
     } catch (error) { status.textContent = error instanceof Error ? error.message : "Falha na preparação fiscal."; prepare.disabled = false; }
   }); box.append(prepare, status); output.append(box);
