@@ -93,6 +93,7 @@ def _rule(data: Mapping[str, Any]) -> TaxRule:
         "nfe_rates",
         "ibs_cbs_classification_code",
         "ibs_cbs_cst_code",
+        "ibs_cbs_classification_table_version",
     }:
         raise FiscalValidationError("unsupported fiscal rule outcome fields")
     required_rates = {"icms_rate", "pis_rate", "cofins_rate", "pis_base", "cofins_base"}
@@ -101,6 +102,21 @@ def _rule(data: Mapping[str, Any]) -> TaxRule:
         "ipi_rate",
         "ipi_enquiry_code",
         "ipi_calculation_mode",
+        "ipi_cst",
+        "ipi_unit_amount",
+        "st_rate",
+        "st_mva_rate",
+        "st_base_mode",
+        "fcp_st_rate",
+        "difal_destination_rate",
+        "difal_interstate_rate",
+        "difal_destination_share",
+        "fcp_destination_rate",
+        "rtc_uf_rate",
+        "rtc_municipal_rate",
+        "rtc_cbs_rate",
+        "rtc_base_mode",
+        "rtc_financial_mode",
     }:
         raise FiscalValidationError("unsupported fiscal calculation parameters")
     return TaxRule(
@@ -127,6 +143,9 @@ def _rule(data: Mapping[str, Any]) -> TaxRule:
             cofins_cst=outcome["cofins_cst"],
             ibs_cbs_classification_code=outcome.get("ibs_cbs_classification_code"),
             ibs_cbs_cst_code=outcome.get("ibs_cbs_cst_code"),
+            ibs_cbs_classification_table_version=outcome.get(
+                "ibs_cbs_classification_table_version"
+            ),
             nfe_rates=NfeRateParameters(
                 Decimal(str(rates["icms_rate"])),
                 Decimal(str(rates["pis_rate"])),
@@ -137,6 +156,45 @@ def _rule(data: Mapping[str, Any]) -> TaxRule:
                 Decimal(str(rates["ipi_rate"])) if "ipi_rate" in rates else None,
                 rates.get("ipi_enquiry_code"),
                 rates.get("ipi_calculation_mode"),
+                ipi_cst=rates.get("ipi_cst"),
+                ipi_unit_amount=(
+                    Decimal(str(rates["ipi_unit_amount"])) if "ipi_unit_amount" in rates else None
+                ),
+                st_rate=Decimal(str(rates["st_rate"])) if "st_rate" in rates else None,
+                st_mva_rate=Decimal(str(rates["st_mva_rate"])) if "st_mva_rate" in rates else None,
+                st_base_mode=rates.get("st_base_mode"),
+                fcp_st_rate=Decimal(str(rates["fcp_st_rate"])) if "fcp_st_rate" in rates else None,
+                difal_destination_rate=(
+                    Decimal(str(rates["difal_destination_rate"]))
+                    if "difal_destination_rate" in rates
+                    else None
+                ),
+                difal_interstate_rate=(
+                    Decimal(str(rates["difal_interstate_rate"]))
+                    if "difal_interstate_rate" in rates
+                    else None
+                ),
+                difal_destination_share=(
+                    Decimal(str(rates["difal_destination_share"]))
+                    if "difal_destination_share" in rates
+                    else None
+                ),
+                fcp_destination_rate=(
+                    Decimal(str(rates["fcp_destination_rate"]))
+                    if "fcp_destination_rate" in rates
+                    else None
+                ),
+                rtc_uf_rate=Decimal(str(rates["rtc_uf_rate"])) if "rtc_uf_rate" in rates else None,
+                rtc_municipal_rate=(
+                    Decimal(str(rates["rtc_municipal_rate"]))
+                    if "rtc_municipal_rate" in rates
+                    else None
+                ),
+                rtc_cbs_rate=Decimal(str(rates["rtc_cbs_rate"]))
+                if "rtc_cbs_rate" in rates
+                else None,
+                rtc_base_mode=rates.get("rtc_base_mode"),
+                rtc_financial_mode=rates.get("rtc_financial_mode"),
             ),
         ),
     )

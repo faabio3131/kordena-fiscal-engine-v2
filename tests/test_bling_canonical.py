@@ -1039,3 +1039,347 @@ def test_special_product_metadata_is_never_silently_dropped(mapping, signing_mat
     )
     with pytest.raises(FiscalValidationError, match="special fiscal metadata"):
         build_nfe_sale(document, key, NfeSaleOptions("VENDA", 1, 9))
+
+
+def test_icms_st_fcp_st_and_payment_are_signed_and_schema_valid(mapping, signing_material):
+    """No implicit ST/MVA: approved rule drives tax, money and XML together."""
+    from lxml import etree
+
+    from kordena_fiscal.domain import ElectronicInvoiceModel
+    from kordena_fiscal.issuance.nfe_builder import NfeSaleOptions, build_nfe_sale
+    from kordena_fiscal.signing.nfe_xmldsig import NfeSignatureProfile, sign_nfe_envi_xml
+    from kordena_fiscal.xml import AccessKeyInput, build_access_key
+    from kordena_fiscal.xml.official_nfe_schema import OfficialNfeEnvelopeValidator
+
+    sale_document(mapping, normal=True)
+    rule = mapping["rules"][0]
+    rates = replace(
+        rule.outcome.nfe_rates,
+        st_rate=Decimal("30"),
+        st_mva_rate=Decimal("40"),
+        st_base_mode="net_mva",
+        fcp_st_rate=Decimal("2"),
+    )
+    mapping["rules"] = (
+        replace(rule, outcome=replace(rule.outcome, icms_code="10", nfe_rates=rates)),
+    )
+    # ST: 1.40*30%=0.42, less own ICMS 0.18 -> 0.24; FCP-ST: 0.028 -> 0.03
+    mapping["payments"] = (FiscalPaymentSnapshot(PaymentMethodKind.PIX, Money(Decimal("1.27"))),)
+    raw = order()
+    raw["total"] = "1.27"
+    document = map_bling_document(raw, **mapping)
+    key = build_access_key(
+        AccessKeyInput(
+            "35", NOW, document.issuer.cnpj, ElectronicInvoiceModel.NFE, 1, 1, 1, 12345678
+        )
+    )
+    xml = build_nfe_sale(document, key, NfeSaleOptions("VENDA", 1, 9))
+    root = etree.fromstring(xml)
+
+    def xpath(tag):
+        return root.xpath("string(//*[local-name()='ICMS10']/*[local-name()='" + tag + "'])")
+
+    assert xpath("vBCST") == "1.40"
+    assert xpath("vICMSST") == "0.24"
+    assert xpath("vFCPST") == "0.03"
+    assert root.xpath("string(//*[local-name()='ICMSTot']/*[local-name()='vNF'])") == "1.27"
+    signed = sign_nfe_envi_xml(
+        xml, signing_material, profile=NfeSignatureProfile.NFE4_OFFICIAL_RSA_SHA1
+    )
+    OfficialNfeEnvelopeValidator()(signed)
+
+
+def test_interstate_difal_and_fcp_destination_signed_schema_valid(mapping, signing_material):
+    """DIFAL and FCP destination are not silently omitted or added to vNF."""
+    from lxml import etree
+
+    from kordena_fiscal.domain import ElectronicInvoiceModel
+    from kordena_fiscal.issuance.nfe_builder import NfeSaleOptions, build_nfe_sale
+    from kordena_fiscal.signing.nfe_xmldsig import NfeSignatureProfile, sign_nfe_envi_xml
+    from kordena_fiscal.xml import AccessKeyInput, build_access_key
+    from kordena_fiscal.xml.official_nfe_schema import OfficialNfeEnvelopeValidator
+
+    sale_document(mapping, normal=True)
+    recipient = mapping["recipient"]
+    mapping["recipient"] = replace(
+        recipient,
+        address=replace(
+            recipient.address,
+            jurisdiction=BrazilianJurisdiction("RJ", "3304557"),
+            municipality_name="Rio de Janeiro",
+        ),
+    )
+    rule = mapping["rules"][0]
+    rates = replace(
+        rule.outcome.nfe_rates,
+        icms_rate=Decimal("12"),
+        difal_destination_rate=Decimal("18"),
+        difal_interstate_rate=Decimal("12"),
+        difal_destination_share=Decimal("100"),
+        fcp_destination_rate=Decimal("2"),
+    )
+    mapping["rules"] = (replace(rule, outcome=replace(rule.outcome, cfop="6102", nfe_rates=rates)),)
+    document = map_bling_document(order(), **mapping)
+    key = build_access_key(
+        AccessKeyInput(
+            "35", NOW, document.issuer.cnpj, ElectronicInvoiceModel.NFE, 1, 1, 1, 12345678
+        )
+    )
+    xml = build_nfe_sale(document, key, NfeSaleOptions("VENDA", 1, 9))
+    root = etree.fromstring(xml)
+
+    def xpath(tag):
+        return root.xpath("string(//*[local-name()='ICMSUFDest']/*[local-name()='" + tag + "'])")
+
+    assert xpath("pICMSInter") == "12.00"
+    assert xpath("vICMSUFDest") == "0.06"
+    assert xpath("vFCPUFDest") == "0.02"
+    assert root.xpath("string(//*[local-name()='ICMSTot']/*[local-name()='vNF'])") == "1.00"
+    signed = sign_nfe_envi_xml(
+        xml, signing_material, profile=NfeSignatureProfile.NFE4_OFFICIAL_RSA_SHA1
+    )
+    OfficialNfeEnvelopeValidator()(signed)
+
+
+def test_icms_st_and_difal_rules_fail_closed_when_incomplete(mapping):
+
+    sale_document(mapping, normal=True)
+    rates = mapping["rules"][0].outcome.nfe_rates
+    with pytest.raises(FiscalValidationError, match="ST requires"):
+        replace(rates, st_rate=Decimal("18"))
+    with pytest.raises(FiscalValidationError, match="DIFAL requires"):
+        replace(rates, difal_destination_rate=Decimal("18"))
+    with pytest.raises(FiscalValidationError, match="destination FCP"):
+        replace(rates, fcp_destination_rate=Decimal("2"))
+    with pytest.raises(FiscalValidationError, match="full destination share"):
+        replace(
+            rates,
+            difal_destination_rate=Decimal("18"),
+            difal_interstate_rate=Decimal("12"),
+            difal_destination_share=Decimal("60"),
+        )
+
+
+def test_rtc_2026_full_taxation_is_signed_schema_valid_and_separate_from_payment(
+    mapping, signing_material
+):
+    """RTC CST 000 is versioned and not guessed from the Bling order."""
+    from lxml import etree
+
+    from kordena_fiscal.domain import ElectronicInvoiceModel
+    from kordena_fiscal.issuance.nfe_builder import NfeSaleOptions, build_nfe_sale
+    from kordena_fiscal.signing.nfe_xmldsig import NfeSignatureProfile, sign_nfe_envi_xml
+    from kordena_fiscal.xml import AccessKeyInput, build_access_key
+    from kordena_fiscal.xml.official_nfe_schema import OfficialNfeEnvelopeValidator
+
+    sale_document(mapping, normal=True)
+    rule = mapping["rules"][0]
+    rates = replace(
+        rule.outcome.nfe_rates,
+        rtc_uf_rate=Decimal("0.1"),
+        rtc_municipal_rate=Decimal("0"),
+        rtc_cbs_rate=Decimal("0.9"),
+        rtc_base_mode="net",
+        rtc_financial_mode="informational_2026",
+    )
+    mapping["rules"] = (
+        replace(
+            rule,
+            outcome=replace(
+                rule.outcome,
+                ibs_cbs_cst_code="000",
+                ibs_cbs_classification_code="000001",
+                ibs_cbs_classification_table_version="IT-2025.002-v1.71",
+                nfe_rates=rates,
+            ),
+        ),
+    )
+    document = map_bling_document(order(), **mapping)
+    key = build_access_key(
+        AccessKeyInput(
+            "35", NOW, document.issuer.cnpj, ElectronicInvoiceModel.NFE, 1, 1, 1, 12345678
+        )
+    )
+    xml = build_nfe_sale(document, key, NfeSaleOptions("VENDA", 1, 9))
+    root = etree.fromstring(xml)
+    assert root.xpath("string(//*[local-name()='IBSCBS']/*[local-name()='CST'])") == "000"
+    assert root.xpath("string(//*[local-name()='IBSCBS']/*[local-name()='cClassTrib'])") == "000001"
+    assert root.xpath("string(//*[local-name()='IBSCBSTot']/*[local-name()='vBCIBSCBS'])") == "1.00"
+    assert root.xpath("string(//*[local-name()='total']/*[local-name()='vNFTot'])") == "1.01"
+    assert root.xpath("string(//*[local-name()='ICMSTot']/*[local-name()='vNF'])") == "1.00"
+    signed = sign_nfe_envi_xml(
+        xml, signing_material, profile=NfeSignatureProfile.NFE4_OFFICIAL_RSA_SHA1
+    )
+    OfficialNfeEnvelopeValidator()(signed)
+
+
+def test_rtc_requires_explicit_rates_and_classification(mapping):
+    sale_document(mapping, normal=True)
+    rates = mapping["rules"][0].outcome.nfe_rates
+    with pytest.raises(FiscalValidationError, match="RTC requires complete"):
+        replace(rates, rtc_cbs_rate=Decimal("0.9"))
+    with pytest.raises(FiscalValidationError, match="RTC financial mode"):
+        replace(
+            rates,
+            rtc_uf_rate=Decimal("0.1"),
+            rtc_municipal_rate=Decimal("0"),
+            rtc_cbs_rate=Decimal("0.9"),
+            rtc_base_mode="net",
+            rtc_financial_mode="collect_without_approval",
+        )
+
+
+def test_ipi_per_taxable_unit_uses_explicit_quantity_and_reconciles_payments(
+    mapping, signing_material
+):
+    from lxml import etree
+
+    from kordena_fiscal.domain import ElectronicInvoiceModel
+    from kordena_fiscal.issuance.nfe_builder import NfeSaleOptions, build_nfe_sale
+    from kordena_fiscal.signing.nfe_xmldsig import NfeSignatureProfile, sign_nfe_envi_xml
+    from kordena_fiscal.xml import AccessKeyInput, build_access_key
+    from kordena_fiscal.xml.official_nfe_schema import OfficialNfeEnvelopeValidator
+
+    sale_document(mapping, normal=True)
+    rule = mapping["rules"][0]
+    rates = replace(
+        rule.outcome.nfe_rates,
+        ipi_unit_amount=Decimal("0.2000"),
+        ipi_enquiry_code="999",
+        ipi_calculation_mode="per_taxable_unit",
+        ipi_cst="50",
+    )
+    mapping["rules"] = (replace(rule, outcome=replace(rule.outcome, nfe_rates=rates)),)
+    mapping["payments"] = (FiscalPaymentSnapshot(PaymentMethodKind.PIX, Money(Decimal("1.60"))),)
+    raw = order()
+    raw["total"] = "1.60"
+    document = map_bling_document(raw, **mapping)
+    key = build_access_key(
+        AccessKeyInput(
+            "35", NOW, document.issuer.cnpj, ElectronicInvoiceModel.NFE, 1, 1, 1, 12345678
+        )
+    )
+    xml = build_nfe_sale(document, key, NfeSaleOptions("VENDA", 1, 9))
+    root = etree.fromstring(xml)
+    assert root.xpath("string(//*[local-name()='IPITrib']/*[local-name()='qUnid'])") == "3.0000"
+    assert root.xpath("string(//*[local-name()='IPITrib']/*[local-name()='vUnid'])") == "0.2000"
+    assert root.xpath("string(//*[local-name()='IPITrib']/*[local-name()='vIPI'])") == "0.60"
+    assert root.xpath("string(//*[local-name()='ICMSTot']/*[local-name()='vNF'])") == "1.60"
+    signed = sign_nfe_envi_xml(
+        xml, signing_material, profile=NfeSignatureProfile.NFE4_OFFICIAL_RSA_SHA1
+    )
+    OfficialNfeEnvelopeValidator()(signed)
+
+
+@pytest.mark.parametrize("ipi_cst", ["51", "52", "53", "54", "55"])
+def test_ipi_non_taxed_output_cst_uses_ipint_and_validates_schema(
+    mapping, signing_material, ipi_cst
+):
+    from lxml import etree
+
+    from kordena_fiscal.domain import ElectronicInvoiceModel
+    from kordena_fiscal.issuance.nfe_builder import NfeSaleOptions, build_nfe_sale
+    from kordena_fiscal.signing.nfe_xmldsig import NfeSignatureProfile, sign_nfe_envi_xml
+    from kordena_fiscal.xml import AccessKeyInput, build_access_key
+    from kordena_fiscal.xml.official_nfe_schema import OfficialNfeEnvelopeValidator
+
+    sale_document(mapping, normal=True)
+    rule = mapping["rules"][0]
+    rates = replace(
+        rule.outcome.nfe_rates,
+        ipi_cst=ipi_cst,
+        ipi_enquiry_code="999",
+        ipi_calculation_mode="non_taxed",
+    )
+    mapping["rules"] = (replace(rule, outcome=replace(rule.outcome, nfe_rates=rates)),)
+    document = map_bling_document(order(), **mapping)
+    key = build_access_key(
+        AccessKeyInput(
+            "35", NOW, document.issuer.cnpj, ElectronicInvoiceModel.NFE, 1, 1, 1, 12345678
+        )
+    )
+    xml = build_nfe_sale(document, key, NfeSaleOptions("VENDA", 1, 9))
+    root = etree.fromstring(xml)
+    assert root.xpath("string(//*[local-name()='IPINT']/*[local-name()='CST'])") == ipi_cst
+    assert root.xpath("string(//*[local-name()='ICMSTot']/*[local-name()='vIPI'])") == "0.00"
+    signed = sign_nfe_envi_xml(
+        xml, signing_material, profile=NfeSignatureProfile.NFE4_OFFICIAL_RSA_SHA1
+    )
+    OfficialNfeEnvelopeValidator()(signed)
+
+
+def test_ipi_per_unit_requires_taxable_quantity(mapping):
+    from kordena_fiscal.tax.nfe_calculation import calculate_nfe_line
+
+    document = sale_document(mapping, normal=True)
+    line = document.items[0]
+    rates = replace(
+        line.tax_decision.outcome.nfe_rates,
+        ipi_unit_amount=Decimal("0.2000"),
+        ipi_enquiry_code="999",
+        ipi_calculation_mode="per_taxable_unit",
+        ipi_cst="50",
+    )
+    decision = replace(
+        line.tax_decision, outcome=replace(line.tax_decision.outcome, nfe_rates=rates)
+    )
+    with pytest.raises(FiscalValidationError, match="taxable quantity"):
+        calculate_nfe_line(
+            decision,
+            net_amount=line.net_amount.amount,
+            regime=document.issuer.tax_regime,
+        )
+
+
+def test_bling_policy_rule_parses_all_explicit_st_difal_rtc_and_ipi_modes():
+    from kordena_fiscal.runtime.bling_preparation import _rule
+
+    base = {
+        "rule_id": "synthetic-complete",
+        "version": 1,
+        "priority": 1,
+        "source_normative": "SYNTHETIC ONLY",
+        "effective_from": NOW.isoformat(),
+        "selector": {
+            "state_code": "RJ",
+            "tax_regime": 3,
+            "recipient_profile": "consumer_final",
+            "ncm_prefix": "21",
+        },
+        "outcome": {
+            "cfop": "6102",
+            "icms_code": "00",
+            "pis_cst": "01",
+            "cofins_cst": "01",
+            "ibs_cbs_cst_code": "000",
+            "ibs_cbs_classification_code": "000001",
+            "ibs_cbs_classification_table_version": "SYNTHETIC_TABLE",
+            "nfe_rates": {
+                "icms_rate": "12",
+                "pis_rate": "1.65",
+                "cofins_rate": "7.6",
+                "pis_base": "net",
+                "cofins_base": "net",
+                "difal_destination_rate": "18",
+                "difal_interstate_rate": "12",
+                "difal_destination_share": "100",
+                "fcp_destination_rate": "2",
+                "rtc_uf_rate": "0.1",
+                "rtc_municipal_rate": "0",
+                "rtc_cbs_rate": "0.9",
+                "rtc_base_mode": "net",
+                "rtc_financial_mode": "informational_2026",
+                "ipi_cst": "51",
+                "ipi_enquiry_code": "999",
+                "ipi_calculation_mode": "non_taxed",
+            },
+        },
+    }
+    rule = _rule(base)
+    rates = rule.outcome.nfe_rates
+    assert rates is not None
+    assert rates.difal_destination_rate == Decimal("18")
+    assert rates.fcp_destination_rate == Decimal("2")
+    assert rates.rtc_cbs_rate == Decimal("0.9")
+    assert rates.ipi_cst == "51"
+    assert rule.outcome.ibs_cbs_classification_table_version == "SYNTHETIC_TABLE"

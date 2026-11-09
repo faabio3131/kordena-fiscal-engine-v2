@@ -109,14 +109,27 @@ def build_nfe_sale(
         raise FiscalValidationError("access key differs from document month")
     if document.change_amount.amount:
         raise FiscalValidationError("sale builder requires payments reconciled without change")
+    if document.issued_at.year != 2026 and any(
+        line.tax_decision.outcome.ibs_cbs_cst_code is not None for line in document.items
+    ):
+        raise FiscalValidationError("RTC informational-2026 rule cannot be used outside 2026")
+    interstate_final_consumer = (
+        issuer.address.jurisdiction.state_code != recipient.address.jurisdiction.state_code
+        and recipient.final_consumer
+        and recipient.ie_indicator == 9
+    )
     taxes = [
         calculate_nfe_line(
-            line.tax_decision, net_amount=line.net_amount.amount, regime=issuer.tax_regime
+            line.tax_decision,
+            net_amount=line.net_amount.amount,
+            regime=issuer.tax_regime,
+            interstate_final_consumer=interstate_final_consumer,
+            taxable_quantity=line.taxable_quantity or line.quantity,
         )
         for line in document.items
     ]
     invoice_total = document.totals.net_amount.amount + sum(
-        (tax.ipi_amount for tax in taxes), Decimal(0)
+        (tax.ipi_amount + tax.st_amount + tax.fcp_st_amount for tax in taxes), Decimal(0)
     )
     if not document.payments or document.totals.payment_amount.amount != invoice_total:
         raise FiscalValidationError("explicit reconciled payment snapshots are required")
@@ -133,8 +146,8 @@ def build_nfe_sale(
         if issuer.address.jurisdiction.state_code == recipient.address.jurisdiction.state_code
         else "2"
     )
-    if destination == "2" and recipient.final_consumer:
-        raise FiscalValidationError("interstate final-consumer sale requires a DIFAL/FCP decision")
+    if destination == "2" and recipient.final_consumer and not interstate_final_consumer:
+        raise FiscalValidationError("interstate final consumer requires reviewed IE indicator")
     if destination == "2" and any(
         line.tax_decision.outcome.nfe_rates is not None
         and line.tax_decision.outcome.nfe_rates.fcp_rate is not None
@@ -257,12 +270,18 @@ def build_nfe_sale(
             if key not in {"vFrete", "vDesc", "vOutro"} or value != "0.00":
                 _element(prod, key, value)
         _taxes(_element(det, "imposto"), line.tax_decision.outcome, int(product.origin), tax)
-    totals = _element(_element(info, "total"), "ICMSTot")
+    total_node = _element(info, "total")
+    totals = _element(total_node, "ICMSTot")
     freight = sum((line.freight_amount.amount for line in document.items), Decimal(0))
     values = {
         "vBC": sum((t.icms_base for t in taxes), Decimal(0)),
         "vICMS": sum((t.icms_amount for t in taxes), Decimal(0)),
         "vFCP": sum((t.fcp_amount for t in taxes), Decimal(0)),
+        "vFCPUFDest": sum((t.fcp_destination_amount for t in taxes), Decimal(0)),
+        "vICMSUFDest": sum((t.difal_amount for t in taxes), Decimal(0)),
+        "vBCST": sum((t.st_base for t in taxes), Decimal(0)),
+        "vST": sum((t.st_amount for t in taxes), Decimal(0)),
+        "vFCPST": sum((t.fcp_st_amount for t in taxes), Decimal(0)),
         "vIPI": sum((t.ipi_amount for t in taxes), Decimal(0)),
         "vProd": document.totals.gross_amount.amount,
         "vFrete": freight,
@@ -276,6 +295,9 @@ def build_nfe_sale(
         "vBC",
         "vICMS",
         "vICMSDeson",
+        "vFCPUFDest",
+        "vICMSUFDest",
+        "vICMSUFRemet",
         "vFCP",
         "vBCST",
         "vST",
@@ -294,6 +316,59 @@ def build_nfe_sale(
         "vNF",
     ):
         _element(totals, key, _money(values.get(key, Decimal(0))))
+    rtc_lines = [
+        tax
+        for tax in taxes
+        if tax.rtc_base != 0
+        or any((tax.rtc_ibs_uf_amount, tax.rtc_ibs_municipal_amount, tax.rtc_cbs_amount))
+    ]
+    if any(line.tax_decision.outcome.ibs_cbs_cst_code is not None for line in document.items):
+        if len(rtc_lines) != len(taxes):
+            raise FiscalValidationError("RTC requires coherent classification on all lines")
+        rtc_total = _element(total_node, "IBSCBSTot")
+        _element(rtc_total, "vBCIBSCBS", _money(sum((t.rtc_base for t in taxes), Decimal(0))))
+        ibs_total = _element(rtc_total, "gIBS")
+        for name, field in (
+            ("gIBSUF", "rtc_ibs_uf_amount"),
+            ("gIBSMun", "rtc_ibs_municipal_amount"),
+        ):
+            group_total = _element(ibs_total, name)
+            _element(group_total, "vDif", "0.00")
+            _element(group_total, "vDevTrib", "0.00")
+            _element(
+                group_total,
+                "vIBSUF" if name == "gIBSUF" else "vIBSMun",
+                _money(sum((getattr(t, field) for t in taxes), Decimal(0))),
+            )
+        _element(
+            ibs_total,
+            "vIBS",
+            _money(
+                sum((t.rtc_ibs_uf_amount + t.rtc_ibs_municipal_amount for t in taxes), Decimal(0))
+            ),
+        )
+        _element(ibs_total, "vCredPres", "0.00")
+        _element(ibs_total, "vCredPresCondSus", "0.00")
+        cbs_total = _element(rtc_total, "gCBS")
+        _element(cbs_total, "vDif", "0.00")
+        _element(cbs_total, "vDevTrib", "0.00")
+        _element(cbs_total, "vCBS", _money(sum((t.rtc_cbs_amount for t in taxes), Decimal(0))))
+        _element(cbs_total, "vCredPres", "0.00")
+        _element(cbs_total, "vCredPresCondSus", "0.00")
+        _element(
+            total_node,
+            "vNFTot",
+            _money(
+                invoice_total
+                + sum(
+                    (
+                        t.rtc_ibs_uf_amount + t.rtc_ibs_municipal_amount + t.rtc_cbs_amount
+                        for t in taxes
+                    ),
+                    Decimal(0),
+                )
+            ),
+        )
     if options.freight_mode == 9 and freight:
         raise FiscalValidationError("freight amount conflicts with no-transport modality")
     _element(_element(info, "transp"), "modFrete", options.freight_mode)
@@ -342,11 +417,11 @@ def _taxes(parent: etree._Element, outcome: object, origin: int, tax: NfeCalcula
     assert isinstance(outcome, TaxRuleOutcome) and outcome.nfe_rates is not None
     rates = outcome.nfe_rates
     code = outcome.icms_code
-    group = "ICMS00" if code == "00" else "ICMSSN102" if len(code) == 3 else "ICMS40"
+    group = ("ICMS" + code) if code in {"00", "10"} else "ICMSSN102" if len(code) == 3 else "ICMS40"
     icms = _element(_element(parent, "ICMS"), group)
     _element(icms, "orig", origin)
     _element(icms, "CSOSN" if len(code) == 3 else "CST", code)
-    if code == "00":
+    if code in {"00", "10"}:
         for key, value in (
             ("modBC", "3"),
             ("vBC", _money(tax.icms_base)),
@@ -355,16 +430,38 @@ def _taxes(parent: etree._Element, outcome: object, origin: int, tax: NfeCalcula
         ):
             _element(icms, key, value)
         if rates.fcp_rate is not None:
+            if code == "10":
+                _element(icms, "vBCFCP", _money(tax.icms_base))
             _element(icms, "pFCP", format(rates.fcp_rate, ".4f"))
             _element(icms, "vFCP", _money(tax.fcp_amount))
-    if rates.ipi_rate is not None:
+        if code == "10":
+            assert rates.st_mva_rate is not None and rates.st_rate is not None
+            for key, value in (
+                ("modBCST", "4"),
+                ("pMVAST", format(rates.st_mva_rate, ".4f")),
+                ("vBCST", _money(tax.st_base)),
+                ("pICMSST", format(rates.st_rate, ".4f")),
+                ("vICMSST", _money(tax.st_amount)),
+            ):
+                _element(icms, key, value)
+            if rates.fcp_st_rate is not None:
+                _element(icms, "vBCFCPST", _money(tax.st_base))
+                _element(icms, "pFCPST", format(rates.fcp_st_rate, ".4f"))
+                _element(icms, "vFCPST", _money(tax.fcp_st_amount))
+    if rates.ipi_enquiry_code is not None:
         ipi = _element(parent, "IPI")
         _element(ipi, "cEnq", rates.ipi_enquiry_code)
-        group_ipi = _element(ipi, "IPITrib")
-        _element(group_ipi, "CST", "50")
-        _element(group_ipi, "vBC", _money(tax.ipi_base))
-        _element(group_ipi, "pIPI", format(rates.ipi_rate, ".4f"))
-        _element(group_ipi, "vIPI", _money(tax.ipi_amount))
+        taxable = rates.ipi_rate is not None or rates.ipi_unit_amount is not None
+        group_ipi = _element(ipi, "IPITrib" if taxable else "IPINT")
+        _element(group_ipi, "CST", "50" if taxable else rates.ipi_cst)
+        if rates.ipi_rate is not None:
+            _element(group_ipi, "vBC", _money(tax.ipi_base))
+            _element(group_ipi, "pIPI", format(rates.ipi_rate, ".4f"))
+        elif rates.ipi_unit_amount is not None:
+            _element(group_ipi, "qUnid", format(tax.ipi_taxable_quantity, ".4f"))
+            _element(group_ipi, "vUnid", format(rates.ipi_unit_amount, ".4f"))
+        if taxable:
+            _element(group_ipi, "vIPI", _money(tax.ipi_amount))
     for name, code, rate, base, amount in (
         ("PIS", outcome.pis_cst, rates.pis_rate, tax.pis_base, tax.pis_amount),
         ("COFINS", outcome.cofins_cst, rates.cofins_rate, tax.cofins_base, tax.cofins_amount),
@@ -376,3 +473,45 @@ def _taxes(parent: etree._Element, outcome: object, origin: int, tax: NfeCalcula
             _element(group_el, "vBC", _money(base))
             _element(group_el, "p" + name, format(rate, ".4f"))
             _element(group_el, "v" + name, _money(amount))
+    if rates.difal_destination_rate is not None:
+        assert rates.difal_interstate_rate is not None
+        assert rates.difal_destination_share is not None
+        uf = _element(parent, "ICMSUFDest")
+        _element(uf, "vBCUFDest", _money(tax.difal_base))
+        if rates.fcp_destination_rate is not None:
+            _element(uf, "vBCFCPUFDest", _money(tax.difal_base))
+            _element(uf, "pFCPUFDest", format(rates.fcp_destination_rate, ".4f"))
+        _element(uf, "pICMSUFDest", format(rates.difal_destination_rate, ".4f"))
+        _element(uf, "pICMSInter", format(rates.difal_interstate_rate, ".2f"))
+        _element(uf, "pICMSInterPart", format(rates.difal_destination_share, ".4f"))
+        if rates.fcp_destination_rate is not None:
+            _element(uf, "vFCPUFDest", _money(tax.fcp_destination_amount))
+        _element(uf, "vICMSUFDest", _money(tax.difal_amount))
+        _element(uf, "vICMSUFRemet", "0.00")
+    if rates.rtc_uf_rate is not None:
+        if outcome.ibs_cbs_cst_code != "000":
+            raise FiscalValidationError("RTC XML requires supported approved CST")
+        rtc = _element(parent, "IBSCBS")
+        _element(rtc, "CST", outcome.ibs_cbs_cst_code)
+        _element(rtc, "cClassTrib", outcome.ibs_cbs_classification_code)
+        rtc_group = _element(rtc, "gIBSCBS")
+        _element(rtc_group, "vBC", _money(tax.rtc_base))
+        for name, rtc_rate, rtc_value, rate_tag, value_tag in (
+            ("gIBSUF", rates.rtc_uf_rate, tax.rtc_ibs_uf_amount, "pIBSUF", "vIBSUF"),
+            (
+                "gIBSMun",
+                rates.rtc_municipal_rate,
+                tax.rtc_ibs_municipal_amount,
+                "pIBSMun",
+                "vIBSMun",
+            ),
+        ):
+            assert rtc_rate is not None
+            part = _element(rtc_group, name)
+            _element(part, rate_tag, format(rtc_rate, ".4f"))
+            _element(part, value_tag, _money(rtc_value))
+        _element(rtc_group, "vIBS", _money(tax.rtc_ibs_uf_amount + tax.rtc_ibs_municipal_amount))
+        cbs = _element(rtc_group, "gCBS")
+        assert rates.rtc_cbs_rate is not None
+        _element(cbs, "pCBS", format(rates.rtc_cbs_rate, ".4f"))
+        _element(cbs, "vCBS", _money(tax.rtc_cbs_amount))

@@ -235,17 +235,25 @@ def map_bling_document(
     )
     if document.totals.net_amount.amount != expected:
         raise FiscalValidationError("canonical total differs from Bling reconciled amount")
-    ipi = sum(
-        (
-            calculate_nfe_line(
-                line.tax_decision, net_amount=line.net_amount.amount, regime=issuer.tax_regime
-            ).ipi_amount
-            for line in document.items
-            if line.tax_decision.outcome.nfe_rates is not None
-        ),
+    calculated_taxes = tuple(
+        calculate_nfe_line(
+            line.tax_decision,
+            net_amount=line.net_amount.amount,
+            regime=issuer.tax_regime,
+            interstate_final_consumer=(
+                recipient_state != issuer.address.jurisdiction.state_code
+                and recipient.final_consumer
+                and recipient.ie_indicator == 9
+            ),
+            taxable_quantity=line.taxable_quantity or line.quantity,
+        )
+        for line in document.items
+        if line.tax_decision.outcome.nfe_rates is not None
+    )
+    expected += sum(
+        (tax.ipi_amount + tax.st_amount + tax.fcp_st_amount for tax in calculated_taxes),
         Decimal(0),
     )
-    expected += ipi
     if "total" in order and _money(order["total"], "order total") != expected:
         raise FiscalValidationError("Bling total requires reconciliation before fiscal preparation")
     if payments and document.totals.payment_amount.amount != expected:

@@ -127,33 +127,60 @@ apenas nos testes: o código de produto usa exclusivamente o cofre configurado.
 
 ### Escopo fiscal executável
 
-Esta entrega implementa venda nacional normal de mercadorias, modelo 55, em
-homologação, com cadastro fiscal governado. Não usa as sugestões NCM/CFOP do ERP
-como autoridade. Grupos executáveis: CSOSN 102/103/300/400; ICMS 00/40/41/50;
-PIS/COFINS 01/02/04/06/07/08/09. Alíquotas e bases são parâmetros explícitos da
-regra vencedora, com fonte normativa e vigência. Não existem alíquotas legais padrão.
-A configuração sintética de exemplo NÃO é recomendação tributária.
+Esta candidata prepara vendas de mercadorias NF-e modelo 55 em **homologação**,
+usando regras fiscais versionadas por empresa, unidade, NCM, regime e destinatário.
+Não usa sugestões do ERP como autoridade; não define alíquotas legais padrão.
+Grupos legados: CSOSN 102/103/300/400; ICMS 00/10/40/41/50;
+PIS/COFINS 01/02/04/06/07/08/09.
 
-IPI, ST, DIFAL, FCP e RTC exigem seus
-próprios dados e cálculo canônico; esta preparação não os implementa. Venda interestadual a consumidor final e metadados especiais de benefício/RTC
-são bloqueados explicitamente neste preparador. Não habilitar uma política para
-operações que exijam grupos tributários fora da cobertura. Grupos não suportados são bloqueados;
-a ausência de metadados não constitui prova de dispensa tributária. A cobertura
-integral desses cenários continua uma pendência interna fiscal, não um certificado
-ou cliente ausente. Produção fiscal não é ativada por esta entrega.
+**ICMS-ST e FCP-ST (CST 10):** exigem `st_rate`, `st_mva_rate` e
+`st_base_mode` (`net_mva` ou `net_plus_ipi_mva`); `fcp_st_rate` é opcional
+somente com ST. O motor calcula a base ST por MVA, subtrai o ICMS próprio do
+ICMS-ST e inclui `vST` e `vFCPST` no total da NF-e e nas parcelas conferidas.
+A base/percentual da operação devem ser aprovados pela regra fiscal local.
+Outras modalidades de base (pauta, tabelado, redução), CSTs de ST e regimes
+específicos não devem usar indevidamente esse caminho: exigem implementação
+especializada e permanecem bloqueados.
 
-O grupo FCP próprio em operações internas com ICMS CST 00 pode ser indicado
-por `fcp_rate` explícito na regra versionada, usando a base do ICMS da operação.
-O valor é calculado por item, incluído no XML e somado ao total `vFCP`.
-FCP em outros grupos, FCP-ST e FCP de destino permanecem pendentes.
+**FCP próprio e DIFAL de destino:** `fcp_rate` exige ICMS 00/10;
+o grupo ICMS10 informa também `vBCFCP`. Para destinatário final não
+contribuinte em outra UF, ICMS 00 exige `difal_destination_rate`,
+`difal_interstate_rate` (4, 7 ou 12) e `difal_destination_share`
+(100 na política desta candidata); `fcp_destination_rate` permite
+o FCP específico do destino. O XML informa ICMSUFDest, e os totais
+`vFCPUFDest` e `vICMSUFDest` são calculados sem duplicar `vNF`.
+Aplicações de DIFAL em outros CSTs/regimes, bases duplas ou benefícios
+precisam de política e caminho próprio.
 
-O IPI ad valorem de saída CST 50 tem caminho limitado e explícito, com
-`ipi_rate`, `ipi_enquiry_code` e `ipi_calculation_mode: net_icms_excluded`
-na regra fiscal. Nesse cenário a base de IPI é o valor líquido da linha e
-o IPI não integra as bases de ICMS e contribuições. O valor de IPI compõe o
-total da nota e a conciliação do pedido e pagamentos. O responsável fiscal
-deve escolher esse modo somente quando aplicável; outras composições de base,
-outros CSTs e tributação por quantidade permanecem pendentes.
+**IPI:** além de saída tributada CST 50 por alíquota (`ipi_rate`,
+`ipi_enquiry_code` e `ipi_calculation_mode: net_icms_excluded`),
+o CST 50 aceita valor fixo por unidade tributável (`ipi_unit_amount`,
+`ipi_cst: 50` e `ipi_calculation_mode: per_taxable_unit`) com quantidade
+tributável exata. CSTs de saída 51/52/53/54/55 geram IPINT, exigindo
+`ipi_cst`, `ipi_enquiry_code` e `ipi_calculation_mode: non_taxed`.
+O IPI devido integra o `vNF` e a conciliação de pedido/pagamento.
+Cálculos mistos, entradas ou outras bases não são inferidos.
+
+**RTC (IBS/CBS de 2026):** caminho inicialmente restrito a tributação
+plena CST IBS/CBS `000` com `ibs_cbs_classification_code` de seis dígitos,
+`ibs_cbs_classification_table_version`, e as três alíquotas explícitas
+`rtc_uf_rate`, `rtc_municipal_rate`, `rtc_cbs_rate`. Exige
+`rtc_base_mode: net` ou `net_less_icms_pis_cofins` e
+`rtc_financial_mode: informational_2026`. Calcula grupos `IBSCBS`
+por item, `IBSCBSTot` e `vNFTot`; preserva conciliação comercial com
+o `vNF` legado, sem presumir recolhimento. Só aceita data de emissão
+em 2026. A versão informada da tabela é proveniência de configuração,
+**não** uma homologação automática da classificação legal.
+Regimes monofásicos, redução, diferimento, suspensão, créditos, IS,
+desonerações e demais CSTs/combinações continuam exigindo sua própria
+modelagem e validação normativa. O sistema falha fechado nesses caminhos.
+
+Em todos os grupos, o enquadramento, a base, a vigência, as alíquotas e
+suas fontes normativas são responsabilidade da política aprovada para
+a empresa e operação, nunca do pedido Bling. O código não prova
+homologação SEFAZ, legalidade universal, produção ativada ou aptidão
+para todos os produtos. Testes sintéticos de assinatura/XSD não
+substituem homologação externa com certificado e credenciais reais.
 
 Para um produto cuja unidade tributável difere da comercial, a vinculação de
 produto da política pode incluir `taxable_factor` como decimal positivo em texto.
