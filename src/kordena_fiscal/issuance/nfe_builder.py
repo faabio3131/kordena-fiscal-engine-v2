@@ -132,6 +132,12 @@ def build_nfe_sale(
     )
     if destination == "2" and recipient.final_consumer:
         raise FiscalValidationError("interstate final-consumer sale requires a DIFAL/FCP decision")
+    if destination == "2" and any(
+        line.tax_decision.outcome.nfe_rates is not None
+        and line.tax_decision.outcome.nfe_rates.fcp_rate is not None
+        for line in document.items
+    ):
+        raise FiscalValidationError("interstate FCP requires destination-specific calculation")
     for key, value in (
         ("cUF", access_key.value[:2]),
         ("cNF", access_key.value[35:43]),
@@ -253,6 +259,7 @@ def build_nfe_sale(
     values = {
         "vBC": sum((t.icms_base for t in taxes), Decimal(0)),
         "vICMS": sum((t.icms_amount for t in taxes), Decimal(0)),
+        "vFCP": sum((t.fcp_amount for t in taxes), Decimal(0)),
         "vProd": document.totals.gross_amount.amount,
         "vFrete": freight,
         "vDesc": document.totals.discount_amount.amount,
@@ -343,6 +350,9 @@ def _taxes(parent: etree._Element, outcome: object, origin: int, tax: NfeCalcula
             ("vICMS", _money(tax.icms_amount)),
         ):
             _element(icms, key, value)
+        if rates.fcp_rate is not None:
+            _element(icms, "pFCP", format(rates.fcp_rate, ".4f"))
+            _element(icms, "vFCP", _money(tax.fcp_amount))
     for name, code, rate, base, amount in (
         ("PIS", outcome.pis_cst, rates.pis_rate, tax.pis_base, tax.pis_amount),
         ("COFINS", outcome.cofins_cst, rates.cofins_rate, tax.cofins_base, tax.cofins_amount),

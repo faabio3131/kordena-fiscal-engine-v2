@@ -26,9 +26,13 @@ class NfeRateParameters:
     cofins_rate: Decimal
     pis_base: Literal["net", "net_less_icms"]
     cofins_base: Literal["net", "net_less_icms"]
+    fcp_rate: Decimal | None = None
 
     def __post_init__(self) -> None:
-        for rate in (self.icms_rate, self.pis_rate, self.cofins_rate):
+        rates: tuple[Decimal, ...] = (self.icms_rate, self.pis_rate, self.cofins_rate)
+        if self.fcp_rate is not None:
+            rates += (self.fcp_rate,)
+        for rate in rates:
             if (
                 not isinstance(rate, Decimal)
                 or not rate.is_finite()
@@ -51,6 +55,7 @@ class NfeCalculatedTaxes:
     pis_amount: Decimal
     cofins_base: Decimal
     cofins_amount: Decimal
+    fcp_amount: Decimal = Decimal("0.00")
 
 
 def calculate_nfe_line(
@@ -80,6 +85,8 @@ def calculate_nfe_line(
     if not simple and code not in {"00", "40", "41", "50"}:
         raise FiscalValidationError("unsupported regular NF-e calculation group")
     taxable_icms = code == "00"
+    if policy.fcp_rate is not None and not taxable_icms:
+        raise FiscalValidationError("FCP configuration requires supported ICMS 00 group")
     if not taxable_icms and policy.icms_rate != 0:
         raise FiscalValidationError("non-taxed ICMS group conflicts with nonzero rate")
     icms_base = net_amount if taxable_icms else Decimal("0.00")
@@ -97,4 +104,7 @@ def calculate_nfe_line(
 
     pis_base, pis = contribution(outcome.pis_cst, policy.pis_rate, policy.pis_base)
     cofins_base, cofins = contribution(outcome.cofins_cst, policy.cofins_rate, policy.cofins_base)
-    return NfeCalculatedTaxes(icms_base, icms, pis_base, pis, cofins_base, cofins)
+    fcp = (icms_base * (policy.fcp_rate or Decimal(0)) / 100).quantize(
+        _CENT, rounding=ROUND_HALF_UP
+    )
+    return NfeCalculatedTaxes(icms_base, icms, pis_base, pis, cofins_base, cofins, fcp)

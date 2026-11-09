@@ -120,6 +120,8 @@ def _tax_decision(decision: TaxDecision) -> dict[str, Any]:
             "pis_base": rates.pis_base,
             "cofins_base": rates.cofins_base,
         }
+        if rates.fcp_rate is not None:
+            payload["outcome"]["nfe_rates"]["fcp_rate"] = _decimal_text(rates.fcp_rate)
     return payload
 
 

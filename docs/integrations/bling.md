@@ -142,6 +142,11 @@ a ausência de metadados não constitui prova de dispensa tributária. A cobertu
 integral desses cenários continua uma pendência interna fiscal, não um certificado
 ou cliente ausente. Produção fiscal não é ativada por esta entrega.
 
+O grupo FCP próprio em operações internas com ICMS CST 00 pode ser indicado
+por `fcp_rate` explícito na regra versionada, usando a base do ICMS da operação.
+O valor é calculado por item, incluído no XML e somado ao total `vFCP`.
+FCP em outros grupos, FCP-ST e FCP de destino permanecem pendentes.
+
 Para um produto cuja unidade tributável difere da comercial, a vinculação de
 produto da política pode incluir `taxable_factor` como decimal positivo em texto.
 O fator é a quantidade tributável por unidade comercial; por exemplo, `"2"`

@@ -403,6 +403,88 @@ def test_integrated_card_binds_transaction_to_xml_and_fingerprint(mapping, signi
         replace(payment, card_brand=None)
 
 
+def test_fcp_own_operation_is_versioned_calculated_and_signed(mapping, signing_material):
+    from lxml import etree
+
+    from kordena_fiscal.domain import ElectronicInvoiceModel
+    from kordena_fiscal.issuance.nfe_builder import NfeSaleOptions, build_nfe_sale
+    from kordena_fiscal.signing.nfe_xmldsig import NfeSignatureProfile, sign_nfe_envi_xml
+    from kordena_fiscal.xml import AccessKeyInput, build_access_key
+    from kordena_fiscal.xml.official_nfe_schema import OfficialNfeEnvelopeValidator
+
+    original = sale_document(mapping, normal=True)
+    line = original.items[0]
+    rates = replace(line.tax_decision.outcome.nfe_rates, fcp_rate=Decimal("2"))
+    decision = replace(
+        line.tax_decision, outcome=replace(line.tax_decision.outcome, nfe_rates=rates)
+    )
+    document = replace(original, items=(replace(line, tax_decision=decision),))
+    assert canonical_sha256(original) != canonical_sha256(document)
+    key = build_access_key(
+        AccessKeyInput(
+            "35", NOW, document.issuer.cnpj, ElectronicInvoiceModel.NFE, 1, 1, 1, 12345678
+        )
+    )
+    xml = build_nfe_sale(document, key, NfeSaleOptions("VENDA", 1, 9))
+    root = etree.fromstring(xml)
+    assert root.xpath("string(//*[local-name()='ICMS00']/*[local-name()='pFCP'])") == "2.0000"
+    assert root.xpath("string(//*[local-name()='ICMS00']/*[local-name()='vFCP'])") == "0.02"
+    assert root.xpath("string(//*[local-name()='ICMSTot']/*[local-name()='vFCP'])") == "0.02"
+    signed = sign_nfe_envi_xml(
+        xml, signing_material, profile=NfeSignatureProfile.NFE4_OFFICIAL_RSA_SHA1
+    )
+    OfficialNfeEnvelopeValidator()(signed)
+    with pytest.raises(FiscalValidationError, match="FCP"):
+        mapping["issuer"] = replace(mapping["issuer"], tax_regime=TaxRegimeCode.SIMPLES_NACIONAL)
+        simple = sale_document(mapping)
+        simple_line = simple.items[0]
+        simple_rates = replace(simple_line.tax_decision.outcome.nfe_rates, fcp_rate=Decimal("2"))
+        simple_decision = replace(
+            simple_line.tax_decision,
+            outcome=replace(simple_line.tax_decision.outcome, nfe_rates=simple_rates),
+        )
+        build_nfe_sale(
+            replace(simple, items=(replace(simple_line, tax_decision=simple_decision),)),
+            key,
+            NfeSaleOptions("VENDA", 1, 9),
+        )
+
+
+def test_bling_rule_loads_explicit_fcp_rate():
+    from kordena_fiscal.runtime.bling_preparation import _rule
+
+    rule = _rule(
+        {
+            "rule_id": "fcp-test",
+            "version": 1,
+            "priority": 1,
+            "source_normative": "SYNTHETIC ONLY",
+            "effective_from": NOW.isoformat(),
+            "selector": {
+                "state_code": "SP",
+                "tax_regime": 3,
+                "recipient_profile": "consumer_final",
+                "ncm_prefix": "21",
+            },
+            "outcome": {
+                "cfop": "5102",
+                "icms_code": "00",
+                "pis_cst": "07",
+                "cofins_cst": "07",
+                "nfe_rates": {
+                    "icms_rate": "18",
+                    "pis_rate": "0",
+                    "cofins_rate": "0",
+                    "pis_base": "net",
+                    "cofins_base": "net",
+                    "fcp_rate": "2",
+                },
+            },
+        }
+    )
+    assert rule.outcome.nfe_rates.fcp_rate == Decimal("2")
+
+
 def test_atomic_preparation_replays_without_certificate_and_rolls_back_number(
     mapping, signing_material, tmp_path, preparation_database
 ):
