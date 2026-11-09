@@ -52,6 +52,11 @@ from .bling_installation_schema import (
     BLING_INSTALLATION_SCHEMA,
     BLING_INSTALLATION_VERSION,
 )
+from .bling_runtime_schema import (
+    BLING_RUNTIME_NAME,
+    BLING_RUNTIME_SCHEMA,
+    BLING_RUNTIME_VERSION,
+)
 from .cognitive_quota_schema import (
     COGNITIVE_QUOTA_NAME,
     COGNITIVE_QUOTA_SCHEMA,
@@ -864,6 +869,16 @@ class PostgresFiscalDatabase:
                          datetime.now().astimezone().isoformat()),
                     )
                     new_versions.append(BLING_INSTALLATION_VERSION)
+                if BLING_RUNTIME_VERSION not in applied:
+                    for statement in BLING_RUNTIME_SCHEMA:
+                        raw.execute(statement)
+                    raw.execute(
+                        "INSERT INTO fm_schema_migrations (version, name, applied_at) "
+                        "VALUES (%s, %s, %s)",
+                        (BLING_RUNTIME_VERSION, BLING_RUNTIME_NAME,
+                         datetime.now().astimezone().isoformat()),
+                    )
+                    new_versions.append(BLING_RUNTIME_VERSION)
                 raw.commit()
                 return tuple(new_versions)
             except Exception:
@@ -889,7 +904,7 @@ class PostgresFiscalDatabase:
         versions instead of creating tables during startup.
         """
         applied = self.applied_migrations()
-        required = tuple(range(1, BLING_INSTALLATION_VERSION + 1))
+        required = tuple(range(1, BLING_RUNTIME_VERSION + 1))
         if applied != required:
             raise PersistenceStateError(
                 "PostgreSQL schema is not at the certified migration version"
@@ -926,6 +941,19 @@ class PostgresFiscalDatabase:
             raise
         except Exception as exc:
             raise PersistenceStateError("Bling installation schema is incomplete") from exc
+        try:
+            with self.connection() as connection:
+                row = connection.execute(
+                    "SELECT to_regclass('public.fm_bling_installation_runtime')"
+                ).fetchone()
+            if row is None or not row[0]:
+                raise PersistenceStateError("Bling runtime configuration schema is incomplete")
+        except PersistenceStateError:
+            raise
+        except Exception as exc:
+            raise PersistenceStateError(
+                "Bling runtime configuration schema is incomplete"
+            ) from exc
         return applied
 
     def unit_of_work(self) -> PostgresFiscalUnitOfWork:
