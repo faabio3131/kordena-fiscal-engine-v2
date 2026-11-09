@@ -12,6 +12,11 @@ from kordena_fiscal.persistence.bling_installation_schema import (
     BLING_INSTALLATION_SCHEMA,
     BLING_INSTALLATION_VERSION,
 )
+from kordena_fiscal.persistence.bling_runtime_schema import (
+    BLING_RUNTIME_NAME,
+    BLING_RUNTIME_SCHEMA,
+    BLING_RUNTIME_VERSION,
+)
 from kordena_fiscal.persistence.cakto import (
     CAKTO_SCHEMA_NAME,
     CAKTO_SCHEMA_STATEMENTS,
@@ -114,6 +119,7 @@ def validate_policy() -> tuple[int, ...]:
         PUBLIC_TRIAL_RATE_VERSION,
         COGNITIVE_QUOTA_VERSION,
         BLING_INSTALLATION_VERSION,
+        BLING_RUNTIME_VERSION,
     )
     if versions != tuple(range(1, max(versions) + 1)):
         raise RuntimeError(f"migration versions must be contiguous from 1: {versions!r}")
@@ -193,6 +199,11 @@ def validate_policy() -> tuple[int, ...]:
         version=BLING_INSTALLATION_VERSION,
         name=BLING_INSTALLATION_NAME,
         statements=BLING_INSTALLATION_SCHEMA,
+    )
+    _reject_unapproved_destructive(
+        version=BLING_RUNTIME_VERSION,
+        name=BLING_RUNTIME_NAME,
+        statements=BLING_RUNTIME_SCHEMA,
     )
     print(
         "migration policy: PASS "
