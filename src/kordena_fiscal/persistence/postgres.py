@@ -47,6 +47,11 @@ from kordena_fiscal.security.human_identity import (
 )
 from kordena_fiscal.security.human_recovery import PasswordResetRecord
 
+from .bling_installation_schema import (
+    BLING_INSTALLATION_NAME,
+    BLING_INSTALLATION_SCHEMA,
+    BLING_INSTALLATION_VERSION,
+)
 from .cognitive_quota_schema import (
     COGNITIVE_QUOTA_NAME,
     COGNITIVE_QUOTA_SCHEMA,
@@ -849,6 +854,16 @@ class PostgresFiscalDatabase:
                         ),
                     )
                     new_versions.append(COGNITIVE_QUOTA_VERSION)
+                if BLING_INSTALLATION_VERSION not in applied:
+                    for statement in BLING_INSTALLATION_SCHEMA:
+                        raw.execute(statement)
+                    raw.execute(
+                        "INSERT INTO fm_schema_migrations (version, name, applied_at) "
+                        "VALUES (%s, %s, %s)",
+                        (BLING_INSTALLATION_VERSION, BLING_INSTALLATION_NAME,
+                         datetime.now().astimezone().isoformat()),
+                    )
+                    new_versions.append(BLING_INSTALLATION_VERSION)
                 raw.commit()
                 return tuple(new_versions)
             except Exception:
@@ -874,7 +889,7 @@ class PostgresFiscalDatabase:
         versions instead of creating tables during startup.
         """
         applied = self.applied_migrations()
-        required = tuple(range(1, COGNITIVE_QUOTA_VERSION + 1))
+        required = tuple(range(1, BLING_INSTALLATION_VERSION + 1))
         if applied != required:
             raise PersistenceStateError(
                 "PostgreSQL schema is not at the certified migration version"
@@ -898,6 +913,19 @@ class PostgresFiscalDatabase:
             raise PersistenceStateError(
                 "PostgreSQL schema is not at the certified migration version"
             ) from exc
+        try:
+            with self.connection() as connection:
+                tables = connection.execute(
+                    "SELECT to_regclass('public.fm_bling_installations'), "
+                    "to_regclass('public.fm_bling_oauth_flows'), "
+                    "to_regclass('public.fm_bling_credentials')"
+                ).fetchone()
+            if tables is None or len(tables) != 3 or not all(tables):
+                raise PersistenceStateError("Bling installation schema is incomplete")
+        except PersistenceStateError:
+            raise
+        except Exception as exc:
+            raise PersistenceStateError("Bling installation schema is incomplete") from exc
         return applied
 
     def unit_of_work(self) -> PostgresFiscalUnitOfWork:
