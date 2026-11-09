@@ -30,6 +30,7 @@ class NfeRateParameters:
     ipi_rate: Decimal | None = None
     ipi_enquiry_code: str | None = None
     ipi_calculation_mode: str | None = None
+    ipi_cst: str | None = None
 
     def __post_init__(self) -> None:
         rates: tuple[Decimal, ...] = (self.icms_rate, self.pis_rate, self.cofins_rate)
@@ -43,6 +44,11 @@ class NfeRateParameters:
             self.ipi_rate is not None and self.ipi_calculation_mode != "net_icms_excluded"
         ):
             raise FiscalValidationError("IPI calculation mode must be explicitly reviewed")
+        if self.ipi_cst is not None:
+            if self.ipi_rate is None or self.ipi_cst not in {"50", "51", "52", "53", "54", "55"}:
+                raise FiscalValidationError("unsupported IPI output CST")
+            if self.ipi_cst != "50" and self.ipi_rate != 0:
+                raise FiscalValidationError("non-taxed IPI group requires zero rate")
         if self.ipi_enquiry_code is not None and (
             not isinstance(self.ipi_enquiry_code, str)
             or len(self.ipi_enquiry_code) != 3

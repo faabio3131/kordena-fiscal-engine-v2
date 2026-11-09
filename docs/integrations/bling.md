@@ -155,6 +155,10 @@ total da nota e a conciliação do pedido e pagamentos. O responsável fiscal
 deve escolher esse modo somente quando aplicável; outras composições de base,
 outros CSTs e tributação por quantidade permanecem pendentes.
 
+Há construção candidata para os grupos de saída IPI não tributado CST
+51/52/53/54/55 com alíquota zero e `ipi_cst` explícito; essa ampliação ainda
+exige validação integrada antes de ser considerada concluída.
+
 Para um produto cuja unidade tributável difere da comercial, a vinculação de
 produto da política pode incluir `taxable_factor` como decimal positivo em texto.
 O fator é a quantidade tributável por unidade comercial; por exemplo, `"2"`

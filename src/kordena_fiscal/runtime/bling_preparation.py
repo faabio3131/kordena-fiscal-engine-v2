@@ -101,6 +101,7 @@ def _rule(data: Mapping[str, Any]) -> TaxRule:
         "ipi_rate",
         "ipi_enquiry_code",
         "ipi_calculation_mode",
+        "ipi_cst",
     }:
         raise FiscalValidationError("unsupported fiscal calculation parameters")
     return TaxRule(
@@ -137,6 +138,7 @@ def _rule(data: Mapping[str, Any]) -> TaxRule:
                 Decimal(str(rates["ipi_rate"])) if "ipi_rate" in rates else None,
                 rates.get("ipi_enquiry_code"),
                 rates.get("ipi_calculation_mode"),
+                rates.get("ipi_cst"),
             ),
         ),
     )

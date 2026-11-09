@@ -360,11 +360,13 @@ def _taxes(parent: etree._Element, outcome: object, origin: int, tax: NfeCalcula
     if rates.ipi_rate is not None:
         ipi = _element(parent, "IPI")
         _element(ipi, "cEnq", rates.ipi_enquiry_code)
-        group_ipi = _element(ipi, "IPITrib")
-        _element(group_ipi, "CST", "50")
-        _element(group_ipi, "vBC", _money(tax.ipi_base))
-        _element(group_ipi, "pIPI", format(rates.ipi_rate, ".4f"))
-        _element(group_ipi, "vIPI", _money(tax.ipi_amount))
+        code_ipi = rates.ipi_cst or "50"
+        group_ipi = _element(ipi, "IPITrib" if code_ipi == "50" else "IPINT")
+        _element(group_ipi, "CST", code_ipi)
+        if code_ipi == "50":
+            _element(group_ipi, "vBC", _money(tax.ipi_base))
+            _element(group_ipi, "pIPI", format(rates.ipi_rate, ".4f"))
+            _element(group_ipi, "vIPI", _money(tax.ipi_amount))
     for name, code, rate, base, amount in (
         ("PIS", outcome.pis_cst, rates.pis_rate, tax.pis_base, tax.pis_amount),
         ("COFINS", outcome.cofins_cst, rates.cofins_rate, tax.cofins_base, tax.cofins_amount),

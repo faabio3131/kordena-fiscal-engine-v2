@@ -126,6 +126,8 @@ def _tax_decision(decision: TaxDecision) -> dict[str, Any]:
             payload["outcome"]["nfe_rates"]["ipi_rate"] = _decimal_text(rates.ipi_rate)
             payload["outcome"]["nfe_rates"]["ipi_enquiry_code"] = rates.ipi_enquiry_code
             payload["outcome"]["nfe_rates"]["ipi_calculation_mode"] = rates.ipi_calculation_mode
+            if rates.ipi_cst is not None:
+                payload["outcome"]["nfe_rates"]["ipi_cst"] = rates.ipi_cst
     return payload
 
 
