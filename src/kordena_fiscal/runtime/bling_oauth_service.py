@@ -335,17 +335,36 @@ class BlingOAuthService:
                 connection.commit()
 
     def revoke_local(self, scope: ExecutionScope, installation_id: str) -> None:
+        """Immediately pause locally, then best-effort provider revocation.
+
+        An upstream error retains the encrypted credentials for retry, but the
+        local installation is already PAUSED and cannot dispatch any new jobs.
+        """
         current = self._scope(scope, installation_id)
-        self.installations.transition(
-            scope, installation_id, expected_revision=current.revision,
-            state=BlingInstallationState.PAUSED,
-        )
-        with self.database.connection() as connection:
-            connection.execute(
-                "DELETE FROM fm_bling_credentials WHERE installation_id = ?",
-                (installation_id,),
+        if current.state is not BlingInstallationState.PAUSED:
+            self.installations.transition(
+                scope, installation_id, expected_revision=current.revision,
+                state=BlingInstallationState.PAUSED,
             )
-            connection.commit()
+        with self.database.connection() as connection:
+            row = connection.execute(
+                "SELECT refresh_ciphertext FROM fm_bling_credentials "
+                "WHERE installation_id = ?", (installation_id,),
+            ).fetchone()
+        if row is not None:
+            try:
+                token = self.cipher.open(installation_id, "refresh", str(row[0]))
+                self.client.revoke(token)
+            except BlingOAuthError as exc:
+                raise BlingOAuthUnavailable(
+                    "Bling upstream revocation pending", retryable=exc.retryable,
+                ) from None
+            with self.database.connection() as connection:
+                connection.execute(
+                    "DELETE FROM fm_bling_credentials WHERE installation_id = ?",
+                    (installation_id,),
+                )
+                connection.commit()
 
     def webhook_secret(self, installation_id: str) -> bytes:
         view = self.installations.get_by_id(installation_id)
