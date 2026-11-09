@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import sqlite3
 from contextlib import contextmanager
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from types import TracebackType
-from typing import Iterator, TypeVar
+from typing import TypeVar
 
 from kordena_fiscal.domain import FiscalValidationError
 
