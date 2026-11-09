@@ -3,14 +3,20 @@
 from __future__ import annotations
 
 import sqlite3
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from types import TracebackType
-from typing import TypeVar
+from typing import Iterator, TypeVar
 
 from kordena_fiscal.domain import FiscalValidationError
 
+from .bling_installation_schema import (
+    BLING_INSTALLATION_NAME,
+    BLING_INSTALLATION_SCHEMA,
+    BLING_INSTALLATION_VERSION,
+)
 from .cognitive_quota_schema import (
     COGNITIVE_QUOTA_NAME,
     COGNITIVE_QUOTA_SCHEMA,
@@ -699,6 +705,14 @@ class SqliteFiscalDatabase:
         connection.execute("PRAGMA busy_timeout = 30000")
         return connection
 
+    @contextmanager
+    def connection(self) -> Iterator[sqlite3.Connection]:
+        connection = self._connect()
+        try:
+            yield connection
+        finally:
+            connection.close()
+
     def initialize(self) -> tuple[int, ...]:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         connection = self._connect()
@@ -794,6 +808,16 @@ class SqliteFiscalDatabase:
                     ),
                 )
                 new_versions.append(COGNITIVE_QUOTA_VERSION)
+            if BLING_INSTALLATION_VERSION not in applied:
+                for statement in BLING_INSTALLATION_SCHEMA:
+                    connection.execute(statement)
+                connection.execute(
+                    "INSERT INTO fm_schema_migrations (version, name, applied_at) "
+                    "VALUES (?, ?, ?)",
+                    (BLING_INSTALLATION_VERSION, BLING_INSTALLATION_NAME,
+                     datetime.now().astimezone().isoformat()),
+                )
+                new_versions.append(BLING_INSTALLATION_VERSION)
             connection.commit()
             return tuple(new_versions)
         except Exception:
