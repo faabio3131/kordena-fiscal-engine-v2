@@ -6,7 +6,6 @@ import base64
 import hashlib
 import json
 import sqlite3
-from collections.abc import Mapping
 from datetime import UTC, datetime
 from uuid import uuid4
 
