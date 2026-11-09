@@ -1,7 +1,7 @@
 """Opt-in Bling composition on the existing Worker; credentials are provisioned later."""
 
 import hashlib
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 from kordena_fiscal.application.bling_orders import (
@@ -60,28 +60,44 @@ def build_bling_orders(
 def build_bling_worker(
     database: FiscalUnitOfWorkFactory,
     environ: Mapping[str, str],
+    *,
+    token_provider: Callable[[], str] | None = None,
 ) -> ScopedWorkerHandlerComposition:
     """Claim only the exact installation's Bling operations, never another worker's jobs."""
     orders = build_bling_orders(database, environ)
     application, scope = orders.application, orders.scope
     token_file = environ.get("NFCORE_BLING_ACCESS_TOKEN_FILE", "").strip()
-    if not token_file:
-        raise RuntimeConfigurationError("Bling OAuth token file is not configured")
-    path = Path(token_file)
-
-    def token() -> str:
-        # Re-read a mounted secret each time so rotation needs no application restart.
-        try:
-            with path.open("rb") as stream:
-                raw = stream.read(8193)
-            value = raw.decode("ascii").strip()
-            if len(raw) > 8192 or not value or any(not 33 <= ord(c) <= 126 for c in value):
-                raise ValueError("invalid token")
+    if token_provider is not None and token_file:
+        raise RuntimeConfigurationError("Bling OAuth token has ambiguous authority")
+    if token_provider is not None:
+        def token() -> str:
+            value = token_provider()
+            if not isinstance(value, str) or not value or any(
+                not 33 <= ord(char) <= 126 for char in value
+            ):
+                raise RuntimeConfigurationError("Bling OAuth token unavailable")
             return value
-        except (OSError, ValueError):
-            raise RuntimeConfigurationError("Bling OAuth token is unavailable") from None
+    else:
+        if not token_file:
+            raise RuntimeConfigurationError("Bling OAuth token file is not configured")
+        path = Path(token_file)
 
-    token()  # No network access; refuse startup with an unusable secret mount.
+        def token() -> str:
+            # Legacy single-company mode: re-read the deployment-owned file.
+            try:
+                with path.open("rb") as stream:
+                    raw = stream.read(8193)
+                value = raw.decode("ascii").strip()
+                if len(raw) > 8192 or not value or any(
+                    not 33 <= ord(char) <= 126 for char in value
+                ):
+                    raise ValueError("invalid token")
+                return value
+            except (OSError, ValueError):
+                raise RuntimeConfigurationError("Bling OAuth token is unavailable") from None
+
+        token()  # The legacy startup probe is local, without provider I/O.
+
     validated_token_digest: str | None = None
 
     def scoped_token() -> str:
