@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "policy_id": "SYNTHETIC-ONLY",
+  "version": 1,
+  "company_id": "SYNTHETIC-COMPANY",
+  "tenant_id": "tenant",
+  "unit_id": "unit",
+  "environment": "homologation",
+  "issuer_profile_id": "issuer",
+  "issuer_profile_version": 1,
+  "products": {
+    "SKU": {
+      "product_id": "p1",
+      "version": 1
+    }
+  },
+  "payment_methods": {
+    "7": "pix"
+  },
+  "series": 1,
+  "sale_options": {
+    "nature": "VENDA",
+    "presence": 1,
+    "freight_mode": 9
+  },
+  "rules": [
+    {
+      "rule_id": "synthetic-rule",
+      "version": 1,
+      "source_normative": "SYNTHETIC ONLY",
+      "effective_from": "2026-11-09T00:00:00+00:00",
+      "priority": 1,
+      "selector": {
+        "state_code": "SP",
+        "tax_regime": 1,
+        "recipient_profile": "consumer_final",
+        "ncm_prefix": "2106"
+      },
+      "outcome": {
+        "cfop": "5102",
+        "icms_code": "102",
+        "pis_cst": "07",
+        "cofins_cst": "07",
+        "nfe_rates": {
+          "icms_rate": "0",
+          "pis_rate": "0",
+          "cofins_rate": "0",
+          "pis_base": "net",
+          "cofins_base": "net"
+        }
+      }
+    }
+  ]
+}

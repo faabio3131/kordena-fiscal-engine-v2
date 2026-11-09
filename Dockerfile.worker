@@ -13,7 +13,7 @@ RUN groupadd --gid 10001 nfcore && useradd --uid 10001 --gid 10001 --no-create-h
 
 COPY pyproject.toml README.md ./
 COPY src ./src
-RUN python -m pip install --upgrade pip && python -m pip install ".[postgres,telemetry]"
+RUN python -m pip install --upgrade pip && python -m pip install ".[postgres,telemetry,web]"
 
 USER 10001:10001
 STOPSIGNAL SIGTERM

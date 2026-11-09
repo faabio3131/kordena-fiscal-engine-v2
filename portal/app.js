@@ -364,6 +364,12 @@ async function api(path, options = {}) {
   if (!response.ok) {
     const detail = body && typeof body === "object" ? body.detail : null;
     const messages = {
+      BLING_PREPARATION_NOT_CONFIGURED: "A política fiscal da integração ainda não foi configurada.",
+      BLING_PREPARATION_BLOCKED: "Preparação bloqueada. Confira destinatário, perfis fiscais, regras, pagamentos e certificado; nenhum envio foi iniciado por esta tentativa.",
+      BLING_NOT_CONFIGURED: "Integração Bling ainda não configurada para revisão.",
+      BLING_REVIEW_CONFLICT: "O pedido mudou ou o documento não está preparado neste escopo. Consulte novamente antes de aprovar.",
+      BLING_ORDER_NOT_FOUND: "Pedido ainda não recebido nesta instalação Bling.",
+      BLING_SCOPE_FORBIDDEN: "A instalação Bling não pertence à sua organização.",
       SESSION_REQUIRED: "Entre novamente para acessar o escopo autorizado.",
       INVALID_SESSION: "A sessão expirou ou foi revogada. Entre novamente.",
       CSRF_REQUIRED: "A proteção da sessão precisa ser renovada. Entre novamente antes de repetir.",
@@ -1883,6 +1889,7 @@ async function renderSurface(viewId) {
       notice.textContent = "Referência cadastrada não comprova segredo resolvido, entrega, homologação ou produção. Webhooks exigem aprovação vigente da plataforma.";
       appendCustomerConfiguration(article, viewId, rows);
       if (viewId === "certificates") appendA1UploadForm(article);
+      if (viewId === "integrations") appendBlingReview(article);
       article.append(notice);
     }
     if (viewId === "onboarding" || viewId === "units") appendOnboardingControls(article);
@@ -1917,6 +1924,133 @@ async function renderSurface(viewId) {
 }
 
 /** @returns {Set<string>|null} */
+/** @param {HTMLElement} article */
+function appendBlingReview(article) {
+  const form = document.createElement("form");
+  const heading = document.createElement("h3"); heading.textContent = "Revisão de pedidos Bling";
+  const label = document.createElement("label"); label.textContent = "Número interno do pedido no Bling";
+  const order = document.createElement("input"); order.type = "text"; order.inputMode = "numeric";
+  order.required = true; order.pattern = "[1-9][0-9]*"; label.append(order);
+  const lookup = document.createElement("button"); lookup.type = "submit"; lookup.textContent = "Consultar pedido";
+  const output = document.createElement("div"); output.setAttribute("aria-live", "polite");
+  form.append(heading, label, lookup, output); article.append(form);
+  let generation = 0;
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault(); const current = ++generation;
+    const path = `/v1/portal/integrations/bling/orders/${encodeURIComponent(order.value)}`;
+    lookup.disabled = true; output.textContent = "Consultando pedido...";
+    try {
+      const result = await api(path);
+      if (current !== generation) return;
+      output.replaceChildren();
+      const state = document.createElement("p");
+      state.textContent = `Situação: ${String(result.order?.state || "indisponível")}`; output.append(state);
+      for (const snapshot of Array.isArray(result.snapshots) ? result.snapshots : []) {
+        const details = document.createElement("details");
+        const summary = document.createElement("summary");
+        summary.textContent = snapshot.sha256 === result.order?.snapshot_sha256 ? "Pedido selecionado" : "Atualização aguardando revisão";
+        const content = document.createElement("pre"); content.textContent = JSON.stringify(snapshot.content, null, 2);
+        details.append(summary, content); output.append(details);
+        if (snapshot.sha256 !== result.order?.snapshot_sha256 && !result.order?.document_id && !result.order?.deleted) {
+          const select = document.createElement("button"); select.type = "button"; select.textContent = "Selecionar esta atualização";
+          select.addEventListener("click", async () => {
+            select.disabled = true;
+            try {
+              await api(`${path}/select-snapshot`, {method: "POST", headers: {"X-CSRF-Token": csrfToken()}, body: JSON.stringify({snapshot_sha256: snapshot.sha256})});
+              form.requestSubmit();
+            } catch (error) { state.textContent = (error instanceof Error ? error.message : "Falha ao revisar pedido Bling."); select.disabled = false; }
+          }); details.append(select);
+        }
+      }
+      if (!result.order?.document_id && !result.order?.changed_snapshot_sha256 && !result.order?.deleted) {
+        if (result.preparation?.configured) appendBlingPreparation(output, result, path, () => form.requestSubmit());
+        const documentLabel = document.createElement("label"); documentLabel.textContent = "Documento fiscal preparado no NFCore";
+        const documentId = document.createElement("input"); documentId.type = "text"; documentLabel.append(documentId);
+        const confirmLabel = document.createElement("label");
+        const confirm = document.createElement("input"); confirm.type = "checkbox";
+        confirmLabel.append(confirm, "Revisei o pedido e a correspondência com o documento fiscal preparado.");
+        const approve = document.createElement("button"); approve.type = "button"; approve.textContent = "Aprovar envio";
+        approve.addEventListener("click", async () => {
+          if (!confirm.checked || !documentId.value.trim()) { state.textContent = "Informe o documento e confirme a revisão."; return; }
+          approve.disabled = true;
+          try {
+            await api(`${path}/approve-prepared`, {method: "POST", headers: {"X-CSRF-Token": csrfToken()}, body: JSON.stringify({snapshot_sha256: result.order.snapshot_sha256, document_id: documentId.value.trim()})});
+            form.requestSubmit();
+          } catch (error) { state.textContent = (error instanceof Error ? error.message : "Falha ao revisar pedido Bling."); approve.disabled = false; }
+        }); output.append(documentLabel, confirmLabel, approve);
+      }
+    } catch (error) { if (current === generation) output.textContent = (error instanceof Error ? error.message : "Falha ao revisar pedido Bling."); }
+    finally { if (current === generation) lookup.disabled = false; }
+  });
+  order.addEventListener("input", () => { generation++; output.replaceChildren(); lookup.disabled = false; });
+}
+
+/** @param {HTMLElement} output @param {any} result @param {string} path @param {()=>void} refresh */
+function appendBlingPreparation(output, result, path, refresh) {
+  const box = document.createElement("fieldset");
+  const legend = document.createElement("legend"); legend.textContent = "Preparar NF-e a partir do pedido"; box.append(legend);
+  const notice = document.createElement("p"); notice.textContent = `Política fiscal ${result.preparation.policy_id}, versão ${result.preparation.version}. Confira o destinatário antes de preparar e enviar.`; box.append(notice);
+  const raw = result.snapshots?.find((/** @type {any} */ snapshot) => snapshot.sha256 === result.order.snapshot_sha256)?.content?.raw || {};
+  const contact = raw.contato || {}; const address = contact.endereco || {};
+  /** @type {Record<string, unknown>} */
+  const defaults = {document: contact.numeroDocumento, name: contact.nome, street: address.endereco,
+    number: address.numero, district: address.bairro, municipality_name: address.municipio,
+    municipality_ibge_code: address.codigoMunicipio, state: address.uf, postal_code: address.cep,
+    complement: address.complemento, state_registration: contact.ie};
+  /** @type {Record<string, HTMLInputElement>} */
+  const inputs = {};
+  for (const [key, label] of [["document", "CPF/CNPJ do destinatário"], ["name", "Nome do destinatário"],
+    ["street", "Logradouro"], ["number", "Número do endereço"], ["district", "Bairro"],
+    ["municipality_name", "Município"], ["municipality_ibge_code", "Código IBGE do município"],
+    ["state", "UF"], ["postal_code", "CEP"], ["complement", "Complemento (opcional)"],
+    ["state_registration", "Inscrição estadual (quando aplicável)"]]) {
+    const wrapper = document.createElement("label"); wrapper.textContent = label;
+    const input = document.createElement("input"); input.type = "text";
+    input.value = String(defaults[key] || ""); inputs[key] = input;
+    wrapper.append(input); box.append(wrapper);
+  }
+  const ieLabel = document.createElement("label"); ieLabel.textContent = "Condição da inscrição estadual";
+  const ie = document.createElement("select"); ie.setAttribute("aria-label", "Condição da inscrição estadual");
+  for (const [value, text] of [["", "Selecione"], ["1", "Contribuinte"], ["2", "Isento"], ["9", "Não contribuinte"]]) {
+    const option = document.createElement("option"); option.value = value; option.textContent = text; ie.append(option);
+  } ieLabel.append(ie); box.append(ieLabel);
+  const finalLabel = document.createElement("label"); finalLabel.textContent = "Consumidor final";
+  const final = document.createElement("select"); final.setAttribute("aria-label", "Consumidor final");
+  for (const [value, text] of [["", "Selecione"], ["true", "Sim"], ["false", "Não"]]) {
+    const option = document.createElement("option"); option.value = value; option.textContent = text; final.append(option);
+  } finalLabel.append(final); box.append(finalLabel);
+  /** @type {Record<string, Record<string, HTMLInputElement>>} */
+  const cardInputs = {};
+  for (const index of result.preparation.integrated_card_indexes || []) {
+    const group = document.createElement("fieldset");
+    const title = document.createElement("legend"); title.textContent = `Pagamento ${index + 1}: cartão integrado`; group.append(title);
+    cardInputs[String(index)] = {};
+    for (const [key, label] of [["acquirer_cnpj", "CNPJ da instituição de pagamento"], ["brand", "Código da bandeira"], ["authorization", "Autorização da operação"]]) {
+      const wrapper = document.createElement("label"); wrapper.textContent = `${label} — pagamento ${index + 1}`;
+      const input = document.createElement("input"); input.type = "text"; input.autocomplete = "off";
+      cardInputs[String(index)][key] = input; wrapper.append(input); group.append(wrapper);
+    }
+    box.append(group);
+  }
+  const confirmLabel = document.createElement("label"); const confirm = document.createElement("input"); confirm.type = "checkbox";
+  confirmLabel.append(confirm, "Revisei o pedido, o destinatário e a política fiscal indicada."); box.append(confirmLabel);
+  const status = document.createElement("p"); status.setAttribute("role", "status");
+  const prepare = document.createElement("button"); prepare.type = "button"; prepare.textContent = "Preparar e enviar NF-e";
+  prepare.addEventListener("click", async () => {
+    if (!confirm.checked || !ie.value || !final.value || Object.entries(inputs).some(([key, input]) => !["complement", "state_registration"].includes(key) && !input.value.trim()) || Object.values(cardInputs).some(fields => Object.values(fields).some(input => !input.value.trim()))) {
+      status.textContent = "Preencha os dados do destinatário e confirme a revisão."; return;
+    }
+    const recipient = {...Object.fromEntries(Object.entries(inputs).map(([key, input]) => [key, input.value.trim()])), ie_indicator: Number(ie.value), final_consumer: final.value === "true"};
+    const cardPayments = Object.fromEntries(Object.entries(cardInputs).map(([index, fields]) => [index, Object.fromEntries(Object.entries(fields).map(([key, input]) => [key, input.value.trim()]))]));
+    prepare.disabled = true; status.textContent = "Preparando documento fiscal...";
+    try {
+      const cardReview = Object.keys(cardPayments).length ? {card_payments: cardPayments} : {};
+      await api(`${path}/prepare`, {method: "POST", headers: {"X-CSRF-Token": csrfToken()}, body: JSON.stringify({snapshot_sha256: result.order.snapshot_sha256, policy_sha256: result.preparation.sha256, issued_at: result.preparation.issued_at, recipient, ...cardReview})});
+      refresh();
+    } catch (error) { status.textContent = error instanceof Error ? error.message : "Falha na preparação fiscal."; prepare.disabled = false; }
+  }); box.append(prepare, status); output.append(box);
+}
+
 function availableSurfaces() {
   const value = bootstrapState?.projection.available_surfaces;
   if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) return null;

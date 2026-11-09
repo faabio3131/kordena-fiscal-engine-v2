@@ -67,3 +67,22 @@ O serviço reutiliza `Dockerfile.worker` e `kordena_fiscal.runtime.worker_main`.
 
 **Não executar o Worker até:** autorização humana específica, acesso operacional ao servidor, auditoria do `production`/DB/segredos GSM, observabilidade, E2E de escopo/outbox/retry, recovery e Go/No-Go. Em especial, `NFCORE_WORKER_GSM_MODE` e material de assinatura não podem ser simulados em produção. O overlay por si só não constitui integração produtiva nem homologação.
 
+
+### Identidades fiscais S2S do Bridge
+
+Monte no serviço da API, em modo somente leitura, um arquivo de credenciais
+gerenciado fora do Git e aponte `NFCORE_BRIDGE_CREDENTIALS_FILE` para o caminho
+interno do container. Restrinja o acesso ao arquivo à operação autorizada e ao
+processo da API. O arquivo deve conter um array JSON de registros com
+`credential_id`, `caller_id`, `host_namespace`, `capabilities`, `scope_grants`
+(lista de objetos com `tenant_id` e `unit_id`), `environments`
+(`homologation` ou `production`), `secret_sha256`, `valid_from` e `expires_at`
+(ISO 8601 com fuso) e `revoked` (booleano). Gere o Bearer com alta entropia e
+entregue-o ao integrador por canal seguro. O arquivo contém apenas seu verificador
+SHA-256. Cada grant deve corresponder ao binding fiscal já autorizado no NFCore.
+
+A API lê o arquivo no arranque. Rotação e revogação exigem atualização atômica
+do arquivo e reinício de todos os workers. Verifique
+`bridge_workload_identity_configured` em `/runtime/profile` e valide uma consulta
+autenticada de capacidades. Arquivo configurado inválido bloqueia o arranque.
+Sem o caminho configurado, a API inicia com o Bridge sem credenciais.
