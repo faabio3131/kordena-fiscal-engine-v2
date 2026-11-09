@@ -1,4 +1,82 @@
-> **BLING FISCAL ? CANDIDATA PR #404 ? 09/11/2026 (N?O MERGEADA, N?O IMPLANTADA):** C?pia isolada da branch \`feat/bling-taxable-unit-conversion\` recebeu paths governados de ICMS10/ST/FCP-ST, DIFAL/FCP destino, IPI CST50 ad valorem ou por unidade, IPI n?o tributado CST51?55 e RTC IBS/CBS CST000 informativo 2026. XML XSD oficial e assinatura sint?tica passaram nos testes dirigidos; regress?o completa e CI da PR exigem certifica??o no commit publicado. A documenta??o de limites est? em \`docs/integrations/bling.md\`. N?o alegar cobertura universal de todos os CSTs, regimes, enquadramentos ou homologa??o fiscal externa. Produ??o e merge n?o autorizados por esta nota.
+# AGENTS.md — Master Execution Schedule: Centro-Oeste Expansion (NFCore V1)
+
+> **Status do Documento:** Ativo / Governança de Execução  
+> **Escopo:** Expansão e Cobertura Total da Região Centro-Oeste (DF, GO, MT, MS)  
+> **Regra de Ouro:** A execução deve seguir estritamente a **Ordem Sequencial de Fases**. Nenhuma fase subsequente pode ser iniciada sem o fechamento com testes, validação XSD e *merge* bem-sucedido da fase anterior.
+
+---
+
+## 1. Diretrizes de Governança para o Agente Executor
+
+1. **Sequenciamento Estrito:** O agente executor deve processar as tasks na ordem exata definida neste arquivo (Sprint 1 -> 2 -> 3 -> 4).
+2. **Atualização Obrigatória de Estado:** Após cada PR (Pull Request) validada e mergeada, o agente deve atualizar este arquivo alterando o status de `[ ]` para `[x]` na respectiva tarefa e registrar o hash do commit/PR correspondente.
+3. **Validação de Contrato Canônico:** Todos os municípios e conectores adicionados devem respeitar o schema canônico definido em `contracts/v1/schemas/fm-fiscal.schema.json`.
+4. **Isolamento de Erros:** Caso ocorra falha em um lote municipal (ex: timeout em webservice de prefeitura), o agente deve isolar a exceção na fila de *outbox/inbox*, registrar em log estruturado e continuar o processamento dos demais municípios do bloco.
+
+---
+
+## 2. Cronograma Parametrizado por Ordem de Execução
+
+### FASE 1: Distrito Federal (DF Completo)
+* **Objetivo:** Estabelecer o conector unificado para a unidade federativa do Distrito Federal (SEFAZ-DF / ISS Distrital).
+* **Dependências:** Sistema governado de isenções fiscais 100% estabilizado.
+
+- [ ] **DF-01:** Mapeamento do WebService e contrato de integração da SEFAZ-DF / ISS Distrital.
+- [ ] **DF-02:** Criação do adaptador de roteamento específico para o Distrito Federal (sem divisão municipal).
+- [ ] **DF-03:** Parametrização das regras fiscais unificadas para as Regiões Administrativas (Brasília, Taguatinga, Ceilândia, etc.).
+- [ ] **DF-04:** Bateria de testes sintéticos de emissão e validação XSD para o DF.
+- [ ] **DF-05:** Homologação e PR de fechamento da Fase 1. *(Hash/PR: ___________)*
+
+---
+
+### FASE 2: Goiás (GO — 100% dos 246 Municípios)
+* **Objetivo:** Cobrir integralmente a malha municipal do estado de Goiás, priorizando polos industriais, eixo de Goiânia/Anápolis, Rio Verde e Entorno do DF.
+* **Dependências:** Fase 1 concluída e validada.
+
+- [ ] **GO-01:** Geração da matriz automatizada de carga para os 246 municípios de GO baseada em provedores padrão (ISSNet, IPM, Ginfes, etc.).
+- [ ] **GO-02:** Conexão e refinamento dos webservices de alta volumetria: Goiânia e Anápolis.
+- [ ] **GO-03:** Integração do polo agroindustrial de Rio Verde, Jataí e Catalão.
+- [ ] **GO-04:** Integração dos municípios do Entorno do DF (Luziânia, Valparaíso de Goiás, Formosa).
+- [ ] **GO-05:** Carga e teste em lote dos demais municípios remanescentes do estado.
+- [ ] **GO-06:** Validação de herança do sistema de isenções fiscais aplicadas às peculiaridades goianas.
+- [ ] **GO-07:** Homologação e PR de fechamento da Fase 2. *(Hash/PR: ___________)*
+
+---
+
+### FASE 3: Mato Grosso (MT — 100% dos 141 Municípios)
+* **Objetivo:** Integrar a malha municipal de Mato Grosso, com foco cirúrgico nos hubs de escoamento de grãos, transporte e agroindústria.
+* **Dependências:** Fase 2 concluída e validada.
+
+- [ ] **MT-01:** Mapeamento de carga em lote para os 141 municípios do estado de Mato Grosso.
+- [ ] **MT-02:** Implementação e testes do conector para a capital (Cuiabá) e Várzea Grande.
+- [ ] **MT-03:** Integração dos polos críticos do agronegócio e logística: Sorriso, Sinop, Rondonópolis e Lucas do Rio Verde.
+- [ ] **MT-04:** Tratamento de regras específicas de incidência de ISS vs ICMS para operações de armazéns gerais e transporte de grãos.
+- [ ] **MT-05:** Varredura e homologação dos municípios remanescentes de MT.
+- [ ] **MT-06:** Homologação e PR de fechamento da Fase 3. *(Hash/PR: ___________)*
+
+---
+
+### FASE 4: Mato Grosso do Sul (MS — 100% dos 79 Municípios)
+* **Objetivo:** Fechar o ciclo regional integrando a malha de Mato Grosso do Sul, com foco em Campo Grande, fronteiras e polos industriais/celulose.
+* **Dependências:** Fase 3 concluída e validada.
+
+- [ ] **MS-01:** Mapeamento de carga em lote para os 79 municípios de Mato Grosso do Sul.
+- [ ] **MS-02:** Conexão e homologação dos eixos principais: Campo Grande e Dourados.
+- [ ] **MS-03:** Integração do polo industrial de celulose e logística em Três Lagoas.
+- [ ] **MS-04:** Integração das praças de fronteira e comércio internacional (Corumbá e Ponta Porã).
+- [ ] **MS-05:** Fechamento e teste integrado da malha municipal restante de MS.
+- [ ] **MS-06:** Auditoria final de cobertura do Centro-Oeste (DF + GO + MT + MS).
+- [ ] **MS-07:** Homologação e PR de fechamento da Fase 4 e Conclusão do Bloco Centro-Oeste. *(Hash/PR: ___________)*
+
+---
+
+## 3. Log de Atualizações de Entregas (Audit Trail)
+
+> *Este log deve ser obrigatoriamente atualizado pelo agente executor a cada entrega de Sprint.*
+
+| Data (UTC) | Fase / Task ID | Ação Realizada / Descrição | PR / Commit Hash | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| A definir | Inicialização | Criação do roadmap master do Centro-Oeste | Pendente | `[ ]` |> **BLING FISCAL ? CANDIDATA PR #404 ? 09/11/2026 (N?O MERGEADA, N?O IMPLANTADA):** C?pia isolada da branch \`feat/bling-taxable-unit-conversion\` recebeu paths governados de ICMS10/ST/FCP-ST, DIFAL/FCP destino, IPI CST50 ad valorem ou por unidade, IPI n?o tributado CST51?55 e RTC IBS/CBS CST000 informativo 2026. XML XSD oficial e assinatura sint?tica passaram nos testes dirigidos; regress?o completa e CI da PR exigem certifica??o no commit publicado. A documenta??o de limites est? em \`docs/integrations/bling.md\`. N?o alegar cobertura universal de todos os CSTs, regimes, enquadramentos ou homologa??o fiscal externa. Produ??o e merge n?o autorizados por esta nota.
 >
 > **EXECUÇÃO INTERNA BLING — 09/11/2026:** PR #403, `feat/bling-ingress`. Preparação nativa implementada: pedido revisado → perfis/regras canônicos → XML assinado/XSD → documento/numeração/vínculo/fila na mesma transação. Portal e CLI integrados, política versionada e pinada por SHA-256. Certificação no HEAD em andamento. Escopo e limites fiscais em `docs/integrations/bling.md` e `agentes.md`; não confundir com cobertura tributária universal. Sem deploy ou promoção. Fechar evidência do Bling antes do Tiny. Certificados/clientes reais não bloqueiam construção interna.
 
