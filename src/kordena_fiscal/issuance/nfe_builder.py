@@ -130,6 +130,8 @@ def build_nfe_sale(
         if issuer.address.jurisdiction.state_code == recipient.address.jurisdiction.state_code
         else "2"
     )
+    if destination == "2" and recipient.final_consumer:
+        raise FiscalValidationError("interstate final-consumer sale requires a DIFAL/FCP decision")
     for key, value in (
         ("cUF", access_key.value[:2]),
         ("cNF", access_key.value[35:43]),
@@ -173,6 +175,14 @@ def build_nfe_sale(
         _element(dest, "IE", recipient.state_registration.number)
     for line, tax in zip(document.items, taxes, strict=True):
         product = line.product
+        if (
+            product.hints.fiscal_benefit_code is not None
+            or product.hints.ibs_cbs_classification_code is not None
+            or line.restaurant_decision is not None
+        ):
+            raise FiscalValidationError(
+                "special fiscal metadata requires its authoritative builder"
+            )
         if any(
             value.amount != value.amount.quantize(Decimal("0.01"))
             for value in (

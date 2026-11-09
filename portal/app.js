@@ -2010,12 +2010,12 @@ function appendBlingPreparation(output, result, path, refresh) {
     wrapper.append(input); box.append(wrapper);
   }
   const ieLabel = document.createElement("label"); ieLabel.textContent = "Condição da inscrição estadual";
-  const ie = document.createElement("select");
+  const ie = document.createElement("select"); ie.setAttribute("aria-label", "Condição da inscrição estadual");
   for (const [value, text] of [["", "Selecione"], ["1", "Contribuinte"], ["2", "Isento"], ["9", "Não contribuinte"]]) {
     const option = document.createElement("option"); option.value = value; option.textContent = text; ie.append(option);
   } ieLabel.append(ie); box.append(ieLabel);
   const finalLabel = document.createElement("label"); finalLabel.textContent = "Consumidor final";
-  const final = document.createElement("select");
+  const final = document.createElement("select"); final.setAttribute("aria-label", "Consumidor final");
   for (const [value, text] of [["", "Selecione"], ["true", "Sim"], ["false", "Não"]]) {
     const option = document.createElement("option"); option.value = value; option.textContent = text; final.append(option);
   } finalLabel.append(final); box.append(finalLabel);

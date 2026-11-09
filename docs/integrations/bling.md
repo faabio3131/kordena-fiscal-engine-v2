@@ -135,8 +135,9 @@ regra vencedora, com fonte normativa e vigência. Não existem alíquotas legais
 A configuração sintética de exemplo NÃO é recomendação tributária.
 
 IPI, ST, DIFAL, FCP, RTC, conversão de unidades e cartões integrados exigem seus
-próprios dados e cálculo canônico; esta preparação não os implementa. Não habilitar
-uma política para operações que os exijam. Grupos não suportados são bloqueados;
+próprios dados e cálculo canônico; esta preparação não os implementa. Venda interestadual a consumidor final e metadados especiais de benefício/RTC
+são bloqueados explicitamente neste preparador. Não habilitar uma política para
+operações que exijam grupos tributários fora da cobertura. Grupos não suportados são bloqueados;
 a ausência de metadados não constitui prova de dispensa tributária. A cobertura
 integral desses cenários continua uma pendência interna fiscal, não um certificado
 ou cliente ausente. Produção fiscal não é ativada por esta entrega.

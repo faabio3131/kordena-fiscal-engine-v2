@@ -196,6 +196,10 @@ class BlingSalePreparer:
         self.environ = environ
 
     def policy(self, orders: BlingOrders) -> tuple[dict[str, Any], str]:
+        policy, digest, _raw = self._policy_artifact(orders)
+        return policy, digest
+
+    def _policy_artifact(self, orders: BlingOrders) -> tuple[dict[str, Any], str, bytes]:
         path = self.environ.get("NFCORE_BLING_FISCAL_POLICY_FILE", "")
         expected = self.environ.get("NFCORE_BLING_FISCAL_POLICY_SHA256", "")
         if not path or not re.fullmatch(r"[0-9a-f]{64}", expected):
@@ -253,7 +257,7 @@ class BlingSalePreparer:
                     or not binding["product_id"]
                 ):
                     raise FiscalValidationError("invalid product profile binding")
-            return policy, expected
+            return policy, expected, raw
         except (OSError, KeyError, TypeError, ValueError, RecursionError):
             raise FiscalValidationError("Bling fiscal policy is unavailable or invalid") from None
 
@@ -264,7 +268,7 @@ class BlingSalePreparer:
             raise FiscalValidationError(
                 "Bling preparation requires the reviewed snapshot and policy"
             )
-        policy, digest = self.policy(orders)
+        policy, digest, policy_bytes = self._policy_artifact(orders)
         if digest != payload["policy_sha256"]:
             raise FiscalValidationError("Bling fiscal policy changed after review")
         row = orders.get(order_id)
@@ -355,9 +359,7 @@ class BlingSalePreparer:
                             scope=orders.scope,
                             document_reference=policy_key,
                             kind=FiscalArchiveKind.OTHER,
-                            content=json.dumps(
-                                policy, sort_keys=True, separators=(",", ":")
-                            ).encode(),
+                            content=policy_bytes,
                             media_type="application/vnd.nfcore.bling-fiscal-policy.v1+json",
                             archived_at=now,
                             retention=RetentionPolicyMetadata("nfcore-fiscal-policy", 1),

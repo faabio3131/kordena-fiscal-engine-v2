@@ -460,6 +460,15 @@ def test_configured_native_preparer_queues_signed_document_atomically(
     with pytest.raises(FiscalValidationError):
         preparer.prepare(orders, 123, payload, "reviewer")
     assert orders.get(123)["document_id"] is None
+    with database() as uow:
+        policies = [
+            entry
+            for entry in uow.archive.list_for_scope(orders.scope)
+            if entry.media_type == "application/vnd.nfcore.bling-fiscal-policy.v1+json"
+        ]
+        assert len(policies) == 1
+        assert policies[0].content == path.read_bytes()
+        assert policies[0].content_sha256 == digest
     monkeypatch.setenv("NFCORE_A1_VAULT_DIR", str(tmp_path / "vault"))
     monkeypatch.setenv("NFCORE_A1_VAULT_KEY_BASE64", base64.b64encode(bytes(range(32))).decode())
     vault = EncryptedA1Vault.from_environ()
@@ -535,6 +544,23 @@ def test_configured_native_preparer_queues_signed_document_atomically(
     )
     assert returned.run_once(now=datetime.now(UTC))[0].status is FiscalOutboxStatus.SUCCEEDED
     assert writes == [(123, 10)]
+    from kordena_fiscal.persistence import PersistenceConflictError
+
+    # Even a newly pinned file cannot rewrite an already used policy version.
+    policy["rules"][0]["priority"] = 2
+    path = tmp_path / "policy.json"
+    path.write_text(json.dumps(policy))
+    changed_digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    changed = BlingSalePreparer(
+        {
+            "NFCORE_BLING_FISCAL_POLICY_FILE": str(path),
+            "NFCORE_BLING_FISCAL_POLICY_SHA256": changed_digest,
+        }
+    )
+    with pytest.raises(PersistenceConflictError):
+        changed.prepare(orders, 123, {**payload, "policy_sha256": changed_digest}, "reviewer")
+    assert orders.get(123)["state"] == "authorized"
+    assert transport.calls == 1
 
 
 @pytest.mark.parametrize(
@@ -728,3 +754,22 @@ def test_policy_pin_scope_and_versions_are_enforced(mapping, tmp_path):
     ):
         with pytest.raises(FiscalValidationError):
             configured({**example, **changes}).policy(orders)
+
+
+@pytest.mark.parametrize("hint", ["fiscal_benefit_code", "ibs_cbs_classification_code"])
+def test_special_product_metadata_is_never_silently_dropped(mapping, signing_material, hint):
+    from kordena_fiscal.domain import ElectronicInvoiceModel, TaxClassificationHints
+    from kordena_fiscal.issuance.nfe_builder import NfeSaleOptions, build_nfe_sale
+    from kordena_fiscal.xml import AccessKeyInput, build_access_key
+
+    document = sale_document(mapping)
+    line = document.items[0]
+    product = replace(line.product, hints=TaxClassificationHints(**{hint: "SYNTHETIC"}))
+    document = replace(document, items=(replace(line, product=product),))
+    key = build_access_key(
+        AccessKeyInput(
+            "35", NOW, document.issuer.cnpj, ElectronicInvoiceModel.NFE, 1, 1, 1, 12345678
+        )
+    )
+    with pytest.raises(FiscalValidationError, match="special fiscal metadata"):
+        build_nfe_sale(document, key, NfeSaleOptions("VENDA", 1, 9))
