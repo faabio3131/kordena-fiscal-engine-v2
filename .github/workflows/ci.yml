@@ -141,6 +141,11 @@ jobs:
           docker build -f Dockerfile.worker -t nfcore-worker:test .
           docker build -f Dockerfile.portal -t nfcore-portal:test .
 
+      - name: Validate Bling worker runtime dependencies
+        run: |
+          docker run --rm nfcore-worker:test python -c \
+            "from kordena_fiscal.runtime.bling_worker import build_bling_worker; from kordena_fiscal.application.bling_status_delivery import BlingStatusPublisher"
+
       - name: Validate non-root images
         run: |
           test "$(docker image inspect nfcore-api:test --format '{{.Config.User}}')" = "10001:10001"

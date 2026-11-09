@@ -9,7 +9,11 @@ from datetime import datetime
 from enum import StrEnum
 
 from kordena_fiscal.archive import FiscalArchiveEntry, FiscalArchiveKind, RetentionPolicyMetadata
-from kordena_fiscal.contingency import FiscalOutboxEnqueueResult, FiscalOutboxEntry
+from kordena_fiscal.contingency import (
+    FiscalOutboxEnqueueResult,
+    FiscalOutboxEntry,
+    FiscalOutboxService,
+)
 from kordena_fiscal.domain import (
     BrazilianJurisdiction,
     ExecutionScope,
@@ -234,6 +238,7 @@ class FiscalApplicationService:
         received_at: datetime,
         causation_id: str | None = None,
         idempotency_key: str | None = None,
+        processing_operation: str | None = None,
     ) -> FiscalInboxReceiveResult:
         """Atomically persist one inbound event before any application processing."""
 
@@ -249,6 +254,15 @@ class FiscalApplicationService:
                 causation_id=causation_id,
                 idempotency_key=idempotency_key,
             )
+            if processing_operation is not None:
+                persisted = result.entry
+                FiscalOutboxService(uow.outbox).enqueue(
+                    scope=persisted.scope,
+                    operation=processing_operation,
+                    deduplication_key=persisted.entry_id,
+                    payload=persisted.entry_id.encode("ascii"),
+                    created_at=persisted.received_at,
+                )
             uow.commit()
             return result
 

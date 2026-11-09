@@ -121,9 +121,12 @@ def normalize_erp_order(payload: Mapping[str, Any], *, platform: str) -> dict[st
         )
     total = sum((i["vProd"] for i in items), Decimal("0.00"))
     document_field = "numeroDocumento" if platform == "BLING_V3" else "cpf_cnpj"
+    order_id = order.get("id")
+    if platform == "BLING_V3" and type(order_id) is int and order_id > 0:
+        order_id = str(order_id)
     return {
         "source_platform": platform,
-        "external_order_id": _text(order.get("id"), "id do pedido"),
+        "external_order_id": _text(order_id, "id do pedido"),
         "customer": {
             "document": _document(customer.get(document_field)),
             "name": _text(customer.get("nome"), "nome"),
