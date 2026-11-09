@@ -80,7 +80,10 @@ class BlingRecoveryResult:
     correlation_id: str
 
     def __post_init__(self) -> None:
-        if not all((self.operation_id, self.installation_id, self.correlation_id)) or self.order_id <= 0:
+        if (
+            not all((self.operation_id, self.installation_id, self.correlation_id))
+            or self.order_id <= 0
+        ):
             raise ValueError("invalid Bling recovery result")
 
 
