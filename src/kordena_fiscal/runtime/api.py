@@ -82,6 +82,7 @@ from .composition import (
     RuntimeComposition,
     build_postgres_runtime_composition,
 )
+from .bridge_credentials import load_bridge_credentials
 from .config import RuntimeConfigurationError, RuntimeSettings
 from .development_commercial_ingress import (
     development_command_resolver,
@@ -1095,6 +1096,7 @@ _entrypoint_certificate_vault = EncryptedA1Vault.from_environ()
 _development_ingress = development_commercial_ingress(_entrypoint_settings, os.environ)
 app = create_runtime_app(
     _entrypoint_settings,
+    workload_credentials=load_bridge_credentials(os.environ),
     password_reset_delivery=build_activation_delivery_from_environ(),
     certificate_vault=_entrypoint_certificate_vault,
     fiscal_dependency_probe=lambda: fiscal_external_dependency_snapshot(
