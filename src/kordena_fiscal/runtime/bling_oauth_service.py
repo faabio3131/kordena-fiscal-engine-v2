@@ -100,7 +100,10 @@ class BlingOAuthService:
         verifier: BlingCompanyVerifier,
         *,
         required_scopes: frozenset[str],
+        webhook_secret: str,
     ) -> None:
+        if not webhook_secret or len(webhook_secret) < 16:
+            raise BlingOAuthUnavailable("Bling webhook secret not configured")
         if not required_scopes:
             raise BlingOAuthUnavailable("Bling approved scopes missing")
         self.database = database
@@ -109,6 +112,7 @@ class BlingOAuthService:
         self.client = client
         self.verifier = verifier
         self.required_scopes = required_scopes
+        self._webhook_secret = webhook_secret
 
     def _scope(self, scope: ExecutionScope, installation_id: str):
         view = self.installations.get_for_scope(scope, installation_id)
@@ -169,13 +173,13 @@ class BlingOAuthService:
             tokens = self.client.exchange(code)
             self._validate_tokens(tokens)
             self.verifier(tokens.access_token, current.company_id)
-        except (BlingOAuthError, Exception) as exc:
-            # A failed verification is not allowed to replace existing credentials.
+        except Exception:
             raise BlingOAuthUnavailable("Bling OAuth connection unavailable") from None
-        self._replace_credentials(installation_id, tokens, expected_revision=0)
-        self.installations.transition(
-            scope, installation_id, expected_revision=current.revision,
-            state=BlingInstallationState.CONNECTED,
+        # Token and installation state are one canonical transaction, preventing
+        # a failed CAS from assigning a new credential to a competing install.
+        self._replace_credentials(
+            installation_id, tokens, expected_revision=0,
+            scope=scope, expected_installation_revision=current.revision,
         )
 
     def _validate_tokens(self, tokens: BlingTokenSet) -> None:
@@ -186,22 +190,56 @@ class BlingOAuthService:
         self, installation_id: str, tokens: BlingTokenSet, *,
         expected_revision: int,
         lease_owner: str | None = None,
+        scope: ExecutionScope | None = None,
+        expected_installation_revision: int | None = None,
     ) -> None:
         access = self.cipher.seal(installation_id, "access", tokens.access_token)
         refresh = self.cipher.seal(installation_id, "refresh", tokens.refresh_token)
         now = datetime.now(UTC).isoformat()
         with self.database.connection() as connection:
             if expected_revision == 0:
+                if scope is None or expected_installation_revision is None:
+                    raise PersistenceConflictError("Bling OAuth installation authority missing")
+                changed = connection.execute(
+                    "UPDATE fm_bling_installations SET state = ?, "
+                    "revision = revision + 1, updated_at = ? "
+                    "WHERE installation_id = ? AND tenant_id = ? AND unit_id = ? "
+                    "AND environment = ? AND revision = ?",
+                    (
+                        BlingInstallationState.CONNECTED.value, now, installation_id,
+                        scope.tenant_id, scope.unit_id, scope.environment.value,
+                        expected_installation_revision,
+                    ),
+                )
+                if changed.rowcount != 1:
+                    connection.rollback()
+                    raise PersistenceConflictError("Bling installation authorization changed")
+                webhook = self.cipher.seal(
+                    installation_id, "webhook", self._webhook_secret,
+                )
                 changed = connection.execute(
                     "INSERT INTO fm_bling_credentials "
                     "(installation_id, access_ciphertext, refresh_ciphertext, "
-                    "access_expires_at, refresh_expires_at, scopes_json, token_revision, "
-                    "refresh_lease_owner, refresh_lease_until, updated_at) "
-                    "VALUES (?, ?, ?, ?, ?, ?, 1, NULL, NULL, ?) "
-                    "ON CONFLICT (installation_id) DO NOTHING",
-                    (installation_id, access, refresh, tokens.access_expires_at.isoformat(),
-                     tokens.refresh_expires_at.isoformat(),
-                     json.dumps(sorted(tokens.scopes)), now),
+                    "webhook_secret_ciphertext, access_expires_at, refresh_expires_at, "
+                    "scopes_json, token_revision, refresh_lease_owner, "
+                    "refresh_lease_until, updated_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, 1, NULL, NULL, ?) "
+                    "ON CONFLICT (installation_id) DO UPDATE SET "
+                    "access_ciphertext = EXCLUDED.access_ciphertext, "
+                    "refresh_ciphertext = EXCLUDED.refresh_ciphertext, "
+                    "webhook_secret_ciphertext = EXCLUDED.webhook_secret_ciphertext, "
+                    "access_expires_at = EXCLUDED.access_expires_at, "
+                    "refresh_expires_at = EXCLUDED.refresh_expires_at, "
+                    "scopes_json = EXCLUDED.scopes_json, "
+                    "token_revision = fm_bling_credentials.token_revision + 1, "
+                    "refresh_lease_owner = NULL, refresh_lease_until = NULL, "
+                    "updated_at = EXCLUDED.updated_at",
+                    (
+                        installation_id, access, refresh, webhook,
+                        tokens.access_expires_at.isoformat(),
+                        tokens.refresh_expires_at.isoformat(),
+                        json.dumps(sorted(tokens.scopes)), now,
+                    ),
                 )
             else:
                 changed = connection.execute(
@@ -211,10 +249,12 @@ class BlingOAuthService:
                     "refresh_lease_owner = NULL, refresh_lease_until = NULL, updated_at = ? "
                     "WHERE installation_id = ? AND token_revision = ? "
                     "AND refresh_lease_owner = ?",
-                    (access, refresh, tokens.access_expires_at.isoformat(),
-                     tokens.refresh_expires_at.isoformat(),
-                     json.dumps(sorted(tokens.scopes)), now,
-                     installation_id, expected_revision, lease_owner),
+                    (
+                        access, refresh, tokens.access_expires_at.isoformat(),
+                        tokens.refresh_expires_at.isoformat(),
+                        json.dumps(sorted(tokens.scopes)), now,
+                        installation_id, expected_revision, lease_owner,
+                    ),
                 )
             if changed.rowcount != 1:
                 connection.rollback()
