@@ -7,6 +7,11 @@ import hashlib
 import os
 import re
 
+from kordena_fiscal.persistence.bling_installation_schema import (
+    BLING_INSTALLATION_NAME,
+    BLING_INSTALLATION_SCHEMA,
+    BLING_INSTALLATION_VERSION,
+)
 from kordena_fiscal.persistence.cakto import (
     CAKTO_SCHEMA_NAME,
     CAKTO_SCHEMA_STATEMENTS,
@@ -56,11 +61,6 @@ from kordena_fiscal.persistence.secret_binding_schema import (
     SECRET_BINDING_NAME,
     SECRET_BINDING_SCHEMA,
     SECRET_BINDING_VERSION,
-)
-from kordena_fiscal.persistence.bling_installation_schema import (
-    BLING_INSTALLATION_NAME,
-    BLING_INSTALLATION_SCHEMA,
-    BLING_INSTALLATION_VERSION,
 )
 from kordena_fiscal.persistence.sqlite import _MIGRATIONS
 
