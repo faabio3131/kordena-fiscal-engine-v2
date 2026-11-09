@@ -76,15 +76,28 @@ def test_cas_rejects_concurrent_transition_and_duplicate_binding(tmp_path: Path)
     db = registered_database(tmp_path)
     store = BlingInstallationRepository(db)
     host = HostScope(HostNamespace("bling"), "t1", "u1")
-    created = store.create(host_scope=host, company_id="company", environment=FiscalEnvironment.HOMOLOGATION)
+    created = store.create(
+        host_scope=host, company_id="company", environment=FiscalEnvironment.HOMOLOGATION,
+    )
     with pytest.raises(PersistenceConflictError):
-        store.create(host_scope=host, company_id="company", environment=FiscalEnvironment.HOMOLOGATION)
+        store.create(
+            host_scope=host, company_id="company", environment=FiscalEnvironment.HOMOLOGATION,
+        )
     scope = scoped(db, "t1", "u1")
-    connected = store.transition(scope, created.installation_id, expected_revision=1, state=BlingInstallationState.CONNECTED)
+    connected = store.transition(
+        scope, created.installation_id, expected_revision=1,
+        state=BlingInstallationState.CONNECTED,
+    )
     assert connected.revision == 2
     with pytest.raises(PersistenceConflictError):
-        store.transition(scope, created.installation_id, expected_revision=1, state=BlingInstallationState.PAUSED)
-    assert store.get_for_scope(scope, created.installation_id).state is BlingInstallationState.CONNECTED
+        store.transition(
+            scope, created.installation_id, expected_revision=1,
+            state=BlingInstallationState.PAUSED,
+        )
+    assert (
+        store.get_for_scope(scope, created.installation_id).state
+        is BlingInstallationState.CONNECTED
+    )
 
 
 def test_pagination_cursor_and_invalid_host_binding_fail_closed(tmp_path: Path) -> None:
