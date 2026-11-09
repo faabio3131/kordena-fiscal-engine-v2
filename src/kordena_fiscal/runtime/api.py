@@ -72,7 +72,9 @@ from .ai_secrets import build_production_openai_key_readers
 from .alert_rules import InternalAlertMonitor, OperationalSignals
 from .api_staging_gsm_probe import staging_probe_verifier
 from .bling_ingress import build_bling_ingress
+from .bling_review import build_bling_review_router
 from .bling_status import build_bling_status_router
+from .bling_worker import build_bling_orders
 from .bridge_credentials import load_bridge_credentials
 from .cakto import build_cakto_webhook_router, compose_postgres_cakto_commercial_runtime
 from .cakto_claim_email import build_cakto_claim_delivery_from_environ
@@ -796,6 +798,11 @@ def create_runtime_app(
     if bling_router is not None:
         app.include_router(bling_router)
         if composition is not None and runtime.database is not None:
+            bling_database = runtime.database
+            app.include_router(build_bling_review_router(
+                composition.human_identity,
+                lambda: build_bling_orders(bling_database, os.environ),
+            ))
             app.include_router(build_bling_status_router(
                 runtime.database, os.environ["NFCORE_BLING_COMPANY_ID"].strip(),
                 composition.bridge_security,

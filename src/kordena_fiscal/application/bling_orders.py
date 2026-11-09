@@ -94,6 +94,20 @@ class BlingOrders:
                     return data
         raise PersistenceStateError("Bling snapshot is unavailable")
 
+    def review_snapshots(self, order_id: int) -> list[dict[str, Any]]:
+        """Expose only the selected and latest pending snapshots to authorized reviewers."""
+        row = self.get(order_id)
+        if row is None:
+            raise FiscalValidationError("Bling order not found")
+        digests = {row.get("snapshot_sha256"), row.get("changed_snapshot_sha256")}
+        with self.factory() as uow:
+            entries = uow.archive.list_for_document(self.scope, self.key(order_id))
+        return [
+            {"sha256": entry.content_sha256, "content": json.loads(entry.content)}
+            for entry in entries
+            if entry.media_type == MEDIA_TYPE and entry.content_sha256 in digests
+        ]
+
     def stage(
         self,
         order_id: int,

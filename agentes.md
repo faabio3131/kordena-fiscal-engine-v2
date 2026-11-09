@@ -131,7 +131,8 @@ não substituem testes internos nem justificam deixar etapas de software por faz
 - **Bloco Bling continua EM EXECUÇÃO:** a vinculação atual exige documento já
   preparado. A transformação completa do pedido bruto em documento fiscal preparado
   continua sendo uma lacuna interna; não classificá-la como falta de A1 nem declarar
-  emissão automática de pedidos concluída. A interface de revisão também precisa
-  integrar esta jornada antes do fechamento integral previsto neste documento.
+  emissão automática de pedidos concluída. A interface de revisão agora consulta snapshots, seleciona atualização e aprova
+  o vínculo preparado com sessão, CSRF e escopo por empresa/unidade. A preparação
+  fiscal a partir do pedido ainda precisa integrar esta jornada antes do fechamento.
 - Tiny permanece na sequência, depois do Bling. Nenhuma redução do aceite original,
   implantação, promoção ou homologação externa decorre desta atualização.

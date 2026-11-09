@@ -116,8 +116,7 @@ exclusão fora de ordem, timeout após autorização/escrita, retomada, resultad
 retorno recusado, reprocessamento auditável e ausência de configuração externa.
 
 O aceite original de `agentes.md` permanece aberto: faltam a transformação completa
-do pedido em documento fiscal preparado e a jornada de revisão na interface. Não
-são dependências externas. O CLI e a vinculação a documento preparado não devem ser
+do pedido em documento fiscal preparado. Não é dependência externa. O CLI e a vinculação a documento preparado não devem ser
 anunciados como emissão automática do pedido. CI/Docker/PostgreSQL da candidata
 precisam de evidência no SHA publicado. Homologação com Bling/SEFAZ, credenciais reais
 e deploy permanecem separados. Não iniciar Tiny nem promover este bloco incompleto.
@@ -131,3 +130,23 @@ de aprovação concorrente e a matriz Bling foi parametrizada para PostgreSQL co
 schema descartável exclusivo. Essa variante usa o banco provisionado pela CI;
 a máquina local não possui PostgreSQL/Docker. Ruff e Mypy strict passaram.
 A CI no HEAD da PR é a autoridade para PostgreSQL, imagem e checks remotos.
+
+
+### Revisão autenticada no portal
+
+Em **Integrações → Revisão de pedidos Bling**, informe o identificador interno do
+pedido. A tela consulta os snapshots imutáveis selecionado e atualizado, mostra
+seus dados como texto e permite selecionar a atualização antes de qualquer vínculo.
+O envio exige referência a documento preparado e confirmação explícita de revisão.
+O backend deriva empresa, unidade e ator da instalação e da sessão; exige
+`integration.manage` para consulta e também `document.issue` e CSRF para mutações.
+Nenhuma credencial OAuth ou certificado é necessário para consultar e revisar.
+
+- `GET /v1/portal/integrations/bling/orders/{id}` — snapshots e estado, `no-store`.
+- `POST .../{id}/select-snapshot` — corpo exclusivo `snapshot_sha256`.
+- `POST .../{id}/approve-prepared` — `snapshot_sha256` e `document_id`.
+
+Atualização concorrente retorna conflito; a tela deve consultar novamente. A
+aprovação repetida do mesmo vínculo é idempotente. Dados de outra organização ou
+unidade não são expostos. Esta tela fecha a revisão do handoff preparado, mas não
+substitui o preparador fiscal do pedido ainda em construção.

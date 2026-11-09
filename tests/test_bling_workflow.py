@@ -854,3 +854,82 @@ def test_signed_http_event_through_worker_issuance_and_official_return(installat
         assert provider.calls == 1
         assert client.post("/webhooks/bling", content=body, headers=headers).status_code == 202
         assert worker.run_once(now=datetime.now(UTC)) == ()
+
+
+def review_client(orders, *, tenant="tenant", unit="unit", role="owner"):
+    from kordena_fiscal.runtime.bling_review import build_bling_review_router
+    from kordena_fiscal.security.human_identity import (
+        HumanAccount,
+        HumanIdentityService,
+        InMemoryHumanAccountRepository,
+        InMemoryWebSessionRepository,
+        PortalRole,
+        ScryptPasswordHasher,
+    )
+    from kordena_fiscal.web import create_app
+
+    password = "synthetic-review-password-2026"
+    hasher = ScryptPasswordHasher()
+    identity = HumanIdentityService(
+        accounts=InMemoryHumanAccountRepository((HumanAccount(
+            account_id="reviewer", email="review@example.test",
+            password_hash=hasher.hash(password), tenant_id=tenant,
+            role=PortalRole(role), unit_ids=frozenset({unit}),
+        ),)),
+        sessions=InMemoryWebSessionRepository(), password_hasher=hasher,
+    )
+    app = create_app(human_identity=identity)
+    app.include_router(build_bling_review_router(identity, lambda: orders))
+    client = TestClient(app, base_url="https://nfcore.test")
+    assert client.post("/v1/auth/login", json={
+        "email": "review@example.test", "password": password,
+    }).status_code == 200
+    return client
+
+
+def test_portal_bling_review_session_csrf_snapshot_and_real_approval(installation):
+    _db, application, orders = installation
+    orders.stage(9001, RAW, event_id="review-1", now=NOW)
+    orders.stage(
+        9001, {**RAW, "observacoes": "revised"},
+        event_id="review-2", now=NOW + timedelta(seconds=1),
+    )
+    client = review_client(orders)
+    path = "/v1/portal/integrations/bling/orders/9001"
+    reviewed = client.get(path)
+    assert reviewed.status_code == 200
+    assert reviewed.headers["cache-control"] == "no-store"
+    data = reviewed.json()
+    assert len(data["snapshots"]) == 2
+    digest = data["order"]["changed_snapshot_sha256"]
+    body = {"snapshot_sha256": digest}
+    assert client.post(path + "/select-snapshot", json=body).status_code == 403
+    headers = {"X-CSRF-Token": client.cookies.get("nfcore_csrf")}
+    assert client.post(path + "/select-snapshot", json={**body, "actor_id": "spoof"},
+                       headers=headers).status_code == 422
+    assert client.post(path + "/select-snapshot", json=body, headers=headers).status_code == 200
+    assert orders.get(9001)["reviewed_by"] == "reviewer"
+    prepare(application, orders.scope)
+    approval = {**body, "document_id": "doc-test"}
+    assert client.post(path + "/approve-prepared", json=approval,
+                       headers=headers).status_code == 200
+    assert client.post(path + "/approve-prepared", json=approval,
+                       headers=headers).status_code == 200
+    assert orders.get(9001)["state"] == "queued"
+    assert orders.get(9001)["approved_by"] == "reviewer"
+    client.cookies.clear()
+    assert client.get(path).status_code == 401
+
+
+@pytest.mark.parametrize("attributes", [
+    {"tenant": "other-tenant"}, {"unit": "other-unit"}, {"role": "auditor"},
+])
+def test_portal_bling_review_rejects_other_tenant_unit_or_role(installation, attributes):
+    _db, _application, orders = installation
+    orders.stage(9001, RAW, event_id="review-1", now=NOW)
+    client = review_client(orders, **attributes)
+    path = "/v1/portal/integrations/bling/orders/9001"
+    assert client.get(path).status_code == 403
+    assert client.post(path + "/select-snapshot", json={"snapshot_sha256": "x"},
+                       headers={"X-CSRF-Token": client.cookies.get("nfcore_csrf")}
+                       ).status_code == 403
