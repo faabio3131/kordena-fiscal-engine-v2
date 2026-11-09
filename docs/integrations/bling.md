@@ -151,8 +151,8 @@ Precisão incompatível ou valores que não reconciliem bloqueiam a preparação
 
 Para cartões integrados, `card_integration_type: 1` na política exige revisão de
 CNPJ da instituição, código de bandeira e autorização por parcela do pedido. Os
-dados revisados são associados ao snapshot fiscal e ao XML, e não se aceita
-número do cartão ou código de segurança. Para cartões não integrados, use o
+dados revisados são associados ao snapshot fiscal e ao XML; o formulário não
+solicita número do cartão ou código de segurança. Para cartões não integrados, use o
 tipo 2 sem dados de integração. O operador deve conferir os dados recebidos do
 processador; a preparação não comprova por si só a liquidação do pagamento.
 
