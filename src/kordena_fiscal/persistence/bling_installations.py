@@ -152,7 +152,7 @@ class BlingInstallationRepository:
                 raise ValueError
             value = json.loads(base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)))
             checksum = hashlib.sha256(
-                scope.identity_partition_key.encode()
+                json.dumps(scope.identity_material, separators=(",", ":")).encode()
             ).hexdigest()
             if (
                 not isinstance(value, dict)
@@ -185,7 +185,7 @@ class BlingInstallationRepository:
         continuation = None
         if len(rows) > limit and views:
             cursor_bytes = json.dumps({
-                "scope": hashlib.sha256(scope.identity_partition_key.encode()).hexdigest(),
+                "scope": hashlib.sha256(json.dumps(scope.identity_material, separators=(",", ":")).encode()).hexdigest(),
                 "after": views[-1].installation_id,
             }, separators=(",", ":"), sort_keys=True).encode()
             continuation = base64.urlsafe_b64encode(cursor_bytes).decode().rstrip("=")
