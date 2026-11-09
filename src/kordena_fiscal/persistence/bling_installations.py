@@ -71,7 +71,7 @@ class BlingInstallationRepository:
         company_id: str,
         environment: FiscalEnvironment,
     ) -> BlingInstallationView:
-        if host_scope.host_namespace != HostNamespace("bling"):
+        if host_scope.namespace != HostNamespace("bling"):
             raise FiscalValidationError("Bling host namespace required")
         if not isinstance(company_id, str) or not company_id.strip() or len(company_id) > 96:
             raise FiscalValidationError("Bling company ID is invalid")
