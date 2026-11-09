@@ -12,6 +12,8 @@ BLING_INSTALLATION_SCHEMA = (
         company_id TEXT NOT NULL,
         external_tenant_id TEXT NOT NULL,
         external_unit_id TEXT NOT NULL,
+        tenant_id TEXT NOT NULL,
+        unit_id TEXT NOT NULL,
         environment TEXT NOT NULL CHECK(environment IN ('homologation', 'production')),
         state TEXT NOT NULL CHECK(
             state IN ('not_configured', 'connected', 'needs_reauth', 'paused', 'error')
@@ -22,7 +24,7 @@ BLING_INSTALLATION_SCHEMA = (
         UNIQUE(company_id, external_tenant_id, external_unit_id, environment)
     )""",
     """CREATE INDEX fm_bling_installations_scope_idx
-       ON fm_bling_installations(external_tenant_id, external_unit_id, environment)""",
+       ON fm_bling_installations(tenant_id, unit_id, environment)""",
     """CREATE TABLE fm_bling_oauth_flows (
         state_sha256 TEXT PRIMARY KEY,
         installation_id TEXT NOT NULL REFERENCES fm_bling_installations(installation_id),
