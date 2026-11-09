@@ -120,7 +120,9 @@ def build_bling_oauth_router(
         )
 
     @router.get("/oauth/callback")
-    def callback(request: Request, state: str = "", code: str = "", error: str = "") -> JSONResponse:
+    def callback(
+        request: Request, state: str = "", code: str = "", error: str = "",
+    ) -> JSONResponse:
         human = _authenticated(request, identity, now=datetime.now(UTC))
         if error or not state or not code or len(state) != 64:
             raise HTTPException(400, detail={"code": "BLING_OAUTH_REJECTED"})
