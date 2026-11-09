@@ -5,8 +5,11 @@ import pytest
 
 from kordena_fiscal.domain import FiscalEnvironment
 from kordena_fiscal.integrations.bling_contracts import (
-    BlingInstallationState, BlingInstallationView, BlingOrderPage,
-    BlingRecoveryOutcome, BlingRecoveryResult,
+    BlingInstallationState,
+    BlingInstallationView,
+    BlingOrderPage,
+    BlingRecoveryOutcome,
+    BlingRecoveryResult,
 )
 
 
