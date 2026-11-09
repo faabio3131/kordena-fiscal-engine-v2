@@ -485,6 +485,47 @@ def test_bling_rule_loads_explicit_fcp_rate():
     assert rule.outcome.nfe_rates.fcp_rate == Decimal("2")
 
 
+def test_ipi_reconciles_order_payments_and_signed_xml(mapping, signing_material):
+    from lxml import etree
+
+    from kordena_fiscal.domain import ElectronicInvoiceModel
+    from kordena_fiscal.issuance.nfe_builder import NfeSaleOptions, build_nfe_sale
+    from kordena_fiscal.signing.nfe_xmldsig import NfeSignatureProfile, sign_nfe_envi_xml
+    from kordena_fiscal.xml import AccessKeyInput, build_access_key
+    from kordena_fiscal.xml.official_nfe_schema import OfficialNfeEnvelopeValidator
+
+    sale_document(mapping, normal=True)
+    rule = mapping["rules"][0]
+    rates = replace(
+        rule.outcome.nfe_rates,
+        ipi_rate=Decimal("10"),
+        ipi_enquiry_code="999",
+        ipi_calculation_mode="net_icms_excluded",
+    )
+    mapping["rules"] = (replace(rule, outcome=replace(rule.outcome, nfe_rates=rates)),)
+    mapping["payments"] = (FiscalPaymentSnapshot(PaymentMethodKind.PIX, Money(Decimal("1.10"))),)
+    raw = order()
+    raw["total"] = "1.10"
+    raw["itens"][0]["aliquotaIPI"] = "10"
+    document = map_bling_document(raw, **mapping)
+    key = build_access_key(
+        AccessKeyInput(
+            "35", NOW, document.issuer.cnpj, ElectronicInvoiceModel.NFE, 1, 1, 1, 12345678
+        )
+    )
+    xml = build_nfe_sale(document, key, NfeSaleOptions("VENDA", 1, 9))
+    root = etree.fromstring(xml)
+    assert root.xpath("string(//*[local-name()='IPITrib']/*[local-name()='vIPI'])") == "0.10"
+    assert root.xpath("string(//*[local-name()='ICMSTot']/*[local-name()='vNF'])") == "1.10"
+    signed = sign_nfe_envi_xml(
+        xml, signing_material, profile=NfeSignatureProfile.NFE4_OFFICIAL_RSA_SHA1
+    )
+    OfficialNfeEnvelopeValidator()(signed)
+    raw["itens"][0]["aliquotaIPI"] = "12"
+    with pytest.raises(FiscalValidationError, match="IPI hint"):
+        map_bling_document(raw, **mapping)
+
+
 def test_atomic_preparation_replays_without_certificate_and_rolls_back_number(
     mapping, signing_material, tmp_path, preparation_database
 ):

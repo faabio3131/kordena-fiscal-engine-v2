@@ -122,6 +122,10 @@ def _tax_decision(decision: TaxDecision) -> dict[str, Any]:
         }
         if rates.fcp_rate is not None:
             payload["outcome"]["nfe_rates"]["fcp_rate"] = _decimal_text(rates.fcp_rate)
+        if rates.ipi_rate is not None:
+            payload["outcome"]["nfe_rates"]["ipi_rate"] = _decimal_text(rates.ipi_rate)
+            payload["outcome"]["nfe_rates"]["ipi_enquiry_code"] = rates.ipi_enquiry_code
+            payload["outcome"]["nfe_rates"]["ipi_calculation_mode"] = rates.ipi_calculation_mode
     return payload
 
 

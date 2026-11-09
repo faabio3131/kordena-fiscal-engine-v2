@@ -27,11 +27,29 @@ class NfeRateParameters:
     pis_base: Literal["net", "net_less_icms"]
     cofins_base: Literal["net", "net_less_icms"]
     fcp_rate: Decimal | None = None
+    ipi_rate: Decimal | None = None
+    ipi_enquiry_code: str | None = None
+    ipi_calculation_mode: str | None = None
 
     def __post_init__(self) -> None:
         rates: tuple[Decimal, ...] = (self.icms_rate, self.pis_rate, self.cofins_rate)
         if self.fcp_rate is not None:
             rates += (self.fcp_rate,)
+        if self.ipi_rate is not None:
+            rates += (self.ipi_rate,)
+        if (self.ipi_rate is None) != (self.ipi_enquiry_code is None):
+            raise FiscalValidationError("IPI rate and legal framing must be specified together")
+        if (self.ipi_rate is None and self.ipi_calculation_mode is not None) or (
+            self.ipi_rate is not None and self.ipi_calculation_mode != "net_icms_excluded"
+        ):
+            raise FiscalValidationError("IPI calculation mode must be explicitly reviewed")
+        if self.ipi_enquiry_code is not None and (
+            not isinstance(self.ipi_enquiry_code, str)
+            or len(self.ipi_enquiry_code) != 3
+            or not self.ipi_enquiry_code.isascii()
+            or not self.ipi_enquiry_code.isdigit()
+        ):
+            raise FiscalValidationError("IPI legal framing must have three digits")
         for rate in rates:
             if (
                 not isinstance(rate, Decimal)
@@ -56,6 +74,8 @@ class NfeCalculatedTaxes:
     cofins_base: Decimal
     cofins_amount: Decimal
     fcp_amount: Decimal = Decimal("0.00")
+    ipi_amount: Decimal = Decimal("0.00")
+    ipi_base: Decimal = Decimal("0.00")
 
 
 def calculate_nfe_line(
@@ -107,4 +127,17 @@ def calculate_nfe_line(
     fcp = (icms_base * (policy.fcp_rate or Decimal(0)) / 100).quantize(
         _CENT, rounding=ROUND_HALF_UP
     )
-    return NfeCalculatedTaxes(icms_base, icms, pis_base, pis, cofins_base, cofins, fcp)
+    ipi = (net_amount * (policy.ipi_rate or Decimal(0)) / 100).quantize(
+        _CENT, rounding=ROUND_HALF_UP
+    )
+    return NfeCalculatedTaxes(
+        icms_base,
+        icms,
+        pis_base,
+        pis,
+        cofins_base,
+        cofins,
+        fcp,
+        ipi,
+        net_amount if policy.ipi_rate is not None else Decimal("0.00"),
+    )

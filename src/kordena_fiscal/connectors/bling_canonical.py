@@ -33,6 +33,7 @@ from kordena_fiscal.tax import (
     TaxRuleContext,
     TaxRuleEngine,
 )
+from kordena_fiscal.tax.nfe_calculation import calculate_nfe_line
 
 _CENT = Decimal("0.01")
 _LIMIT = Decimal("999999999999.99")
@@ -132,8 +133,7 @@ def map_bling_document(
     for index, raw in enumerate(raw_lines, 1):
         if not isinstance(raw, dict):
             raise FiscalValidationError("Bling line must be an object")
-        if _number(raw.get("aliquotaIPI", 0), "IPI rate") != 0:
-            raise FiscalValidationError("IPI requires its own approved calculation path")
+        provider_ipi = _number(raw.get("aliquotaIPI", 0), "IPI rate")
         code = raw.get("codigo")
         if not isinstance(code, str) or not code.strip():
             raise FiscalValidationError("Bling line requires a product code")
@@ -164,6 +164,9 @@ def map_bling_document(
             ),
             rules,
         )
+        selected_rates = decision.outcome.nfe_rates
+        if provider_ipi and (selected_rates is None or selected_rates.ipi_rate != provider_ipi):
+            raise FiscalValidationError("IPI hint conflicts with approved fiscal policy")
         expected_cfop_prefix = (
             "5" if recipient_state == issuer.address.jurisdiction.state_code else "6"
         )
@@ -208,8 +211,6 @@ def map_bling_document(
     if "totalProdutos" in order and _money(order["totalProdutos"], "products total") != gross_total:
         raise FiscalValidationError("Bling product total conflicts with item amounts")
     expected = gross_total - discount + freight + other
-    if "total" in order and _money(order["total"], "order total") != expected:
-        raise FiscalValidationError("Bling total requires reconciliation before fiscal preparation")
     weights = [line.gross_amount.amount for line in lines]
     discounts = _allocate(discount, weights)
     freights, others = _allocate(freight, weights), _allocate(other, weights)
@@ -234,6 +235,19 @@ def map_bling_document(
     )
     if document.totals.net_amount.amount != expected:
         raise FiscalValidationError("canonical total differs from Bling reconciled amount")
+    ipi = sum(
+        (
+            calculate_nfe_line(
+                line.tax_decision, net_amount=line.net_amount.amount, regime=issuer.tax_regime
+            ).ipi_amount
+            for line in document.items
+            if line.tax_decision.outcome.nfe_rates is not None
+        ),
+        Decimal(0),
+    )
+    expected += ipi
+    if "total" in order and _money(order["total"], "order total") != expected:
+        raise FiscalValidationError("Bling total requires reconciliation before fiscal preparation")
     if payments and document.totals.payment_amount.amount != expected:
         raise FiscalValidationError("payment snapshots do not reconcile with the order")
     return document

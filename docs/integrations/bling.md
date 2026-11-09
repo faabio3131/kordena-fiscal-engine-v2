@@ -147,6 +147,14 @@ por `fcp_rate` explícito na regra versionada, usando a base do ICMS da operaç�
 O valor é calculado por item, incluído no XML e somado ao total `vFCP`.
 FCP em outros grupos, FCP-ST e FCP de destino permanecem pendentes.
 
+O IPI ad valorem de saída CST 50 tem caminho limitado e explícito, com
+`ipi_rate`, `ipi_enquiry_code` e `ipi_calculation_mode: net_icms_excluded`
+na regra fiscal. Nesse cenário a base de IPI é o valor líquido da linha e
+o IPI não integra as bases de ICMS e contribuições. O valor de IPI compõe o
+total da nota e a conciliação do pedido e pagamentos. O responsável fiscal
+deve escolher esse modo somente quando aplicável; outras composições de base,
+outros CSTs e tributação por quantidade permanecem pendentes.
+
 Para um produto cuja unidade tributável difere da comercial, a vinculação de
 produto da política pode incluir `taxable_factor` como decimal positivo em texto.
 O fator é a quantidade tributável por unidade comercial; por exemplo, `"2"`

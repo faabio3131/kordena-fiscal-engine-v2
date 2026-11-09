@@ -107,8 +107,6 @@ def build_nfe_sale(
         raise FiscalValidationError("access key differs from issuer jurisdiction")
     if access_key.value[2:6] != document.issued_at.strftime("%y%m"):
         raise FiscalValidationError("access key differs from document month")
-    if not document.payments or document.totals.payment_amount != document.totals.net_amount:
-        raise FiscalValidationError("explicit reconciled payment snapshots are required")
     if document.change_amount.amount:
         raise FiscalValidationError("sale builder requires payments reconciled without change")
     taxes = [
@@ -117,6 +115,11 @@ def build_nfe_sale(
         )
         for line in document.items
     ]
+    invoice_total = document.totals.net_amount.amount + sum(
+        (tax.ipi_amount for tax in taxes), Decimal(0)
+    )
+    if not document.payments or document.totals.payment_amount.amount != invoice_total:
+        raise FiscalValidationError("explicit reconciled payment snapshots are required")
     root = etree.Element("{" + NS + "}enviNFe", nsmap={"nfe": NS}, versao="4.00")
     _element(root, "idLote", str(int(access_key.value[25:34])))
     _element(root, "indSinc", "1")
@@ -260,13 +263,14 @@ def build_nfe_sale(
         "vBC": sum((t.icms_base for t in taxes), Decimal(0)),
         "vICMS": sum((t.icms_amount for t in taxes), Decimal(0)),
         "vFCP": sum((t.fcp_amount for t in taxes), Decimal(0)),
+        "vIPI": sum((t.ipi_amount for t in taxes), Decimal(0)),
         "vProd": document.totals.gross_amount.amount,
         "vFrete": freight,
         "vDesc": document.totals.discount_amount.amount,
         "vPIS": sum((t.pis_amount for t in taxes), Decimal(0)),
         "vCOFINS": sum((t.cofins_amount for t in taxes), Decimal(0)),
         "vOutro": document.totals.surcharge_amount.amount - freight,
-        "vNF": document.totals.net_amount.amount,
+        "vNF": invoice_total,
     }
     for key in (
         "vBC",
@@ -353,6 +357,14 @@ def _taxes(parent: etree._Element, outcome: object, origin: int, tax: NfeCalcula
         if rates.fcp_rate is not None:
             _element(icms, "pFCP", format(rates.fcp_rate, ".4f"))
             _element(icms, "vFCP", _money(tax.fcp_amount))
+    if rates.ipi_rate is not None:
+        ipi = _element(parent, "IPI")
+        _element(ipi, "cEnq", rates.ipi_enquiry_code)
+        group_ipi = _element(ipi, "IPITrib")
+        _element(group_ipi, "CST", "50")
+        _element(group_ipi, "vBC", _money(tax.ipi_base))
+        _element(group_ipi, "pIPI", format(rates.ipi_rate, ".4f"))
+        _element(group_ipi, "vIPI", _money(tax.ipi_amount))
     for name, code, rate, base, amount in (
         ("PIS", outcome.pis_cst, rates.pis_rate, tax.pis_base, tax.pis_amount),
         ("COFINS", outcome.cofins_cst, rates.cofins_rate, tax.cofins_base, tax.cofins_amount),

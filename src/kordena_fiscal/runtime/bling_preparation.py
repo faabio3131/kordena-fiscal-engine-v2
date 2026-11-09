@@ -96,7 +96,12 @@ def _rule(data: Mapping[str, Any]) -> TaxRule:
     }:
         raise FiscalValidationError("unsupported fiscal rule outcome fields")
     required_rates = {"icms_rate", "pis_rate", "cofins_rate", "pis_base", "cofins_base"}
-    if not required_rates <= set(rates) or set(rates) - required_rates - {"fcp_rate"}:
+    if not required_rates <= set(rates) or set(rates) - required_rates - {
+        "fcp_rate",
+        "ipi_rate",
+        "ipi_enquiry_code",
+        "ipi_calculation_mode",
+    }:
         raise FiscalValidationError("unsupported fiscal calculation parameters")
     return TaxRule(
         rule_id=data["rule_id"],
@@ -129,6 +134,9 @@ def _rule(data: Mapping[str, Any]) -> TaxRule:
                 rates["pis_base"],
                 rates["cofins_base"],
                 Decimal(str(rates["fcp_rate"])) if "fcp_rate" in rates else None,
+                Decimal(str(rates["ipi_rate"])) if "ipi_rate" in rates else None,
+                rates.get("ipi_enquiry_code"),
+                rates.get("ipi_calculation_mode"),
             ),
         ),
     )
