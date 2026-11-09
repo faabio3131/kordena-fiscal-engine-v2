@@ -66,3 +66,28 @@ def test_bling_status_patch_refuses_invalid_identifiers_before_network(value) ->
         with pytest.raises(ValueError):
             update_sales_order_status(9001, value, "synthetic")
         connect.assert_not_called()
+
+
+@pytest.mark.parametrize("company", ["synthetic-company", "other-company"])
+def test_oauth_company_identity_is_checked_before_accessing_orders(company):
+    import json
+
+    from kordena_fiscal.connectors.bling_api import verify_company
+
+    with patch("kordena_fiscal.connectors.bling_api.HTTPSConnection") as connect:
+        connection = connect.return_value
+        response = connection.getresponse.return_value
+        response.status = 200
+        response.read.return_value = json.dumps({"data": {"id": company}}).encode()
+        if company == "synthetic-company":
+            verify_company("synthetic", "synthetic-company")
+        else:
+            with pytest.raises(BlingApiError) as error:
+                verify_company("synthetic", "synthetic-company")
+            assert not error.value.retryable
+        connection.request.assert_called_once_with(
+            "GET",
+            "/Api/v3/empresas/me/dados-basicos",
+            headers={"Authorization": "Bearer synthetic", "Accept": "application/json"},
+        )
+        connection.close.assert_called_once()

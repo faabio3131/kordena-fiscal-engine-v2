@@ -6,8 +6,21 @@
   "verified_at": "2026-11-09",
   "base_url": "https://api.bling.com.br/Api/v3",
   "operations": {
-    "fetch_order": {"method": "GET", "path": "/pedidos/vendas/{idPedidoVenda}", "success": 200},
-    "set_status": {"method": "PATCH", "path": "/pedidos/vendas/{idPedidoVenda}/situacoes/{idSituacao}", "success": 204}
+    "fetch_order": {
+      "method": "GET",
+      "path": "/pedidos/vendas/{idPedidoVenda}",
+      "success": 200
+    },
+    "set_status": {
+      "method": "PATCH",
+      "path": "/pedidos/vendas/{idPedidoVenda}/situacoes/{idSituacao}",
+      "success": 204
+    },
+    "verify_oauth_company": {
+      "method": "GET",
+      "path": "/empresas/me/dados-basicos",
+      "success": 200
+    }
   },
   "ingress": {
     "path": "/webhooks/bling",
@@ -16,7 +29,11 @@
     "signature_header": "X-Bling-Signature-256",
     "signature": "sha256=<hex HMAC-SHA256 of raw body using client secret>",
     "version": "v1",
-    "events": ["order.created", "order.updated", "order.deleted"],
+    "events": [
+      "order.created",
+      "order.updated",
+      "order.deleted"
+    ],
     "max_body_bytes": 1048576,
     "company_id_type": "string",
     "order_id_type": "positive integer"

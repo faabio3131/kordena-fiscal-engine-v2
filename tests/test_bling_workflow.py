@@ -368,11 +368,21 @@ def test_configured_worker_claims_only_bling_partition_without_certificate(insta
     )
     assert composition.claim_selection.operations == frozenset({PROCESS_ORDER})
     handler = composition.handlers[PROCESS_ORDER]
-    with patch("kordena_fiscal.runtime.bling_worker.fetch_sales_order", return_value=RAW) as fetch:
+    with (
+        patch("kordena_fiscal.runtime.bling_worker.fetch_sales_order", return_value=RAW) as fetch,
+        patch("kordena_fiscal.runtime.bling_worker.verify_company") as verify,
+    ):
         handler.fetch(9001)
         token.write_text("rotated-synthetic-token")
         handler.fetch(9001)
+        verify.side_effect = BlingApiError(200, retryable=False)
+        token.write_text("synthetic-wrong-company-token")
+        with pytest.raises(BlingApiError):
+            handler.fetch(9001)
+    assert fetch.call_count == 2
     assert fetch.call_args.args == (9001, "rotated-synthetic-token")
+    assert verify.call_count == 3
+    assert verify.call_args.args == ("synthetic-wrong-company-token", orders.company_id)
     with pytest.raises(RuntimeConfigurationError):
         build_bling_worker(db, {**env, "NFCORE_BLING_ENVIRONMENT": "production"})
     with pytest.raises(RuntimeConfigurationError):
@@ -768,3 +778,79 @@ def test_issue_rechecks_current_order_even_when_update_webhook_has_not_arrived(
     assert result[0].status is FiscalOutboxStatus.DEAD_LETTER
     assert transport.calls == 0
     assert orders.requires_dispatch("doc-test")
+
+
+def test_signed_http_event_through_worker_issuance_and_official_return(installation):
+    import hmac
+    import json
+
+    from kordena_fiscal.application.background_runtime import RoutedOutboxHandler
+    from kordena_fiscal.application.bling_orders import PUBLISH_STATUS
+    from kordena_fiscal.application.bling_status_delivery import BlingStatusPublisher
+    from kordena_fiscal.runtime.bling_ingress import build_bling_ingress
+
+    db, application, orders = installation
+    secret = "synthetic-client-secret"
+    router = build_bling_ingress(
+        application,
+        {
+            "NFCORE_BLING_CLIENT_SECRET": secret,
+            "NFCORE_BLING_COMPANY_ID": orders.company_id,
+            "NFCORE_BLING_TENANT_ID": "host-tenant",
+            "NFCORE_BLING_UNIT_ID": "host-unit",
+            "NFCORE_BLING_ENVIRONMENT": "homologation",
+        },
+    )
+    app = FastAPI()
+    app.include_router(router)
+    body = json.dumps(
+        {
+            "eventId": "end-to-end",
+            "date": NOW.isoformat(),
+            "version": "v1",
+            "event": "order.created",
+            "companyId": orders.company_id,
+            "data": {"id": 9001},
+        }
+    ).encode()
+    headers = {
+        "X-Bling-Signature-256": "sha256=" + hmac.digest(secret.encode(), body, "sha256").hex()
+    }
+    provider = Transport()
+    handler = handler_for(application, orders, provider)
+    handler.fetch.return_value = {**RAW, "situacao": {"id": 1}}
+    update = Mock()
+    publisher = BlingStatusPublisher(
+        orders,
+        {"authorized": 10, "rejected": 11},
+        handler.fetch,
+        update,
+    )
+    registered = {PROCESS_ORDER: handler, ISSUE_ORDER: handler, PUBLISH_STATUS: publisher}
+    worker = DurableFiscalOutboxWorker(
+        uow_factory=db,
+        handler=RoutedOutboxHandler(registered),
+        claim_selection=OutboxClaimSelection(orders.scope, frozenset(registered)),
+    )
+    with TestClient(app) as client:
+        assert client.post("/webhooks/bling", content=body, headers=headers).status_code == 202
+        now = datetime.now(UTC)
+        assert worker.run_once(now=now)[0].status is FiscalOutboxStatus.SUCCEEDED
+        row = orders.get(9001)
+        assert row["state"] == "review_required"
+        assert provider.calls == 0
+        prepare(application, orders.scope)
+        orders.approve_prepared(
+            9001,
+            snapshot_sha256=row["snapshot_sha256"],
+            document_id="doc-test",
+            actor_id="operator",
+            now=now,
+        )
+        assert worker.run_once(now=now)[0].status is FiscalOutboxStatus.SUCCEEDED
+        assert worker.run_once(now=now)[0].status is FiscalOutboxStatus.SUCCEEDED
+        assert orders.get(9001)["state"] == "authorized"
+        update.assert_called_once_with(9001, 10)
+        assert provider.calls == 1
+        assert client.post("/webhooks/bling", content=body, headers=headers).status_code == 202
+        assert worker.run_once(now=datetime.now(UTC)) == ()

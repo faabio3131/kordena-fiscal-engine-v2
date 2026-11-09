@@ -1,5 +1,6 @@
 """Opt-in Bling composition on the existing Worker; credentials are provisioned later."""
 
+import hashlib
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -12,7 +13,11 @@ from kordena_fiscal.application.bling_orders import (
 from kordena_fiscal.application.bling_processing import BlingProcessingHandler
 from kordena_fiscal.application.bling_status_delivery import BlingStatusPublisher
 from kordena_fiscal.application.service import FiscalApplicationService
-from kordena_fiscal.connectors.bling_api import fetch_sales_order, update_sales_order_status
+from kordena_fiscal.connectors.bling_api import (
+    fetch_sales_order,
+    update_sales_order_status,
+    verify_company,
+)
 from kordena_fiscal.contingency import FiscalOutboxHandler
 from kordena_fiscal.contingency.outbox import OutboxClaimSelection
 from kordena_fiscal.domain import FiscalEnvironment, HostNamespace, HostScope
@@ -77,6 +82,17 @@ def build_bling_worker(
             raise RuntimeConfigurationError("Bling OAuth token is unavailable") from None
 
     token()  # No network access; refuse startup with an unusable secret mount.
+    validated_token_digest: str | None = None
+
+    def scoped_token() -> str:
+        nonlocal validated_token_digest
+        value = token()
+        digest = hashlib.sha256(value.encode()).hexdigest()
+        if digest != validated_token_digest:
+            verify_company(value, orders.company_id)
+            validated_token_digest = digest
+        return value
+
     vault = EncryptedA1Vault.from_environ()
     handlers = build_runtime_fiscal_handler_factory(certificate_vault=vault)(application)
 
@@ -101,7 +117,7 @@ def build_bling_worker(
 
     handler = BlingProcessingHandler(
         orders=orders,
-        fetch=lambda order_id: fetch_sales_order(order_id, token()),
+        fetch=lambda order_id: fetch_sales_order(order_id, scoped_token()),
         fiscal_path=CanonicalFiscalOperationPath(application, handlers=handlers),
         before_issue=before_issue,
         validate_binding=validate_binding,
@@ -119,8 +135,10 @@ def build_bling_worker(
         registered[PUBLISH_STATUS] = BlingStatusPublisher(
             orders,
             {"authorized": authorized_status, "rejected": rejected_status},
-            fetch=lambda order_id: fetch_sales_order(order_id, token()),
-            update=lambda order_id, status: update_sales_order_status(order_id, status, token()),
+            fetch=lambda order_id: fetch_sales_order(order_id, scoped_token()),
+            update=lambda order_id, status: update_sales_order_status(
+                order_id, status, scoped_token()
+            ),
             validate_binding=validate_binding,
         )
     if vault is not None:

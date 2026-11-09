@@ -76,3 +76,35 @@ def update_sales_order_status(order_id: int, status_id: int, access_token: str) 
         raise BlingApiError(None, retryable=True) from exc
     finally:
         connection.close()
+
+
+def verify_company(access_token: str, expected_company_id: str) -> None:
+    """Bind the OAuth principal to the webhook company before accessing any order."""
+    if not access_token or any(not 33 <= ord(char) <= 126 for char in access_token):
+        raise ValueError("Invalid Bling OAuth token")
+    connection = HTTPSConnection("api.bling.com.br", timeout=10)
+    try:
+        connection.request(
+            "GET",
+            "/Api/v3/empresas/me/dados-basicos",
+            headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"},
+        )
+        response = connection.getresponse()
+        if response.status != 200:
+            raise BlingApiError(
+                response.status,
+                retryable=response.status == 429 or response.status >= 500,
+            )
+        body = response.read(65_537)
+    except (OSError, HTTPException) as exc:
+        raise BlingApiError(None, retryable=True) from exc
+    finally:
+        connection.close()
+    if len(body) > 65_536:
+        raise BlingApiError(200, retryable=False)
+    try:
+        data = json.loads(body)["data"]
+        if not isinstance(data, dict) or data.get("id") != expected_company_id:
+            raise ValueError("company mismatch")
+    except (ValueError, TypeError, KeyError, RecursionError):
+        raise BlingApiError(200, retryable=False) from None

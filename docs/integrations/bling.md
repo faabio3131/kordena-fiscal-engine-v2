@@ -11,7 +11,10 @@ mesmo evento com conteúdo diferente recebe 409. Corpo máximo: 1 MiB.
 
 O Worker existente, no modo `NFCORE_WORKER_CONNECTOR=bling`, resolve novamente o
 vínculo exato a cada despacho. Consulta o pedido por OAuth no host fixo oficial,
-preserva os valores decimais e arquiva o snapshot. Pedidos incompletos ficam em
+confirma a identidade da empresa OAuth em `/empresas/me/dados-basicos`,
+preserva os valores decimais e arquiva o snapshot. Essa confirmação é refeita
+quando o hash do token muda; token de outra empresa não acessa pedidos nem escreve
+situações. A inicialização local não exige comunicação com o Bling. Pedidos incompletos ficam em
 revisão. A normalização consultiva nunca determina impostos nem produz XML.
 
 Um operador vincula o hash revisado a um documento modelo 55 **já preparado pela
