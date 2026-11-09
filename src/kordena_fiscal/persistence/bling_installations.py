@@ -184,8 +184,11 @@ class BlingInstallationRepository:
         views = tuple(self._row(row) for row in rows[:limit])
         continuation = None
         if len(rows) > limit and views:
+            scope_digest = hashlib.sha256(
+                json.dumps(scope.identity_material, separators=(",", ":")).encode()
+            ).hexdigest()
             cursor_bytes = json.dumps({
-                "scope": hashlib.sha256(json.dumps(scope.identity_material, separators=(",", ":")).encode()).hexdigest(),
+                "scope": scope_digest,
                 "after": views[-1].installation_id,
             }, separators=(",", ":"), sort_keys=True).encode()
             continuation = base64.urlsafe_b64encode(cursor_bytes).decode().rstrip("=")
