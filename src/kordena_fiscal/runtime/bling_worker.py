@@ -62,6 +62,7 @@ def build_bling_worker(
     environ: Mapping[str, str],
     *,
     token_provider: Callable[[], str] | None = None,
+    installation_validator: Callable[[], None] | None = None,
 ) -> ScopedWorkerHandlerComposition:
     """Claim only the exact installation's Bling operations, never another worker's jobs."""
     orders = build_bling_orders(database, environ)
@@ -127,6 +128,8 @@ def build_bling_worker(
         vault.resolve(scope=scope, issuer_cnpj=request.access_key.value[6:20])
 
     def validate_binding() -> None:
+        if installation_validator is not None:
+            installation_validator()
         current = build_bling_orders(database, environ)
         if current.scope.identity_partition_key != scope.identity_partition_key:
             raise RuntimeConfigurationError("Bling installation binding changed")
