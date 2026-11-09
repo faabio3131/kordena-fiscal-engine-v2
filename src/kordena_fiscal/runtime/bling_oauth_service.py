@@ -17,7 +17,12 @@ from typing import Protocol
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from kordena_fiscal.domain import ExecutionScope, FiscalValidationError
+from kordena_fiscal.connectors.bling_oauth import (
+    BlingOAuthClient,
+    BlingOAuthError,
+    BlingTokenSet,
+)
+from kordena_fiscal.domain import ExecutionScope
 from kordena_fiscal.integrations.bling_contracts import BlingInstallationState
 from kordena_fiscal.persistence.bling_installations import (
     BlingInstallationRepository,
@@ -25,11 +30,6 @@ from kordena_fiscal.persistence.bling_installations import (
 )
 from kordena_fiscal.persistence.ports import PersistenceConflictError
 
-from kordena_fiscal.connectors.bling_oauth import (
-    BlingOAuthClient,
-    BlingOAuthError,
-    BlingTokenSet,
-)
 
 
 class BlingOAuthUnavailable(RuntimeError):
@@ -307,7 +307,9 @@ class BlingOAuthService:
             )
             if updated.rowcount != 1:
                 connection.rollback()
-                raise BlingOAuthUnavailable("Bling token refresh already in progress", retryable=True)
+                raise BlingOAuthUnavailable(
+                    "Bling token refresh already in progress", retryable=True,
+                )
             connection.commit()
         try:
             token = self.cipher.open(installation_id, "refresh", str(row[1]))
