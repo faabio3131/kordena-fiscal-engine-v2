@@ -526,6 +526,43 @@ def test_ipi_reconciles_order_payments_and_signed_xml(mapping, signing_material)
         map_bling_document(raw, **mapping)
 
 
+def test_ipi_rule_rejects_incomplete_or_implicit_calculation():
+    from kordena_fiscal.runtime.bling_preparation import _rule
+
+    rule = {
+        "rule_id": "ipi-test",
+        "version": 1,
+        "priority": 1,
+        "source_normative": "SYNTHETIC ONLY",
+        "effective_from": NOW.isoformat(),
+        "selector": {
+            "state_code": "SP",
+            "tax_regime": 3,
+            "recipient_profile": "consumer_final",
+            "ncm_prefix": "21",
+        },
+        "outcome": {
+            "cfop": "5102",
+            "icms_code": "00",
+            "pis_cst": "07",
+            "cofins_cst": "07",
+            "nfe_rates": {
+                "icms_rate": "18",
+                "pis_rate": "0",
+                "cofins_rate": "0",
+                "pis_base": "net",
+                "cofins_base": "net",
+                "ipi_rate": "10",
+                "ipi_enquiry_code": "999",
+            },
+        },
+    }
+    with pytest.raises(FiscalValidationError, match="mode"):
+        _rule(rule)
+    rule["outcome"]["nfe_rates"]["ipi_calculation_mode"] = "net_icms_excluded"
+    assert _rule(rule).outcome.nfe_rates.ipi_rate == Decimal("10")
+
+
 def test_atomic_preparation_replays_without_certificate_and_rolls_back_number(
     mapping, signing_material, tmp_path, preparation_database
 ):
