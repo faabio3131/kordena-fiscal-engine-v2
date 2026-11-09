@@ -172,6 +172,93 @@ def test_checkout_binding_write_requires_global_platform_authority(
         service.set_binding(actor=_actor(global_scope=False), binding=binding)
 
 
+def test_checkout_projection_never_resolves_annual_price_to_monthly_checkout(
+    tmp_path: Path,
+) -> None:
+    """Regression: a plan with distinct monthly/annual Cakto products must
+    project each price_id to its own checkout_url. Before this binding
+    model was exercised with two *different* external products per plan,
+    an annual price could silently resolve to the monthly checkout_url
+    whenever its external_price_reference pointed at the monthly binding
+    (e.g. because no annual binding had been registered yet).
+    """
+    database = _database(tmp_path)
+    service = CaktoCheckoutAdministrationService(database)
+
+    monthly_price = PriceDefinition(
+        price_id="nfcore-pro-monthly",
+        currency="BRL",
+        cadence=BillingCadence.MONTHLY,
+        base_amount=Decimal("249.00"),
+        external_price_reference="cakto://product-monthly/offer-monthly",
+    )
+    annual_price = PriceDefinition(
+        price_id="nfcore-pro-annual",
+        currency="BRL",
+        cadence=BillingCadence.ANNUAL,
+        base_amount=Decimal("2388.00"),
+        external_price_reference="cakto://product-annual/offer-annual",
+    )
+    pricing = CommercialPricingConfiguration(
+        configuration_id="nfcore-checkout-annual-regression",
+        version=1,
+        prices=(monthly_price, annual_price),
+        plans=(
+            PlanDefinition(
+                plan_id="nfcore-pro",
+                display_name="NFCore Pro",
+                edition_id="pro",
+                price_ids=(monthly_price.price_id, annual_price.price_id),
+            ),
+        ),
+    )
+
+    service.set_binding(
+        actor=_actor(),
+        binding=CaktoPlanBinding(
+            external_product_id="product-monthly",
+            external_offer_id="offer-monthly",
+            plan_id="nfcore-pro",
+            entitlement_ids=("portal", "fiscal-core"),
+        ),
+    )
+    service.set_binding(
+        actor=_actor(),
+        binding=CaktoPlanBinding(
+            external_product_id="product-annual",
+            external_offer_id="offer-annual",
+            plan_id="nfcore-pro",
+            entitlement_ids=("portal", "fiscal-core"),
+        ),
+    )
+
+    projected = service.project(pricing)
+    assert projected.status is CaktoCheckoutStatus.CONFIGURED
+    assert projected.expected_count == 2
+    assert projected.configured_count == 2
+
+    by_price_id = {item.price_id: item for item in projected.items}
+    assert by_price_id["nfcore-pro-monthly"].checkout_url == (
+        "https://pay.cakto.com.br/offer-monthly"
+    )
+    assert by_price_id["nfcore-pro-annual"].checkout_url == (
+        "https://pay.cakto.com.br/offer-annual"
+    )
+    assert (
+        by_price_id["nfcore-pro-monthly"].checkout_url
+        != by_price_id["nfcore-pro-annual"].checkout_url
+    )
+
+    # Explicit regression guard for the production bug fixed on 2026-11-08:
+    # if the annual price's external_price_reference were ever left pointing
+    # at the monthly binding (e.g. a catalog publish that forgot to repoint
+    # it after a new annual Cakto product/offer was created), the annual
+    # item would collapse onto the monthly checkout_url. The real catalog
+    # must never do this; the assertion above is what guards against it.
+    assert by_price_id["nfcore-pro-annual"].checkout_url.endswith("offer-annual")
+    assert "offer-monthly" not in by_price_id["nfcore-pro-annual"].checkout_url
+
+
 def test_checkout_start_carries_only_opaque_nfcore_callback(tmp_path: Path) -> None:
     service = CaktoCheckoutAdministrationService(_database(tmp_path))
     pricing = _configuration("cakto://product-1/offer-1")

@@ -58,6 +58,10 @@ from kordena_fiscal.web.commercial_trial import create_commercial_trial_router
 from kordena_fiscal.web.human_recovery import PasswordResetDelivery
 from kordena_fiscal.web.production_gsm_binding_admin import create_production_gsm_binding_router
 from kordena_fiscal.web.production_gsm_tenant_admin import create_production_gsm_tenant_router
+from kordena_fiscal.web.public_commercial_acquisition import (
+    PublicCommercialAcquisitionAbuseGate,
+    create_public_commercial_acquisition_router,
+)
 from kordena_fiscal.web.public_trial import PublicTrialAbuseGate, create_public_trial_router
 from kordena_fiscal.web.staging_gsm_binding_admin import create_staging_gsm_binding_router
 from kordena_fiscal.web.staging_webhook_approval import create_staging_webhook_egress_router
@@ -217,6 +221,8 @@ def create_runtime_app(
     commercial_trial_rate_limiter: FixedWindowRateLimiter | None = None,
     public_trial_allowed_origins: tuple[str, ...] = (),
     public_trial_rate_limiter: PublicTrialAbuseGate | None = None,
+    public_commercial_acquisition_allowed_origins: tuple[str, ...] = (),
+    public_commercial_acquisition_rate_limiter: PublicCommercialAcquisitionAbuseGate | None = None,
     password_reset_delivery: PasswordResetDelivery | None = None,
     production_authority: ProductionExecutionAuthority | None = None,
     workload_credentials: tuple[WorkloadCredentialRecord, ...] = (),
@@ -467,6 +473,7 @@ def create_runtime_app(
     app.state.nfcore_command_commercial = command_receiver
     app.state.nfcore_commercial_acquisition = commercial_acquisition
     app.state.nfcore_public_trial_configured = False
+    app.state.nfcore_public_commercial_acquisition_configured = False
     app.state.nfcore_commercial_trial = (
         composition.commercial_trial
         if composition is not None
@@ -713,6 +720,10 @@ def create_runtime_app(
             ),
             # Separate the anonymous HTTPS trial route from signed S2S trial.
             "public_trial_configured": app.state.nfcore_public_trial_configured,
+            # Separate the anonymous HTTPS acquisition route from signed S2S.
+            "public_commercial_acquisition_configured": (
+                app.state.nfcore_public_commercial_acquisition_configured
+            ),
             "cakto_checkout_admin_configured": (
                 cakto_checkout_administration is not None
             ),
@@ -881,6 +892,67 @@ def create_runtime_app(
             )
         )
         app.state.nfcore_public_trial_configured = True
+
+    # Public first-party acquisition intake: the browser-facing counterpart to
+    # the signed /v1/commercial/acquisitions route. Same opt-in posture as
+    # public trial intake above -- explicit origins, externally shared
+    # anti-abuse gate, never automatically enabled. It calls the same
+    # in-process CommercialAcquisitionService the signed route uses, so the
+    # HMAC signature requirement (which protects an authenticated network
+    # boundary) does not apply: this process is already the trusted caller.
+    configured_acquisition_origins = os.getenv(
+        "NFCORE_PUBLIC_COMMERCIAL_ACQUISITION_ALLOWED_ORIGINS", ""
+    ).strip()
+    if configured_acquisition_origins and public_commercial_acquisition_allowed_origins:
+        raise RuntimeConfigurationError(
+            "duplicate public commercial acquisition origin configuration"
+        )
+    if configured_acquisition_origins:
+        public_commercial_acquisition_allowed_origins = tuple(
+            value.strip() for value in configured_acquisition_origins.split(",")
+        )
+    if (
+        public_commercial_acquisition_allowed_origins
+        and public_commercial_acquisition_rate_limiter is None
+        and runtime.database is not None
+    ):
+        public_commercial_acquisition_rate_limiter = PostgresPublicTrialAbuseGate(
+            runtime.database.connection,
+            scope_prefix="public-acquisition",
+        )
+    if (
+        public_commercial_acquisition_allowed_origins
+        or public_commercial_acquisition_rate_limiter is not None
+    ):
+        if (
+            commercial_acquisition is None
+            or public_commercial_acquisition_rate_limiter is None
+            or not public_commercial_acquisition_allowed_origins
+        ):
+            raise RuntimeConfigurationError(
+                "public commercial acquisition prerequisites are incomplete"
+            )
+        if resolved.is_production_like and not set(
+            public_commercial_acquisition_allowed_origins
+        ).issubset(resolved.allowed_origins):
+            raise RuntimeConfigurationError(
+                "public commercial acquisition origins must be allowed by canonical"
+                " edge CORS policy"
+            )
+        if resolved.is_production_like and isinstance(
+            public_commercial_acquisition_rate_limiter, FixedWindowRateLimiter
+        ):
+            raise RuntimeConfigurationError(
+                "public commercial acquisition requires an externally shared anti-abuse gate"
+            )
+        app.include_router(
+            create_public_commercial_acquisition_router(
+                commercial_acquisition,
+                allowed_origins=public_commercial_acquisition_allowed_origins,
+                rate_limiter=public_commercial_acquisition_rate_limiter,
+            )
+        )
+        app.state.nfcore_public_commercial_acquisition_configured = True
 
     def public_trial_operational_readiness() -> bool:
         """Read-only, fail-closed availability of the independent browser trial."""

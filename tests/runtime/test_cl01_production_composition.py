@@ -18,6 +18,7 @@ from kordena_fiscal.domain import FiscalEnvironment
 from kordena_fiscal.persistence.cakto import SqliteCaktoCommercialDatabase
 from kordena_fiscal.persistence.commercial_period_schema import COMMERCIAL_PERIOD_VERSION
 from kordena_fiscal.product.cakto import CaktoWebhookReceiver, CaktoWebhookVerifier
+from kordena_fiscal.product.commercial_fulfillment import CommercialAcquisitionRecord
 from kordena_fiscal.product.pricing import CommercialPricingRegistry
 from kordena_fiscal.runtime import api as runtime_api
 from kordena_fiscal.runtime import composition as composition_module
@@ -48,6 +49,59 @@ class _ResetDelivery:
         reset: IssuedPasswordReset,
     ) -> None:
         del email, reset
+
+
+class _MemoryCommercialAcquisitionStore:
+    """Fake canonical commercial store: the shared `_RuntimeDatabase` fake used
+    across this module answers every SQL `fetchone()` with a fixed `(1,)`
+    tuple regardless of statement (see `_Cursor` below), so it cannot support
+    a real idempotency lookup/insert round trip for acquisitions. This
+    minimal in-memory store mirrors the one already proven in
+    tests/application/test_cl11_first_party_acquisition.py, just for the
+    narrow surface `CommercialAcquisitionService` actually calls."""
+
+    def __init__(self) -> None:
+        self.acquisitions: dict[str, CommercialAcquisitionRecord] = {}
+
+    def get_acquisition_by_idempotency(
+        self, idempotency_sha256: str
+    ) -> CommercialAcquisitionRecord | None:
+        return next(
+            (
+                item
+                for item in self.acquisitions.values()
+                if item.idempotency_sha256 == idempotency_sha256
+            ),
+            None,
+        )
+
+    def put_acquisition(
+        self, acquisition: CommercialAcquisitionRecord
+    ) -> CommercialAcquisitionRecord:
+        self.acquisitions[acquisition.acquisition_id] = acquisition
+        return acquisition
+
+
+class _MemoryCommercialAcquisitionUow:
+    def __init__(self, store: _MemoryCommercialAcquisitionStore) -> None:
+        self.commercial = store
+
+    def __enter__(self) -> _MemoryCommercialAcquisitionUow:
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
+        del exc_type, exc, traceback
+
+    def commit(self) -> None:
+        return None
+
+
+class _MemoryCommercialAcquisitionDatabase:
+    def __init__(self) -> None:
+        self.store = _MemoryCommercialAcquisitionStore()
+
+    def __call__(self) -> _MemoryCommercialAcquisitionUow:
+        return _MemoryCommercialAcquisitionUow(self.store)
 
 
 class _Cursor:
@@ -568,6 +622,183 @@ def test_postgres_runtime_exposes_real_cakto_checkout_url_to_anonymous_buyers(
         # This is the fix under test: previously always False for Cakto.
         assert body["purchase_enabled"] is True
         assert body["checkout"]["items"][0]["checkout_url"] is not None
+
+
+def test_postgres_runtime_public_acquisition_route_issues_real_checkout_url(
+    monkeypatch, tmp_path
+) -> None:
+    """The signed /v1/commercial/acquisitions route requires an HMAC signature
+    the static portal (no backend of its own) can never hold. This is the
+    end-to-end regression for its browser-facing counterpart,
+    /v1/public/acquisitions: an anonymous, same-origin POST with no signature
+    and no cookie/Authorization still produces a real, provider-redirectable
+    checkout_url -- by calling the same in-process CommercialAcquisitionService
+    the signed route uses, never a second authority."""
+    from kordena_fiscal.runtime.public_trial_abuse import PostgresPublicTrialAbuseGate
+
+    class _FullyMigratedRuntimeDatabase(_RuntimeDatabase):
+        def applied_migrations(self) -> tuple[int, ...]:
+            return tuple(range(1, COMMERCIAL_PERIOD_VERSION + 1))
+
+    monkeypatch.setattr(runtime_api, "PostgresFiscalDatabase", _FullyMigratedRuntimeDatabase)
+    cakto_bindings_database = SqliteCaktoCommercialDatabase(
+        tmp_path / "cakto-public-acquisition-bindings.sqlite3"
+    )
+    cakto_bindings_database.initialize()
+    monkeypatch.setattr(
+        composition_module,
+        "postgres_cakto_commercial_database",
+        lambda _database: cakto_bindings_database,
+    )
+    # The shared `_RuntimeDatabase` fake's `_Connection.execute()` answers every
+    # statement with a fixed `(1,)` row (see `_Cursor` above) -- it was built
+    # only for the simple probes (migrations/health) this module's other
+    # tests need, not for a real idempotency-keyed insert/lookup round trip.
+    # `CommercialAcquisitionService.begin()` genuinely reads and writes
+    # through `postgres_canonical_commercial_database(runtime.database)`, so
+    # give it a real (in-memory, but behaviorally real) store instead of
+    # letting it decode that fixed row as acquisition data.
+    monkeypatch.setattr(
+        runtime_api,
+        "postgres_canonical_commercial_database",
+        lambda _database: _MemoryCommercialAcquisitionDatabase(),
+    )
+    settings = RuntimeSettings.from_mapping(
+        {
+            "NFCORE_ENVIRONMENT": "staging",
+            "NFCORE_PERSISTENCE_BACKEND": "postgres",
+            "DATABASE_URL": "postgresql://user:password@db:5432/nfcore",
+            "NFCORE_SECRET_BACKEND": "external",
+            "NFCORE_REQUIRE_HTTPS": "true",
+            "NFCORE_COMMERCIAL_CHECKOUT_PROVIDER": "cakto",
+            "NFCORE_ALLOWED_ORIGINS": "https://app.nfcore.com.br",
+        }
+    )
+    cakto_database = SqliteCaktoCommercialDatabase(
+        tmp_path / "cakto-public-acquisition.sqlite3"
+    )
+    cakto_database.initialize()
+    receiver = CaktoWebhookReceiver(
+        verifier=CaktoWebhookVerifier(b"test-only-webhook-authority-key"),
+        unit_of_work_factory=cakto_database,
+    )
+    acquisition_security = WebhookSecurity(
+        key_resolver=InMemoryWebhookKeyRing(
+            active_key_id="synthetic-acquisition-key",
+            keys={"synthetic-acquisition-key": b"synthetic-acquisition-secret-0001"},
+        ),
+        signing_key_id="synthetic-acquisition-key",
+    )
+
+    with TestClient(
+        runtime_api.create_runtime_app(
+            settings,
+            cakto_receiver=receiver,
+            password_reset_delivery=_ResetDelivery(),
+            commercial_acquisition_security=acquisition_security,
+            public_commercial_acquisition_allowed_origins=("https://app.nfcore.com.br",),
+            public_commercial_acquisition_rate_limiter=PostgresPublicTrialAbuseGate(
+                # Resolved lazily at request time, after create_runtime_app has
+                # already constructed the real (fake, for this test) database
+                # instance and assigned it to .last.
+                lambda: _FullyMigratedRuntimeDatabase.last.connection(),
+                scope_prefix="public-acquisition",
+            ),
+        ),
+        base_url="https://testserver",
+    ) as client:
+        login = client.post(
+            "/v1/auth/login",
+            json={"email": "platform-admin@example.com", "password": PASSWORD},
+        )
+        assert login.status_code == 200
+        csrf = client.cookies.get(CSRF_COOKIE)
+        assert csrf
+
+        publish = client.post(
+            "/v1/admin/pricing",
+            headers={CSRF_HEADER: csrf},
+            json={
+                "configuration": {
+                    "configuration_id": "nfcore-public-offer",
+                    "version": 1,
+                    "prices": [
+                        {
+                            "price_id": "nfcore-monthly",
+                            "currency": "BRL",
+                            "cadence": "monthly",
+                            "base_amount": "123.45",
+                            "external_price_reference": "cakto://product-nfcore/offer-monthly",
+                        }
+                    ],
+                    "plans": [
+                        {
+                            "plan_id": "nfcore-pro",
+                            "display_name": "NFCore Pro",
+                            "edition_id": "pro",
+                            "price_ids": ["nfcore-monthly"],
+                        }
+                    ],
+                },
+                "expected_version": None,
+            },
+        )
+        assert publish.status_code == 200
+
+        release = client.post(
+            "/v1/admin/commercial-release",
+            headers={CSRF_HEADER: csrf},
+            json={
+                "decision": {
+                    "version": 1,
+                    "status": "commercial_approved",
+                    "public_message": "Oferta sintética aprovada.",
+                    "human_decision_reference": "synthetic-human-release-evidence",
+                },
+                "expected_version": None,
+            },
+        )
+        assert release.status_code == 200
+
+        binding = client.post(
+            "/v1/admin/checkout/cakto",
+            headers={CSRF_HEADER: csrf},
+            json={
+                "external_product_id": "product-nfcore",
+                "external_offer_id": "offer-monthly",
+                "plan_id": "nfcore-pro",
+                "entitlement_ids": ["portal", "fiscal-core"],
+                "enabled": True,
+            },
+        )
+        assert binding.status_code == 200
+
+        # A fresh, cookie-less client stands in for the anonymous browser
+        # visitor: no session, no Authorization, only the same-origin header.
+        with TestClient(client.app, base_url="https://testserver") as anonymous:
+            acquisition = anonymous.post(
+                "/v1/public/acquisitions",
+                json={
+                    "plan_id": "nfcore-pro",
+                    "price_id": "nfcore-monthly",
+                    "buyer_email": "buyer@example.com",
+                    "legal_name": "Comprador Sintético LTDA",
+                },
+                headers={
+                    "Origin": "https://app.nfcore.com.br",
+                    "Idempotency-Key": "public-acquisition-e2e-0001",
+                },
+            )
+        assert acquisition.status_code == 201
+        acquisition_body = acquisition.json()
+        assert acquisition_body["provider"] == "cakto"
+        assert acquisition_body["checkout_url"].startswith("https://pay.cakto.com.br/")
+        assert acquisition_body["acquisition_reference"].startswith("acq-")
+        assert acquisition.headers["access-control-allow-origin"] == "https://app.nfcore.com.br"
+
+        profile = client.get("/runtime/profile")
+        assert profile.status_code == 200
+        assert profile.json()["public_commercial_acquisition_configured"] is True
 
 
 def test_postgres_runtime_reports_composition_failure_separately(monkeypatch) -> None:

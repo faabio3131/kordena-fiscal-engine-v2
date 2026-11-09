@@ -45,18 +45,22 @@ class PostgresPublicTrialAbuseGate:
         *,
         max_requests: int = 3,
         window_seconds: int = 3600,
+        scope_prefix: str = "public-trial",
     ) -> None:
         if max_requests < 1 or window_seconds < 1:
             raise ValueError("public trial limits must be positive")
+        if not scope_prefix:
+            raise ValueError("scope_prefix must be non-blank")
         self._connection_factory = connection_factory
         self._max_requests = max_requests
         self._window_seconds = window_seconds
+        self._scope_prefix = scope_prefix
 
     def allow(self, identity: str, now: datetime) -> bool:
         if not identity or now.tzinfo is None or now.utcoffset() is None:
             return False
         scope = hashlib.sha256(
-            ("public-trial:" + identity).encode("utf-8")
+            (self._scope_prefix + ":" + identity).encode("utf-8")
         ).hexdigest()
         window = int(now.timestamp()) // self._window_seconds
         statement = """
