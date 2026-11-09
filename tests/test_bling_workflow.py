@@ -702,3 +702,48 @@ def test_concurrent_approval_creates_only_one_fiscal_job(installation):
         jobs = uow.outbox.list_for_scope(orders.scope, operations=frozenset({ISSUE_ORDER}))
         assert len(jobs) == 1
     assert orders.get(9001)["document_id"] == "doc-test"
+
+
+def test_explicit_status_retry_never_queues_another_issuance(installation):
+    from kordena_fiscal.application.bling_orders import PUBLISH_STATUS
+
+    db, application, orders = installation
+    prepare(application, orders.scope)
+    approve(orders)
+    transport = Transport()
+    DurableFiscalOutboxWorker(
+        uow_factory=db,
+        handler=handler_for(application, orders, transport),
+        claim_selection=OutboxClaimSelection(orders.scope, frozenset({ISSUE_ORDER})),
+    ).run_once(now=NOW)
+    job_id = orders.retry_status(9001, request_id="fixed-oauth", actor_id="operator")
+    assert orders.retry_status(9001, request_id="fixed-oauth", actor_id="operator") == job_id
+    with db() as uow:
+        jobs = uow.outbox.list_for_scope(orders.scope)
+        assert len([job for job in jobs if job.operation == PUBLISH_STATUS]) == 2
+        assert len([job for job in jobs if job.operation == ISSUE_ORDER]) == 1
+    assert transport.calls == 1
+    assert orders.get(9001)["state"] == "authorized"
+
+
+def test_retry_before_dispatch_preserves_document_and_refuses_after_dispatch(installation):
+    from kordena_fiscal.persistence import PersistenceStateError
+
+    db, application, orders = installation
+    prepare(application, orders.scope)
+    approve(orders)
+    job_id = orders.retry_issuance(9001, request_id="fixed-certificate", actor_id="operator")
+    assert (
+        orders.retry_issuance(9001, request_id="fixed-certificate", actor_id="operator") == job_id
+    )
+    transport = Transport()
+    result = DurableFiscalOutboxWorker(
+        uow_factory=db,
+        handler=handler_for(application, orders, transport),
+        claim_selection=OutboxClaimSelection(orders.scope, frozenset({ISSUE_ORDER})),
+    ).run_once(now=NOW)
+    assert len(result) == 2
+    assert all(job.status is FiscalOutboxStatus.SUCCEEDED for job in result)
+    assert transport.calls == 1
+    with pytest.raises(PersistenceStateError):
+        orders.retry_issuance(9001, request_id="unsafe-resend", actor_id="operator")

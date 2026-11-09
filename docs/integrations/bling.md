@@ -82,11 +82,17 @@ PYTHONPATH=src python scripts/admin/bling_order.py approve-prepared 9001 \
   --snapshot-sha256 HASH_REVISADO --document-id DOCUMENTO_PREPARADO --actor-id OPERADOR
 PYTHONPATH=src python scripts/admin/bling_order.py retry-event ID_DA_INBOX \
   --request-id CORRECAO_001 --actor-id OPERADOR
+PYTHONPATH=src python scripts/admin/bling_order.py retry-status 9001 \
+  --request-id RETORNO_001 --actor-id OPERADOR
 PYTHONPATH=src python scripts/admin/bling_order.py reconcile 9001
 ```
 
 Seleção de novo snapshot só ocorre antes de vincular um documento. O retry de
 captação é idempotente pelo request-id e preserva a tentativa anterior na DLQ.
+O retry-status repete somente o retorno ao ERP, mantendo a emissão final intacta.
+`retry-issuance` aceita o mesmo order-id/request-id/actor-id e só agenda o documento
+original se o lifecycle canônico ainda for READY_TO_TRANSMIT. Após transmissão,
+exige `reconcile`; não produz outro documento nem reenvia uma operação incerta.
 IDs de operador são evidência do comando administrativo, não substituem IAM;
 esses comandos não são expostos como rotas públicas.
 

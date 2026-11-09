@@ -19,7 +19,15 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "action",
-        choices=("status", "approve-prepared", "select-snapshot", "retry-event", "reconcile"),
+        choices=(
+            "status",
+            "approve-prepared",
+            "select-snapshot",
+            "retry-event",
+            "retry-status",
+            "retry-issuance",
+            "reconcile",
+        ),
     )
     parser.add_argument("reference", help="order ID, or inbox entry ID for retry-event")
     parser.add_argument("--request-id")
@@ -53,6 +61,22 @@ def main() -> int:
             print(json.dumps({"job_id": job_id}))
             return 0
         order_id = int(args.reference)
+        if args.action in {"retry-status", "retry-issuance"}:
+            if not args.request_id or not args.actor_id:
+                parser.error("retry requires --request-id and --actor-id")
+            retry = orders.retry_status if args.action == "retry-status" else orders.retry_issuance
+            print(
+                json.dumps(
+                    {
+                        "job_id": retry(
+                            order_id,
+                            request_id=args.request_id,
+                            actor_id=args.actor_id,
+                        )
+                    }
+                )
+            )
+            return 0
         if args.action == "approve-prepared":
             result = orders.approve_prepared(
                 order_id,

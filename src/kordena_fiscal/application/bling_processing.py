@@ -122,7 +122,14 @@ class BlingProcessingHandler:
 
     def _issue(self, job: FiscalOutboxEntry) -> FiscalDispatchResult:
         order_id = int(job.payload.decode("ascii"))
-        if job.deduplication_key != self.orders.key(order_id):
+        key = self.orders.key(order_id)
+        suffix = job.deduplication_key.removeprefix(key + ":retry:")
+        retry = (
+            job.deduplication_key.startswith(key + ":retry:")
+            and len(suffix) == 64
+            and all(c in "0123456789abcdef" for c in suffix)
+        )
+        if job.deduplication_key != key and not retry:
             raise ValueError("invalid issuance reference")
         row = self.orders.get(order_id)
         if row is None or not isinstance(row.get("document_id"), str):

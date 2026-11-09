@@ -19,6 +19,7 @@ from kordena_fiscal.connectors.erp_pme import ConnectorValidationError, normaliz
 from kordena_fiscal.contingency import FiscalOutboxService
 from kordena_fiscal.domain import ElectronicInvoiceModel, ExecutionScope, FiscalValidationError
 from kordena_fiscal.gateway import AuthorizationRequest
+from kordena_fiscal.lifecycle import FiscalDocumentState
 from kordena_fiscal.persistence.ports import (
     FiscalUnitOfWorkFactory,
     PersistenceConflictError,
@@ -339,6 +340,112 @@ class BlingOrders:
             ):
                 raise PersistenceConflictError("Bling deletion changed concurrently")
             uow.commit()
+
+    def retry_issuance(self, order_id: int, *, request_id: str, actor_id: str) -> str:
+        """Retry an approved document only when canonical state proves no dispatch occurred."""
+        if not request_id.strip() or len(request_id) > 128 or not actor_id.strip():
+            raise FiscalValidationError("retry request and actor are required")
+        with self.factory() as uow:
+            row = uow.commercial.configuration_receipt(self.scope, self.key(order_id))
+            if (
+                row is None
+                or not isinstance(row.get("document_id"), str)
+                or row.get("deleted")
+                or row.get("changed_snapshot_sha256")
+            ):
+                raise PersistenceStateError("Bling approved document is unavailable")
+            document_id = str(row["document_id"])
+            uow.lifecycle.assert_scope(document_id, self.scope)
+            lifecycle = uow.lifecycle.get(document_id)
+            if lifecycle is None or lifecycle.state is not FiscalDocumentState.READY_TO_TRANSMIT:
+                raise PersistenceStateError("Bling document requires reconciliation, not resend")
+            key = self.key(order_id) + ":retry:" + hashlib.sha256(request_id.encode()).hexdigest()
+            fingerprint = hashlib.sha256(
+                encode_order(
+                    {
+                        "actor": actor_id,
+                        "document_id": document_id,
+                    }
+                )
+            ).hexdigest()
+            existing = uow.commercial.reserve_configuration_command(self.scope, key, fingerprint)
+            if existing is None:
+                uow.commercial.complete_configuration_command(
+                    self.scope,
+                    key,
+                    {
+                        "document_id": document_id,
+                        "requested_by": actor_id,
+                        "request_id": request_id,
+                    },
+                )
+            job = (
+                FiscalOutboxService(uow.outbox)
+                .enqueue(
+                    scope=self.scope,
+                    operation=ISSUE_ORDER,
+                    deduplication_key=key,
+                    payload=str(order_id).encode("ascii"),
+                    created_at=datetime.fromisoformat(str(row["approved_at"])),
+                )
+                .entry
+            )
+            uow.commit()
+            return job.entry_id
+
+    def retry_status(self, order_id: int, *, request_id: str, actor_id: str) -> str:
+        """Retry only ERP writeback after an operator fixes its permanent failure."""
+        if not request_id.strip() or len(request_id) > 128 or not actor_id.strip():
+            raise FiscalValidationError("retry request and actor are required")
+        with self.factory() as uow:
+            row = uow.commercial.configuration_receipt(self.scope, self.key(order_id))
+            if (
+                row is None
+                or row.get("state") not in {"authorized", "rejected"}
+                or row.get("deleted")
+                or row.get("changed_snapshot_sha256")
+            ):
+                raise PersistenceStateError("Bling final result is unavailable for retry")
+            payload = encode_order(
+                {
+                    "event": "bling.fiscal_result",
+                    "order_id": order_id,
+                    "document_id": row["document_id"],
+                    "status": row["state"],
+                    "recovery_required": row.get("recovery_required", False),
+                    "result_reference": row.get("result_reference"),
+                }
+            )
+            key = (
+                self.key(order_id)
+                + ":result-retry:"
+                + hashlib.sha256(request_id.encode()).hexdigest()
+            )
+            fingerprint = hashlib.sha256(payload + actor_id.encode()).hexdigest()
+            existing = uow.commercial.reserve_configuration_command(self.scope, key, fingerprint)
+            if existing is None:
+                uow.commercial.complete_configuration_command(
+                    self.scope,
+                    key,
+                    {
+                        "order_id": order_id,
+                        "requested_by": actor_id,
+                        "request_id": request_id,
+                    },
+                )
+            job = (
+                FiscalOutboxService(uow.outbox)
+                .enqueue(
+                    scope=self.scope,
+                    operation=PUBLISH_STATUS,
+                    deduplication_key=key,
+                    payload=payload,
+                    created_at=datetime.fromisoformat(str(row["approved_at"])),
+                )
+                .entry
+            )
+            uow.commit()
+            return job.entry_id
 
     def record_result(self, order_id: int, result: Mapping[str, Any]) -> Mapping[str, object]:
         # Only the canonical executor supplies this result, never the ERP payload.
