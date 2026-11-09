@@ -75,6 +75,12 @@ class BlingOrders:
         with self.factory() as uow:
             return uow.commercial.configuration_receipt(self.scope, self.key(order_id))
 
+    def requires_dispatch(self, document_id: str) -> bool:
+        with self.factory() as uow:
+            uow.lifecycle.assert_scope(document_id, self.scope)
+            lifecycle = uow.lifecycle.get(document_id)
+        return lifecycle is not None and lifecycle.state is FiscalDocumentState.READY_TO_TRANSMIT
+
     def snapshot(self, order_id: int) -> dict[str, Any]:
         row = self.get(order_id)
         if row is None:

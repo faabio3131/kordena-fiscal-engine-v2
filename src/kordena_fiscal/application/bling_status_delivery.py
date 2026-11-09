@@ -1,11 +1,12 @@
 """Retryable status writeback, independent of the fiscal issuance job."""
 
+import hashlib
 import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from kordena_fiscal.application.bling_orders import PUBLISH_STATUS, BlingOrders
+from kordena_fiscal.application.bling_orders import PUBLISH_STATUS, BlingOrders, encode_order
 from kordena_fiscal.connectors.bling_api import BlingApiError
 from kordena_fiscal.contingency import FiscalDispatchResult, FiscalDispatchStatus, FiscalOutboxEntry
 
@@ -46,6 +47,11 @@ class BlingStatusPublisher:
             current = self.fetch(order_id)
             if type(current.get("id")) is not int or current["id"] != order_id:
                 raise ValueError("order mismatch")
+            fingerprint = hashlib.sha256(
+                encode_order({key: value for key, value in current.items() if key != "situacao"})
+            ).hexdigest()
+            if fingerprint != row.get("order_fingerprint"):
+                raise ValueError("fiscal order data changed before writeback")
             current_status = current["situacao"]["id"]
             if type(current_status) is not int:
                 raise ValueError("invalid current status")

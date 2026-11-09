@@ -1,12 +1,18 @@
 """Bling jobs use the canonical durable inbox, snapshots and fiscal executor."""
 
+import hashlib
 import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
-from kordena_fiscal.application.bling_orders import ISSUE_ORDER, PROCESS_ORDER, BlingOrders
+from kordena_fiscal.application.bling_orders import (
+    ISSUE_ORDER,
+    PROCESS_ORDER,
+    BlingOrders,
+    encode_order,
+)
 from kordena_fiscal.connectors.bling_api import BlingApiError
 from kordena_fiscal.contingency import (
     FiscalDispatchResult,
@@ -141,6 +147,16 @@ class BlingProcessingHandler:
             )
         if self.before_issue is not None:
             self.before_issue(str(row["document_id"]))
+        if self.orders.requires_dispatch(str(row["document_id"])):
+            current = self.fetch(order_id)
+            fingerprint = hashlib.sha256(
+                encode_order({key: value for key, value in current.items() if key != "situacao"})
+            ).hexdigest()
+            original = self.orders.snapshot(order_id)["raw"]
+            if fingerprint != row.get("order_fingerprint") or current.get(
+                "situacao"
+            ) != original.get("situacao"):
+                raise ValueError("Bling order changed after approval")
         result = self.fiscal_path.execute(
             operation_id="issueFiscalDocument",
             scope=job.scope,

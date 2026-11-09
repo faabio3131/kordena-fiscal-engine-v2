@@ -211,7 +211,8 @@ def handler_for(application, orders, transport):
             ),
         },
     )
-    return BlingProcessingHandler(orders, Mock(return_value=RAW), path)
+    raw = orders.snapshot(9001)["raw"] if orders.get(9001) is not None else RAW
+    return BlingProcessingHandler(orders, Mock(return_value=raw), path)
 
 
 def approve(orders):
@@ -747,3 +748,23 @@ def test_retry_before_dispatch_preserves_document_and_refuses_after_dispatch(ins
     assert transport.calls == 1
     with pytest.raises(PersistenceStateError):
         orders.retry_issuance(9001, request_id="unsafe-resend", actor_id="operator")
+
+
+@pytest.mark.parametrize("change", [{"total": "999.00"}, {"situacao": {"id": 99}}])
+def test_issue_rechecks_current_order_even_when_update_webhook_has_not_arrived(
+    installation, change
+):
+    db, application, orders = installation
+    prepare(application, orders.scope)
+    approve(orders)
+    transport = Transport()
+    handler = handler_for(application, orders, transport)
+    handler.fetch.return_value = {**RAW, **change}
+    result = DurableFiscalOutboxWorker(
+        uow_factory=db,
+        handler=handler,
+        claim_selection=OutboxClaimSelection(orders.scope, frozenset({ISSUE_ORDER})),
+    ).run_once(now=NOW)
+    assert result[0].status is FiscalOutboxStatus.DEAD_LETTER
+    assert transport.calls == 0
+    assert orders.requires_dispatch("doc-test")
