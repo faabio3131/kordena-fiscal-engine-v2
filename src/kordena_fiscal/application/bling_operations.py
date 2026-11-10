@@ -11,9 +11,8 @@ import hashlib
 import json
 import time
 from collections.abc import Callable, Mapping
-from typing import Protocol
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Protocol
 
 from kordena_fiscal.application.bling_orders import (
     ISSUE_ORDER,
@@ -36,6 +35,8 @@ from kordena_fiscal.integrations.bling_contracts import (
 )
 from kordena_fiscal.persistence.bling_installations import BlingInstallationRepository
 from kordena_fiscal.persistence.ports import FiscalUnitOfWorkFactory
+
+
 class BlingOAuthAccess(Protocol):
     def access_token(self, scope: ExecutionScope, installation_id: str) -> str: ...
 
