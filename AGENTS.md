@@ -1,5 +1,22 @@
 # AGENTS.md — Master Execution Schedule: Centro-Oeste Expansion (NFCore V1)
 
+## ALERTA DE GOVERNANÇA — CONTINUIDADE E STATUS NACIONAL (10/11/2026)
+
+**Incidente registrado `NAT-GOV-2026-11-10-01`:** o acompanhamento técnico deixou de atualizar e reconciliar o cronograma de cobertura por UF/município, e apresentou informações de forma que o proprietário acreditou que o trabalho solicitado para os sete estados havia sido concluído em 07/11. **Reconhecimento explícito de falha do acompanhamento**, não da interpretação do proprietário. A data 07/11 marca publicação de cronograma, não certificação nacional.
+
+**CURRENT pontual verificado em 10/11:** `main@2d6ba3d1c32d70923a473b37950769b19511c52d` e `production@8f9c7038c3c668a2be5c5f859b288ab64e7b530e`. O estado atual não deve ser inferido de checkpoints históricos abaixo. O ledger e o cronograma nacionais não apresentam prova final `UF_100_COMPLETA` para MG/SP/RJ/RS/PR/MT/MS. Isso **não equivale a afirmar que o código inexiste**: requer auditoria de PRs, merges, CI e contratos por operação/município.
+
+**Correção operacional obrigatória:** consultar GitHub CURRENT no início e após cada entrega; atualizar na mesma etapa `docs/NFV1_NATIONAL_EXPANSION_EXECUTION_LEDGER_2026-11-05.md` e `docs/NFCORE_NATIONAL_COVERAGE_MASTER_SCHEDULE_2026-11-07.md` com data, UF, municípios em escopo, NF-e/NFC-e/NFS-e, operações, branch/HEAD, PR, CI, evidência XSD/Web e homologação por ambiente. Não confundir `IMPLEMENTADO`, `CERTIFICADO_INTERNO`, `EXTERNAL_HOMOLOGATED` e `PRODUCTION_LIVE`. Se não houver evidência, escrever `AUDITORIA_PENDENTE` / `NAO_CERTIFICADO`, jamais `100% CONCLUÍDO`. Nunca apagar etapas existentes nem repetir uma fase sem regressão comprovada.
+
+**Sequenciamento em disputa `NAT-GOV-2026-11-10-02`:** este novo plano regional DF → GO → MT → MS não reconciliou a prioridade do cronograma nacional de 07/11 (MG → SP → RJ → RS → PR → MT → MS). Não tratar o cabeçalho novo como autorização para abandonar MG ou executar DF imediatamente; reconciliar a precedência formalmente antes de começar uma nova UF, preservando o trabalho já feito.
+
+**Prioridade máxima vigente:** finalizar Bling operacional e preparar o teste real com a contabilidade em 11/11/2026. PR #412 em andamento; nenhuma correção documental promove automaticamente código, Worker, migrations, homologação ou produção.
+
+**Documentação canônica desta reconciliação:** `docs/NFCORE_NATIONAL_COVERAGE_MASTER_SCHEDULE_2026-11-07.md` e `docs/NFV1_NATIONAL_EXPANSION_EXECUTION_LEDGER_2026-11-05.md`. Nenhum registro histórico prevalece sobre código/CI/runtime atuais.
+
+---
+
+
 > **Status do Documento:** Ativo / Governança de Execução  
 > **Escopo:** Expansão e Cobertura Total da Região Centro-Oeste (DF, GO, MT, MS)  
 > **Regra de Ouro:** A execução deve seguir estritamente a **Ordem Sequencial de Fases**. Nenhuma fase subsequente pode ser iniciada sem o fechamento com testes, validação XSD e *merge* bem-sucedido da fase anterior.
