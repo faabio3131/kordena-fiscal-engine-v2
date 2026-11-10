@@ -13,7 +13,7 @@
 3. Antes de qualquer DDL, confirmar backup verificado e escopo de schema PostgreSQL. A versão 19 é baseline histórico; **migrações Bling 20/21 só pela ferramenta canônica `scripts/ci/migration_guard.py`, com aprovação humana específica**, ensaio/rollback e sem automatizar `--apply` em `deploy.sh`.
 4. Confirmar que não há variáveis globais legadas `NFCORE_BLING_COMPANY_ID`, `TENANT_ID`, `UNIT_ID`, `ENVIRONMENT` no modo multi-installation.
 5. Confirmar callback HTTPS da aplicação Bling registrado no provedor: `https://app.nfcore.com.br/v1/portal/integrations/bling/oauth/callback` e escopos aprovados (acesso de pedidos e identificação de empresa); validar origem/rota no proxy reverso.
-6. Obter `NFCORE_BLING_CLIENT_ID` e três segredos reais fora do chat/Git: client-secret, master-key (base64 de 32 bytes) e webhook-secret (mínimo 16 caracteres). Não inventar credenciais, códigos de empresa ou IDs de status.
+6. Obter `NFCORE_BLING_CLIENT_ID` e dois segredos reais fora do chat/Git: Client Secret do aplicativo (também usado para assinar webhooks pelo Bling) e master-key (base64 de 32 bytes). Não criar chave HMAC independente. Não inventar credenciais, códigos de empresa ou IDs de status.
 
 ## Ativação da API EXISTENTE — somente após aprovação de host/migration
 - Copiar o modelo versionado `deploy/contabo/.env.bling.api.example` para o arquivo host-owned `/opt/fm/nfcore/.env.bling.api`; inserir *somente* `CLIENT_ID` e scopes reais; chmod 0600 e ownership correto.
@@ -35,3 +35,9 @@
 
 ## Evidência exigida para encerramento
 Registrar commit em `production`, SHA no `.deployed`, `DEPLOY OK`, lista de containers, migrações 1..21, `/health/ready` interno, API OAuth pronta, Worker health, consentimento real Bling por tenant, ID de status mapeado e ciclo de pedido de teste. **Nenhuma dessas evidências é substituída por CI verde isolada.**
+
+## Contratos oficiais verificados para o teste real
+
+- Webhooks: o cabeçalho `X-Bling-Signature-256` é HMAC-SHA256 assinado com o Client Secret do aplicativo OAuth; o runtime reutiliza exatamente essa chave. Fonte: https://developer.bling.com.br/webhooks
+- JWT: utilizar `enable-jwt: 1` no token OAuth e em requisições autenticadas à API Bling. Fonte: https://developer.bling.com.br/migracao-jwt
+- Identidade: a API pode responder `data.id` numérico; comparar com o identificador configurado da empresa após conversão textual exata, sem inferência de tenant/unidade.
