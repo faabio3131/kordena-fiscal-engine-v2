@@ -23,7 +23,10 @@ from kordena_fiscal.connectors.bling_oauth import (
     BlingTokenSet,
 )
 from kordena_fiscal.domain import ExecutionScope
-from kordena_fiscal.integrations.bling_contracts import BlingInstallationState
+from kordena_fiscal.integrations.bling_contracts import (
+    BlingInstallationState,
+    BlingInstallationView,
+)
 from kordena_fiscal.persistence.bling_installations import (
     BlingInstallationRepository,
     Database,
@@ -113,7 +116,9 @@ class BlingOAuthService:
         self.required_scopes = required_scopes
         self._webhook_secret = webhook_secret
 
-    def _scope(self, scope: ExecutionScope, installation_id: str):
+    def _scope(
+        self, scope: ExecutionScope, installation_id: str
+    ) -> BlingInstallationView:
         view = self.installations.get_for_scope(scope, installation_id)
         if view is None:
             raise BlingOAuthUnavailable("Bling installation unavailable")
@@ -302,7 +307,7 @@ class BlingOAuthService:
                 "refresh_lease_until = ? WHERE installation_id = ? "
                 "AND token_revision = ? AND "
                 "(refresh_lease_until IS NULL OR refresh_lease_until < ?)",
-                (owner, lease_until, installation_id, int(row[4]), now.isoformat()),
+                (owner, lease_until, installation_id, int(str(row[4])), now.isoformat()),
             )
             if updated.rowcount != 1:
                 connection.rollback()
@@ -316,7 +321,7 @@ class BlingOAuthService:
             self._validate_tokens(fresh)
             self.verifier(fresh.access_token, current.company_id)
             self._replace_credentials(
-                installation_id, fresh, expected_revision=int(row[4]), lease_owner=owner,
+                installation_id, fresh, expected_revision=int(str(row[4])), lease_owner=owner,
             )
             return fresh.access_token
         except BlingOAuthError as exc:
