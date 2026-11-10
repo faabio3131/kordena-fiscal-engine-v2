@@ -1,0 +1,23 @@
+# Bling OAuth/API activation on the EXISTING nfcore-api, never a second API.
+# To make the opt-in durable across the 5-minute pull deploy, install a
+# host-owned docker-compose.override.yml symlink to this versioned file only
+# AFTER schema 20/21, real app registration and secret mounts are approved.
+# The default compose/deploy remains unchanged until explicitly opted in.
+services:
+  nfcore-api:
+    env_file:
+      - .env
+      - path: .env.bling.api
+        required: true
+    environment:
+      NFCORE_BLING_INSTALLATIONS_ENABLED: "true"
+      NFCORE_BLING_CLIENT_SECRET_FILE: /run/nfcore/bling/client-secret
+      NFCORE_BLING_TOKEN_MASTER_KEY_FILE: /run/nfcore/bling/master-key
+      NFCORE_BLING_WEBHOOK_SECRET_FILE: /run/nfcore/bling/webhook-secret
+    volumes:
+      - type: bind
+        source: ${NFCORE_BLING_SECRETS_HOST_DIR:?required}
+        target: /run/nfcore/bling
+        read_only: true
+        bind:
+          create_host_path: false

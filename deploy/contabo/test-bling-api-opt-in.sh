@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Config-only acceptance: no network, no server, no secrets, no containers started.
+set -euo pipefail
+HERE="$(cd "$(dirname "$0")" && pwd)"
+T="$(mktemp -d)"
+trap 'rm -rf "$T"' EXIT
+cp "$HERE/compose.prod.yml" "$T/docker-compose.yml"
+mkdir -p "$T/src" "$T/host-blind"
+printf 'POSTGRES_PASSWORD=synthetic-ci-only\n' > "$T/.env"
+printf 'NFCORE_BLING_CLIENT_ID=synthetic-ci-app\nNFCORE_BLING_APPROVED_SCOPES=synthetic\n' > "$T/.env.bling.api"
+export POSTGRES_PASSWORD=synthetic-ci-only
+export NFCORE_BLING_SECRETS_HOST_DIR="$T/host-blind"
+(cd "$T" && docker compose config --format json) > "$T/base.json"
+python3 - "$T/base.json" <<'PY'
+import json, sys
+config=json.load(open(sys.argv[1], encoding="utf-8"))
+api=config["services"]["nfcore-api"]
+assert api["environment"].get("NFCORE_BLING_INSTALLATIONS_ENABLED") != "true"
+assert not api.get("volumes")
+assert "nfcore-bling-worker" not in config["services"]
+PY
+cp "$HERE/compose.bling.api.opt-in.yml" "$T/docker-compose.override.yml"
+(cd "$T" && docker compose config --format json) > "$T/optin.json"
+python3 - "$T/optin.json" <<'PY'
+import json, sys
+config=json.load(open(sys.argv[1], encoding="utf-8"))
+api=config["services"]["nfcore-api"]
+assert api["environment"]["NFCORE_BLING_INSTALLATIONS_ENABLED"] == "true"
+assert api["environment"]["NFCORE_BLING_CLIENT_ID"] == "synthetic-ci-app"
+assert api["environment"]["NFCORE_BLING_APPROVED_SCOPES"] == "synthetic"
+assert api["environment"]["NFCORE_BLING_CLIENT_SECRET_FILE"] == "/run/nfcore/bling/client-secret"
+assert api["environment"]["NFCORE_BLING_TOKEN_MASTER_KEY_FILE"] == "/run/nfcore/bling/master-key"
+assert api["environment"]["NFCORE_BLING_WEBHOOK_SECRET_FILE"] == "/run/nfcore/bling/webhook-secret"
+assert len(api["volumes"]) == 1
+mount=api["volumes"][0]
+assert mount["type"] == "bind" and mount["read_only"] is True
+assert mount["target"] == "/run/nfcore/bling"
+assert mount.get("bind",{}).get("create_host_path") is False
+assert "proxy-net" in api["networks"] and "internal" in api["networks"]
+assert set(config["services"]) == {"nfcore-api", "nfcore-db", "nfcore-portal"}
+PY
+rm "$T/.env.bling.api"
+if (cd "$T" && docker compose config -q) >/dev/null 2>&1; then
+  echo "FAIL: missing Bling API configuration was silently accepted"; exit 1
+fi
+cp "$HERE/.env.bling.api.example" "$T/.env.bling.api"
+if (cd "$T" && env -u NFCORE_BLING_SECRETS_HOST_DIR docker compose config -q) >/dev/null 2>&1; then
+  echo "FAIL: missing secret mount was silently accepted"; exit 1
+fi
+echo "PASS: Bling API compose opt-in is persistent, isolated and fail-closed"
