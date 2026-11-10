@@ -1952,6 +1952,12 @@ function appendBlingOperationsPanel(article, onReview) {
   addInstallation.type = "button"; addInstallation.textContent = "Cadastrar empresa Bling";
   const oauthConnect = document.createElement("button");
   oauthConnect.type = "button"; oauthConnect.textContent = "Conectar / reautorizar no Bling";
+  const webhookLabel = document.createElement("label");
+  webhookLabel.textContent = "URL do webhook Bling (cadastrar no aplicativo do provedor)";
+  const webhookUrl = document.createElement("input");
+  webhookUrl.type = "url"; webhookUrl.readOnly = true;
+  webhookUrl.setAttribute("aria-label", "URL do webhook Bling");
+  webhookLabel.append(webhookUrl);
   const mappingLabel = document.createElement("label");
   mappingLabel.textContent = "ID do status autorizado no Bling";
   const authorizedStatus = document.createElement("input");
@@ -1972,7 +1978,7 @@ function appendBlingOperationsPanel(article, onReview) {
     window.history.replaceState({}, "", `${location.pathname}${location.search}${location.hash}`);
   }
   setup.append(setupTitle, bindingLabel, createBinding, companyLabel, addInstallation, oauthConnect,
-    mappingLabel, rejectedLabel, mappingSave, setupMessage);
+    webhookLabel, mappingLabel, rejectedLabel, mappingSave, setupMessage);
   const controls = document.createElement("div"); controls.className = "bling-operations-controls";
   const installationLabel = document.createElement("label");
   installationLabel.textContent = "Instalação Bling vinculada à unidade";
@@ -2239,6 +2245,9 @@ function appendBlingOperationsPanel(article, onReview) {
 
   installation.addEventListener("change", () => {
     active = installation.value;
+    webhookUrl.value = active
+      ? `${window.location.origin}/webhooks/bling/installations/${encodeURIComponent(active)}`
+      : "";
     const selected = installation.selectedOptions[0];
     connected = selected?.dataset.state === "connected";
     oauthConnect.disabled = !active; mappingSave.disabled = !connected;
