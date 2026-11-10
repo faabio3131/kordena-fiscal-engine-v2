@@ -2132,6 +2132,7 @@ function appendBlingOperationsPanel(article, onReview) {
   /** @param {string} [preferred] */
   async function loadInstallations(preferred = "") {
     const data = await api(`/v1/portal/integrations/bling/installations/available?unit_id=${encodeURIComponent(unitId)}`);
+    /** @type {Array<{installation_id: string, state: string, revision: number, company_id: string}>} */
     const records = Array.isArray(data.rows) ? data.rows : [];
     installation.replaceChildren();
     for (const item of records) {
