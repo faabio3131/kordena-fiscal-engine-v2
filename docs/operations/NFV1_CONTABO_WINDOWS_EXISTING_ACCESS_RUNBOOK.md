@@ -12,6 +12,7 @@
 - Pasta local das identidades SSH do usuário atual: `$env:USERPROFILE\.ssh`.
 - Arquivos locais verificados por teste de existência em 10/11/2026: `fm_contabo2`/ `fm_contabo2.pub`, `contabo_admin_ed25519`/ `contabo_admin_ed25519.pub`, `fmcc_contabo_deploy_20261024`/ `fmcc_contabo_deploy_20261024.pub`. O teste de existência **não** comprova permissão no servidor ou validade criptográfica.
 - Teste com `contabo_admin_ed25519` forçada para `fmadmin@13.140.234.22`: `Permission denied (publickey)`. **Não insistir nem concluir que o acesso anterior foi perdido.**
+- **CONFIRMADO PELO OPERADOR EM 10/11/2026, 20h25 BRT:** `ssh -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes -i "$env:USERPROFILE\.ssh\fm_contabo2" fmadmin@13.140.234.22 "whoami"` solicitou a frase-senha local e retornou **`fmadmin`**, sem erro. Isto comprova execução de comando remoto read-only com esta identidade e endpoint. Não comprova estado de Docker/deploy nem conexão pelo GitHub Actions.
 - Relato do proprietário: o acesso normal é realizado por **script local e senha digitada interativamente**. **Nome/caminho exatos desse script ainda não foram identificados nesta retomada; não substituí-los por suposição.**
 - Histórico operacional recuperado: em 01/11/2026 foi registrado acesso funcional após `ssh-add "$env:USERPROFILE\.ssh\fm_contabo2"` e em seguida `ssh fmadmin@13.140.234.22`; a senha solicitada nesse caso era a **frase-senha da chave privada**, fornecida somente no terminal. Há ainda executores Python históricos em Downloads que pediam senha SSH; eles **não devem ser executados apenas para testar conexão**, pois têm ações administrativas.
 - Outro histórico 24/10/2026 usou `ssh -tt fmadmin@13.140.234.22` para executar scripts de autorização/deploy no host. Esses scripts causavam alterações e não fazem parte do diagnóstico de acesso.
@@ -36,7 +37,8 @@ Se o serviço `ssh-agent` estiver parado, `ssh-add` pode falhar com erro de agen
 
 A opção `StrictHostKeyChecking=yes` exige que a identidade do servidor tenha sido validada e confiada previamente. Uma falha de host key **não** deve ser contornada com `-o StrictHostKeyChecking=no`.
 
-**Critério de êxito:** comando remoto retorna `fmadmin` e exit code zero. Sem evidência desse resultado, classificar como `SSH_REAL_NOT_VERIFIED`.
+**Critério de êxito atingido pelo operador em 10/11/2026:** comando remoto retornou `fmadmin`. O caminho **PC Windows → SSH → Contabo** está comprovado; **Work/cloud → SSH** continua `NOT_VERIFIED`. Não copiar a chave privada existente para o GitHub.
+
 
 ## Segredos — salvamento correto sem perda de acesso
 
