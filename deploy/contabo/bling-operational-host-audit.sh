@@ -134,7 +134,7 @@ else:
         if not artifacts:
             print("EMPTY")
         else:
-            # Validate using the API process's actual environment: a forbidden
+            # Validate against the actual API environment: forbidden global settings
             # legacy global policy must not be masked by synthetic audit settings.
             preparer = BlingSalePreparer(os.environ)
             for artifact in artifacts:
