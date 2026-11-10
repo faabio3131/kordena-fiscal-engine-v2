@@ -53,7 +53,7 @@ def _signature(body: bytes, secret: bytes) -> str:
 
 def test_multitenant_webhook_is_hmac_verified_and_scope_bound(tmp_path: Path) -> None:
     db = SqliteFiscalDatabase(tmp_path / "webhooks.sqlite")
-    db.initialize()
+    db.initialize(enable_bling=True)
     with db() as uow:
         for tenant in ("a", "b"):
             for unit in ("1", "2"):
@@ -120,7 +120,7 @@ def test_multitenant_webhook_is_hmac_verified_and_scope_bound(tmp_path: Path) ->
 
 def test_unconfigured_installation_rejects_signed_event(tmp_path: Path) -> None:
     db = SqliteFiscalDatabase(tmp_path / "inactive.sqlite")
-    db.initialize()
+    db.initialize(enable_bling=True)
     with db() as uow:
         uow.bindings.add(FiscalAccountBinding(
             binding_id="binding",
