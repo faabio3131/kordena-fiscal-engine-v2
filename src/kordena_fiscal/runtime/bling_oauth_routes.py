@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, HTTPException, Request
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 
 from kordena_fiscal.application.service import FiscalApplicationService
 from kordena_fiscal.domain import (
@@ -213,7 +213,7 @@ def build_bling_oauth_router(
     @router.get("/oauth/callback")
     def callback(
         request: Request, state: str = "", code: str = "", error: str = "",
-    ) -> JSONResponse | RedirectResponse:
+    ) -> Response:
         human = _authenticated(request, identity, now=datetime.now(UTC))
         if error or not state or not code or len(state) != 64:
             raise HTTPException(400, detail={"code": "BLING_OAUTH_REJECTED"})
