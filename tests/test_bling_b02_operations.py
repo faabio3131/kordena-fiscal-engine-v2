@@ -179,13 +179,25 @@ def test_jobs_and_metrics_do_not_expose_provider_or_customer_payload(tmp_path: P
         120, {"id": 120, "contato": {"nome": "CUSTOMER SECRET"}, "itens": []},
         event_id="secret-test", now=datetime.now(UTC),
     )
-    from kordena_fiscal.application.bling_orders import PROCESS_ORDER
+    from kordena_fiscal.application.bling_orders import PUBLISH_STATUS, encode_order
     from kordena_fiscal.contingency import FiscalOutboxService
 
+    foreign = BlingOrders(db, scope, "other-company")
     with db() as uow:
         FiscalOutboxService(uow.outbox).enqueue(
-            scope=scope, operation=PROCESS_ORDER,
-            deduplication_key="secret-job", payload=b"PRIVATE ORDER RAW DATA",
+            scope=scope, operation=PUBLISH_STATUS,
+            deduplication_key=orders.key(120) + ":original-status",
+            payload=encode_order({
+                "order_id": 120, "status": "authorized", "private": "PRIVATE ORDER RAW DATA",
+            }),
+            created_at=datetime.now(UTC),
+        )
+        FiscalOutboxService(uow.outbox).enqueue(
+            scope=scope, operation=PUBLISH_STATUS,
+            deduplication_key=foreign.key(121) + ":original-status",
+            payload=encode_order({
+                "order_id": 121, "status": "authorized", "private": "OTHER COMPANY SECRET",
+            }),
             created_at=datetime.now(UTC),
         )
         uow.commit()
@@ -193,6 +205,7 @@ def test_jobs_and_metrics_do_not_expose_provider_or_customer_payload(tmp_path: P
     assert len(jobs["rows"]) == 1
     assert jobs["rows"][0]["status"] == FiscalOutboxStatus.PENDING.value
     assert "PRIVATE ORDER RAW DATA" not in str(jobs)
+    assert "OTHER COMPANY SECRET" not in str(jobs)
     assert "CUSTOMER SECRET" not in str(jobs)
     metrics = service.page_metrics(scope, view.installation_id)
     assert metrics["order_states"]["review_required"] == 1
