@@ -142,12 +142,12 @@ def test_policy_digest_and_content_must_match_per_partition(tmp_path: Path) -> N
     assert preparer.policy(orders)[0]["policy_id"] == "fiscal-policy-company"
 
     artifact.write_bytes(artifact.read_bytes() + b" ")
-    with pytest.raises(FiscalValidationError, match="integrity mismatch"):
+    with pytest.raises(FiscalValidationError, match="unavailable or invalid"):
         preparer.policy(orders)
 
     artifact, pin, _digest = _install(tmp_path, orders)
     pin.write_text("0" * 64 + "\n", encoding="ascii")
-    with pytest.raises(FiscalValidationError, match="integrity mismatch"):
+    with pytest.raises(FiscalValidationError, match="unavailable or invalid"):
         preparer.policy(orders)
 
     pin.write_bytes(b"invalid\n")
@@ -162,7 +162,7 @@ def test_policy_cross_scope_payload_rejected_even_with_correct_pin(tmp_path: Pat
     payload = json.dumps(_fixture(foreign)).encode()
     artifact.write_bytes(payload)
     pin.write_text(hashlib.sha256(payload).hexdigest() + "\n", encoding="ascii")
-    with pytest.raises(FiscalValidationError, match="scope mismatch"):
+    with pytest.raises(FiscalValidationError, match="unavailable or invalid"):
         _preparer(tmp_path).policy(target)
 
 
@@ -178,7 +178,7 @@ def test_policy_symlink_and_oversized_payload_fail_closed(tmp_path: Path) -> Non
         preparer.policy(orders)
     artifact.unlink()
     artifact.write_bytes(b"x" * 1_048_577)
-    with pytest.raises(FiscalValidationError, match="integrity mismatch"):
+    with pytest.raises(FiscalValidationError, match="unavailable or invalid"):
         preparer.policy(orders)
     assert pin.read_text().strip() == digest
 
