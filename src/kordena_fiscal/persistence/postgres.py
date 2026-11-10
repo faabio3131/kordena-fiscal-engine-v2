@@ -624,7 +624,7 @@ class PostgresFiscalDatabase:
         with self._pool.connection() as raw:
             yield _PostgresCompatConnection(raw)
 
-    def initialize(self) -> tuple[int, ...]:
+    def initialize(self, *, enable_bling: bool = False) -> tuple[int, ...]:
         with self._pool.connection() as raw:
             try:
                 raw.execute(
@@ -854,7 +854,7 @@ class PostgresFiscalDatabase:
                         ),
                     )
                     new_versions.append(COGNITIVE_QUOTA_VERSION)
-                if BLING_INSTALLATION_VERSION not in applied:
+                if enable_bling and BLING_INSTALLATION_VERSION not in applied:
                     for statement in BLING_INSTALLATION_SCHEMA:
                         raw.execute(statement)
                     raw.execute(
@@ -881,7 +881,7 @@ class PostgresFiscalDatabase:
                 return ()
             return tuple(int(row[0]) for row in rows)
 
-    def require_current_schema(self) -> tuple[int, ...]:
+    def require_current_schema(self, *, require_bling: bool = False) -> tuple[int, ...]:
         """Check schema compatibility without DDL or migration side effects.
 
         In staging/production only the governed migration_guard orchestrator may
@@ -889,7 +889,8 @@ class PostgresFiscalDatabase:
         versions instead of creating tables during startup.
         """
         applied = self.applied_migrations()
-        required = tuple(range(1, BLING_INSTALLATION_VERSION + 1))
+        max_version = BLING_INSTALLATION_VERSION if require_bling else COGNITIVE_QUOTA_VERSION
+        required = tuple(range(1, max_version + 1))
         if applied != required:
             raise PersistenceStateError(
                 "PostgreSQL schema is not at the certified migration version"
@@ -913,6 +914,8 @@ class PostgresFiscalDatabase:
             raise PersistenceStateError(
                 "PostgreSQL schema is not at the certified migration version"
             ) from exc
+        if not require_bling:
+            return applied
         try:
             with self.connection() as connection:
                 tables = connection.execute(
