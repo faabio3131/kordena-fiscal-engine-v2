@@ -1923,9 +1923,203 @@ async function renderSurface(viewId) {
   }
 }
 
+/** Operational Bling dashboard, always using the authenticated portal authority. */
+/** @param {HTMLElement} article */
+/** @param {(installationId:string, orderId:number)=>void} onReview */
+function appendBlingOperationsPanel(article, onReview) {
+  const panel = document.createElement("section"); panel.className = "bling-operations";
+  const heading = document.createElement("h3"); heading.textContent = "Centro de Operações Bling";
+  const summary = document.createElement("p"); summary.className = "empty-state";
+  summary.textContent = "Consultando instalações da unidade autorizada...";
+  const controls = document.createElement("div"); controls.className = "bling-operations-controls";
+  const installationLabel = document.createElement("label");
+  installationLabel.textContent = "Instalação Bling vinculada à unidade";
+  const installation = document.createElement("select");
+  installation.setAttribute("aria-label", "Instalação Bling vinculada à unidade");
+  installationLabel.append(installation); controls.append(installationLabel);
+  const refresh = document.createElement("button"); refresh.type = "button";
+  refresh.textContent = "Atualizar fila";
+  controls.append(refresh);
+  const metrics = document.createElement("p"); metrics.setAttribute("role", "status");
+  const list = document.createElement("div"); list.className = "bling-operations-queue";
+  const jobs = document.createElement("div"); jobs.className = "bling-operations-jobs";
+  const provider = document.createElement("div"); provider.className = "bling-provider-recovery";
+  panel.append(heading, summary, controls, metrics, list, jobs, provider); article.prepend(panel);
+  let active = "";
+  let cursor = null;
+  let next = null;
+  let providerCursor = null;
+  let generation = 0;
+  let connected = false;
+  const canMutate = bootstrapState?.permissions?.includes("document.issue") === true;
+
+  const notice = (box, value) => {
+    box.replaceChildren();
+    const line = document.createElement("p"); line.textContent = value;
+    line.setAttribute("role", "status"); box.append(line);
+  };
+  const callMutation = async (path, body) => {
+    return api(path, {method: "POST", headers: {"X-CSRF-Token": csrfToken()}, body: JSON.stringify(body)});
+  };
+  const requestId = () => {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+    return `bling-operator-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  };
+  const button = (label, action, disabled = false) => {
+    const element = document.createElement("button");
+    element.type = "button"; element.textContent = label; element.disabled = disabled;
+    element.addEventListener("click", () => { void action(element); });
+    return element;
+  };
+
+  async function loadQueue(current = cursor) {
+    if (!active) return;
+    const currentGeneration = ++generation;
+    const prefix = `/v1/portal/integrations/bling/installations/${encodeURIComponent(active)}`;
+    notice(list, "Carregando fila operacional...");
+    try {
+      const [page, health, jobPage] = await Promise.all([
+        api(`${prefix}/orders?limit=25${current ? `&cursor=${encodeURIComponent(current)}` : ""}`),
+        api(`${prefix}/metrics`),
+        api(`${prefix}/jobs?limit=25`),
+      ]);
+      if (generation !== currentGeneration) return;
+      cursor = current; next = page.next_cursor || null;
+      const pageRows = Array.isArray(page.rows) ? page.rows : [];
+      list.replaceChildren();
+      const title = document.createElement("h4");
+      title.textContent = "Fila fiscal Bling"; list.append(title);
+      if (!pageRows.length) notice(list, "Nenhum pedido capturado nesta instalação.");
+      for (const row of pageRows) {
+        const entry = document.createElement("article"); entry.className = "surface-row bling-operation-row";
+        const title = document.createElement("strong");
+        title.textContent = `Pedido #${row.order_id} · ${row.state}`;
+        const detail = document.createElement("p");
+        detail.textContent = `Revisão: ${row.review_required ? "necessária" : "não pendente"} · Documento: ${row.document_id || "não preparado"}`;
+        entry.append(title, detail, button("Revisar pedido", () => onReview(active, row.order_id)));
+        if (row.retryable && connected && canMutate) {
+          entry.append(button("Reprocessar retorno ao Bling", async (element) => {
+            element.disabled = true;
+            try {
+              await callMutation(`${prefix}/orders/${row.order_id}/retry-status`, {request_id: requestId()});
+              await loadQueue();
+            } catch (error) {
+              detail.textContent = error instanceof Error ? error.message : "Reprocessamento bloqueado";
+              element.disabled = false;
+            }
+          }));
+        }
+        list.append(entry);
+      }
+      const pages = document.createElement("div"); pages.className = "bling-operations-pages";
+      pages.append(
+        button("Primeira página", () => loadQueue(null), !cursor),
+        button("Próxima página de pedidos", () => loadQueue(next), !next),
+      );
+      list.append(pages);
+      const orderStates = Object.entries(health.order_states || {}).map(([state, count]) => `${state}: ${count}`).join(" · ");
+      metrics.textContent = `Visão amostral (${health.sample_limit} registros por consulta)${health.partial ? " · há mais páginas" : ""}: ${orderStates || "sem pedidos"}.`;
+      jobs.replaceChildren();
+      const jobTitle = document.createElement("h4"); jobTitle.textContent = "Processamento e falhas";
+      jobs.append(jobTitle);
+      for (const job of Array.isArray(jobPage.rows) ? jobPage.rows : []) {
+        const line = document.createElement("p");
+        line.textContent = `${job.operation} · ${job.status} · tentativas ${job.attempt_count}`;
+        jobs.append(line);
+      }
+      if (health.has_dead_letter) {
+        const alert = document.createElement("p"); alert.className = "form-error";
+        alert.setAttribute("role", "alert");
+        alert.textContent = "Há eventos em dead-letter. Revise as causas antes de qualquer reprocessamento.";
+        jobs.prepend(alert);
+      }
+    } catch (error) {
+      if (generation === currentGeneration) notice(list, error instanceof Error ? error.message : "Fila indisponível");
+    }
+  }
+
+  async function discoverProvider(currentCursor = providerCursor) {
+    if (!active || !connected) return;
+    const prefix = `/v1/portal/integrations/bling/installations/${encodeURIComponent(active)}`;
+    notice(provider, "Consultando página no Bling...");
+    try {
+      const page = await api(`${prefix}/provider-orders?limit=5${currentCursor ? `&cursor=${encodeURIComponent(currentCursor)}` : ""}`);
+      providerCursor = currentCursor;
+      provider.replaceChildren();
+      const h = document.createElement("h4"); h.textContent = "Pedidos ausentes — recuperação controlada"; provider.append(h);
+      for (const row of Array.isArray(page.rows) ? page.rows : []) {
+        const line = document.createElement("div"); line.className = "bling-operation-row";
+        const detail = document.createElement("span");
+        detail.textContent = `Pedido #${row.order_id}: ${row.recorded ? "já capturado" : "ausente no NFCore"}`;
+        line.append(detail);
+        if (!row.recorded && canMutate) line.append(button("Recuperar para revisão", async (element) => {
+          element.disabled = true;
+          try {
+            await callMutation(`${prefix}/orders/${row.order_id}/recover`, {request_id: requestId()});
+            await loadQueue(null);
+            onReview(active, row.order_id);
+          } catch (error) {
+            detail.textContent = error instanceof Error ? error.message : "Recuperação bloqueada";
+            element.disabled = false;
+          }
+        }));
+        provider.append(line);
+      }
+      provider.append(button("Próxima página no Bling", () => discoverProvider(page.next_cursor), !page.next_cursor));
+    } catch (error) {
+      notice(provider, error instanceof Error ? error.message : "Consulta ao Bling indisponível");
+    }
+  }
+
+  installation.addEventListener("change", () => {
+    active = installation.value;
+    const selected = installation.selectedOptions[0];
+    connected = selected?.dataset.state === "connected";
+    cursor = null; next = null; providerCursor = null;
+    provider.replaceChildren();
+    summary.textContent = connected
+      ? "Conexão disponível para recuperação com revisão humana. Emissão fiscal real depende de A1 e homologação."
+      : "Instalação desconectada ou pendente de reautorização. Novas operações permanecem bloqueadas.";
+    void loadQueue(null);
+  });
+  refresh.addEventListener("click", () => { void loadQueue(null); });
+  const providerAction = button("Localizar pedidos que não chegaram pelo webhook", () => discoverProvider(null));
+  controls.append(providerAction);
+  const units = authorizedFiscalUnits();
+  const unitId = selectedFiscalUnit || units[0]?.unit_id;
+  if (!unitId) {
+    summary.textContent = "Selecione uma unidade fiscal autorizada para consultar o Bling.";
+    return;
+  }
+  void (async () => {
+    try {
+      const data = await api(`/v1/portal/integrations/bling/installations/available?unit_id=${encodeURIComponent(unitId)}`);
+      const records = Array.isArray(data.rows) ? data.rows : [];
+      installation.replaceChildren();
+      for (const item of records) {
+        const option = document.createElement("option");
+        option.value = item.installation_id;
+        option.dataset.state = item.state;
+        option.textContent = `Empresa ${item.company_id} · ${item.state}`;
+        installation.append(option);
+      }
+      if (!records.length) {
+        summary.textContent = "Nenhuma instalação Bling configurada para esta unidade. O cadastro e OAuth são feitos pela integração administrativa.";
+        controls.hidden = true;
+        return;
+      }
+      installation.dispatchEvent(new Event("change"));
+    } catch (_error) {
+      summary.textContent = "Painel multi-tenant indisponível. A revisão legada permanece sujeita às permissões e à configuração existentes.";
+      controls.hidden = true;
+    }
+  })();
+}
+
 /** @returns {Set<string>|null} */
 /** @param {HTMLElement} article */
 function appendBlingReview(article) {
+  let selectedInstallationId = "";
   const form = document.createElement("form");
   const heading = document.createElement("h3"); heading.textContent = "Revisão de pedidos Bling";
   const label = document.createElement("label"); label.textContent = "Número interno do pedido no Bling";
@@ -1934,10 +2128,17 @@ function appendBlingReview(article) {
   const lookup = document.createElement("button"); lookup.type = "submit"; lookup.textContent = "Consultar pedido";
   const output = document.createElement("div"); output.setAttribute("aria-live", "polite");
   form.append(heading, label, lookup, output); article.append(form);
+  appendBlingOperationsPanel(article, (installationId, orderId) => {
+    selectedInstallationId = installationId;
+    order.value = String(orderId);
+    form.requestSubmit();
+  });
   let generation = 0;
   form.addEventListener("submit", async (event) => {
     event.preventDefault(); const current = ++generation;
-    const path = `/v1/portal/integrations/bling/orders/${encodeURIComponent(order.value)}`;
+    const path = selectedInstallationId
+      ? `/v1/portal/integrations/bling/installations/${encodeURIComponent(selectedInstallationId)}/orders/${encodeURIComponent(order.value)}`
+      : `/v1/portal/integrations/bling/orders/${encodeURIComponent(order.value)}`;
     lookup.disabled = true; output.textContent = "Consultando pedido...";
     try {
       const result = await api(path);
