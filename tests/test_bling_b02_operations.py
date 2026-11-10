@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from test_bling_a02_oauth import installation
 
 from kordena_fiscal.application.bling_operations import (
     BlingOperationalError,
@@ -20,9 +21,6 @@ from kordena_fiscal.integrations.bling_contracts import (
     BlingInstallationState,
     BlingRecoveryOutcome,
 )
-from kordena_fiscal.persistence.ports import PersistenceConflictError
-
-from test_bling_a02_oauth import installation
 
 
 def setup(tmp_path: Path):
