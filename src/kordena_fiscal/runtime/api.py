@@ -13,6 +13,7 @@ from uuid import uuid4
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from kordena_fiscal.application.bling_operations import BlingOperationsService
 from kordena_fiscal.application.command_commercial import CommandCommercialReceiver
 from kordena_fiscal.application.commercial_acquisition import CommercialAcquisitionService
 from kordena_fiscal.cognitive.composition import build_cognitive_router
@@ -75,6 +76,7 @@ from .bling_ingress import build_bling_ingress
 from .bling_multitenant_ingress import build_multitenant_bling_ingress
 from .bling_oauth_factory import build_bling_oauth_service
 from .bling_oauth_routes import build_bling_oauth_router
+from .bling_operations import build_bling_operations_router
 from .bling_preparation import BlingSalePreparer
 from .bling_review import build_bling_review_router
 from .bling_status import build_bling_status_router
@@ -818,6 +820,11 @@ def create_runtime_app(
         ))
         app.include_router(build_bling_oauth_router(
             composition.human_identity, installations, oauth,
+        ))
+        app.include_router(build_bling_operations_router(
+            composition.human_identity, installations,
+            BlingOperationsService(runtime.database, installations, oauth),
+            preparer=BlingSalePreparer(os.environ),
         ))
     else:
         bling_router = build_bling_ingress(

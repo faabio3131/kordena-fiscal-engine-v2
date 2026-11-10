@@ -90,3 +90,78 @@ test("native preparation reviews recipient and posts only scoped fiscal facts", 
   await expect(page.getByText("Situação: queued", {exact: true})).toBeVisible();
   expect(queued).toBe(true);
 });
+
+
+test("Bling mission control lists scoped jobs and recovers missing orders with CSRF", async ({ page, context }) => {
+  const installId = "a".repeat(32);
+  await context.addCookies([{
+    name: "nfcore_csrf", value: "ops-csrf", domain: "127.0.0.1", path: "/",
+  }]);
+  await page.route("**/v1/portal/bootstrap", route => route.fulfill({json: {
+    tenant_id: "tenant", unit_ids: ["unit"], role: "owner",
+    permissions: ["portal.read", "integration.manage", "document.issue"],
+    supported_documents: ["nfe"],
+    projection: {
+      available_surfaces: ["integrations"],
+      authorized_units: [{unit_id: "unit", display_name: "Unidade teste", environments: ["homologation"]}],
+    },
+  }}));
+  await page.route("**/v1/portal/surfaces/integrations*", route => route.fulfill({json: {rows: []}}));
+  let recovered = false;
+  await page.route("**/v1/portal/integrations/bling/installations/available*", route =>
+    route.fulfill({json: {rows: [{
+      installation_id: installId, company_id: "company", state: "connected",
+      environment: "homologation", credential_status: "configured", revision: 1,
+    }], next_cursor: null}}));
+  await page.route("**/v1/portal/integrations/bling/installations/**", route => {
+    const request = route.request();
+    const url = new URL(request.url());
+    // Specific availability fixture was registered earlier; let it handle this URL.
+    if (url.pathname.endsWith("/available")) return route.fallback();
+    if (url.pathname.endsWith("/orders") && request.method() === "GET") {
+      return route.fulfill({json: {
+        rows: [{order_id: 9001, state: "review_required", review_required: true,
+          document_id: null, retryable: false, updated_at: "2026-11-10T00:00:00Z"},
+        ...(recovered ? [{order_id: 9002, state: "review_required", review_required: true,
+          document_id: null, retryable: false, updated_at: "2026-11-10T00:00:00Z"}] : [])],
+        next_cursor: null,
+      }});
+    }
+    if (url.pathname.endsWith("/jobs")) return route.fulfill({json: {rows: [
+      {entry_id: "c".repeat(64), operation: "process_bling_order",
+        status: "dead_letter", attempt_count: 3, available_at: "2026-11-10T00:00:00Z"},
+    ], next_offset: null}});
+    if (url.pathname.endsWith("/metrics")) return route.fulfill({json: {
+      sample_limit: 100, partial: false, order_states: {review_required: recovered ? 2 : 1},
+      job_states: {dead_letter: 1}, has_dead_letter: true,
+    }});
+    if (url.pathname.endsWith("/provider-orders")) return route.fulfill({json: {
+      rows: [{order_id: 9002, recorded: recovered}], next_cursor: null,
+    }});
+    if (url.pathname.endsWith("/orders/9002/recover")) {
+      expect(request.method()).toBe("POST");
+      expect(request.headers()["x-csrf-token"]).toBe("ops-csrf");
+      expect(typeof request.postDataJSON().request_id).toBe("string");
+      recovered = true;
+      return route.fulfill({json: {outcome: "requires_review", order_id: 9002}});
+    }
+    if (url.pathname.endsWith("/orders/9002")) return route.fulfill({json: {
+      order: {order_id: 9002, state: "review_required", snapshot_sha256: "digest", document_id: null},
+      snapshots: [{sha256: "digest", content: {raw: {nome: "<svg onload=alert(1)>"}}}],
+      preparation: {configured: false},
+    }});
+    return route.fulfill({status: 404, json: {code: "NOT_FOUND"}});
+  });
+  await page.goto("/");
+  await page.getByRole("button", {name: "Integrações", exact: true}).click();
+  await expect(page.getByRole("heading", {name: "Centro de Operações Bling"})).toBeVisible();
+  await expect(page.getByText("Pedido #9001 · review_required")).toBeVisible();
+  await expect(page.getByText(/Há eventos em dead-letter/)).toBeVisible();
+  await page.getByRole("button", {name: "Localizar pedidos que não chegaram pelo webhook"}).click();
+  await expect(page.getByText("Pedido #9002: ausente no NFCore")).toBeVisible();
+  await page.getByRole("button", {name: "Recuperar para revisão"}).click();
+  await expect(page.getByText("Pedido #9002 · review_required")).toBeVisible();
+  await expect(page.getByText("Pedido selecionado")).toBeVisible();
+  await expect(page.locator(".bling-operations svg")).toHaveCount(0);
+  expect(recovered).toBe(true);
+});
