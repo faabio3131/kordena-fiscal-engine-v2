@@ -25,6 +25,38 @@ def build_bling_oauth_router(
 ) -> APIRouter:
     router = APIRouter(prefix="/v1/portal/integrations/bling", tags=["bling-oauth"])
 
+    @router.get("/bindings/available")
+    def available_bindings(
+        request: Request, unit_id: str, offset: int = 0,
+    ) -> JSONResponse:
+        """Read only the CURRENT tenant/unit's existing Bling fiscal bindings.
+
+        No host IDs in requests may grant authority; non-Bling bindings must
+        never be offered for Bling installation registration.
+        """
+        human = _authenticated(request, identity, now=datetime.now(UTC))
+        if not unit_id or len(unit_id) > 128 or not 0 <= offset <= 10_000:
+            raise HTTPException(422, detail={"code": "BLING_INPUT_INVALID"})
+        _authorized(human, PortalPermission.INTEGRATION_MANAGE, unit_id=unit_id)
+        scope = ExecutionScope(
+            tenant_id=human.tenant_id, unit_id=unit_id,
+            environment=FiscalEnvironment.HOMOLOGATION,
+            correlation_id="bling-bindings", host_namespace="bling",
+        )
+        with installations.database() as uow:
+            page = uow.bindings.list_for_fiscal_unit(scope, limit=100, offset=offset)
+        rows = [
+            {"binding_id": binding.binding_id, "unit_id": binding.fiscal_unit_id.value}
+            for binding in page if binding.host_scope.namespace.value == "bling"
+        ]
+        return JSONResponse(
+            content={
+                "rows": rows,
+                "next_offset": offset + 100 if len(page) == 100 else None,
+            },
+            headers={"Cache-Control": "no-store"},
+        )
+
     def by_binding(request: Request, binding_id: str) -> tuple[Any, ExecutionScope]:
         human = _authenticated(request, identity, now=datetime.now(UTC))
         if not binding_id or len(binding_id) > 128:

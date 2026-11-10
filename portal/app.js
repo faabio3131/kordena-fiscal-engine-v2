@@ -1933,6 +1933,38 @@ function appendBlingOperationsPanel(article, onReview) {
   const heading = document.createElement("h3"); heading.textContent = "Centro de Operações Bling";
   const summary = document.createElement("p"); summary.className = "empty-state";
   summary.textContent = "Consultando instalações da unidade autorizada...";
+  const setup = document.createElement("div"); setup.className = "bling-setup";
+  const setupTitle = document.createElement("h4");
+  setupTitle.textContent = "Conectar empresa Bling";
+  const bindingLabel = document.createElement("label");
+  bindingLabel.textContent = "Vínculo fiscal Bling da unidade";
+  const bindingSelect = document.createElement("select");
+  bindingSelect.setAttribute("aria-label", "Vínculo fiscal Bling da unidade");
+  bindingLabel.append(bindingSelect);
+  const companyLabel = document.createElement("label");
+  companyLabel.textContent = "ID da empresa no Bling";
+  const companyInput = document.createElement("input");
+  companyInput.type = "text"; companyInput.maxLength = 96;
+  companyInput.required = true; companyLabel.append(companyInput);
+  const addInstallation = document.createElement("button");
+  addInstallation.type = "button"; addInstallation.textContent = "Cadastrar empresa Bling";
+  const oauthConnect = document.createElement("button");
+  oauthConnect.type = "button"; oauthConnect.textContent = "Conectar / reautorizar no Bling";
+  const mappingLabel = document.createElement("label");
+  mappingLabel.textContent = "ID do status autorizado no Bling";
+  const authorizedStatus = document.createElement("input");
+  authorizedStatus.type = "number"; authorizedStatus.min = "1"; authorizedStatus.step = "1";
+  mappingLabel.append(authorizedStatus);
+  const rejectedLabel = document.createElement("label");
+  rejectedLabel.textContent = "ID do status rejeitado no Bling";
+  const rejectedStatus = document.createElement("input");
+  rejectedStatus.type = "number"; rejectedStatus.min = "1"; rejectedStatus.step = "1";
+  rejectedLabel.append(rejectedStatus);
+  const mappingSave = document.createElement("button");
+  mappingSave.type = "button"; mappingSave.textContent = "Salvar mapeamento de status";
+  const setupMessage = document.createElement("p"); setupMessage.setAttribute("role", "status");
+  setup.append(setupTitle, bindingLabel, companyLabel, addInstallation, oauthConnect,
+    mappingLabel, rejectedLabel, mappingSave, setupMessage);
   const controls = document.createElement("div"); controls.className = "bling-operations-controls";
   const installationLabel = document.createElement("label");
   installationLabel.textContent = "Instalação Bling vinculada à unidade";
@@ -1946,7 +1978,7 @@ function appendBlingOperationsPanel(article, onReview) {
   const list = document.createElement("div"); list.className = "bling-operations-queue";
   const jobs = document.createElement("div"); jobs.className = "bling-operations-jobs";
   const provider = document.createElement("div"); provider.className = "bling-provider-recovery";
-  panel.append(heading, summary, controls, metrics, list, jobs, provider); article.prepend(panel);
+  panel.append(heading, summary, setup, controls, metrics, list, jobs, provider); article.prepend(panel);
   let active = "";
   /** @type {string | null} */
   let cursor = null;
@@ -2083,10 +2115,101 @@ function appendBlingOperationsPanel(article, onReview) {
     }
   }
 
+  /** @param {string} [preferred] */
+  async function loadInstallations(preferred = "") {
+    const data = await api(`/v1/portal/integrations/bling/installations/available?unit_id=${encodeURIComponent(unitId)}`);
+    const records = Array.isArray(data.rows) ? data.rows : [];
+    installation.replaceChildren();
+    for (const item of records) {
+      const option = document.createElement("option");
+      option.value = item.installation_id;
+      option.dataset.state = item.state;
+      option.dataset.revision = String(item.revision);
+      option.textContent = `Empresa ${item.company_id} · ${item.state}`;
+      installation.append(option);
+    }
+    if (!records.length) {
+      active = ""; connected = false;
+      summary.textContent = "Nenhuma empresa Bling cadastrada. Selecione o vínculo fiscal e cadastre a empresa para conectar.";
+      controls.hidden = true;
+      oauthConnect.disabled = true; mappingSave.disabled = true;
+      return;
+    }
+    controls.hidden = false;
+    if (preferred && records.some((item) => item.installation_id === preferred)) {
+      installation.value = preferred;
+    }
+    installation.dispatchEvent(new Event("change"));
+  }
+  addInstallation.addEventListener("click", () => { void (async () => {
+    if (!bindingSelect.value || !companyInput.value.trim()) {
+      setupMessage.textContent = "Selecione um vínculo fiscal e informe o ID da empresa.";
+      return;
+    }
+    addInstallation.disabled = true; setupMessage.textContent = "Cadastrando empresa...";
+    try {
+      const created = await callMutation("/v1/portal/integrations/bling/installations", {
+        binding_id: bindingSelect.value, company_id: companyInput.value.trim(),
+      });
+      await loadInstallations(created.installation_id);
+      setupMessage.textContent = "Empresa cadastrada. Conecte a conta Bling para autorizar os pedidos.";
+    } catch (error) {
+      setupMessage.textContent = error instanceof Error ? error.message : "Cadastro bloqueado";
+    } finally {
+      addInstallation.disabled = false;
+    }
+  })(); });
+  oauthConnect.addEventListener("click", () => { void (async () => {
+    if (!active) return;
+    oauthConnect.disabled = true;
+    setupMessage.textContent = "Preparando autorização segura no Bling...";
+    try {
+      const result = await callMutation(
+        `/v1/portal/integrations/bling/installations/${encodeURIComponent(active)}/connect`, {},
+      );
+      const target = new URL(result.authorization_url);
+      if (target.origin !== "https://www.bling.com.br"
+        || target.pathname !== "/Api/v3/oauth/authorize") {
+        throw new Error("Destino OAuth não autorizado");
+      }
+      setupMessage.textContent = "Após autorizar no Bling, retorne às Integrações e atualize a lista.";
+      window.location.assign(target.href);
+    } catch (error) {
+      setupMessage.textContent = error instanceof Error ? error.message : "Autorização indisponível";
+      oauthConnect.disabled = false;
+    }
+  })(); });
+  mappingSave.addEventListener("click", () => { void (async () => {
+    if (!active || !connected) return;
+    const authorized = Number(authorizedStatus.value);
+    const rejected = Number(rejectedStatus.value);
+    const revision = Number(installation.selectedOptions[0]?.dataset.revision);
+    if (!Number.isSafeInteger(authorized) || authorized <= 0
+      || !Number.isSafeInteger(rejected) || rejected <= 0 || authorized === rejected
+      || !Number.isSafeInteger(revision) || revision < 1) {
+      setupMessage.textContent = "Informe dois IDs de status válidos e diferentes.";
+      return;
+    }
+    mappingSave.disabled = true;
+    try {
+      await callMutation(
+        `/v1/portal/integrations/bling/installations/${encodeURIComponent(active)}/status-mapping`,
+        {authorized_status_id: authorized, rejected_status_id: rejected, expected_revision: revision},
+      );
+      await loadInstallations(active);
+      setupMessage.textContent = "Mapeamento salvo na instalação autorizada.";
+    } catch (error) {
+      setupMessage.textContent = error instanceof Error ? error.message : "Mapeamento bloqueado";
+    } finally {
+      mappingSave.disabled = !connected;
+    }
+  })(); });
+
   installation.addEventListener("change", () => {
     active = installation.value;
     const selected = installation.selectedOptions[0];
     connected = selected?.dataset.state === "connected";
+    oauthConnect.disabled = !active; mappingSave.disabled = !connected;
     cursor = null; next = null; providerCursor = null;
     provider.replaceChildren();
     summary.textContent = connected
@@ -2105,25 +2228,25 @@ function appendBlingOperationsPanel(article, onReview) {
   }
   void (async () => {
     try {
-      const data = await api(`/v1/portal/integrations/bling/installations/available?unit_id=${encodeURIComponent(unitId)}`);
-      const records = Array.isArray(data.rows) ? data.rows : [];
-      installation.replaceChildren();
-      for (const item of records) {
+      const bindings = await api(
+        `/v1/portal/integrations/bling/bindings/available?unit_id=${encodeURIComponent(unitId)}`,
+      );
+      const rows = Array.isArray(bindings.rows) ? bindings.rows : [];
+      bindingSelect.replaceChildren();
+      for (const binding of rows) {
         const option = document.createElement("option");
-        option.value = item.installation_id;
-        option.dataset.state = item.state;
-        option.textContent = `Empresa ${item.company_id} · ${item.state}`;
-        installation.append(option);
+        option.value = binding.binding_id;
+        option.textContent = `Vínculo fiscal ${binding.binding_id}`;
+        bindingSelect.append(option);
       }
-      if (!records.length) {
-        summary.textContent = "Nenhuma instalação Bling configurada para esta unidade. O cadastro e OAuth são feitos pela integração administrativa.";
-        controls.hidden = true;
-        return;
+      addInstallation.disabled = rows.length === 0;
+      if (!rows.length) {
+        setupMessage.textContent = "Não há vínculo fiscal Bling nesta unidade. A autoridade fiscal precisa cadastrá-lo antes da conexão.";
       }
-      installation.dispatchEvent(new Event("change"));
+      await loadInstallations();
     } catch {
       summary.textContent = "Painel multi-tenant indisponível. A revisão legada permanece sujeita às permissões e à configuração existentes.";
-      controls.hidden = true;
+      controls.hidden = true; setup.hidden = true;
     }
   })();
 }
