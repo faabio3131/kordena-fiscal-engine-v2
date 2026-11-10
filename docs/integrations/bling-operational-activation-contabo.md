@@ -12,7 +12,7 @@
 2. Examinar `crontab -l`, o compose instalado e `/opt/fm/nfcore/deploy.sh --check`. Não copiar scripts do Git sem diff/autorizar instalação.
 3. Antes de qualquer DDL, confirmar backup verificado e escopo de schema PostgreSQL. A versão 19 é baseline histórico; **migrações Bling 20/21 só pela ferramenta canônica `scripts/ci/migration_guard.py`, com aprovação humana específica**, ensaio/rollback e sem automatizar `--apply` em `deploy.sh`.
 4. Confirmar que não há variáveis globais legadas `NFCORE_BLING_COMPANY_ID`, `TENANT_ID`, `UNIT_ID`, `ENVIRONMENT` no modo multi-installation.
-5. Confirmar callback HTTPS da aplicação Bling registrado no provedor: `https://app.nfcore.com.br/v1/portal/integrations/bling/oauth/callback` e escopos aprovados (acesso de pedidos e identificação de empresa); validar origem/rota no proxy reverso.
+5. Confirmar callback HTTPS da aplicação Bling registrado no provedor: `https://app.nfcore.com.br/v1/portal/integrations/bling/oauth/callback` e escopos aprovados (IDs exatos concedidos pela aplicação Bling, compatíveis com o retorno `scope` do OAuth; nunca códigos inventados); validar origem/rota no proxy reverso.
 6. Obter `NFCORE_BLING_CLIENT_ID` e dois segredos reais fora do chat/Git: Client Secret do aplicativo (também usado para assinar webhooks pelo Bling) e master-key (base64 de 32 bytes). Não criar chave HMAC independente. Não inventar credenciais, códigos de empresa ou IDs de status.
 
 ## Ativação da API EXISTENTE — somente após aprovação de host/migration
