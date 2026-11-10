@@ -3,12 +3,21 @@
 from __future__ import annotations
 
 import http.client
+import importlib.util
 from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
 
-from scripts.serve_portal import SecurePortalHandler
+# CI installs the wheel with src/ on sys.path; load the deployment script
+# from its exact repo path without relying on namespace-package import paths.
+_SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "serve_portal.py"
+_SPEC = importlib.util.spec_from_file_location("nfcore_portal_server", _SCRIPT)
+if _SPEC is None or _SPEC.loader is None:
+    raise RuntimeError("canonical portal server module unavailable")
+_MODULE = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(_MODULE)
+SecurePortalHandler = _MODULE.SecurePortalHandler
 
 
 class RecordingUpstream(BaseHTTPRequestHandler):
