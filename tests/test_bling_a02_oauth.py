@@ -67,7 +67,7 @@ def token_set(access: str, refresh: str) -> BlingTokenSet:
 
 def installation(tmp_path: Path):
     db = SqliteFiscalDatabase(tmp_path / "bling-oauth.sqlite")
-    db.initialize()
+    db.initialize(enable_bling=True)
     host = HostScope(HostNamespace("bling"), "ext-tenant", "ext-unit")
     with db() as uow:
         uow.bindings.add(FiscalAccountBinding(
