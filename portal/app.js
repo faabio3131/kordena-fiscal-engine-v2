@@ -1965,6 +1965,12 @@ function appendBlingOperationsPanel(article, onReview) {
   const mappingSave = document.createElement("button");
   mappingSave.type = "button"; mappingSave.textContent = "Salvar mapeamento de status";
   const setupMessage = document.createElement("p"); setupMessage.setAttribute("role", "status");
+  if (new URLSearchParams(window.location.search).get("bling") === "connected") {
+    setupMessage.textContent = "Autorização do Bling recebida. Confira o status conectado da instalação.";
+    const location = new URL(window.location.href);
+    location.searchParams.delete("bling");
+    window.history.replaceState({}, "", `${location.pathname}${location.search}${location.hash}`);
+  }
   setup.append(setupTitle, bindingLabel, createBinding, companyLabel, addInstallation, oauthConnect,
     mappingLabel, rejectedLabel, mappingSave, setupMessage);
   const controls = document.createElement("div"); controls.className = "bling-operations-controls";

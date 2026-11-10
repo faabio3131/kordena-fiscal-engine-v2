@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from kordena_fiscal.application.service import FiscalApplicationService
 from kordena_fiscal.domain import (
@@ -213,7 +213,7 @@ def build_bling_oauth_router(
     @router.get("/oauth/callback")
     def callback(
         request: Request, state: str = "", code: str = "", error: str = "",
-    ) -> JSONResponse:
+    ) -> JSONResponse | RedirectResponse:
         human = _authenticated(request, identity, now=datetime.now(UTC))
         if error or not state or not code or len(state) != 64:
             raise HTTPException(400, detail={"code": "BLING_OAUTH_REJECTED"})
@@ -238,6 +238,13 @@ def build_bling_oauth_router(
             )
         except (BlingOAuthUnavailable, PersistenceConflictError):
             raise HTTPException(409, detail={"code": "BLING_NEEDS_REAUTH"}) from None
+        if "text/html" in request.headers.get("accept", "").lower():
+            # Browser return from OAuth must not leave its authorization code
+            # in the address bar or same-origin Referer after completion.
+            return RedirectResponse(
+                url="/?bling=connected", status_code=303,
+                headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"},
+            )
         return JSONResponse(
             content={"state": "connected", "installation_id": installation_id},
             headers={"Cache-Control": "no-store"},

@@ -154,3 +154,23 @@ def test_create_binding_is_same_tenant_unit_idempotent_and_csrf_protected(tmp_pa
         assert available.json()["rows"] == [{
             "binding_id": created.json()["binding_id"], "unit_id": "unit",
         }]
+
+def test_browser_oauth_callback_redirects_without_referrer_or_code(tmp_path: Path) -> None:
+    from urllib.parse import parse_qs, urlsplit
+
+    client, install_id = login(tmp_path)
+    headers = {"X-CSRF-Token": client.cookies.get("nfcore_csrf")}
+    connected = client.post(
+        f"/v1/portal/integrations/bling/installations/{install_id}/connect",
+        headers=headers,
+    )
+    assert connected.status_code == 200
+    state = parse_qs(urlsplit(connected.json()["authorization_url"]).query)["state"][0]
+    response = client.get(
+        f"/v1/portal/integrations/bling/oauth/callback?state={state}&code=approved",
+        headers={"Accept": "text/html"}, follow_redirects=False,
+    )
+    assert response.status_code == 303
+    assert response.headers["location"] == "/?bling=connected"
+    assert response.headers["referrer-policy"] == "no-referrer"
+    assert "approved" not in response.headers["location"]
