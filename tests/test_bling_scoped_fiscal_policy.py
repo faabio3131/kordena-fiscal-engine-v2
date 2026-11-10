@@ -57,7 +57,7 @@ def _install(root: Path, orders: BlingOrders) -> tuple[Path, Path, str]:
         _fixture(orders), ensure_ascii=True, separators=(",", ":")
     ).encode("utf-8")
     fingerprint = hashlib.sha256(payload).hexdigest()
-    name = BlingSalePreparer.policy_scope_digest(orders)
+    name = BlingSalePreparer.policy_scope_digest(orders.scope, orders.company_id)
     artifact = root / f"{name}.json"
     pin = root / f"{name}.sha256"
     artifact.write_bytes(payload)
@@ -81,7 +81,7 @@ def test_policy_selection_isolated_by_tenant_unit_company(tmp_path: Path) -> Non
     )
     fingerprints = [_install(tmp_path, orders)[2] for orders in instances]
     assert len({
-        BlingSalePreparer.policy_scope_digest(item) for item in instances
+        BlingSalePreparer.policy_scope_digest(item.scope, item.company_id) for item in instances
     }) == len(instances)
     preparer = _preparer(tmp_path)
     for orders, fingerprint in zip(instances, fingerprints, strict=True):
@@ -95,11 +95,13 @@ def test_policy_selection_isolated_by_tenant_unit_company(tmp_path: Path) -> Non
 def test_policy_key_ignores_correlation_but_not_host_namespace() -> None:
     before = _orders("t", "u", "c", correlation="before")
     after = _orders("t", "u", "c", correlation="after")
-    assert BlingSalePreparer.policy_scope_digest(before) == (
-        BlingSalePreparer.policy_scope_digest(after)
+    assert BlingSalePreparer.policy_scope_digest(before.scope, before.company_id) == (
+        BlingSalePreparer.policy_scope_digest(after.scope, after.company_id)
     )
     with pytest.raises(FiscalValidationError, match="canonical host scope"):
-        BlingSalePreparer.policy_scope_digest(_orders("t", "u", "c", namespace=None))
+        BlingSalePreparer.policy_scope_digest(
+            _orders("t", "u", "c", namespace=None).scope, "c"
+        )
 
 
 def test_multi_mode_never_falls_back_to_global_policy(tmp_path: Path) -> None:
