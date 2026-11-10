@@ -28,6 +28,8 @@
 4. Definir IDs de status autorizado/rejeitado **daquela conta Bling**, usando mapeamento por revisão CAS; valores diferentes, positivos. Não compartilhar IDs entre empresas.
 5. Simular recebimento de pedido, revisão humana, preparação e recuperação de webhook com duas unidades. Provar que nenhuma recuperação emite NF-e por si. Verificar dead-letter/erro, revogação OAuth, reautorização e replay seguro.
 
+6. Configurar **Pedidos de Venda** (eventos `order.created`, `order.updated`, `order.deleted`, versão `v1`) na aba Webhooks do aplicativo Bling, utilizando **a URL exata de instalação exibida no painel**, `https://app.nfcore.com.br/webhooks/bling/installations/{installation_id}`. Não usar callback OAuth como webhook. O HMAC deve validar `X-Bling-Signature-256` com Client Secret real. A emissão de evento exige o token OAuth autorizado; checar 202 e idempotência sem emissão duplicada. Fonte: https://developer.bling.com.br/webhooks
+
 ## Ativação do Worker existente — etapa SEPARADA da API
 - É **opt-in**, fora do compose base e do cron. Montar os mesmos segredos com permissões e dot-env apropriados, usando `compose.bling.worker.opt-in.yml`; confirmar o DB e a identidade antes do start.
 - Verificar a configuração do Vault A1 para autorização fiscal; sem certificado real da contabilidade, não marcar emissão como homologada. Sem A1 o processamento deve permanecer bloqueado com erro verificável.
