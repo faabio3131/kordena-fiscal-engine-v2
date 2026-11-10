@@ -85,9 +85,9 @@ jobs:
               echo '### NFCore Contabo host audit — read only'
               echo 'The log is sanitized and proves only local host prerequisites.'
               echo 'OAuth, A1 and SEFAZ homologation require separate evidence.'
-              echo '\`\`\`text'
+              echo '```text'
               cat "$work/status.txt"
-              echo '\`\`\`'
+              echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
           else
             echo 'NO_GO: no authenticated host status was collected.' >> "$GITHUB_STEP_SUMMARY"
