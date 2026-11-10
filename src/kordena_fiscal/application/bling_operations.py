@@ -24,7 +24,7 @@ from kordena_fiscal.application.bling_orders import (
 from kordena_fiscal.application.service import FiscalApplicationService
 from kordena_fiscal.connectors.bling_api import fetch_sales_order, verify_company
 from kordena_fiscal.connectors.bling_order_search import list_sales_orders
-from kordena_fiscal.contingency import FiscalOutboxStatus
+from kordena_fiscal.contingency import FiscalOutboxEntry, FiscalOutboxStatus
 from kordena_fiscal.domain import ExecutionScope, FiscalValidationError
 from kordena_fiscal.integrations.bling_contracts import (
     BlingInstallationState,
@@ -35,7 +35,7 @@ from kordena_fiscal.integrations.bling_contracts import (
     BlingRecoveryResult,
 )
 from kordena_fiscal.persistence.bling_installations import BlingInstallationRepository
-from kordena_fiscal.persistence.ports import FiscalUnitOfWorkFactory
+from kordena_fiscal.persistence.ports import FiscalUnitOfWork, FiscalUnitOfWorkFactory
 
 
 class BlingOAuthAccess(Protocol):
@@ -201,21 +201,81 @@ class BlingOperationsService:
         )
         return BlingOrderPage(rows=tuple(views), next_cursor=next_cursor, limit=limit)
 
+    @staticmethod
+    def _job_for_installation(
+        uow: FiscalUnitOfWork, orders: BlingOrders, entry: FiscalOutboxEntry,
+    ) -> bool:
+        """Do not mix another company's jobs sharing this tenant/unit scope."""
+        if entry.operation == PROCESS_ORDER:
+            try:
+                event_id = entry.payload.decode("ascii")
+            except UnicodeDecodeError:
+                return False
+            if len(event_id) != 64 or any(c not in "0123456789abcdef" for c in event_id):
+                return False
+            event = uow.inbox.get(event_id)
+            if (
+                event is None
+                or event.scope.identity_partition_key != orders.scope.identity_partition_key
+                or event.producer != ("bling:" + orders.company_id).lower()
+            ):
+                return False
+            try:
+                data = json.loads(event.payload)
+            except (ValueError, TypeError, UnicodeDecodeError):
+                return False
+            return isinstance(data, dict) and data.get("companyId") == orders.company_id
+        if entry.operation == ISSUE_ORDER:
+            if not entry.payload.isdigit():
+                return False
+            try:
+                key = orders.key(int(entry.payload))
+            except ValueError:
+                return False
+            return (
+                entry.deduplication_key == key
+                or entry.deduplication_key.startswith(key + ":retry:")
+            )
+        if entry.operation == PUBLISH_STATUS:
+            try:
+                data = json.loads(entry.payload)
+            except (ValueError, TypeError, UnicodeDecodeError):
+                return False
+            if not isinstance(data, dict) or type(data.get("order_id")) is not int:
+                return False
+            try:
+                key = orders.key(data["order_id"])
+            except ValueError:
+                return False
+            return entry.deduplication_key.startswith(key + ":")
+        return False
+
     def list_jobs(
         self, scope: ExecutionScope, installation_id: str, *,
         offset: int = 0, limit: int = 50,
     ) -> dict[str, object]:
-        self._bound(scope, installation_id)
+        orders = self._orders(scope, installation_id)
         if (
             type(limit) is not int or not 1 <= limit <= 100
             or type(offset) is not int or not 0 <= offset <= 10_000
         ):
             raise BlingOperationalError("BLING_INVALID_CURSOR")
+        # Outbox is partitioned by tenant/unit, not by Bling company. Scan
+        # bounded canonical pages until the requested company-specific page
+        # is collected; never expose a different installation's event metadata.
+        matches: list[FiscalOutboxEntry] = []
         with self.factory() as uow:
-            rows = uow.outbox.list_for_scope(
-                scope, limit=limit, offset=offset,
-                operations=frozenset({PROCESS_ORDER, ISSUE_ORDER, PUBLISH_STATUS}),
-            )
+            for raw_offset in range(0, 10_001, 100):
+                batch = uow.outbox.list_for_scope(
+                    scope, limit=100, offset=raw_offset,
+                    operations=frozenset({PROCESS_ORDER, ISSUE_ORDER, PUBLISH_STATUS}),
+                )
+                matches.extend(
+                    row for row in batch if self._job_for_installation(uow, orders, row)
+                )
+                if len(matches) > offset + limit or len(batch) < 100:
+                    break
+        page = matches[offset:offset + limit]
         return {
             "rows": [
                 {
@@ -225,9 +285,9 @@ class BlingOperationsService:
                     "attempt_count": row.attempt_count,
                     "available_at": row.available_at.isoformat(),
                 }
-                for row in rows
+                for row in page
             ],
-            "next_offset": offset + limit if len(rows) == limit else None,
+            "next_offset": offset + limit if len(matches) > offset + limit else None,
         }
 
     def page_metrics(
