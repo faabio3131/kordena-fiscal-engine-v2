@@ -23,7 +23,7 @@ from kordena_fiscal.persistence.sqlite import SqliteFiscalDatabase
 
 def registered_database(tmp_path: Path) -> SqliteFiscalDatabase:
     db = SqliteFiscalDatabase(tmp_path / "bling-multitenant.sqlite")
-    db.initialize()
+    db.initialize(enable_bling=True)
     with db() as uow:
         for tenant in ("t1", "t2"):
             for unit in ("u1", "u2"):
