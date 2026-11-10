@@ -27,7 +27,11 @@ def fetch_sales_order(order_id: int, access_token: str) -> dict[str, Any]:
         connection.request(
             "GET",
             f"/Api/v3/pedidos/vendas/{order_id}",
-            headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"},
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Accept": "application/json",
+                "enable-jwt": "1",
+            },
         )
         response = connection.getresponse()
         if response.status != 200:
@@ -64,7 +68,11 @@ def update_sales_order_status(order_id: int, status_id: int, access_token: str) 
         connection.request(
             "PATCH",
             f"/Api/v3/pedidos/vendas/{order_id}/situacoes/{status_id}",
-            headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"},
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Accept": "application/json",
+                "enable-jwt": "1",
+            },
         )
         response = connection.getresponse()
         if response.status != 204:
@@ -87,7 +95,11 @@ def verify_company(access_token: str, expected_company_id: str) -> None:
         connection.request(
             "GET",
             "/Api/v3/empresas/me/dados-basicos",
-            headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"},
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Accept": "application/json",
+                "enable-jwt": "1",
+            },
         )
         response = connection.getresponse()
         if response.status != 200:
@@ -104,7 +116,8 @@ def verify_company(access_token: str, expected_company_id: str) -> None:
         raise BlingApiError(200, retryable=False)
     try:
         data = json.loads(body)["data"]
-        if not isinstance(data, dict) or data.get("id") != expected_company_id:
+        company_id = data.get("id") if isinstance(data, dict) else None
+        if type(company_id) not in (int, str) or str(company_id) != expected_company_id:
             raise ValueError("company mismatch")
     except (ValueError, TypeError, KeyError, RecursionError):
         raise BlingApiError(200, retryable=False) from None

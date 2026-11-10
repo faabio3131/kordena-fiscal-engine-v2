@@ -63,10 +63,9 @@ def build_bling_oauth_service(
     cipher = BlingTokenCipher.from_base64(
         _confidential_file(source, "TOKEN_MASTER_KEY"),
     )
-    client = BlingOAuthClient(
-        client_id=client_id,
-        client_secret=_confidential_file(source, "CLIENT_SECRET"),
-    )
+    # The official Bling HMAC webhook signature uses the OAuth app Client Secret.
+    client_secret = _confidential_file(source, "CLIENT_SECRET")
+    client = BlingOAuthClient(client_id=client_id, client_secret=client_secret)
     installations = BlingInstallationRepository(database)
     oauth = BlingOAuthService(
         database,
@@ -75,6 +74,6 @@ def build_bling_oauth_service(
         client,
         verify_company,
         required_scopes=scopes,
-        webhook_secret=_confidential_file(source, "WEBHOOK_SECRET"),
+        webhook_secret=client_secret,
     )
     return installations, oauth
