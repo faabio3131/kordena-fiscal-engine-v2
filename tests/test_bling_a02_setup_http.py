@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi.testclient import TestClient
-from test_bling_a02_oauth import installation
+from test_bling_a02_oauth import FakeOAuthClient, installation
 
 from kordena_fiscal.domain import (
     FiscalAccountBinding,
@@ -13,7 +13,10 @@ from kordena_fiscal.domain import (
     HostNamespace,
     HostScope,
 )
+from kordena_fiscal.persistence.bling_installations import BlingInstallationRepository
+from kordena_fiscal.persistence.sqlite import SqliteFiscalDatabase
 from kordena_fiscal.runtime.bling_oauth_routes import build_bling_oauth_router
+from kordena_fiscal.runtime.bling_oauth_service import BlingOAuthService, BlingTokenCipher
 from kordena_fiscal.security.human_identity import (
     HumanAccount,
     HumanIdentityService,
@@ -112,8 +115,6 @@ def test_create_binding_is_same_tenant_unit_idempotent_and_csrf_protected(tmp_pa
     assert existed.json() == {"binding_id": "oauth-binding", "created": False}
     other = tmp_path / "new"
     other.mkdir()
-    from kordena_fiscal.persistence.sqlite import SqliteFiscalDatabase
-    from kordena_fiscal.persistence.bling_installations import BlingInstallationRepository
     db = SqliteFiscalDatabase(other / "blank.sqlite")
     db.initialize(enable_bling=True)
     password = "synthetic"
@@ -127,10 +128,6 @@ def test_create_binding_is_same_tenant_unit_idempotent_and_csrf_protected(tmp_pa
             ),
         )),
         sessions=InMemoryWebSessionRepository(), password_hasher=hasher,
-    )
-    from test_bling_a02_oauth import FakeOAuthClient
-    from kordena_fiscal.runtime.bling_oauth_service import (
-        BlingOAuthService, BlingTokenCipher,
     )
     store = BlingInstallationRepository(db)
     svc = BlingOAuthService(
