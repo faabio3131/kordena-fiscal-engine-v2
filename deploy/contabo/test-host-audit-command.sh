@@ -35,4 +35,13 @@ if SSH_ORIGINAL_COMMAND="nfcore-audit $sha $digest; id" \
   echo 'FAIL: accepted shell injection' >&2
   exit 1
 fi
-echo 'PASS: forced SSH audit entry rejects arbitrary commands'
+# Public repository's current main is unprotected; never unlock audit SSH on an
+# unprotected workflow branch or automatically on pull_request.
+workflow="$here/../../.github/workflows/contabo-readonly-host-audit.yml"
+grep -Fq "github.ref_protected == true" "$workflow"
+grep -Fq "github.ref == 'refs/heads/main'" "$workflow"
+if grep -Eq '^[[:space:]]+pull_request:' "$workflow"; then
+  echo 'FAIL: SSH audit must never execute on pull_request' >&2
+  exit 1
+fi
+echo 'PASS: forced SSH audit entry rejects arbitrary commands and unprotected branches'
