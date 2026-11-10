@@ -230,7 +230,7 @@ class BlingOperationsService:
                 return False
             try:
                 key = orders.key(int(entry.payload))
-            except ValueError:
+            except (ValueError, FiscalValidationError):
                 return False
             return (
                 entry.deduplication_key == key
@@ -245,7 +245,7 @@ class BlingOperationsService:
                 return False
             try:
                 key = orders.key(data["order_id"])
-            except ValueError:
+            except (ValueError, FiscalValidationError):
                 return False
             return entry.deduplication_key.startswith(key + ":")
         return False
