@@ -91,6 +91,36 @@ A1 são pré-requisitos externos do estabelecimento, não código pendente.
 - Verificar a configuração do Vault A1 para autorização fiscal; sem certificado real da contabilidade, não marcar emissão como homologada. Sem A1 o processamento deve permanecer bloqueado com erro verificável.
 - Smoke do processo e estado de health do Worker; duas empresas/unidades isoladas; confirmação de reprocessamento e rollback que preserva outbox. A decisão de transmitir NF-e em homologação requer confirmação da contabilidade.
 
+## Auditoria de host sem credenciais expostas (10/11/2026)
+
+O procedimento seguinte é **somente leitura**. Deve ser executado no host
+Contabo pelo operador autorizado depois de confirmar a branch de produção.
+Ele não faz deploy, não instala segredos, não aplica migrations e não transmite
+documentos fiscais:
+
+```bash
+bash /opt/fm/nfcore/src/deploy/contabo/bling-operational-host-audit.sh \
+  61015a837be8b2e5e3b0f1cdb5fb14c5c875fb91
+```
+
+O SHA acima é o release Bling #415 de 10/11; para versões posteriores use
+o SHA real de `production` verificado no GitHub. Não extrapolar esse
+checkpoint para releases futuros.
+
+A auditoria devolve apenas `PASS / PENDING / BLOCKED` e identificadores
+de commit. Verifica `.deployed`, `.failed-sha`, marcador `DEPLOY OK`,
+integridade de backup recente, containers, readiness interno, migração fiscal/Cakto,
+esquema Bling 20/21, flag e montagens dos segredos OAuth na API e health do Worker.
+Nenhum conteúdo secreto é impresso. O resultado
+`HOST_GATES_PASS_EXTERNAL_STILL_UNVERIFIED` **não significa** que Bling
+OAuth real, pedido ou A1/SEFAZ estejam homologados.
+
+Se retornar `BLOCKED` ou `PENDING`, registrar somente a saída
+dessas chaves sem adicionar logs brutos e não forçar deploy, DDL ou emissão.
+O operador valida consentimento real da conta Bling e ciclo fiscal oficial
+separadamente. A aprovação humana continua obrigatória para migrações e
+ativação dos serviços que modifiquem o estado de produção.
+
 ## Evidência exigida para encerramento
 Registrar commit em `production`, SHA no `.deployed`, `DEPLOY OK`, lista de containers, migrações 1..21, `/health/ready` interno, API OAuth pronta, Worker health, consentimento real Bling por tenant, ID de status mapeado e ciclo de pedido de teste. **Nenhuma dessas evidências é substituída por CI verde isolada.**
 
