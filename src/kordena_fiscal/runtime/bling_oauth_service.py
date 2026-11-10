@@ -31,7 +31,6 @@ from kordena_fiscal.persistence.bling_installations import (
 from kordena_fiscal.persistence.ports import PersistenceConflictError
 
 
-
 class BlingOAuthUnavailable(RuntimeError):
     """Safe error. Never attach or stringify response bodies/tokens."""
 
