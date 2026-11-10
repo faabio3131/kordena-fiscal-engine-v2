@@ -7,6 +7,7 @@ the human approval and deterministic NF-e path remain separate.
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import json
 import time
@@ -140,7 +141,7 @@ class BlingOperationsService:
             ):
                 raise ValueError
             return data["after"]
-        except (ValueError, TypeError, KeyError, UnicodeDecodeError):
+        except (ValueError, TypeError, KeyError, UnicodeDecodeError, binascii.Error):
             raise BlingOperationalError("BLING_INVALID_CURSOR") from None
 
     @staticmethod
@@ -322,6 +323,29 @@ class BlingOperationsService:
     ) -> BlingRecoveryResult:
         self._request(request_id, actor_id, order_id)
         orders = self._orders(scope, installation_id, active=True)
+        # A successful/queued status must not be resent just because its
+        # fiscal document is final. Retry only a proven dead-letter writeback.
+        found = False
+        with self.factory() as uow:
+            for offset in range(0, 10_000, 100):
+                entries = uow.outbox.list_for_scope(
+                    scope, limit=100, offset=offset,
+                    statuses=frozenset({FiscalOutboxStatus.DEAD_LETTER}),
+                    operations=frozenset({PUBLISH_STATUS}),
+                )
+                for entry in entries:
+                    try:
+                        payload = json.loads(entry.payload)
+                    except (ValueError, TypeError, UnicodeDecodeError):
+                        continue
+                    if (isinstance(payload, dict) and
+                            payload.get("order_id") == order_id):
+                        found = True
+                        break
+                if found or len(entries) < 100:
+                    break
+        if not found:
+            raise BlingOperationalError("BLING_RECOVERY_REQUIRED")
         operation_id = orders.retry_status(
             order_id, request_id=request_id, actor_id=actor_id,
         )
