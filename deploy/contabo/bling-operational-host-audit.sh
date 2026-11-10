@@ -134,10 +134,9 @@ else:
         if not artifacts:
             print("EMPTY")
         else:
-            preparer = BlingSalePreparer({
-                "NFCORE_BLING_INSTALLATIONS_ENABLED": "true",
-                "NFCORE_BLING_FISCAL_POLICY_ROOT": root_path,
-            })
+            # Validate using the API process's actual environment: a forbidden
+            # legacy global policy must not be masked by synthetic audit settings.
+            preparer = BlingSalePreparer(os.environ)
             for artifact in artifacts:
                 if artifact.is_symlink():
                     raise ValueError("symlink")
