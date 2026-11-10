@@ -52,6 +52,19 @@ O diagnóstico do Bling completo está em `deploy/contabo/bling-operational-host
 
 Workflow proposto: `.github/workflows/contabo-readonly-host-audit.yml`.
 
+**BLOQUEIO DE SEGURANÇA CONFIRMADO NO GITHUB EM 10/11/2026:** o repositório
+`faabio3131/nf-core-v001` é **público** e a branch `main` consta como
+**NÃO PROTEGIDA** (`protected=false`). O workflow verifica
+`github.ref_protected == true` e **não executa a auditoria** enquanto a
+proteção não estiver efetivamente habilitada. Antes de adicionar a chave
+SSH aos Secrets é obrigatório: (a) configurar proteção de `main` por
+branch protection/ruleset com revisão e checks; (b) configurar o
+environment `nfcore-contabo-audit` com **required reviewers** e restrição
+à branch protegida; (c) validar ambos no GitHub. Se o plano atual do
+GitHub não suportar os controles necessários, **não armazenar a chave
+nesse workflow**; usar SSH direto e outra arquitetura de autenticação
+aprovada. Não contornar o guard para conseguir verde.
+
 **Pré-condições de ativação humana, fora do repositório:**
 - Aprovar formalmente uso da identidade de auditoria no host, validando privilégios Docker necessários. Evitar root SSH. Acesso ao socket Docker equivale a privilégios elevados: não delegá-lo indiscriminadamente.
 - Criar um novo par Ed25519 exclusivo para esta auditoria em equipamento seguro; **não reutilizar** chave pessoal ou credencial de deploy e **não publicá-la** no repositório ou no chat.
@@ -86,6 +99,7 @@ Referências oficiais:
 
 ## Critério de aceite do Plano B
 
+- [ ] Branch `main` efetivamente protegida e GitHub environment com required reviewers (antes de instalar secrets).
 - [ ] Comandos SSH de somente leitura executados na VPS correta, com identidade do host verificada.
 - [ ] Instalação root-owned dos dois scripts e digest pinado ao commit revisado (aprovação específica).
 - [ ] Chave SSH exclusiva e restringida por forced command; sem shell interativo e sem forwardings.
