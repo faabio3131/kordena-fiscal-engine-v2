@@ -66,10 +66,14 @@ nesse workflow**; usar SSH direto e outra arquitetura de autenticação
 aprovada. Não contornar o guard para conseguir verde.
 
 **Pré-condições de ativação humana, fora do repositório:**
-- Aprovar formalmente uso da identidade de auditoria no host, validando privilégios Docker necessários. Evitar root SSH. Acesso ao socket Docker equivale a privilégios elevados: não delegá-lo indiscriminadamente.
+- Aprovar formalmente a criação da identidade **exclusiva `nfcoreaudit`**, SEM grupo `docker`, `sudo` ou `admin`, SEM senha de login, e sem acesso SSH interativo pela chave de auditoria. Acesso ao socket Docker equivale a privilégios elevados: **nunca conceder acesso direto ao socket ao usuário SSH**.
+- Aplicar o único privilégio excepcional por `sudoers`: executar **apenas e sem argumentos** `/usr/local/libexec/nfcore-audit/root-audit.sh` como root, mediante `sudo -n`, com entrada estritamente validada contendo apenas SHA da produção e digest do script. Exemplo revisável `deploy/contabo/nfcore-audit.sudoers.example`. Validar com `visudo -cf` antes de instalar em `/etc/sudoers.d/`; não instalar com o workflow. Esse helper executa exclusivamente o auditor imutável e nunca executa comandos livres.
+- Instalar toda a cadeia executável em `/usr/local/libexec/nfcore-audit/` (não em `/opt/fm/nfcore`, cuja árvore pode ser alterada por operações de deploy): `host-audit-command.sh` como `ssh-gate.sh`, `root-host-audit.sh` como `root-audit.sh`, e `bling-operational-host-audit.sh` com o mesmo nome. Os três arquivos devem ser `root:root` e `0755` ou `0555` e não conter symlinks.
+- Auditar também **cada ancestral**: `/`, `/usr`, `/usr/local`, `/usr/local/libexec`, `/usr/local/libexec/nfcore-audit`, além dos três scripts. Cada componente precisa ser root-owned, não symlink e sem escrita por grupo/outros. O root helper falha com `NO_GO_UNTRUSTED_AUDIT_PATH` em caso de violações. Não corrigir chmod/chown de diretórios do sistema automaticamente.
+- Manter o `authorized_keys` da conta de auditoria sob controle administrativo, sem possibilidade de alteração pela conta de auditoria. A permissão operacional para Docker fica **somente dentro do script raiz pré-revisado**, sem `sudo su`, `sudo bash` ou shell administrativo.
 - Criar um novo par Ed25519 exclusivo para esta auditoria em equipamento seguro; **não reutilizar** chave pessoal ou credencial de deploy e **não publicá-la** no repositório ou no chat.
-- Instalar os arquivos revisados `host-audit-command.sh` e `bling-operational-host-audit.sh` no diretório **`/opt/fm/nfcore/audit/`**, ownership `root:root`, sem symlinks, e modo `0755`. A instalação inicial exige aprovação específica e conferência do SHA-256 contra o commit aprovado. **Esta PR NÃO instala os arquivos no host.**
-- Restringir a chave pública em `authorized_keys` com `restrict,command="/opt/fm/nfcore/audit/host-audit-command.sh"`. Isso veta shell arbitrário, encaminhamentos e pseudo-terminal para a chave de auditoria. Conservar a chave SSH de acesso de emergência do operador separada.
+- Conferir hashes dos **três** scripts contra o commit aprovado e validar o sudoers de exemplo. Instalação inicial requer autorização específica da administração Contabo. **Esta PR NÃO instala os arquivos no host e não altera privilégios.**
+- Restringir a chave pública em `authorized_keys` com `restrict,command="/usr/local/libexec/nfcore-audit/ssh-gate.sh"`. Isso veta shell arbitrário, encaminhamentos e pseudo-terminal pela chave de auditoria. Conservar a chave SSH de acesso de emergência do operador separada.
 - No GitHub, criar environment `nfcore-contabo-audit` e, quando disponível no plano, exigir revisão humana e limitar execuções à branch `main`. Configurar os segredos **nesse environment**, não em arquivos versionados:
 
 | Nome | Conteúdo protegido |
@@ -81,7 +85,7 @@ aprovada. Não contornar o guard para conseguir verde.
 
 **Como acionar quando estiver configurado:** GitHub → Actions → `NFCore Contabo Read-only Host Audit (Plan B)` → Run workflow na branch `main`, informando o SHA completo **atual** de `production`. O workflow valida esse SHA no GitHub, a assinatura SSH do host previamente pinada e o digest SHA-256 do script de auditoria instalado no host. Toda requisição que falhar nesses gates retorna `NO_GO` e não tenta um deploy.
 
-O comando forçado autoriza **somente** `nfcore-audit <SHA_40> <SHA256_SCRIPT_64>`; o script instalado é root-owned e a chave SSH não executa código fornecido pelo chamador. O workflow não faz checkout da branch `production` para execução remota, não envia arquivos executáveis, não habilita modos privilegiados do Docker e não imprime segredos.
+O comando forçado autoriza **somente** `nfcore-audit <SHA_40> <SHA256_SCRIPT_64>`; a conta SSH não tem Docker nem sudo geral. Ela envia apenas os dois digests a um helper root-owned sob uma regra sudoers que autoriza **um único binário/script sem argumentos**. O helper valida toda a cadeia de arquivos/diretórios e executa exclusivamente o auditor de código fixo. Os scripts instalados são root-owned e a chave SSH nunca executa código fornecido pelo chamador. O workflow não faz checkout da branch `production` para execução remota, não envia arquivos executáveis, não habilita modos privilegiados do Docker e não imprime segredos.
 
 **Evidência:** workflow com head `main`, SHA de `production`, status `DEPLOY_SHA_EXACT`, `SCHEMA_PRODUCTION_GUARD`, backups, API/Portal, Bling e `RESULT`. A saída de SSH é filtrada para chaves e estados permitidos; nem o stdout bruto nem o stderr bruto são publicados.
 
@@ -101,8 +105,8 @@ Referências oficiais:
 
 - [ ] Branch `main` efetivamente protegida e GitHub environment com required reviewers (antes de instalar secrets).
 - [ ] Comandos SSH de somente leitura executados na VPS correta, com identidade do host verificada.
-- [ ] Instalação root-owned dos dois scripts e digest pinado ao commit revisado (aprovação específica).
-- [ ] Chave SSH exclusiva e restringida por forced command; sem shell interativo e sem forwardings.
+- [ ] Instalação root-owned dos três scripts, ancestralidade confiável e sudoers de comando único sem argumentos (aprovação específica).
+- [ ] Usuário SSH sem grupo Docker e sem sudo geral; chave exclusiva com forced command, sem shell interativo e sem forwardings.
 - [ ] GitHub environment e secrets configurados fora do Git, com aprovação quando suportada.
 - [ ] Execução do workflow em `main`, com SHA `production` correto, PASS/NO_GO real (não simulação).
 - [ ] Audit trail persistente e classificação de erros sem informações confidenciais.
