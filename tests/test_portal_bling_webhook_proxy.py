@@ -28,6 +28,16 @@ class RecordingUpstream(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def do_GET(self) -> None:  # noqa: N802
+        if self.path.startswith("/v1/portal/integrations/bling/oauth/callback?"):
+            self.send_response(303)
+            self.send_header("Location", "/?bling=connected")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        self.send_response(404)
+        self.end_headers()
+
     def log_message(self, *_args: object) -> None:
         return
 
@@ -54,7 +64,7 @@ def test_webhook_proxy_restricts_method_and_installation_path(
         for thread in threads:
             thread.start()
         try:
-            def request(method: str, path: str) -> tuple[int, bytes]:
+            def request(method: str, path: str) -> tuple[int, bytes, str | None, str | None]:
                 client = http.client.HTTPConnection(
                     "127.0.0.1", portal.server_port, timeout=3,
                 )
@@ -67,7 +77,11 @@ def test_webhook_proxy_restricts_method_and_installation_path(
                         },
                     )
                     response = client.getresponse()
-                    return response.status, response.read()
+                    return (
+                        response.status, response.read(),
+                        response.getheader("Location"),
+                        response.getheader("Referrer-Policy"),
+                    )
                 finally:
                     client.close()
 
@@ -84,6 +98,14 @@ def test_webhook_proxy_restricts_method_and_installation_path(
                 ("POST", "/webhooks/other/installations/" + "a" * 32),
             ]:
                 assert request(method, path)[0] == 404
+            assert len(RecordingUpstream.calls) == 1
+            oauth = request(
+                "GET", "/v1/portal/integrations/bling/oauth/callback"
+                "?state=synthetic&code=synthetic",
+            )
+            assert oauth[0] == 303
+            assert oauth[2] == "/?bling=connected"
+            assert oauth[3] == "no-referrer"
             assert len(RecordingUpstream.calls) == 1
         finally:
             for server in (portal, upstream):
