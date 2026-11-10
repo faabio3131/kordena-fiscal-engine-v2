@@ -26,12 +26,18 @@ cat > "$tmp/bin/docker" <<'DOCKER'
 set -euo pipefail
 case "$1" in
 inspect)
+  if [[ "$3" == *".Mounts"* ]]; then
+    if [[ "${MOCK_POLICY_RW:-0}" == 1 ]]; then echo RW; else echo RO; fi
+    exit 0
+  fi
   if [[ "${MOCK_WORKER:-1}" == 0 && "$4" == nfcore-bling-worker ]]; then exit 1; fi
   if [[ "$3" == *Health* ]]; then echo healthy; else echo running; fi
   ;;
 exec)
   if [[ "$3" == psql ]]; then
     if [[ "${MOCK_SCHEMA:-21}" == 21 ]]; then seq -s, 1 21; else seq -s, 1 19; fi
+  elif [[ "$3" == python && "$4" == -c && "$5" == *NFCORE_BLING_FISCAL_POLICY_ROOT* ]]; then
+    echo "${MOCK_POLICY_STATE:-READY}"
   elif [[ "$3" == python && "$4" == -c && "$5" == *NFCORE_BLING_INSTALLATIONS_ENABLED* ]]; then
     if [[ "${MOCK_BLING:-1}" == 1 ]]; then echo ENABLED; else echo DISABLED; fi
   elif [[ "$3" == python && "$4" == -c && "$5" == *NFCORE_BLING_CLIENT_ID* ]]; then
@@ -46,6 +52,7 @@ NFCORE_ROOT="$tmp/root" NFCORE_BACKUP_DIR="$tmp/backups" PATH="$tmp/bin:$PATH" \
   bash "$here/bling-operational-host-audit.sh" "$sha" > "$tmp/ready.out"
 for assertion in 'DEPLOY_SHA_EXACT=PASS' 'RECENT_BACKUP_INTEGRITY=PASS' \
   'BLING_SCHEMA_20_21=PASS' 'BLING_API_FLAG=PASS' 'BLING_SECRET_MOUNTS=PASS' \
+  'BLING_POLICY_MOUNT=PASS' 'BLING_POLICY_ARTIFACTS=PASS' \
   'BLING_WORKER_HEALTH=PASS' 'RESULT=HOST_GATES_PASS_EXTERNAL_STILL_UNVERIFIED'; do
   grep -Fxq "$assertion" "$tmp/ready.out"
 done
@@ -58,4 +65,26 @@ for assertion in 'BLING_SCHEMA_20_21=PENDING' 'BLING_API_FLAG=PENDING' \
   'BLING_WORKER_RUNNING=PENDING' 'RESULT=CODE_READY_BUT_BLING_NOT_ACTIVE'; do
   grep -Fxq "$assertion" "$tmp/off.out"
 done
+# Scoped fiscal policies must be mounted read-only and valid, not just OAuth-ready.
+if NFCORE_ROOT="$tmp/root" NFCORE_BACKUP_DIR="$tmp/backups" PATH="$tmp/bin:$PATH" \
+  MOCK_POLICY_STATE=EMPTY \
+  bash "$here/bling-operational-host-audit.sh" "$sha" > "$tmp/policy-empty.out"; then
+  echo 'FAIL: empty scoped policy directory accepted'; exit 1
+fi
+grep -Fxq 'BLING_POLICY_ARTIFACTS=PENDING' "$tmp/policy-empty.out"
+grep -Fxq 'RESULT=CODE_READY_BUT_BLING_NOT_ACTIVE' "$tmp/policy-empty.out"
+if NFCORE_ROOT="$tmp/root" NFCORE_BACKUP_DIR="$tmp/backups" PATH="$tmp/bin:$PATH" \
+  MOCK_POLICY_RW=1 \
+  bash "$here/bling-operational-host-audit.sh" "$sha" > "$tmp/policy-rw.out"; then
+  echo 'FAIL: writable scoped fiscal-policy mount accepted'; exit 1
+fi
+grep -Fxq 'BLING_POLICY_MOUNT=BLOCKED' "$tmp/policy-rw.out"
+grep -Fxq 'RESULT=NO_GO_HOST_GATES' "$tmp/policy-rw.out"
+if NFCORE_ROOT="$tmp/root" NFCORE_BACKUP_DIR="$tmp/backups" PATH="$tmp/bin:$PATH" \
+  MOCK_POLICY_STATE=INVALID \
+  bash "$here/bling-operational-host-audit.sh" "$sha" > "$tmp/policy-invalid.out"; then
+  echo 'FAIL: invalid scoped fiscal-policy artifact accepted'; exit 1
+fi
+grep -Fxq 'BLING_POLICY_ARTIFACTS=BLOCKED' "$tmp/policy-invalid.out"
+grep -Fxq 'RESULT=NO_GO_HOST_GATES' "$tmp/policy-invalid.out"
 echo 'PASS: Bling host audit is read-only and fails closed'
