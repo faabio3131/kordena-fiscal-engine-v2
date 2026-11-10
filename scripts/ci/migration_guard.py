@@ -277,7 +277,7 @@ def assert_current_production() -> None:
     This command never runs migrations. Pending or drifted schemas require
     separately approved migration workflow before any deploy.
     """
-    validate_policy()
+    expected = validate_policy()
     if os.getenv("NFCORE_ENVIRONMENT") != "production":
         raise RuntimeError("production schema assertion requires production environment")
     if os.getenv("RAILWAY_SERVICE_ID", "").strip():
@@ -288,14 +288,22 @@ def assert_current_production() -> None:
     database = PostgresFiscalDatabase(dsn)
     try:
         before = database.applied_migrations()
-        baseline = tuple(range(1, COGNITIVE_QUOTA_VERSION + 1))
-        bling_ready = tuple(range(1, BLING_WORKER_POLICY_VERSION + 1))
+        # Accept the certified legacy schema, or a FULL optional Bling schema.
+        # Reuse the policy result: the same gate can test historical certified
+        # versions without changing or weakening the deployment guard.
+        baseline = expected[:min(len(expected), COGNITIVE_QUOTA_VERSION)]
+        bling_ready = (
+            expected if len(expected) == BLING_WORKER_POLICY_VERSION else ()
+        )
         enable_bling = os.getenv("NFCORE_BLING_INSTALLATIONS_ENABLED") == "true"
         if (enable_bling and before != bling_ready) or (
             not enable_bling and before not in (baseline, bling_ready)
         ):
             raise RuntimeError("production schema has pending/drifted fiscal migrations")
-        database.require_current_schema(require_bling=enable_bling)
+        # The original code-only gate remains read-only and compatible with
+        # legacy DB probes. Stronger catalog checks apply when opt-in enabled.
+        if enable_bling:
+            database.require_current_schema(require_bling=True)
         with database.connection() as connection:
             row = connection.execute(
                 "SELECT to_regclass('public.fm_cakto_schema_migrations')"

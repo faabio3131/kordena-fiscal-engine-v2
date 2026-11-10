@@ -87,9 +87,10 @@ def run(
         database = PostgresFiscalDatabase(settings.database_url)
         try:
             if settings.is_production_like:
-                database.require_current_schema(
-                    require_bling=os.environ.get('NFCORE_BLING_INSTALLATIONS_ENABLED') == 'true'
-                )
+                if os.environ.get("NFCORE_BLING_INSTALLATIONS_ENABLED") == "true":
+                    database.require_current_schema(require_bling=True)
+                else:
+                    database.require_current_schema()
             else:
                 database.initialize()
             with database.connection() as connection:
