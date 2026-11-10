@@ -323,8 +323,10 @@ class BlingOperationsService:
     ) -> BlingRecoveryResult:
         self._request(request_id, actor_id, order_id)
         orders = self._orders(scope, installation_id, active=True)
+        order_key = orders.key(order_id)
         # A successful/queued status must not be resent just because its
-        # fiscal document is final. Retry only a proven dead-letter writeback.
+        # fiscal document is final. Retry only a proven dead-letter writeback
+        # for this company, not another Bling installation with the same order ID.
         found = False
         with self.factory() as uow:
             for offset in range(0, 10_000, 100):
@@ -338,8 +340,11 @@ class BlingOperationsService:
                         payload = json.loads(entry.payload)
                     except (ValueError, TypeError, UnicodeDecodeError):
                         continue
-                    if (isinstance(payload, dict) and
-                            payload.get("order_id") == order_id):
+                    if (
+                        isinstance(payload, dict)
+                        and payload.get("order_id") == order_id
+                        and entry.deduplication_key.startswith(order_key + ":")
+                    ):
                         found = True
                         break
                 if found or len(entries) < 100:
