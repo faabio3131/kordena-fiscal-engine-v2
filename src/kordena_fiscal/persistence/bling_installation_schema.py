@@ -30,7 +30,6 @@ BLING_INSTALLATION_SCHEMA = (
         installation_id TEXT NOT NULL REFERENCES fm_bling_installations(installation_id),
         actor_id TEXT NOT NULL,
         session_id TEXT NOT NULL,
-        verifier_ciphertext TEXT NOT NULL,
         expires_at TEXT NOT NULL,
         consumed INTEGER NOT NULL CHECK(consumed IN (0, 1))
     )""",
@@ -45,6 +44,8 @@ BLING_INSTALLATION_SCHEMA = (
         refresh_expires_at TEXT,
         scopes_json TEXT NOT NULL,
         token_revision INTEGER NOT NULL CHECK(token_revision > 0),
+        refresh_lease_owner TEXT,
+        refresh_lease_until TEXT,
         updated_at TEXT NOT NULL
     )""",
 )
