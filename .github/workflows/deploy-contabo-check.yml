@@ -2,7 +2,7 @@ name: Deploy Contabo (config e teste)
 
 on:
   pull_request:
-    paths: ["deploy/contabo/**", ".github/workflows/deploy-contabo-check.yml"]
+    paths: ["deploy/contabo/**", ".github/workflows/deploy-contabo-check.yml", ".github/workflows/contabo-readonly-host-audit.yml"]
   push:
     branches: [main]
     paths: ["deploy/contabo/**"]
@@ -29,3 +29,5 @@ jobs:
           bash deploy/contabo/test-bling-api-opt-in.sh
       - name: Auditar preflight Bling sem host/segredos
         run: bash deploy/contabo/test-bling-operational-host-audit.sh
+      - name: Validar comando SSH restrito sem host/segredos
+        run: bash deploy/contabo/test-host-audit-command.sh
