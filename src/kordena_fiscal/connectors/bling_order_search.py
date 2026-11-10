@@ -32,7 +32,11 @@ def list_sales_orders(
     try:
         conn.request(
             "GET", path,
-            headers={"Authorization": "Bearer " + access_token, "Accept": "application/json", "enable-jwt": "1"},
+            headers={
+                "Authorization": "Bearer " + access_token,
+                "Accept": "application/json",
+                "enable-jwt": "1",
+            },
         )
         response = conn.getresponse()
         if response.status != 200:
