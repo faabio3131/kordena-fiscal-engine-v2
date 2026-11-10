@@ -116,6 +116,8 @@ test("Bling mission control lists scoped jobs and recovers missing orders with C
   await page.route("**/v1/portal/integrations/bling/installations/**", route => {
     const request = route.request();
     const url = new URL(request.url());
+    // Specific availability fixture was registered earlier; let it handle this URL.
+    if (url.pathname.endsWith("/available")) return route.fallback();
     if (url.pathname.endsWith("/orders") && request.method() === "GET") {
       return route.fulfill({json: {
         rows: [{order_id: 9001, state: "review_required", review_required: true,
