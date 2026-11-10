@@ -47,6 +47,16 @@ from kordena_fiscal.security.human_identity import (
 )
 from kordena_fiscal.security.human_recovery import PasswordResetRecord
 
+from .bling_installation_schema import (
+    BLING_INSTALLATION_NAME,
+    BLING_INSTALLATION_SCHEMA,
+    BLING_INSTALLATION_VERSION,
+)
+from .bling_worker_policy_schema import (
+    BLING_WORKER_POLICY_NAME,
+    BLING_WORKER_POLICY_SCHEMA,
+    BLING_WORKER_POLICY_VERSION,
+)
 from .cognitive_quota_schema import (
     COGNITIVE_QUOTA_NAME,
     COGNITIVE_QUOTA_SCHEMA,
@@ -619,7 +629,7 @@ class PostgresFiscalDatabase:
         with self._pool.connection() as raw:
             yield _PostgresCompatConnection(raw)
 
-    def initialize(self) -> tuple[int, ...]:
+    def initialize(self, *, enable_bling: bool = False) -> tuple[int, ...]:
         with self._pool.connection() as raw:
             try:
                 raw.execute(
@@ -849,6 +859,36 @@ class PostgresFiscalDatabase:
                         ),
                     )
                     new_versions.append(COGNITIVE_QUOTA_VERSION)
+                if enable_bling and BLING_INSTALLATION_VERSION not in applied:
+                    for statement in BLING_INSTALLATION_SCHEMA:
+                        raw.execute(statement)
+                    raw.execute(
+                        "INSERT INTO fm_schema_migrations (version, name, applied_at) "
+                        "VALUES (%s, %s, %s)",
+                        (BLING_INSTALLATION_VERSION, BLING_INSTALLATION_NAME,
+                         datetime.now().astimezone().isoformat()),
+                    )
+                    new_versions.append(BLING_INSTALLATION_VERSION)
+                if enable_bling and BLING_WORKER_POLICY_VERSION not in applied:
+                    if (
+                        BLING_INSTALLATION_VERSION not in applied
+                        and BLING_INSTALLATION_VERSION not in new_versions
+                    ):
+                        raise PersistenceStateError(
+                            "Bling installation schema required before policy"
+                        )
+                    for statement in BLING_WORKER_POLICY_SCHEMA:
+                        raw.execute(statement)
+                    raw.execute(
+                        "INSERT INTO fm_schema_migrations (version, name, applied_at) "
+                        "VALUES (%s, %s, %s)",
+                        (
+                            BLING_WORKER_POLICY_VERSION,
+                            BLING_WORKER_POLICY_NAME,
+                            datetime.now().astimezone().isoformat(),
+                        ),
+                    )
+                    new_versions.append(BLING_WORKER_POLICY_VERSION)
                 raw.commit()
                 return tuple(new_versions)
             except Exception:
@@ -866,7 +906,7 @@ class PostgresFiscalDatabase:
                 return ()
             return tuple(int(row[0]) for row in rows)
 
-    def require_current_schema(self) -> tuple[int, ...]:
+    def require_current_schema(self, *, require_bling: bool = False) -> tuple[int, ...]:
         """Check schema compatibility without DDL or migration side effects.
 
         In staging/production only the governed migration_guard orchestrator may
@@ -874,8 +914,13 @@ class PostgresFiscalDatabase:
         versions instead of creating tables during startup.
         """
         applied = self.applied_migrations()
-        required = tuple(range(1, COGNITIVE_QUOTA_VERSION + 1))
-        if applied != required:
+        baseline = tuple(range(1, COGNITIVE_QUOTA_VERSION + 1))
+        bling_ready = tuple(range(1, BLING_WORKER_POLICY_VERSION + 1))
+        # A code-only release accepts either original production baseline or
+        # the fully installed optional Bling schema. Partial v20 is NOT ready.
+        if (require_bling and applied != bling_ready) or (
+            not require_bling and applied not in (baseline, bling_ready)
+        ):
             raise PersistenceStateError(
                 "PostgreSQL schema is not at the certified migration version"
             )
@@ -898,6 +943,31 @@ class PostgresFiscalDatabase:
             raise PersistenceStateError(
                 "PostgreSQL schema is not at the certified migration version"
             ) from exc
+        if not require_bling:
+            return applied
+        try:
+            with self.connection() as connection:
+                tables = connection.execute(
+                    "SELECT to_regclass('public.fm_bling_installations'), "
+                    "to_regclass('public.fm_bling_oauth_flows'), "
+                    "to_regclass('public.fm_bling_credentials'), "
+                    "to_regclass('public.fm_bling_active_partition_unique')"
+                ).fetchone()
+                columns = connection.execute(
+                    "SELECT column_name FROM information_schema.columns "
+                    "WHERE table_schema = 'public' AND table_name = 'fm_bling_installations' "
+                    "AND column_name IN ('authorized_status_id', 'rejected_status_id')"
+                ).fetchall()
+            if (
+                tables is None or len(tables) != 4 or not all(tables)
+                or {str(row[0]) for row in columns}
+                != {'authorized_status_id', 'rejected_status_id'}
+            ):
+                raise PersistenceStateError("Bling installation schema is incomplete")
+        except PersistenceStateError:
+            raise
+        except Exception as exc:
+            raise PersistenceStateError("Bling installation schema is incomplete") from exc
         return applied
 
     def unit_of_work(self) -> PostgresFiscalUnitOfWork:

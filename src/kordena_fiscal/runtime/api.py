@@ -13,6 +13,7 @@ from uuid import uuid4
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from kordena_fiscal.application.bling_operations import BlingOperationsService
 from kordena_fiscal.application.command_commercial import CommandCommercialReceiver
 from kordena_fiscal.application.commercial_acquisition import CommercialAcquisitionService
 from kordena_fiscal.cognitive.composition import build_cognitive_router
@@ -72,6 +73,10 @@ from .ai_secrets import build_production_openai_key_readers
 from .alert_rules import InternalAlertMonitor, OperationalSignals
 from .api_staging_gsm_probe import staging_probe_verifier
 from .bling_ingress import build_bling_ingress
+from .bling_multitenant_ingress import build_multitenant_bling_ingress
+from .bling_oauth_factory import build_bling_oauth_service
+from .bling_oauth_routes import build_bling_oauth_router
+from .bling_operations import build_bling_operations_router
 from .bling_preparation import BlingSalePreparer
 from .bling_review import build_bling_review_router
 from .bling_status import build_bling_status_router
@@ -140,9 +145,14 @@ class RuntimeApi:
             try:
                 database = PostgresFiscalDatabase(settings.database_url)
                 if settings.is_production_like:
-                    database.require_current_schema()
+                    if os.environ.get("NFCORE_BLING_INSTALLATIONS_ENABLED") == "true":
+                        database.require_current_schema(require_bling=True)
+                    else:
+                        database.require_current_schema()
                 else:
-                    database.initialize()
+                    database.initialize(
+                        enable_bling=os.environ.get("NFCORE_BLING_INSTALLATIONS_ENABLED") == "true"
+                    )
             except Exception:
                 if database is not None:
                     database.close()
@@ -792,23 +802,48 @@ def create_runtime_app(
     if cakto_receiver is not None:
         app.include_router(build_cakto_webhook_router(cakto_receiver))
 
-    bling_router = build_bling_ingress(
-        composition.fiscal_application if composition is not None else None,
-        os.environ,
-    )
-    if bling_router is not None:
-        app.include_router(bling_router)
-        if composition is not None and runtime.database is not None:
-            bling_database = runtime.database
-            app.include_router(build_bling_review_router(
-                composition.human_identity,
-                lambda: build_bling_orders(bling_database, os.environ),
-                preparer=BlingSalePreparer(os.environ),
-            ))
-            app.include_router(build_bling_status_router(
-                runtime.database, os.environ["NFCORE_BLING_COMPANY_ID"].strip(),
-                composition.bridge_security,
-            ))
+    # The new multi-installation mode is opt-in and never coexists with
+    # the legacy single-company webhook/worker authority.
+    if os.environ.get("NFCORE_BLING_INSTALLATIONS_ENABLED") == "true":
+        if any(
+            os.environ.get("NFCORE_BLING_" + field, "").strip()
+            for field in ("COMPANY_ID", "TENANT_ID", "UNIT_ID", "ENVIRONMENT")
+        ):
+            raise RuntimeConfigurationError(
+                "Bling global single-company authority conflicts with multi-installation mode"
+            )
+        if composition is None or runtime.database is None:
+            raise RuntimeConfigurationError("Bling requires canonical runtime composition")
+        installations, oauth = build_bling_oauth_service(runtime.database, os.environ)
+        app.include_router(build_multitenant_bling_ingress(
+            composition.fiscal_application, installations, oauth,
+        ))
+        app.include_router(build_bling_oauth_router(
+            composition.human_identity, installations, oauth,
+        ))
+        app.include_router(build_bling_operations_router(
+            composition.human_identity, installations,
+            BlingOperationsService(runtime.database, installations, oauth),
+            preparer=BlingSalePreparer(os.environ),
+        ))
+    else:
+        bling_router = build_bling_ingress(
+            composition.fiscal_application if composition is not None else None,
+            os.environ,
+        )
+        if bling_router is not None:
+            app.include_router(bling_router)
+            if composition is not None and runtime.database is not None:
+                bling_database = runtime.database
+                app.include_router(build_bling_review_router(
+                    composition.human_identity,
+                    lambda: build_bling_orders(bling_database, os.environ),
+                    preparer=BlingSalePreparer(os.environ),
+                ))
+                app.include_router(build_bling_status_router(
+                    runtime.database, os.environ["NFCORE_BLING_COMPANY_ID"].strip(),
+                    composition.bridge_security,
+                ))
 
     if commercial_acquisition is not None and commercial_acquisition_security is not None:
         app.include_router(

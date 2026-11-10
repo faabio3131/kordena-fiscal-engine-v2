@@ -1,5 +1,92 @@
+> **CURRENT — PROMOÇÃO GOVERNADA BLING A-00–A-05 + B-01–B-05 / 10-11-2026:** candidato para Contabo preparado a partir de `main@2d6ba3d1c32d70923a473b37950769b19511c52d` (PR #410 MERGED; CI pós-merge #42827985845 SUCCESS; governança #42827987234 SUCCESS). A branch `production@5dc48dfe1a9256b8d1e761e44533e763dd5bed63` continha cinco commits próprios já preservados como segunda linha ancestral do commit de reconciliação (sem force-push). PR #411: validação da candidata para promover código API/Portal na branch `production`, mediante CI/governança e gate de produção. Deploy Contabo é pull `production`/5 min e CODE-ONLY; sem DDL, sem ativação de Worker Bling, sem OAuth/SEFAZ real, sem alterações de segredos. Migracoes Bling 20/21 e Worker continuam OPT-IN e dependentes de aprovação e verificação do ambiente real. **A existência desta nota ou da candidata NÃO significa deploy concluído; após promoção exigir DEPLOY OK, commit implantado e readiness do host.**
+>
+> **REGISTRO HISTÓRICO INTEGRADO DA BRANCH production (09/11/2026; não é CURRENT vigente):**
 > **CURRENT — CANDIDATA DE RELEASE CONTABO / 09-11-2026:** PRs #403 e #404 MERGED em main@112a4412c1e1fb53355f7ba8a7d1f3126d3808bb (CI #42705237839 e governanca #42705237769 SUCCESS). production@ea6719728ff99d4a633657af98256d6ed640fe76 agrega os 3 commits exclusivos do checkout publico Cakto, preservados na candidata release/contabo-20261109-bling criada a partir de production e reconciliada com main. Host Contabo vmi3692211 inicialmente em ea67197, API/Portal/DB healthy, schema fiscal 1..19 e Cakto 1..3 em preflight read-only. Esta nota e o commit da candidata NAO comprovam CI final da candidata, promocao, deploy, worker habilitado, homologacao fiscal real ou smoke pos-deploy. Somente publicar via PR para production apos CI/governanca verdes no HEAD exato; o cron Contabo monitora production a cada 5 minutos e seu deploy e code-only, sem DDL. Confirmar .deployed, readiness HTTP e log DEPLOY OK depois. Sem alterar outros SaaS nem segredos.
 >
+---
+
+# AGENTS.md — Master Execution Schedule: Centro-Oeste Expansion (NFCore V1)
+
+> **Status do Documento:** Ativo / Governança de Execução  
+> **Escopo:** Expansão e Cobertura Total da Região Centro-Oeste (DF, GO, MT, MS)  
+> **Regra de Ouro:** A execução deve seguir estritamente a **Ordem Sequencial de Fases**. Nenhuma fase subsequente pode ser iniciada sem o fechamento com testes, validação XSD e *merge* bem-sucedido da fase anterior.
+
+---
+
+## 1. Diretrizes de Governança para o Agente Executor
+
+1. **Sequenciamento Estrito:** O agente executor deve processar as tasks na ordem exata definida neste arquivo (Sprint 1 -> 2 -> 3 -> 4).
+2. **Atualização Obrigatória de Estado:** Após cada PR (Pull Request) validada e mergeada, o agente deve atualizar este arquivo alterando o status de `[ ]` para `[x]` na respectiva tarefa e registrar o hash do commit/PR correspondente.
+3. **Validação de Contrato Canônico:** Todos os municípios e conectores adicionados devem respeitar o schema canônico definido em `contracts/v1/schemas/fm-fiscal.schema.json`.
+4. **Isolamento de Erros:** Caso ocorra falha em um lote municipal (ex: timeout em webservice de prefeitura), o agente deve isolar a exceção na fila de *outbox/inbox*, registrar em log estruturado e continuar o processamento dos demais municípios do bloco.
+
+---
+
+## 2. Cronograma Parametrizado por Ordem de Execução
+
+### FASE 1: Distrito Federal (DF Completo)
+* **Objetivo:** Estabelecer o conector unificado para a unidade federativa do Distrito Federal (SEFAZ-DF / ISS Distrital).
+* **Dependências:** Sistema governado de isenções fiscais 100% estabilizado.
+
+- [ ] **DF-01:** Mapeamento do WebService e contrato de integração da SEFAZ-DF / ISS Distrital.
+- [ ] **DF-02:** Criação do adaptador de roteamento específico para o Distrito Federal (sem divisão municipal).
+- [ ] **DF-03:** Parametrização das regras fiscais unificadas para as Regiões Administrativas (Brasília, Taguatinga, Ceilândia, etc.).
+- [ ] **DF-04:** Bateria de testes sintéticos de emissão e validação XSD para o DF.
+- [ ] **DF-05:** Homologação e PR de fechamento da Fase 1. *(Hash/PR: ___________)*
+
+---
+
+### FASE 2: Goiás (GO — 100% dos 246 Municípios)
+* **Objetivo:** Cobrir integralmente a malha municipal do estado de Goiás, priorizando polos industriais, eixo de Goiânia/Anápolis, Rio Verde e Entorno do DF.
+* **Dependências:** Fase 1 concluída e validada.
+
+- [ ] **GO-01:** Geração da matriz automatizada de carga para os 246 municípios de GO baseada em provedores padrão (ISSNet, IPM, Ginfes, etc.).
+- [ ] **GO-02:** Conexão e refinamento dos webservices de alta volumetria: Goiânia e Anápolis.
+- [ ] **GO-03:** Integração do polo agroindustrial de Rio Verde, Jataí e Catalão.
+- [ ] **GO-04:** Integração dos municípios do Entorno do DF (Luziânia, Valparaíso de Goiás, Formosa).
+- [ ] **GO-05:** Carga e teste em lote dos demais municípios remanescentes do estado.
+- [ ] **GO-06:** Validação de herança do sistema de isenções fiscais aplicadas às peculiaridades goianas.
+- [ ] **GO-07:** Homologação e PR de fechamento da Fase 2. *(Hash/PR: ___________)*
+
+---
+
+### FASE 3: Mato Grosso (MT — 100% dos 141 Municípios)
+* **Objetivo:** Integrar a malha municipal de Mato Grosso, com foco cirúrgico nos hubs de escoamento de grãos, transporte e agroindústria.
+* **Dependências:** Fase 2 concluída e validada.
+
+- [ ] **MT-01:** Mapeamento de carga em lote para os 141 municípios do estado de Mato Grosso.
+- [ ] **MT-02:** Implementação e testes do conector para a capital (Cuiabá) e Várzea Grande.
+- [ ] **MT-03:** Integração dos polos críticos do agronegócio e logística: Sorriso, Sinop, Rondonópolis e Lucas do Rio Verde.
+- [ ] **MT-04:** Tratamento de regras específicas de incidência de ISS vs ICMS para operações de armazéns gerais e transporte de grãos.
+- [ ] **MT-05:** Varredura e homologação dos municípios remanescentes de MT.
+- [ ] **MT-06:** Homologação e PR de fechamento da Fase 3. *(Hash/PR: ___________)*
+
+---
+
+### FASE 4: Mato Grosso do Sul (MS — 100% dos 79 Municípios)
+* **Objetivo:** Fechar o ciclo regional integrando a malha de Mato Grosso do Sul, com foco em Campo Grande, fronteiras e polos industriais/celulose.
+* **Dependências:** Fase 3 concluída e validada.
+
+- [ ] **MS-01:** Mapeamento de carga em lote para os 79 municípios de Mato Grosso do Sul.
+- [ ] **MS-02:** Conexão e homologação dos eixos principais: Campo Grande e Dourados.
+- [ ] **MS-03:** Integração do polo industrial de celulose e logística em Três Lagoas.
+- [ ] **MS-04:** Integração das praças de fronteira e comércio internacional (Corumbá e Ponta Porã).
+- [ ] **MS-05:** Fechamento e teste integrado da malha municipal restante de MS.
+- [ ] **MS-06:** Auditoria final de cobertura do Centro-Oeste (DF + GO + MT + MS).
+- [ ] **MS-07:** Homologação e PR de fechamento da Fase 4 e Conclusão do Bloco Centro-Oeste. *(Hash/PR: ___________)*
+
+---
+
+## 3. Log de Atualizações de Entregas (Audit Trail)
+
+> *Este log deve ser obrigatoriamente atualizado pelo agente executor a cada entrega de Sprint.*
+
+| Data (UTC) | Fase / Task ID | Ação Realizada / Descrição | PR / Commit Hash | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| A definir | Inicialização | Criação do roadmap master do Centro-Oeste | Pendente | `[ ]` |> **BLING FISCAL ? CANDIDATA PR #404 ? 09/11/2026 (N?O MERGEADA, N?O IMPLANTADA):** C?pia isolada da branch \`feat/bling-taxable-unit-conversion\` recebeu paths governados de ICMS10/ST/FCP-ST, DIFAL/FCP destino, IPI CST50 ad valorem ou por unidade, IPI n?o tributado CST51?55 e RTC IBS/CBS CST000 informativo 2026. XML XSD oficial e assinatura sint?tica passaram nos testes dirigidos; regress?o completa e CI da PR exigem certifica??o no commit publicado. A documenta??o de limites est? em \`docs/integrations/bling.md\`. N?o alegar cobertura universal de todos os CSTs, regimes, enquadramentos ou homologa??o fiscal externa. Produ??o e merge n?o autorizados por esta nota.
+>
+> **EXECUÇÃO INTERNA BLING — 09/11/2026:** PR #403, `feat/bling-ingress`. Preparação nativa implementada: pedido revisado → perfis/regras canônicos → XML assinado/XSD → documento/numeração/vínculo/fila na mesma transação. Portal e CLI integrados, política versionada e pinada por SHA-256. Certificação no HEAD em andamento. Escopo e limites fiscais em `docs/integrations/bling.md` e `agentes.md`; não confundir com cobertura tributária universal. Sem deploy ou promoção. Fechar evidência do Bling antes do Tiny. Certificados/clientes reais não bloqueiam construção interna.
+
 > **CURRENT RECONCILIADO EM 09/11/2026 (~01:05 UTC) — PREVALECE SOBRE TODOS OS SNAPSHOTS HISTÓRICOS ABAIXO, INCLUSIVE O BANNER DE 07/11 E A PR #388:** Repositório `faabio3131/nf-core-v001`, `main@397f5ebf96abdfd919b24006730661748a03a710` (inclui PR #398, mergeada agora), `production@ba01a03ee5a5e1fd262f8d462d8c4ba8f59da4e0` (inclui até PR #396). Esta reconciliação substitui a PR #388 (aberta ontem contra `production`, já defasada frente ao trabalho abaixo) — fechar/superseder essa PR em favor deste banner.
 >
 > **Sessão de 08-09/11/2026 — quatro itens executados, nesta ordem, todos com autorização explícita do Fábio:**

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -11,6 +13,16 @@ from typing import TypeVar
 
 from kordena_fiscal.domain import FiscalValidationError
 
+from .bling_installation_schema import (
+    BLING_INSTALLATION_NAME,
+    BLING_INSTALLATION_SCHEMA,
+    BLING_INSTALLATION_VERSION,
+)
+from .bling_worker_policy_schema import (
+    BLING_WORKER_POLICY_NAME,
+    BLING_WORKER_POLICY_SCHEMA,
+    BLING_WORKER_POLICY_VERSION,
+)
 from .cognitive_quota_schema import (
     COGNITIVE_QUOTA_NAME,
     COGNITIVE_QUOTA_SCHEMA,
@@ -699,7 +711,15 @@ class SqliteFiscalDatabase:
         connection.execute("PRAGMA busy_timeout = 30000")
         return connection
 
-    def initialize(self) -> tuple[int, ...]:
+    @contextmanager
+    def connection(self) -> Iterator[sqlite3.Connection]:
+        connection = self._connect()
+        try:
+            yield connection
+        finally:
+            connection.close()
+
+    def initialize(self, *, enable_bling: bool = False) -> tuple[int, ...]:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         connection = self._connect()
         try:
@@ -794,6 +814,36 @@ class SqliteFiscalDatabase:
                     ),
                 )
                 new_versions.append(COGNITIVE_QUOTA_VERSION)
+            if enable_bling and BLING_INSTALLATION_VERSION not in applied:
+                for statement in BLING_INSTALLATION_SCHEMA:
+                    connection.execute(statement)
+                connection.execute(
+                    "INSERT INTO fm_schema_migrations (version, name, applied_at) "
+                    "VALUES (?, ?, ?)",
+                    (BLING_INSTALLATION_VERSION, BLING_INSTALLATION_NAME,
+                     datetime.now().astimezone().isoformat()),
+                )
+                new_versions.append(BLING_INSTALLATION_VERSION)
+            if enable_bling and BLING_WORKER_POLICY_VERSION not in applied:
+                if (
+                    BLING_INSTALLATION_VERSION not in applied
+                    and BLING_INSTALLATION_VERSION not in new_versions
+                ):
+                    raise PersistenceStateError(
+                        "Bling installation schema required before policy"
+                    )
+                for statement in BLING_WORKER_POLICY_SCHEMA:
+                    connection.execute(statement)
+                connection.execute(
+                    "INSERT INTO fm_schema_migrations (version, name, applied_at) "
+                    "VALUES (?, ?, ?)",
+                    (
+                        BLING_WORKER_POLICY_VERSION,
+                        BLING_WORKER_POLICY_NAME,
+                        datetime.now().astimezone().isoformat(),
+                    ),
+                )
+                new_versions.append(BLING_WORKER_POLICY_VERSION)
             connection.commit()
             return tuple(new_versions)
         except Exception:
