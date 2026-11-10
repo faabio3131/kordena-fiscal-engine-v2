@@ -11,6 +11,7 @@ import hashlib
 import json
 import time
 from collections.abc import Callable, Mapping
+from typing import Protocol
 from datetime import UTC, datetime
 from typing import Any
 
@@ -35,7 +36,8 @@ from kordena_fiscal.integrations.bling_contracts import (
 )
 from kordena_fiscal.persistence.bling_installations import BlingInstallationRepository
 from kordena_fiscal.persistence.ports import FiscalUnitOfWorkFactory
-from kordena_fiscal.runtime.bling_oauth_service import BlingOAuthService
+class BlingOAuthAccess(Protocol):
+    def access_token(self, scope: ExecutionScope, installation_id: str) -> str: ...
 
 
 class BlingOperationalError(RuntimeError):
@@ -53,7 +55,7 @@ class BlingOperationsService:
         self,
         factory: FiscalUnitOfWorkFactory,
         installations: BlingInstallationRepository,
-        oauth: BlingOAuthService,
+        oauth: BlingOAuthAccess,
         *,
         fetch: Callable[[int, str], dict[str, Any]] = fetch_sales_order,
         search: Callable[[int, int, str], tuple[dict[str, Any], ...]] = list_sales_orders,
@@ -106,13 +108,18 @@ class BlingOperationsService:
         return BlingOrders(self.factory, scope, view.company_id)
 
     @staticmethod
-    def _cursor(scope: ExecutionScope, installation_id: str, last: int) -> str:
-        digest = hashlib.sha256(
+    def _scope_tag(scope: ExecutionScope, installation_id: str) -> str:
+        return hashlib.sha256(
             json.dumps(
                 [*scope.identity_material, installation_id], separators=(",", ":"),
             ).encode()
         ).hexdigest()
-        raw = json.dumps({"scope": digest, "after": last}, separators=(",", ":")).encode()
+
+    @classmethod
+    def _cursor(cls, scope: ExecutionScope, installation_id: str, last: int) -> str:
+        raw = json.dumps({
+            "scope": cls._scope_tag(scope, installation_id), "after": last,
+        }, separators=(",", ":")).encode()
         return base64.urlsafe_b64encode(raw).decode().rstrip("=")
 
     @classmethod
@@ -128,12 +135,7 @@ class BlingOperationsService:
             if (
                 not isinstance(data, dict) or set(data) != {"scope", "after"}
                 or type(data["after"]) is not int or data["after"] <= 0
-                or data["scope"] != json.loads(
-                    base64.urlsafe_b64decode(
-                        cls._cursor(scope, installation_id, data["after"])
-                        + "=" * (-len(cls._cursor(scope, installation_id, data["after"])) % 4)
-                    )
-                )["scope"]
+                or data["scope"] != cls._scope_tag(scope, installation_id)
             ):
                 raise ValueError
             return data["after"]
@@ -236,9 +238,13 @@ class BlingOperationsService:
         for order in page.rows:
             order_states[order["state"]] = order_states.get(order["state"], 0) + 1
         job_states: dict[str, int] = {}
-        for job in jobs["rows"]:
-            key = str(job["status"])
-            job_states[key] = job_states.get(key, 0) + 1
+        job_rows = jobs["rows"]
+        if isinstance(job_rows, list):
+            for job in job_rows:
+                if not isinstance(job, dict):
+                    continue
+                key = str(job.get("status", "unknown"))
+                job_states[key] = job_states.get(key, 0) + 1
         return {
             "sample_limit": limit,
             "partial": page.next_cursor is not None or jobs["next_offset"] is not None,
@@ -371,31 +377,38 @@ class BlingOperationsService:
         ):
             raise BlingOperationalError("BLING_INPUT_INVALID")
         self._request(request_id, actor_id, 1)
-        rows, next_cursor = self.search_orders(
-            scope, installation_id, cursor=f"page:{page}", limit=limit,
-        )
+        view = self._bound(scope, installation_id, active=True)
+        orders = BlingOrders(self.factory, scope, view.company_id)
+        token = self._provider_token(scope, view)
+        # Rate limit is account-wide, not instance-wide; propagate 429 without
+        # looping or pretending that a partial scan was fully reconciled.
+        rows = self._search(page, limit, token)
         recovered = 0
         already_recorded = 0
         for row in rows:
-            order_id = int(str(row["order_id"]))
-            if row["recorded"]:
+            order_id = row.get("id")
+            if type(order_id) is not int or order_id <= 0:
+                raise BlingOperationalError("BLING_RECOVERY_REQUIRED")
+            if orders.get(order_id) is not None:
                 already_recorded += 1
                 continue
-            # One app process issues <=3 requests/s to a given Bling account.
-            # Shared-provider 429 is propagated for operator-controlled retry.
             self._pause(0.36)
-            result = self.reconcile(
-                scope, installation_id, order_id,
-                request_id=f"{request_id}:{order_id}", actor_id=actor_id,
+            raw = self._fetch(order_id, token)
+            if type(raw.get("id")) is not int or raw["id"] != order_id:
+                raise BlingOperationalError("BLING_RECOVERY_REQUIRED")
+            self._bound(scope, installation_id, active=True)
+            event_key = hashlib.sha256(
+                f"{installation_id}:backfill:{order_id}:{request_id}".encode()
+            ).hexdigest()
+            orders.stage(
+                order_id, raw, event_id="operator-backfill:" + event_key,
+                now=datetime.now(UTC),
             )
-            if result.outcome is BlingRecoveryOutcome.REQUIRES_REVIEW:
-                recovered += 1
-            else:
-                already_recorded += 1
+            recovered += 1
         return {
             "examined": len(rows),
             "recovered": recovered,
             "already_recorded": already_recorded,
-            "next_cursor": next_cursor,
+            "next_cursor": ("page:" + str(page + 1) if len(rows) == limit else None),
             "fiscal_issuance_started": False,
         }
