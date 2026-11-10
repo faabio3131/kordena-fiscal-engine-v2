@@ -92,6 +92,16 @@ def test_policy_selection_isolated_by_tenant_unit_company(tmp_path: Path) -> Non
         assert policy["unit_id"] == orders.scope.unit_id
 
 
+def test_foreign_tenant_cannot_borrow_only_available_policy(tmp_path: Path) -> None:
+    first = _orders("tenant-A", "unit", "company")
+    foreign = _orders("tenant-B", "unit", "company")
+    _install(tmp_path, first)
+    preparer = _preparer(tmp_path)
+    assert preparer.policy(first)[0]["tenant_id"] == "tenant-A"
+    with pytest.raises(FiscalValidationError, match="digest unavailable"):
+        preparer.policy(foreign)
+
+
 def test_policy_key_ignores_correlation_but_not_host_namespace() -> None:
     before = _orders("t", "u", "c", correlation="before")
     after = _orders("t", "u", "c", correlation="after")
