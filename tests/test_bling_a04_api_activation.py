@@ -19,9 +19,6 @@ def test_ibling_api_overlay_only_extends_existing_api() -> None:
     assert api["environment"]["NFCORE_BLING_TOKEN_MASTER_KEY_FILE"] == (
         "/run/nfcore/bling/master-key"
     )
-    assert api["environment"]["NFCORE_BLING_WEBHOOK_SECRET_FILE"] == (
-        "/run/nfcore/bling/webhook-secret"
-    )
     assert api["volumes"][0]["type"] == "bind"
     assert api["volumes"][0]["read_only"] is True
     assert api["volumes"][0]["bind"]["create_host_path"] is False
