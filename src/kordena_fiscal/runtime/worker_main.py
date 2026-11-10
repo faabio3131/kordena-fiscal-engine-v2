@@ -17,6 +17,7 @@ from threading import Event
 from kordena_fiscal.contingency import FiscalOutboxHandler
 from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
 
+from .bling_multi_worker import BlingMultiTenantWorkerComposition
 from .config import RuntimeConfigurationError, RuntimeSettings
 from .production_multi_gsm import MultiTenantGsmWorkerComposition
 from .worker_composition import (
@@ -31,6 +32,7 @@ WorkerHandlers = (
     Mapping[str, FiscalOutboxHandler]
     | ScopedWorkerHandlerComposition
     | MultiTenantGsmWorkerComposition
+    | BlingMultiTenantWorkerComposition
 )
 WorkerHandlerFactory = Callable[[PostgresFiscalDatabase, RuntimeSettings], WorkerHandlers]
 
@@ -85,7 +87,9 @@ def run(
         database = PostgresFiscalDatabase(settings.database_url)
         try:
             if settings.is_production_like:
-                database.require_current_schema()
+                database.require_current_schema(
+                    require_bling=os.environ.get('NFCORE_BLING_INSTALLATIONS_ENABLED') == 'true'
+                )
             else:
                 database.initialize()
             with database.connection() as connection:
@@ -103,7 +107,10 @@ def run(
             )
             # Opt-in multi-tenant mode owns one process and cycles over dynamic,
             # individually authorized exact partitions using the existing Worker.
-            if isinstance(handler_composition, MultiTenantGsmWorkerComposition):
+            if isinstance(
+                handler_composition,
+                (MultiTenantGsmWorkerComposition, BlingMultiTenantWorkerComposition),
+            ):
                 publisher.attach(handler_composition.health)
                 handler_composition.run_forever(stop)
                 return 0
@@ -141,7 +148,15 @@ def main() -> int:
         return run()
     connector = os.environ.get("NFCORE_WORKER_CONNECTOR", "").strip()
     if connector:
-        if connector != "bling" or os.environ.get("NFCORE_WORKER_GSM_MODE"):
+        if os.environ.get("NFCORE_WORKER_GSM_MODE"):
+            raise RuntimeConfigurationError("ambiguous worker connector")
+        if connector == "bling-multi":
+            from .bling_multi_worker import build_bling_multi_worker
+
+            return run(handler_factory=lambda database, settings: build_bling_multi_worker(
+                database, settings, os.environ,
+            ))
+        if connector != "bling" or os.environ.get("NFCORE_BLING_INSTALLATIONS_ENABLED") == "true":
             raise RuntimeConfigurationError("ambiguous or unsupported worker connector")
         from .bling_worker import build_bling_worker
 

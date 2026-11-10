@@ -12,6 +12,11 @@ from kordena_fiscal.persistence.bling_installation_schema import (
     BLING_INSTALLATION_SCHEMA,
     BLING_INSTALLATION_VERSION,
 )
+from kordena_fiscal.persistence.bling_worker_policy_schema import (
+    BLING_WORKER_POLICY_NAME,
+    BLING_WORKER_POLICY_SCHEMA,
+    BLING_WORKER_POLICY_VERSION,
+)
 from kordena_fiscal.persistence.cakto import (
     CAKTO_SCHEMA_NAME,
     CAKTO_SCHEMA_STATEMENTS,
@@ -114,6 +119,7 @@ def validate_policy() -> tuple[int, ...]:
         PUBLIC_TRIAL_RATE_VERSION,
         COGNITIVE_QUOTA_VERSION,
         BLING_INSTALLATION_VERSION,
+        BLING_WORKER_POLICY_VERSION,
     )
     if versions != tuple(range(1, max(versions) + 1)):
         raise RuntimeError(f"migration versions must be contiguous from 1: {versions!r}")
@@ -194,6 +200,11 @@ def validate_policy() -> tuple[int, ...]:
         name=BLING_INSTALLATION_NAME,
         statements=BLING_INSTALLATION_SCHEMA,
     )
+    _reject_unapproved_destructive(
+        version=BLING_WORKER_POLICY_VERSION,
+        name=BLING_WORKER_POLICY_NAME,
+        statements=BLING_WORKER_POLICY_SCHEMA,
+    )
     print(
         "migration policy: PASS "
         f"versions={','.join(str(item) for item in versions)} "
@@ -266,7 +277,7 @@ def assert_current_production() -> None:
     This command never runs migrations. Pending or drifted schemas require
     separately approved migration workflow before any deploy.
     """
-    expected = validate_policy()
+    validate_policy()
     if os.getenv("NFCORE_ENVIRONMENT") != "production":
         raise RuntimeError("production schema assertion requires production environment")
     if os.getenv("RAILWAY_SERVICE_ID", "").strip():
@@ -277,8 +288,14 @@ def assert_current_production() -> None:
     database = PostgresFiscalDatabase(dsn)
     try:
         before = database.applied_migrations()
-        if before != expected:
+        baseline = tuple(range(1, COGNITIVE_QUOTA_VERSION + 1))
+        bling_ready = tuple(range(1, BLING_WORKER_POLICY_VERSION + 1))
+        enable_bling = os.getenv("NFCORE_BLING_INSTALLATIONS_ENABLED") == "true"
+        if (enable_bling and before != bling_ready) or (
+            not enable_bling and before not in (baseline, bling_ready)
+        ):
             raise RuntimeError("production schema has pending/drifted fiscal migrations")
+        database.require_current_schema(require_bling=enable_bling)
         with database.connection() as connection:
             row = connection.execute(
                 "SELECT to_regclass('public.fm_cakto_schema_migrations')"
@@ -315,8 +332,9 @@ def apply() -> None:
     database = PostgresFiscalDatabase(dsn)
     try:
         before = database.applied_migrations()
-        applied = database.initialize()
-        after = database.require_current_schema()
+        enable_bling = os.getenv("NFCORE_BLING_INSTALLATIONS_ENABLED") == "true"
+        applied = database.initialize(enable_bling=enable_bling)
+        after = database.require_current_schema(require_bling=enable_bling)
         cakto = postgres_cakto_commercial_database(database)
         cakto_changed = cakto.initialize()
         cakto_versions = cakto.require_current_schema()

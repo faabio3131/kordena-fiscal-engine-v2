@@ -220,3 +220,81 @@ class BlingInstallationRepository:
         if result is None:
             raise PersistenceStateError("Bling installation transition not observable")
         return result
+
+    def list_connected_for_worker(
+        self, *, after: str = "", limit: int = 100,
+    ) -> tuple[tuple[BlingInstallationView, ...], str | None]:
+        """Trusted worker-only discovery; each item is re-resolved before claiming."""
+        if type(limit) is not int or not 1 <= limit <= 100:
+            raise FiscalValidationError("invalid Bling worker page size")
+        if after and (len(after) != 32 or any(c not in "0123456789abcdef" for c in after)):
+            raise FiscalValidationError("invalid Bling worker pagination cursor")
+        with self.database.connection() as connection:
+            rows = connection.execute(
+                f"SELECT {_FIELDS} FROM fm_bling_installations "
+                "WHERE state = 'connected' AND installation_id > ? "
+                "ORDER BY installation_id LIMIT ?",
+                (after, limit + 1),
+            ).fetchall()
+        views = tuple(self._row(row) for row in rows[:limit])
+        return views, (views[-1].installation_id if len(rows) > limit and views else None)
+
+    def status_mapping_for_scope(
+        self, scope: ExecutionScope, installation_id: str,
+    ) -> tuple[int, int] | None:
+        """Read-only per-installation writeback policy; absent means no dispatch."""
+        self._require_scope(scope)
+        if len(installation_id) != 32:
+            return None
+        with self.database.connection() as connection:
+            row = connection.execute(
+                "SELECT authorized_status_id, rejected_status_id "
+                "FROM fm_bling_installations WHERE installation_id = ? "
+                "AND tenant_id = ? AND unit_id = ? AND environment = ? "
+                "AND state = 'connected'",
+                (installation_id, scope.tenant_id, scope.unit_id, scope.environment.value),
+            ).fetchone()
+        if row is None or row[0] is None or row[1] is None:
+            return None
+        try:
+            authorized, rejected = int(str(row[0])), int(str(row[1]))
+        except ValueError:
+            raise PersistenceStateError("invalid Bling status mapping") from None
+        if authorized <= 0 or rejected <= 0 or authorized == rejected:
+            raise PersistenceStateError("invalid Bling status mapping")
+        return authorized, rejected
+
+    def configure_status_mapping(
+        self, scope: ExecutionScope, installation_id: str, *,
+        authorized_status_id: int, rejected_status_id: int,
+        expected_revision: int,
+    ) -> BlingInstallationView:
+        self._require_scope(scope)
+        if (
+            type(authorized_status_id) is not int or type(rejected_status_id) is not int
+            or min(authorized_status_id, rejected_status_id) <= 0
+            or authorized_status_id == rejected_status_id
+        ):
+            raise FiscalValidationError("invalid Bling status policy")
+        if type(expected_revision) is not int or expected_revision < 1:
+            raise PersistenceConflictError("invalid Bling policy revision")
+        with self.database.connection() as connection:
+            updated = connection.execute(
+                "UPDATE fm_bling_installations SET authorized_status_id = ?, "
+                "rejected_status_id = ?, revision = revision + 1, updated_at = ? "
+                "WHERE installation_id = ? AND tenant_id = ? AND unit_id = ? "
+                "AND environment = ? AND revision = ?",
+                (
+                    authorized_status_id, rejected_status_id,
+                    datetime.now(UTC).isoformat(), installation_id, scope.tenant_id,
+                    scope.unit_id, scope.environment.value, expected_revision,
+                ),
+            )
+            if updated.rowcount != 1:
+                connection.rollback()
+                raise PersistenceConflictError("Bling installation status policy conflict")
+            connection.commit()
+        view = self.get_for_scope(scope, installation_id)
+        if view is None:
+            raise PersistenceStateError("Bling status policy update unavailable")
+        return view

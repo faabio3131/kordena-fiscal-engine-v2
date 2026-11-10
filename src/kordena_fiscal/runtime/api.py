@@ -143,9 +143,13 @@ class RuntimeApi:
             try:
                 database = PostgresFiscalDatabase(settings.database_url)
                 if settings.is_production_like:
-                    database.require_current_schema()
+                    database.require_current_schema(
+                        require_bling=os.environ.get('NFCORE_BLING_INSTALLATIONS_ENABLED') == 'true'
+                    )
                 else:
-                    database.initialize()
+                    database.initialize(
+                        enable_bling=os.environ.get('NFCORE_BLING_INSTALLATIONS_ENABLED') == 'true'
+                    )
             except Exception:
                 if database is not None:
                     database.close()

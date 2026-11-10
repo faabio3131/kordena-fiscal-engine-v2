@@ -9,7 +9,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Body, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from kordena_fiscal.domain import ExecutionScope, FiscalEnvironment
+from kordena_fiscal.domain import ExecutionScope, FiscalEnvironment, FiscalValidationError
 from kordena_fiscal.persistence.bling_installations import BlingInstallationRepository
 from kordena_fiscal.persistence.ports import PersistenceConflictError
 from kordena_fiscal.security.human_identity import HumanIdentityService, PortalPermission
@@ -161,5 +161,31 @@ def build_bling_oauth_router(
         except (BlingOAuthUnavailable, PersistenceConflictError):
             raise HTTPException(409, detail={"code": "BLING_INSTALLATION_CONFLICT"}) from None
         return JSONResponse(content={"state": "paused"}, headers={"Cache-Control": "no-store"})
+
+    @router.post("/installations/{installation_id}/status-mapping")
+    def configure_status_mapping(
+        installation_id: str, request: Request, body: Annotated[dict[str, Any], Body()],
+    ) -> JSONResponse:
+        human, scope = by_installation(request, installation_id)
+        _csrf(request, identity, human)
+        if set(body) != {"authorized_status_id", "rejected_status_id", "expected_revision"}:
+            raise HTTPException(422, detail={"code": "BLING_INPUT_INVALID"})
+        if any(type(body[key]) is not int for key in body):
+            raise HTTPException(422, detail={"code": "BLING_INPUT_INVALID"})
+        try:
+            view = installations.configure_status_mapping(
+                scope, installation_id,
+                authorized_status_id=body["authorized_status_id"],
+                rejected_status_id=body["rejected_status_id"],
+                expected_revision=body["expected_revision"],
+            )
+        except FiscalValidationError:
+            raise HTTPException(422, detail={"code": "BLING_STATUS_MAPPING_INVALID"}) from None
+        except PersistenceConflictError:
+            raise HTTPException(409, detail={"code": "BLING_INSTALLATION_CONFLICT"}) from None
+        return JSONResponse(
+            content={"installation_id": view.installation_id, "revision": view.revision},
+            headers={"Cache-Control": "no-store"},
+        )
 
     return router
