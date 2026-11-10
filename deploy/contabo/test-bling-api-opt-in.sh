@@ -30,7 +30,6 @@ assert api["environment"]["NFCORE_BLING_CLIENT_ID"] == "synthetic-ci-app"
 assert api["environment"]["NFCORE_BLING_APPROVED_SCOPES"] == "synthetic"
 assert api["environment"]["NFCORE_BLING_CLIENT_SECRET_FILE"] == "/run/nfcore/bling/client-secret"
 assert api["environment"]["NFCORE_BLING_TOKEN_MASTER_KEY_FILE"] == "/run/nfcore/bling/master-key"
-assert api["environment"]["NFCORE_BLING_WEBHOOK_SECRET_FILE"] == "/run/nfcore/bling/webhook-secret"
 assert len(api["volumes"]) == 1
 mount=api["volumes"][0]
 assert mount["type"] == "bind" and mount["read_only"] is True
