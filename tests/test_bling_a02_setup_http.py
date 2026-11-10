@@ -96,3 +96,64 @@ def test_connect_requires_same_session_and_csrf(tmp_path: Path) -> None:
     assert result.json()["authorization_url"].startswith(
         "https://www.bling.com.br/Api/v3/oauth/authorize?state=",
     )
+
+def test_create_binding_is_same_tenant_unit_idempotent_and_csrf_protected(tmp_path: Path) -> None:
+    client, _ = login(tmp_path)
+    url = "/v1/portal/integrations/bling/bindings"
+    assert client.post(url, json={"unit_id": "unit"}).status_code == 403
+    h = {"X-CSRF-Token": client.cookies.get("nfcore_csrf")}
+    blocked = client.post(
+        url, json={"unit_id": "unit", "tenant_id": "spoof"}, headers=h,
+    )
+    assert blocked.status_code == 422
+    assert client.post(url, json={"unit_id": "other-unit"}, headers=h).status_code == 403
+    existed = client.post(url, json={"unit_id": "unit"}, headers=h)
+    assert existed.status_code == 200
+    assert existed.json() == {"binding_id": "oauth-binding", "created": False}
+    other = tmp_path / "new"
+    other.mkdir()
+    from kordena_fiscal.persistence.sqlite import SqliteFiscalDatabase
+    from kordena_fiscal.persistence.bling_installations import BlingInstallationRepository
+    db = SqliteFiscalDatabase(other / "blank.sqlite")
+    db.initialize(enable_bling=True)
+    password = "synthetic"
+    hasher = ScryptPasswordHasher()
+    identity = HumanIdentityService(
+        accounts=InMemoryHumanAccountRepository((
+            HumanAccount(
+                account_id="operator", email="operator@example.test",
+                password_hash=hasher.hash(password), tenant_id="tenant",
+                role=PortalRole.OWNER, unit_ids=frozenset({"unit"}),
+            ),
+        )),
+        sessions=InMemoryWebSessionRepository(), password_hasher=hasher,
+    )
+    from test_bling_a02_oauth import FakeOAuthClient
+    from kordena_fiscal.runtime.bling_oauth_service import (
+        BlingOAuthService, BlingTokenCipher,
+    )
+    store = BlingInstallationRepository(db)
+    svc = BlingOAuthService(
+        db, store, BlingTokenCipher(b"K" * 32), FakeOAuthClient(),
+        lambda token, company: None, required_scopes=frozenset({"pedidos_vendas"}),
+        webhook_secret="synthetic-app-secret-123456",
+    )
+    app = create_app(human_identity=identity)
+    app.include_router(build_bling_oauth_router(identity, store, svc))
+    with TestClient(app, base_url="https://nfcore.test") as fresh:
+        assert fresh.post("/v1/auth/login", json={
+            "email": "operator@example.test", "password": password,
+        }).status_code == 200
+        headers = {"X-CSRF-Token": fresh.cookies.get("nfcore_csrf")}
+        created = fresh.post(url, json={"unit_id": "unit"}, headers=headers)
+        assert created.status_code == 201
+        assert created.json()["created"] is True
+        second = fresh.post(url, json={"unit_id": "unit"}, headers=headers)
+        assert second.status_code == 200
+        assert second.json()["binding_id"] == created.json()["binding_id"]
+        available = fresh.get(
+            "/v1/portal/integrations/bling/bindings/available?unit_id=unit",
+        )
+        assert available.json()["rows"] == [{
+            "binding_id": created.json()["binding_id"], "unit_id": "unit",
+        }]

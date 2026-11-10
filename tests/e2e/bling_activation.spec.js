@@ -92,3 +92,33 @@ test("Bling operator sets per-installation status mapping with revision and CSRF
   await expect(page.getByText(/Mapeamento salvo/)).toBeVisible();
   expect(changed).toBe(true);
 });
+
+test("Bling operator provisions an exact fiscal binding when unit is new", async ({ page, context }) => {
+  await context.addCookies([{name: "nfcore_csrf", value: "binding-csrf", domain: "127.0.0.1", path: "/"}]);
+  await page.route("**/v1/portal/bootstrap", route => route.fulfill({json: {
+    tenant_id: "tenant", role: "owner", unit_ids: ["unit"],
+    permissions: ["portal.read", "integration.manage", "document.issue"],
+    projection: {available_surfaces: ["integrations"],
+      authorized_units: [{unit_id: "unit", display_name: "Unidade", environments: ["homologation"]}]},
+  }}));
+  await page.route("**/v1/portal/surfaces/integrations*", route => route.fulfill({json: {rows: []}}));
+  let bound = false;
+  await page.route("**/v1/portal/integrations/bling/bindings/available*", route =>
+    route.fulfill({json: {rows: bound ? [{binding_id: "new-binding", unit_id: "unit"}] : []}}));
+  await page.route("**/v1/portal/integrations/bling/bindings", route => {
+    const request = route.request();
+    expect(request.headers()["x-csrf-token"]).toBe("binding-csrf");
+    expect(request.postDataJSON()).toEqual({unit_id: "unit"});
+    bound = true;
+    return route.fulfill({status: 201, json: {binding_id: "new-binding", created: true}});
+  });
+  await page.route("**/v1/portal/integrations/bling/installations/available*", route =>
+    route.fulfill({json: {rows: []}}));
+  await page.goto("/");
+  await page.getByRole("button", {name: "Integrações", exact: true}).click();
+  await expect(page.getByRole("button", {name: "Cadastrar empresa Bling"})).toBeDisabled();
+  await page.getByRole("button", {name: "Criar vínculo fiscal Bling"}).click();
+  await expect(page.getByText(/Vínculo fiscal criado/)).toBeVisible();
+  await expect(page.getByRole("button", {name: "Cadastrar empresa Bling"})).toBeEnabled();
+  expect(bound).toBe(true);
+});

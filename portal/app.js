@@ -1946,6 +1946,8 @@ function appendBlingOperationsPanel(article, onReview) {
   const companyInput = document.createElement("input");
   companyInput.type = "text"; companyInput.maxLength = 96;
   companyInput.required = true; companyLabel.append(companyInput);
+  const createBinding = document.createElement("button");
+  createBinding.type = "button"; createBinding.textContent = "Criar vínculo fiscal Bling";
   const addInstallation = document.createElement("button");
   addInstallation.type = "button"; addInstallation.textContent = "Cadastrar empresa Bling";
   const oauthConnect = document.createElement("button");
@@ -1963,7 +1965,7 @@ function appendBlingOperationsPanel(article, onReview) {
   const mappingSave = document.createElement("button");
   mappingSave.type = "button"; mappingSave.textContent = "Salvar mapeamento de status";
   const setupMessage = document.createElement("p"); setupMessage.setAttribute("role", "status");
-  setup.append(setupTitle, bindingLabel, companyLabel, addInstallation, oauthConnect,
+  setup.append(setupTitle, bindingLabel, createBinding, companyLabel, addInstallation, oauthConnect,
     mappingLabel, rejectedLabel, mappingSave, setupMessage);
   const controls = document.createElement("div"); controls.className = "bling-operations-controls";
   const installationLabel = document.createElement("label");
@@ -2141,6 +2143,30 @@ function appendBlingOperationsPanel(article, onReview) {
     }
     installation.dispatchEvent(new Event("change"));
   }
+  createBinding.addEventListener("click", () => { void (async () => {
+    createBinding.disabled = true;
+    setupMessage.textContent = "Criando vínculo no escopo da unidade autorizada...";
+    try {
+      const created = await callMutation("/v1/portal/integrations/bling/bindings", {unit_id: unitId});
+      const bindings = await api(
+        `/v1/portal/integrations/bling/bindings/available?unit_id=${encodeURIComponent(unitId)}`,
+      );
+      bindingSelect.replaceChildren();
+      for (const binding of Array.isArray(bindings.rows) ? bindings.rows : []) {
+        const option = document.createElement("option");
+        option.value = binding.binding_id;
+        option.textContent = `Vínculo fiscal ${binding.binding_id}`;
+        bindingSelect.append(option);
+      }
+      bindingSelect.value = created.binding_id;
+      addInstallation.disabled = !bindingSelect.value;
+      setupMessage.textContent = "Vínculo fiscal criado no escopo desta unidade.";
+    } catch (error) {
+      setupMessage.textContent = error instanceof Error ? error.message : "Criação bloqueada";
+    } finally {
+      createBinding.disabled = false;
+    }
+  })(); });
   addInstallation.addEventListener("click", () => { void (async () => {
     if (!bindingSelect.value || !companyInput.value.trim()) {
       setupMessage.textContent = "Selecione um vínculo fiscal e informe o ID da empresa.";
@@ -2224,6 +2250,7 @@ function appendBlingOperationsPanel(article, onReview) {
   const unitId = selectedFiscalUnit || units[0]?.unit_id;
   if (!unitId) {
     summary.textContent = "Selecione uma unidade fiscal autorizada para consultar o Bling.";
+    setup.hidden = true; controls.hidden = true;
     return;
   }
   void (async () => {
@@ -2241,7 +2268,7 @@ function appendBlingOperationsPanel(article, onReview) {
       }
       addInstallation.disabled = rows.length === 0;
       if (!rows.length) {
-        setupMessage.textContent = "Não há vínculo fiscal Bling nesta unidade. A autoridade fiscal precisa cadastrá-lo antes da conexão.";
+        setupMessage.textContent = "Não há vínculo fiscal Bling nesta unidade. Use Criar vínculo fiscal Bling para registrar a autoridade exata.";
       }
       await loadInstallations();
     } catch {

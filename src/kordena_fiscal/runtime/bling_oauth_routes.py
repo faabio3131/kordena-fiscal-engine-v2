@@ -3,15 +3,26 @@
 from __future__ import annotations
 
 import hashlib
+import secrets
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from kordena_fiscal.domain import ExecutionScope, FiscalEnvironment, FiscalValidationError
+from kordena_fiscal.application.service import FiscalApplicationService
+from kordena_fiscal.domain import (
+    ExecutionScope,
+    FiscalAccountBinding,
+    FiscalAccountId,
+    FiscalEnvironment,
+    FiscalUnitId,
+    FiscalValidationError,
+    HostNamespace,
+    HostScope,
+)
 from kordena_fiscal.persistence.bling_installations import BlingInstallationRepository
-from kordena_fiscal.persistence.ports import PersistenceConflictError
+from kordena_fiscal.persistence.ports import PersistenceConflictError, PersistenceStateError
 from kordena_fiscal.security.human_identity import HumanIdentityService, PortalPermission
 from kordena_fiscal.web.portal_api import _authenticated, _authorized, _csrf
 
@@ -24,6 +35,54 @@ def build_bling_oauth_router(
     oauth: BlingOAuthService,
 ) -> APIRouter:
     router = APIRouter(prefix="/v1/portal/integrations/bling", tags=["bling-oauth"])
+
+    @router.post("/bindings")
+    def create_binding(
+        request: Request, body: Annotated[dict[str, Any], Body()],
+    ) -> JSONResponse:
+        """One exact-scope binding through the existing application service.
+
+        The caller cannot submit host tenant, external unit, namespace or
+        fiscal account IDs; all authorities derive from the signed session.
+        """
+        human = _authenticated(request, identity, now=datetime.now(UTC))
+        _csrf(request, identity, human)
+        if set(body) != {"unit_id"} or not isinstance(body["unit_id"], str):
+            raise HTTPException(422, detail={"code": "BLING_INPUT_INVALID"})
+        unit_id = body["unit_id"]
+        if not unit_id or len(unit_id) > 128:
+            raise HTTPException(422, detail={"code": "BLING_INPUT_INVALID"})
+        _authorized(human, PortalPermission.INTEGRATION_MANAGE, unit_id=unit_id)
+        host = HostScope(HostNamespace("bling"), human.tenant_id, unit_id)
+        with installations.database() as uow:
+            try:
+                old = uow.bindings.resolve(host)
+            except PersistenceStateError:
+                old = None
+        if old is not None:
+            if (
+                old.fiscal_account_id.value != human.tenant_id
+                or old.fiscal_unit_id.value != unit_id
+            ):
+                raise HTTPException(409, detail={"code": "BLING_BINDING_CONFLICT"})
+            return JSONResponse(
+                content={"binding_id": old.binding_id, "created": False},
+                headers={"Cache-Control": "no-store"},
+            )
+        candidate = FiscalAccountBinding(
+            binding_id=secrets.token_hex(16), host_scope=host,
+            fiscal_account_id=FiscalAccountId(human.tenant_id),
+            fiscal_unit_id=FiscalUnitId(unit_id),
+        )
+        try:
+            created = FiscalApplicationService(installations.database).register_binding(candidate)
+        except (PersistenceConflictError, PersistenceStateError):
+            raise HTTPException(409, detail={"code": "BLING_BINDING_CONFLICT"}) from None
+        return JSONResponse(
+            status_code=201,
+            content={"binding_id": created.binding_id, "created": True},
+            headers={"Cache-Control": "no-store"},
+        )
 
     @router.get("/bindings/available")
     def available_bindings(
