@@ -232,3 +232,69 @@ def test_provider_listing_validates_fixed_origin_pagination_and_identity() -> No
         with pytest.raises(ValueError):
             list_sales_orders(0, 10, "token")
         connect.assert_not_called()
+
+
+def test_status_retry_requires_proven_dead_letter_and_keeps_idempotency(
+    tmp_path: Path,
+) -> None:
+    from datetime import timedelta
+
+    from kordena_fiscal.application.bling_orders import PUBLISH_STATUS, encode_order
+    from kordena_fiscal.contingency import FiscalOutboxService
+    from kordena_fiscal.contingency.outbox import OutboxClaimSelection
+
+    db, _store, view, scope, service, _seen, _fetched, _pauses = setup(tmp_path)
+    orders = BlingOrders(db, scope, "expected-company")
+    orders.stage(
+        333, {"id": 333, "itens": []},
+        event_id="status-retry-test", now=datetime.now(UTC),
+    )
+    with db() as uow:
+        old = uow.commercial.configuration_receipt(scope, orders.key(333))
+        assert old is not None
+        changed = {
+            **old, "state": "authorized", "document_id": "synthetic-document",
+            "approved_at": datetime.now(UTC).isoformat(),
+        }
+        assert uow.commercial.replace_configuration_receipt(
+            scope, orders.key(333), old, changed,
+        )
+        uow.commit()
+    with pytest.raises(BlingOperationalError, match="BLING_RECOVERY_REQUIRED"):
+        service.retry_status(
+            scope, view.installation_id, 333,
+            request_id="premature-retry", actor_id="operator",
+        )
+    now = datetime.now(UTC)
+    with db() as uow:
+        FiscalOutboxService(uow.outbox).enqueue(
+            scope=scope, operation=PUBLISH_STATUS,
+            deduplication_key="original-status-333",
+            payload=encode_order({"order_id": 333, "status": "authorized"}),
+            created_at=now,
+        )
+        uow.commit()
+    with db() as uow:
+        claimed = uow.outbox.claim_due(
+            now=now + timedelta(seconds=1),
+            limit=1, lease_duration=timedelta(seconds=30),
+            selection=OutboxClaimSelection(
+                scope=scope, operations=frozenset({PUBLISH_STATUS}),
+            ),
+        )
+        assert len(claimed) == 1
+        uow.outbox.dead_letter(
+            claimed[0].entry_id, expected_attempt=claimed[0].attempt_count,
+            error="synthetic provider permanent failure",
+        )
+        uow.commit()
+    retry = service.retry_status(
+        scope, view.installation_id, 333,
+        request_id="approved-retry", actor_id="operator",
+    )
+    assert retry.outcome is BlingRecoveryOutcome.QUEUED
+    repeated = service.retry_status(
+        scope, view.installation_id, 333,
+        request_id="approved-retry", actor_id="operator",
+    )
+    assert repeated.operation_id == retry.operation_id
