@@ -13,10 +13,17 @@ services:
       NFCORE_BLING_INSTALLATIONS_ENABLED: "true"
       NFCORE_BLING_CLIENT_SECRET_FILE: /run/nfcore/bling/client-secret
       NFCORE_BLING_TOKEN_MASTER_KEY_FILE: /run/nfcore/bling/master-key
+      NFCORE_BLING_FISCAL_POLICY_ROOT: /run/nfcore/bling-policies
     volumes:
       - type: bind
         source: ${NFCORE_BLING_SECRETS_HOST_DIR:?required}
         target: /run/nfcore/bling
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${NFCORE_BLING_POLICIES_HOST_DIR:?required}
+        target: /run/nfcore/bling-policies
         read_only: true
         bind:
           create_host_path: false

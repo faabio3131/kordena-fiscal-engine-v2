@@ -21,6 +21,62 @@
 - Depois de um ensaio `docker compose config` com as variáveis necessárias (não imprimir o config completo pois contém dados sensíveis), ativar de forma **durável** o overlay `deploy/contabo/compose.bling.api.opt-in.yml` por symlink host-owned `/opt/fm/nfcore/docker-compose.override.yml`. O Compose passará a incorporar o overlay automaticamente ao deploy pull normal. **Não criar um compose paralelo nem alterar o Dockerfile.**
 - Validar `NFCORE_BLING_INSTALLATIONS_ENABLED=true`, schema 1..21 completo e cada arquivo secreto legível *dentro* da API, sem imprimir conteúdo; health de `nfcore-api` e Portal. Em erro: remover apenas o override controlado, recriar API no compose base e confirmar readiness. Não dar rollback de schema destrutivo.
 
+## Política fiscal por instalação — construção interna multiempresa
+
+A API Bling multi-instalação usa uma **única autoridade de regras fiscais**,
+o preparador nativo e os perfis canônicos do NFCore. A política fiscal **não**
+pode ser um arquivo global para todos os estabelecimentos. O modo multi exige o
+diretório read-only `NFCORE_BLING_FISCAL_POLICY_ROOT` montado em
+`/run/nfcore/bling-policies`; o caminho correspondente no host fica em
+`NFCORE_BLING_POLICIES_HOST_DIR` e deve ser criado por operador autorizado,
+com permissões de diretório 0700, titularidade UID/GID 10001, arquivos 0600.
+É proibido colocar documentos fiscais, políticas de clientes ou segredos no Git.
+
+Cada instalação usa o nome do arquivo derivado **somente** dos valores
+canônicos do vínculo fiscal, em `[host_namespace, tenant_id, unit_id,
+environment, company_id]`. O prefixo é sempre `bling`, o ambiente operacional
+do Worker é `homologation`, e o identificador da empresa é o validado pelo
+provedor. O algoritmo é
+`sha256(json.dumps(lista, separators=(",", ":"), ensure_ascii=True).encode("utf-8")).hexdigest()`.
+Para cada hash `H`, existem exatamente dois artefatos:
+
+- `H.json`: a política fiscal já revisada pelo contador e vinculada aos
+  perfis da empresa; segue o contrato de
+  `contracts/integrations/bling-fiscal-policy.example.json`.
+- `H.sha256`: 64 caracteres hexadecimais minúsculos do SHA-256 **dos bytes
+  exatos de H.json**, com newline final opcional.
+
+Para obter H em ambiente de configuração autorizado, sem acessar credenciais:
+
+```python
+import hashlib
+import json
+material = ["bling", "TENANT_CANONICO", "UNIDADE_CANONICA", "homologation", "EMPRESA_BLING"]
+slot = hashlib.sha256(
+    json.dumps(material, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+).hexdigest()
+print(slot + ".json", slot + ".sha256")
+```
+
+Ao trocar uma política é preciso criar **nova versão e novo digest**, mantendo
+a revisão humana e a trilha de auditoria do preparador. Nunca reutilizar
+`policy_id + version` com conteúdo diferente: o archive canônico já bloqueia
+conflitos. A instalação diferente não lê nenhuma política substituta, e um
+artefato ausente, adulterado ou com symlink bloqueia apenas aquela preparação.
+
+**Compatibilidade:** o modo single-company legado continua aceitando
+`NFCORE_BLING_FISCAL_POLICY_FILE` e `NFCORE_BLING_FISCAL_POLICY_SHA256`,
+mas o modo multi rejeita essas variáveis para evitar isolamento ilusório.
+O diretório pode ficar vazio durante cadastro OAuth; isso deixa a preparação
+fiscal daquele cliente bloqueada até a política aprovada ser configurada.
+O sistema jamais inventa tributos nem empresta política de outro tenant.
+
+**Aceite interno sem clientes ou certificados:** testes com várias identidades,
+políticas isoladas, políticas ausentes, hash adulterado, symlinks, legacy mode,
+configuração Docker read-only e a suíte completa de assinatura/XSD, API/Portal,
+RBAC, E2E e PostgreSQL. A configuração de valores legais e assinatura real de
+A1 são pré-requisitos externos do estabelecimento, não código pendente.
+
 ## Operação Web
 1. Proprietário/administrador com `integration.manage` abre **Integrações > Centro de Operações Bling** e seleciona a unidade autorizada.
 2. O painel lista apenas os vínculos `host_namespace=bling` dessa unidade. Se nenhum existir, é obrigatório criar o vínculo fiscal pelo fluxo canônico de gestão; não aceitar tenant/unit informados pelo navegador como autoridade.
@@ -34,6 +90,46 @@
 - É **opt-in**, fora do compose base e do cron. Montar os mesmos segredos com permissões e dot-env apropriados, usando `compose.bling.worker.opt-in.yml`; confirmar o DB e a identidade antes do start.
 - Verificar a configuração do Vault A1 para autorização fiscal; sem certificado real da contabilidade, não marcar emissão como homologada. Sem A1 o processamento deve permanecer bloqueado com erro verificável.
 - Smoke do processo e estado de health do Worker; duas empresas/unidades isoladas; confirmação de reprocessamento e rollback que preserva outbox. A decisão de transmitir NF-e em homologação requer confirmação da contabilidade.
+
+## Auditoria de host sem credenciais expostas (10/11/2026)
+
+O procedimento seguinte é **somente leitura**. Deve ser executado no host
+Contabo pelo operador autorizado depois de confirmar a branch de produção.
+Ele não faz deploy, não instala segredos, não aplica migrations e não transmite
+documentos fiscais:
+
+```bash
+bash /opt/fm/nfcore/src/deploy/contabo/bling-operational-host-audit.sh \
+  61015a837be8b2e5e3b0f1cdb5fb14c5c875fb91
+```
+
+O SHA acima é o release Bling #415 de 10/11; para versões posteriores use
+o SHA real de `production` verificado no GitHub. Não extrapolar esse
+checkpoint para releases futuros.
+
+A auditoria devolve apenas `PASS / PENDING / BLOCKED` e identificadores
+de commit. Verifica `.deployed`, `.failed-sha`, marcador `DEPLOY OK`,
+integridade de backup recente, containers, readiness interno, migração fiscal/Cakto,
+esquema Bling 20/21, flag e montagens dos segredos OAuth na API e health do Worker.
+Nenhum conteúdo secreto é impresso. O resultado
+`HOST_GATES_PASS_EXTERNAL_STILL_UNVERIFIED` **não significa** que Bling
+OAuth real, pedido ou A1/SEFAZ estejam homologados.
+
+A auditoria também exige `BLING_POLICY_MOUNT=PASS` (bind mount real,
+read-only, no caminho canônico da API) e
+`BLING_POLICY_ARTIFACTS=PASS` (ao menos um arquivo de política encontrado e
+todos os arquivos presentes aprovados pelo mesmo `BlingSalePreparer` do
+runtime, incluindo vínculo de escopo e digest). Diretório vazio significa
+`PENDING`; ausência, symlink, conteúdo adulterado ou mount gravável significa
+`BLOCKED`. Essa prova **não confirma** que todas as instalações tenham
+política aprovada: o escopo exato da empresa do teste deve ser exercitado no
+Portal antes de transmitir. Nenhum dado da política é impresso pelo script.
+
+Se retornar `BLOCKED` ou `PENDING`, registrar somente a saída
+dessas chaves sem adicionar logs brutos e não forçar deploy, DDL ou emissão.
+O operador valida consentimento real da conta Bling e ciclo fiscal oficial
+separadamente. A aprovação humana continua obrigatória para migrações e
+ativação dos serviços que modifiquem o estado de produção.
 
 ## Evidência exigida para encerramento
 Registrar commit em `production`, SHA no `.deployed`, `DEPLOY OK`, lista de containers, migrações 1..21, `/health/ready` interno, API OAuth pronta, Worker health, consentimento real Bling por tenant, ID de status mapeado e ciclo de pedido de teste. **Nenhuma dessas evidências é substituída por CI verde isolada.**
