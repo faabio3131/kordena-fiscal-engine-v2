@@ -115,6 +115,16 @@ Nenhum conteúdo secreto é impresso. O resultado
 `HOST_GATES_PASS_EXTERNAL_STILL_UNVERIFIED` **não significa** que Bling
 OAuth real, pedido ou A1/SEFAZ estejam homologados.
 
+A auditoria também exige `BLING_POLICY_MOUNT=PASS` (bind mount real,
+read-only, no caminho canônico da API) e
+`BLING_POLICY_ARTIFACTS=PASS` (ao menos um arquivo de política encontrado e
+todos os arquivos presentes aprovados pelo mesmo `BlingSalePreparer` do
+runtime, incluindo vínculo de escopo e digest). Diretório vazio significa
+`PENDING`; ausência, symlink, conteúdo adulterado ou mount gravável significa
+`BLOCKED`. Essa prova **não confirma** que todas as instalações tenham
+política aprovada: o escopo exato da empresa do teste deve ser exercitado no
+Portal antes de transmitir. Nenhum dado da política é impresso pelo script.
+
 Se retornar `BLOCKED` ou `PENDING`, registrar somente a saída
 dessas chaves sem adicionar logs brutos e não forçar deploy, DDL ou emissão.
 O operador valida consentimento real da conta Bling e ciclo fiscal oficial
