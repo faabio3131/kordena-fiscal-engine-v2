@@ -27,3 +27,5 @@ jobs:
         run: |
           bash deploy/contabo/test-worker-opt-in.sh
           bash deploy/contabo/test-bling-api-opt-in.sh
+      - name: Auditar preflight Bling sem host/segredos
+        run: bash deploy/contabo/test-bling-operational-host-audit.sh
