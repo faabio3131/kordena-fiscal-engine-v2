@@ -43,3 +43,10 @@ Registrar commit em `production`, SHA no `.deployed`, `DEPLOY OK`, lista de cont
 - Webhooks: o cabeçalho `X-Bling-Signature-256` é HMAC-SHA256 assinado com o Client Secret do aplicativo OAuth; o runtime reutiliza exatamente essa chave. Fonte: https://developer.bling.com.br/webhooks
 - JWT: utilizar `enable-jwt: 1` no token OAuth e em requisições autenticadas à API Bling. Fonte: https://developer.bling.com.br/migracao-jwt
 - Identidade: a API pode responder `data.id` numérico; comparar com o identificador configurado da empresa após conversão textual exata, sem inferência de tenant/unidade.
+
+## Gates de liberação do callback e JWT — revisão 10/11/2026
+
+- O callback OAuth pode produzir JSON para APIs ou redirect 303 para a aplicação Web. A assinatura de retorno do handler deve ser a classe-base `Response`, não a união de classes de resposta, porque FastAPI rejeita este tipo na compilação do roteador. Testar a rota com `TestClient` efetivo.
+- Os testes de transporte devem exigir `enable-jwt: 1` em pedidos, atualizações e identificação de empresa, conforme contrato oficial Bling. Nunca remover o cabeçalho de produção para fazer testes antigos passarem.
+- A correção de import do teste do proxy deve importar o mesmo `scripts/serve_portal.py` do repositório de maneira independente do PYTHONPATH da wheel, sem trocar o handler ou dispensar o teste.
+- CI e Governança do HEAD exato da PR #412 são critérios obrigatórios; testes de revisão anterior ou cancelados não certificam o release.
