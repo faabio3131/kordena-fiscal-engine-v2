@@ -1,3 +1,10 @@
+> **CURRENT — PROMOÇÃO GOVERNADA BLING A-00–A-05 + B-01–B-05 / 10-11-2026:** candidato para Contabo preparado a partir de `main@2d6ba3d1c32d70923a473b37950769b19511c52d` (PR #410 MERGED; CI pós-merge #42827985845 SUCCESS; governança #42827987234 SUCCESS). A branch `production@5dc48dfe1a9256b8d1e761e44533e763dd5bed63` continha cinco commits próprios já preservados como segunda linha ancestral do commit de reconciliação (sem force-push). PR #411: validação da candidata para promover código API/Portal na branch `production`, mediante CI/governança e gate de produção. Deploy Contabo é pull `production`/5 min e CODE-ONLY; sem DDL, sem ativação de Worker Bling, sem OAuth/SEFAZ real, sem alterações de segredos. Migracoes Bling 20/21 e Worker continuam OPT-IN e dependentes de aprovação e verificação do ambiente real. **A existência desta nota ou da candidata NÃO significa deploy concluído; após promoção exigir DEPLOY OK, commit implantado e readiness do host.**
+>
+> **REGISTRO HISTÓRICO INTEGRADO DA BRANCH production (09/11/2026; não é CURRENT vigente):**
+> **CURRENT — CANDIDATA DE RELEASE CONTABO / 09-11-2026:** PRs #403 e #404 MERGED em main@112a4412c1e1fb53355f7ba8a7d1f3126d3808bb (CI #42705237839 e governanca #42705237769 SUCCESS). production@ea6719728ff99d4a633657af98256d6ed640fe76 agrega os 3 commits exclusivos do checkout publico Cakto, preservados na candidata release/contabo-20261109-bling criada a partir de production e reconciliada com main. Host Contabo vmi3692211 inicialmente em ea67197, API/Portal/DB healthy, schema fiscal 1..19 e Cakto 1..3 em preflight read-only. Esta nota e o commit da candidata NAO comprovam CI final da candidata, promocao, deploy, worker habilitado, homologacao fiscal real ou smoke pos-deploy. Somente publicar via PR para production apos CI/governanca verdes no HEAD exato; o cron Contabo monitora production a cada 5 minutos e seu deploy e code-only, sem DDL. Confirmar .deployed, readiness HTTP e log DEPLOY OK depois. Sem alterar outros SaaS nem segredos.
+>
+---
+
 # AGENTS.md — Master Execution Schedule: Centro-Oeste Expansion (NFCore V1)
 
 > **Status do Documento:** Ativo / Governança de Execução  
