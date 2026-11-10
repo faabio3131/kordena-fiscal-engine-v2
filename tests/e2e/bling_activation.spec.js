@@ -85,6 +85,9 @@ test("Bling operator sets per-installation status mapping with revision and CSRF
   });
   await page.goto("/");
   await page.getByRole("button", {name: "Integrações", exact: true}).click();
+  await expect(page.getByLabel("URL do webhook Bling")).toHaveValue(
+    `http://127.0.0.1:8081/webhooks/bling/installations/${"c".repeat(32)}`,
+  );
   await expect(page.getByRole("button", {name: "Salvar mapeamento de status"})).toBeEnabled();
   await page.getByLabel("ID do status autorizado no Bling").fill("100");
   await page.getByLabel("ID do status rejeitado no Bling").fill("200");
