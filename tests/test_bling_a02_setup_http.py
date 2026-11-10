@@ -75,17 +75,21 @@ def test_eligible_bindings_exact_tenant_unit_and_bling_only(tmp_path: Path) -> N
 
 
 def test_eligible_bindings_fail_closed_for_wrong_tenant_and_role(tmp_path: Path) -> None:
-    for title, kwargs in [
-        ("foreign", {"tenant": "foreign-tenant"}),
-        ("auditor", {"role": "auditor"}),
-    ]:
-        path = tmp_path / title
-        path.mkdir()
-        client, _ = login(path, **kwargs)
-        result = client.get(
-            "/v1/portal/integrations/bling/bindings/available?unit_id=unit",
-        )
-        assert result.status_code in (403, 404)
+    foreign = tmp_path / "foreign"
+    foreign.mkdir()
+    foreign_client, _ = login(foreign, tenant="foreign-tenant")
+    path = "/v1/portal/integrations/bling/bindings/available?unit_id=unit"
+    foreign_result = foreign_client.get(path)
+    # The foreign tenant may list its own (empty) bindings, never another
+    # tenant's binding IDs. A successful empty response is correct isolation.
+    assert foreign_result.status_code == 200
+    assert foreign_result.json()["rows"] == []
+    assert "oauth-binding" not in foreign_result.text
+
+    auditor = tmp_path / "auditor"
+    auditor.mkdir()
+    auditor_client, _ = login(auditor, role="auditor")
+    assert auditor_client.get(path).status_code in (403, 404)
 
 
 def test_connect_requires_same_session_and_csrf(tmp_path: Path) -> None:
@@ -110,9 +114,23 @@ def test_create_binding_is_same_tenant_unit_idempotent_and_csrf_protected(tmp_pa
     )
     assert blocked.status_code == 422
     assert client.post(url, json={"unit_id": "other-unit"}, headers=h).status_code == 403
-    existed = client.post(url, json={"unit_id": "unit"}, headers=h)
-    assert existed.status_code == 200
-    assert existed.json() == {"binding_id": "oauth-binding", "created": False}
+    created_for_session = client.post(url, json={"unit_id": "unit"}, headers=h)
+    # The fixture's legacy Bling host scope is ext-tenant/ext-unit; it must
+    # never be silently reused as this session's tenant/unit host authority.
+    assert created_for_session.status_code == 201
+    session_binding = created_for_session.json()["binding_id"]
+    assert session_binding != "oauth-binding"
+    assert created_for_session.json()["created"] is True
+    repeated = client.post(url, json={"unit_id": "unit"}, headers=h)
+    assert repeated.status_code == 200
+    assert repeated.json() == {"binding_id": session_binding, "created": False}
+    available = client.get(
+        "/v1/portal/integrations/bling/bindings/available?unit_id=unit",
+    )
+    assert available.status_code == 200
+    assert {row["binding_id"] for row in available.json()["rows"]} == {
+        "oauth-binding", session_binding,
+    }
     other = tmp_path / "new"
     other.mkdir()
     db = SqliteFiscalDatabase(other / "blank.sqlite")
