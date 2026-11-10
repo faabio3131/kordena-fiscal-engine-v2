@@ -2285,10 +2285,20 @@ function appendBlingOperationsPanel(article, onReview) {
       if (!rows.length) {
         setupMessage.textContent = "Não há vínculo fiscal Bling nesta unidade. Use Criar vínculo fiscal Bling para registrar a autoridade exata.";
       }
+    } catch {
+      // Binding administration can be unavailable independently of the
+      // already-authorized installation operations. Fail closed for setup,
+      // but preserve the read-only queue for existing installations.
+      bindingSelect.replaceChildren();
+      createBinding.disabled = true;
+      addInstallation.disabled = true;
+      setup.hidden = true;
+    }
+    try {
       await loadInstallations();
     } catch {
       summary.textContent = "Painel multi-tenant indisponível. A revisão legada permanece sujeita às permissões e à configuração existentes.";
-      controls.hidden = true; setup.hidden = true;
+      controls.hidden = true;
     }
   })();
 }
