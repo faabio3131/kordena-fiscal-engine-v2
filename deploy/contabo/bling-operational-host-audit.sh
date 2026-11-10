@@ -104,6 +104,78 @@ ready=(all(os.getenv(k) for k in keys) and
 print("READY" if ready else "UNAVAILABLE")
 ' 2>/dev/null || true)
 if [[ $secret_ready == READY ]]; then report BLING_SECRET_MOUNTS PASS; else pending BLING_SECRET_MOUNTS; fi
+
+# Read-only proof that the scoped fiscal-policy runtime from PR #418 is mounted
+# RO and that present artifacts pass the CANONICAL preparer validation. This
+# does not prove every Bling installation has a policy: tenant-specific onboarding
+# still requires its own policy and authenticated end-to-end rehearsal.
+if [[ $api_flag == ENABLED ]]; then
+  policy_mount=$(docker inspect --format '{{range .Mounts}}{{if eq .Destination "/run/nfcore/bling-policies"}}{{if .RW}}RW{{else}}RO{{end}}{{end}}{{end}}' nfcore-api 2>/dev/null || true)
+  if [[ $policy_mount == RO ]]; then
+    report BLING_POLICY_MOUNT PASS
+  else
+    block BLING_POLICY_MOUNT
+  fi
+  policy_state=$(docker exec nfcore-api python -c '
+import json
+import os
+from pathlib import Path
+from types import SimpleNamespace
+from kordena_fiscal.domain import ExecutionScope, FiscalEnvironment
+from kordena_fiscal.runtime.bling_preparation import BlingSalePreparer
+
+root_path = os.environ.get("NFCORE_BLING_FISCAL_POLICY_ROOT", "")
+root = Path(root_path)
+if root_path != "/run/nfcore/bling-policies" or root.is_symlink() or not root.is_dir():
+    print("UNAVAILABLE")
+else:
+    try:
+        artifacts = sorted(root.glob("*.json"))
+        if not artifacts:
+            print("EMPTY")
+        else:
+            preparer = BlingSalePreparer({
+                "NFCORE_BLING_INSTALLATIONS_ENABLED": "true",
+                "NFCORE_BLING_FISCAL_POLICY_ROOT": root_path,
+            })
+            for artifact in artifacts:
+                if artifact.is_symlink():
+                    raise ValueError("symlink")
+                with artifact.open("rb") as stream:
+                    raw = stream.read(1_048_577)
+                if len(raw) > 1_048_576:
+                    raise ValueError("oversized")
+                data = json.loads(raw)
+                if not isinstance(data, dict):
+                    raise ValueError("not a policy")
+                company_id = data["company_id"]
+                if not isinstance(company_id, str):
+                    raise ValueError("company")
+                scope = ExecutionScope(
+                    tenant_id=data["tenant_id"],
+                    unit_id=data["unit_id"],
+                    environment=FiscalEnvironment(data["environment"]),
+                    correlation_id="host-audit",
+                    host_namespace="bling",
+                )
+                name = preparer.policy_scope_digest(scope, company_id)
+                if artifact.name != name + ".json":
+                    raise ValueError("wrong scope slot")
+                preparer.policy(SimpleNamespace(scope=scope, company_id=company_id))
+            print("READY")
+    except Exception:
+        # Do not reveal tenant names, policy JSON, secret paths or exception text.
+        print("INVALID")
+' 2>/dev/null || true)
+  case "$policy_state" in
+    READY) report BLING_POLICY_ARTIFACTS PASS ;;
+    EMPTY) pending BLING_POLICY_ARTIFACTS ;;
+    *) block BLING_POLICY_ARTIFACTS ;;
+  esac
+else
+  pending BLING_POLICY_MOUNT
+  pending BLING_POLICY_ARTIFACTS
+fi
 if [[ $(status_of nfcore-bling-worker) == running ]]; then
   report BLING_WORKER_RUNNING PASS
   if [[ $(health_of nfcore-bling-worker) == healthy ]]; then
