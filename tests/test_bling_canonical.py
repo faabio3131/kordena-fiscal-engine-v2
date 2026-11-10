@@ -1860,3 +1860,80 @@ def test_pis_cofins_other_mode_is_never_inferred(mapping):
             net_amount=Decimal("1.00"),
             regime=TaxRegimeCode.NORMAL,
         )
+
+
+@pytest.mark.parametrize(
+    ("normal", "code", "group"),
+    [
+        (True, "40", "ICMS40"),
+        (True, "41", "ICMS40"),
+        (True, "50", "ICMS40"),
+        (False, "103", "ICMSSN102"),
+        (False, "300", "ICMSSN102"),
+        (False, "400", "ICMSSN102"),
+    ],
+)
+def test_b01_additional_supported_icms_codes_have_signed_official_schema(
+    mapping, signing_material, normal, code, group
+):
+    """Previously supported no-ICMS codes must never invent rates or credit."""
+    from lxml import etree
+
+    from kordena_fiscal.domain import ElectronicInvoiceModel
+    from kordena_fiscal.issuance.nfe_builder import NfeSaleOptions, build_nfe_sale
+    from kordena_fiscal.signing.nfe_xmldsig import NfeSignatureProfile, sign_nfe_envi_xml
+    from kordena_fiscal.xml import AccessKeyInput, build_access_key
+    from kordena_fiscal.xml.official_nfe_schema import OfficialNfeEnvelopeValidator
+
+    sale_document(mapping, normal=normal)
+    rule = mapping["rules"][0]
+    rates = replace(rule.outcome.nfe_rates, icms_rate=Decimal("0"))
+    mapping["rules"] = (
+        replace(rule, outcome=replace(rule.outcome, icms_code=code, nfe_rates=rates)),
+    )
+    document = map_bling_document(order(), **mapping)
+    access_key = build_access_key(
+        AccessKeyInput("35", NOW, document.issuer.cnpj, ElectronicInvoiceModel.NFE,
+                       1, 1, 1, 12345678)
+    )
+    xml = build_nfe_sale(document, access_key, NfeSaleOptions("VENDA", 1, 9))
+    root = etree.fromstring(xml)
+    matches = root.xpath("//*[local-name()='" + group + "']")
+    assert len(matches) == 1
+    element = matches[0]
+    code_field = "CST" if normal else "CSOSN"
+    assert element.xpath("string(./*[local-name()='" + code_field + "'])") == code
+    assert not element.xpath("./*[local-name()='vICMS']")
+    assert not element.xpath("./*[local-name()='pICMS']")
+    assert root.xpath("string(//*[local-name()='ICMSTot']/*[local-name()='vNF'])") == "1.00"
+    signed = sign_nfe_envi_xml(
+        xml, signing_material, profile=NfeSignatureProfile.NFE4_OFFICIAL_RSA_SHA1,
+    )
+    OfficialNfeEnvelopeValidator()(signed)
+
+
+@pytest.mark.parametrize(
+    ("normal", "code"),
+    [
+        (True, "51"), (True, "60"), (True, "90"),
+        (False, "101"), (False, "201"), (False, "202"),
+        (False, "203"), (False, "500"), (False, "900"),
+    ],
+)
+def test_b01_unmodelled_icms_never_degrades_to_a_supported_tax_group(
+    mapping, normal, code
+):
+    """Explicitly block retained ST, credits, deferment and opaque CST modes."""
+    from kordena_fiscal.tax.nfe_calculation import calculate_nfe_line
+
+    document = sale_document(mapping, normal=normal)
+    line = document.items[0]
+    with pytest.raises(FiscalValidationError, match="unsupported"):
+        calculate_nfe_line(
+            replace(
+                line.tax_decision,
+                outcome=replace(line.tax_decision.outcome, icms_code=code),
+            ),
+            net_amount=line.net_amount.amount,
+            regime=document.issuer.tax_regime,
+        )
