@@ -1923,9 +1923,11 @@ async function renderSurface(viewId) {
   }
 }
 
-/** Operational Bling dashboard, always using the authenticated portal authority. */
-/** @param {HTMLElement} article */
-/** @param {(installationId:string, orderId:number)=>void} onReview */
+/**
+ * Operational Bling dashboard using the authenticated portal authority.
+ * @param {HTMLElement} article
+ * @param {(installationId: string, orderId: number) => void} onReview
+ */
 function appendBlingOperationsPanel(article, onReview) {
   const panel = document.createElement("section"); panel.className = "bling-operations";
   const heading = document.createElement("h3"); heading.textContent = "Centro de Operações Bling";
@@ -1946,18 +1948,23 @@ function appendBlingOperationsPanel(article, onReview) {
   const provider = document.createElement("div"); provider.className = "bling-provider-recovery";
   panel.append(heading, summary, controls, metrics, list, jobs, provider); article.prepend(panel);
   let active = "";
+  /** @type {string | null} */
   let cursor = null;
+  /** @type {string | null} */
   let next = null;
+  /** @type {string | null} */
   let providerCursor = null;
   let generation = 0;
   let connected = false;
   const canMutate = bootstrapState?.permissions?.includes("document.issue") === true;
 
+  /** @param {HTMLElement} box @param {string} value */
   const notice = (box, value) => {
     box.replaceChildren();
     const line = document.createElement("p"); line.textContent = value;
     line.setAttribute("role", "status"); box.append(line);
   };
+  /** @param {string} path @param {Record<string, unknown>} body */
   const callMutation = async (path, body) => {
     return api(path, {method: "POST", headers: {"X-CSRF-Token": csrfToken()}, body: JSON.stringify(body)});
   };
@@ -1965,6 +1972,11 @@ function appendBlingOperationsPanel(article, onReview) {
     if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
     return `bling-operator-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   };
+  /**
+   * @param {string} label
+   * @param {(element: HTMLButtonElement) => void | Promise<void>} action
+   * @param {boolean} [disabled]
+   */
   const button = (label, action, disabled = false) => {
     const element = document.createElement("button");
     element.type = "button"; element.textContent = label; element.disabled = disabled;
