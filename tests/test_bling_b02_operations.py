@@ -265,11 +265,43 @@ def test_status_retry_requires_proven_dead_letter_and_keeps_idempotency(
             scope, view.installation_id, 333,
             request_id="premature-retry", actor_id="operator",
         )
+    # Another Bling company can use the same numeric order ID within a unit.
+    # Its dead letter must never authorize a writeback for this installation.
+    foreign_key = BlingOrders(db, scope, "other-company").key(333)
+    foreign_now = datetime.now(UTC)
+    with db() as uow:
+        FiscalOutboxService(uow.outbox).enqueue(
+            scope=scope, operation=PUBLISH_STATUS,
+            deduplication_key=foreign_key + ":original-status",
+            payload=encode_order({"order_id": 333, "status": "authorized"}),
+            created_at=foreign_now,
+        )
+        uow.commit()
+    with db() as uow:
+        foreign_claimed = uow.outbox.claim_due(
+            now=foreign_now + timedelta(seconds=1),
+            limit=1, lease_duration=timedelta(seconds=30),
+            selection=OutboxClaimSelection(
+                scope=scope, operations=frozenset({PUBLISH_STATUS}),
+            ),
+        )
+        assert len(foreign_claimed) == 1
+        uow.outbox.dead_letter(
+            foreign_claimed[0].entry_id,
+            expected_attempt=foreign_claimed[0].attempt_count,
+            error="synthetic foreign provider failure",
+        )
+        uow.commit()
+    with pytest.raises(BlingOperationalError, match="BLING_RECOVERY_REQUIRED"):
+        service.retry_status(
+            scope, view.installation_id, 333,
+            request_id="foreign-only", actor_id="operator",
+        )
     now = datetime.now(UTC)
     with db() as uow:
         FiscalOutboxService(uow.outbox).enqueue(
             scope=scope, operation=PUBLISH_STATUS,
-            deduplication_key="original-status-333",
+            deduplication_key=orders.key(333) + ":original-status",
             payload=encode_order({"order_id": 333, "status": "authorized"}),
             created_at=now,
         )
