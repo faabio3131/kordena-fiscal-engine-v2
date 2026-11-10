@@ -6,6 +6,32 @@
 **Autoridade:** decisão expressa do proprietário em 07/11/2026, registrada em `AGENTS.md`.
 **Fonte superior:** GitHub CURRENT, código, CI e runtime. Este documento rege ORDEM; não substitui `docs/NFV1_NATIONAL_EXPANSION_EXECUTION_LEDGER_2026-11-05.md`, `docs/NFV1_NATIONAL_EXPANSION_MASTER_ARCHITECTURE_2026-11-05.md` nem `docs/NFV1_NATIONAL_EXPANSION_MASTER_EXECUTION_SCHEDULE_2026-11-05.md`, que continuam regendo escopo/critério técnico de cada bloco NAT-xx.
 
+## REGISTRO DE INCIDENTE DE CONTINUIDADE — 10/11/2026
+
+**Origem:** apontamento expresso do proprietário em 10/11/2026: acreditava que a cobertura solicitada de estados e municípios havia sido concluída em 07/11. O acompanhamento técnico falhou ao não atualizar continuamente este cronograma e ao não comunicar, de forma inequívoca, que a data de publicação do plano **não era data de conclusão**. Esta é uma **falha de rastreabilidade e comunicação técnica registrada**, com correção obrigatória; não imputar ao proprietário a divergência.
+
+**Verificação pontual de CURRENT em 10/11/2026:** repositório `faabio3131/nf-core-v001`; `main@2d6ba3d1c32d70923a473b37950769b19511c52d`; `production@8f9c7038c3c668a2be5c5f859b288ab64e7b530e`. O estado do código real, CI e homologação prevalece sobre esta fotografia. O arquivo original foi publicado em 07/11 como *cronograma*, com todas as sete verificações `UF_100_COMPLETA` desmarcadas. Nenhuma das sete UFs tinha, nos registros auditados, checkpoint final que comprovasse `UF_100_COMPLETA`. **Isso não autoriza dizer que nenhuma implementação existe; exige reauditoria do código e das PRs por UF.**
+
+| Ordem publicada em 07/11 | UF | Situação DOCUMENTADA até este registro, não status integral do código | Declaração permitida |
+| --- | --- | --- | --- |
+| 1 | MG | Parcial/em execução no ledger e neste cronograma; reaproveitamento de NF-e 55 e transporte com lacunas | `UF_100_COMPLETA` **não comprovada** |
+| 2 | SP | Componentes fiscais e preparação municipal já citados; inventário atual por documento/município ainda não reconciliado | `UF_100_COMPLETA` **não comprovada** |
+| 3 | RJ | Pesquisa e contrato, sem checkpoint de módulo completo | `UF_100_COMPLETA` **não comprovada** |
+| 4 | RS | Pesquisa parcial, sem checkpoint de módulo completo | `UF_100_COMPLETA` **não comprovada** |
+| 5 | PR | Pesquisa parcial, sem checkpoint de módulo completo | `UF_100_COMPLETA` **não comprovada** |
+| 6 | MT | Pesquisa parcial, sem checkpoint de módulo completo | `UF_100_COMPLETA` **não comprovada** |
+| 7 | MS | Pesquisa parcial, sem checkpoint de módulo completo | `UF_100_COMPLETA` **não comprovada** |
+
+**Pendência nova, ID NAT-GOV-2026-11-10-01 — RECONCILIAÇÃO DE STATUS:** auditar desde 07/11 todos os merges e branches que alteraram roteamento fiscal, NF-e 55, NFC-e 65 e NFS-e municipal/nacional; construir uma matriz por **UF × município em escopo × documento × operação (emissão, consulta, cancelamento, inutilização quando aplicável) × ambiente**, com implementação, teste XSD, CI no HEAD, runtime, homologação oficial e links de evidência. Somente atualizar `[ ]` para `[x]` com rastreabilidade da PR/commit, evitando reiniciar trabalho concluído ou inventar certificações. Não tratar texto histórico `NOT_STARTED` como verdade atual contra código já integrado.
+
+**Inconsistência de governança — NAT-GOV-2026-11-10-02:** `AGENTS.md` contém cronograma DF → GO → MT → MS (adicionado 09/11), enquanto este plano ordena MG → SP → RJ → RS → PR → MT → MS. Esses documentos descrevem recortes distintos, mas a **precedência entre frentes está pendente de reconciliação**. Não iniciar DF ou abandonar MG com base apenas na posição de um cabeçalho sem decisão expressa e mapa de dependências.
+
+**Prioridade executiva ratificada pelo proprietário:** conclusão da ativação operacional **Bling** e teste com a contabilidade em **11/11/2026**. A conciliação documental pode ocorrer em paralelo, sem atrasar o gate do Bling. O Bling tem PR #412 em andamento, distinta da cobertura nacional; seus testes não certificam municípios/UFs.
+
+**Prevenção obrigatória:** ao finalizar qualquer PR/CI/merge relevante para cobertura, atualizar **no mesmo bloco** o ledger e este cronograma com data, branch/HEAD, PR, gates executados, escopo real, município/documento/ambiente e pendências. Se a evidência estiver ausente, indicar explicitamente `NAO_CERTIFICADO` ou `AUDITORIA_PENDENTE`. Nunca declarar "100% concluído" ou homologação por dedução, pela data de um cronograma, ou somente porque há uma implementação parcial.
+
+---
+
 ## Regra obrigatória de sequenciamento
 
 1. **Uma UF por vez.** Nenhuma UF nova pode ser iniciada (pesquisa normativa, contrato, envelope, transporte, assinatura ou homologação) enquanto a UF ATIVA não estiver marcada `UF_100_COMPLETA` nesta tabela.
