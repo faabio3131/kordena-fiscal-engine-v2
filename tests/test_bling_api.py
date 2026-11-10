@@ -17,7 +17,11 @@ def test_bling_fetch_uses_fixed_origin_and_checks_order_identity() -> None:
         connection.request.assert_called_once_with(
             "GET",
             "/Api/v3/pedidos/vendas/9001",
-            headers={"Authorization": "Bearer synthetic", "Accept": "application/json"},
+            headers={
+                "Authorization": "Bearer synthetic",
+                "Accept": "application/json",
+                "enable-jwt": "1",
+            },
         )
         response.read.return_value = b'{"data":{"id":9002}}'
         with pytest.raises(BlingApiError) as error:
@@ -50,7 +54,11 @@ def test_bling_status_patch_uses_official_contract_and_only_accepts_204() -> Non
         connection.request.assert_called_once_with(
             "PATCH",
             "/Api/v3/pedidos/vendas/9001/situacoes/10",
-            headers={"Authorization": "Bearer synthetic", "Accept": "application/json"},
+            headers={
+                "Authorization": "Bearer synthetic",
+                "Accept": "application/json",
+                "enable-jwt": "1",
+            },
         )
         connection.close.assert_called_once()
         connection.getresponse.return_value.status = 200
@@ -88,6 +96,10 @@ def test_oauth_company_identity_is_checked_before_accessing_orders(company):
         connection.request.assert_called_once_with(
             "GET",
             "/Api/v3/empresas/me/dados-basicos",
-            headers={"Authorization": "Bearer synthetic", "Accept": "application/json"},
+            headers={
+                "Authorization": "Bearer synthetic",
+                "Accept": "application/json",
+                "enable-jwt": "1",
+            },
         )
         connection.close.assert_called_once()
