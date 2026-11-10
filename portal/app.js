@@ -2352,7 +2352,13 @@ function appendBlingReview(article) {
         }
       }
       if (!result.order?.document_id && !result.order?.changed_snapshot_sha256 && !result.order?.deleted) {
-        if (result.preparation?.configured) appendBlingPreparation(output, result, path, () => form.requestSubmit());
+        if (result.preparation?.configured) {
+          appendBlingPreparation(output, result, path, () => form.requestSubmit());
+        } else {
+          const pendingPolicy = document.createElement("p");
+          pendingPolicy.textContent = "Política fiscal desta empresa e unidade ainda não configurada. A preparação de NF-e fica bloqueada até o cadastro de uma política aprovada; nenhuma regra de outro estabelecimento será reutilizada.";
+          output.append(pendingPolicy);
+        }
         const documentLabel = document.createElement("label"); documentLabel.textContent = "Documento fiscal preparado no NFCore";
         const documentId = document.createElement("input"); documentId.type = "text"; documentLabel.append(documentId);
         const confirmLabel = document.createElement("label");
