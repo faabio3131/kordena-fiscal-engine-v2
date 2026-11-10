@@ -2109,7 +2109,7 @@ function appendBlingOperationsPanel(article, onReview) {
         return;
       }
       installation.dispatchEvent(new Event("change"));
-    } catch (_error) {
+    } catch {
       summary.textContent = "Painel multi-tenant indisponível. A revisão legada permanece sujeita às permissões e à configuração existentes.";
       controls.hidden = true;
     }
