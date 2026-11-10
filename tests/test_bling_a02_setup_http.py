@@ -135,7 +135,7 @@ def test_create_binding_is_same_tenant_unit_idempotent_and_csrf_protected(tmp_pa
     other.mkdir()
     db = SqliteFiscalDatabase(other / "blank.sqlite")
     db.initialize(enable_bling=True)
-    password = "synthetic"
+    password = "synthetic-long-test-password"
     hasher = ScryptPasswordHasher()
     identity = HumanIdentityService(
         accounts=InMemoryHumanAccountRepository((
