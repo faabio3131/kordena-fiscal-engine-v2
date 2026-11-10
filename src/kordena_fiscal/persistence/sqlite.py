@@ -719,7 +719,7 @@ class SqliteFiscalDatabase:
         finally:
             connection.close()
 
-    def initialize(self) -> tuple[int, ...]:
+    def initialize(self, *, enable_bling: bool = False) -> tuple[int, ...]:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         connection = self._connect()
         try:
@@ -814,7 +814,7 @@ class SqliteFiscalDatabase:
                     ),
                 )
                 new_versions.append(COGNITIVE_QUOTA_VERSION)
-            if BLING_INSTALLATION_VERSION not in applied:
+            if enable_bling and BLING_INSTALLATION_VERSION not in applied:
                 for statement in BLING_INSTALLATION_SCHEMA:
                     connection.execute(statement)
                 connection.execute(
@@ -824,7 +824,7 @@ class SqliteFiscalDatabase:
                      datetime.now().astimezone().isoformat()),
                 )
                 new_versions.append(BLING_INSTALLATION_VERSION)
-            if BLING_RUNTIME_VERSION not in applied:
+            if enable_bling and BLING_RUNTIME_VERSION not in applied:
                 for statement in BLING_RUNTIME_SCHEMA:
                     connection.execute(statement)
                 connection.execute(
