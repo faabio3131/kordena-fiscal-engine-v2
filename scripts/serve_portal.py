@@ -153,7 +153,12 @@ class SecurePortalHandler(SimpleHTTPRequestHandler):
         self.send_header("Content-Security-Policy", _PORTAL_CSP)
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
-        self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
+        policy = (
+            "no-referrer"
+            if urlsplit(self.path).path == "/v1/portal/integrations/bling/oauth/callback"
+            else "strict-origin-when-cross-origin"
+        )
+        self.send_header("Referrer-Policy", policy)
         self.send_header("Permissions-Policy", "camera=(), geolocation=(), microphone=()")
         self.send_header("Cross-Origin-Resource-Policy", "same-origin")
         super().end_headers()
@@ -259,6 +264,14 @@ class SecurePortalHandler(SimpleHTTPRequestHandler):
                     self.send_header(name, value)
             for cookie in response.headers.get_all("Set-Cookie", []):
                 self.send_header("Set-Cookie", cookie)
+            # Forward only the fixed same-origin success redirect for the
+            # Bling OAuth callback. Never forward arbitrary upstream Location.
+            if (
+                parsed_request.path == "/v1/portal/integrations/bling/oauth/callback"
+                and response.status == 303
+                and response.getheader("Location") == "/?bling=connected"
+            ):
+                self.send_header("Location", "/?bling=connected")
             self.send_header("Content-Length", str(len(response_body)))
             self.end_headers()
             if self.command != "HEAD" and response_body:
