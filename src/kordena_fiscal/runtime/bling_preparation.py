@@ -26,6 +26,7 @@ from kordena_fiscal.domain import (
     FiscalAddress,
     FiscalDocumentKind,
     FiscalValidationError,
+    ExecutionScope,
     Money,
     StateRegistration,
     TaxRegimeCode,
@@ -306,15 +307,17 @@ class BlingSalePreparer:
         return policy, digest
 
     @staticmethod
-    def policy_scope_digest(orders: BlingOrders) -> str:
+    def policy_scope_digest(scope: ExecutionScope, company_id: str) -> str:
         """Filename is derived only from canonical fiscal scope and provider company.
 
         Neither an HTTP field nor a provider webhook can select another company's
         policy. The digest also hides tenant identifiers from directory listings.
         """
-        if orders.scope.host_namespace != "bling":
+        if scope.host_namespace != "bling":
             raise FiscalValidationError("Bling fiscal policy requires canonical host scope")
-        material = [*orders.scope.identity_material, orders.company_id]
+        if not isinstance(company_id, str) or not company_id.strip():
+            raise FiscalValidationError("Bling fiscal policy requires company identity")
+        material = [*scope.identity_material, company_id]
         return hashlib.sha256(
             json.dumps(material, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
         ).hexdigest()
@@ -331,7 +334,7 @@ class BlingSalePreparer:
             root = Path(self.environ.get("NFCORE_BLING_FISCAL_POLICY_ROOT", ""))
             if not root.is_absolute() or root.is_symlink() or not root.is_dir():
                 raise FiscalValidationError("Bling scoped fiscal policy directory unavailable")
-            digest = self.policy_scope_digest(orders)
+            digest = self.policy_scope_digest(orders.scope, orders.company_id)
             policy_path = root / f"{digest}.json"
             digest_path = root / f"{digest}.sha256"
             if policy_path.is_symlink() or digest_path.is_symlink():
