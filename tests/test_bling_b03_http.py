@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from test_bling_b02_operations import setup
 
 from kordena_fiscal.runtime.bling_operations import build_bling_operations_router
 from kordena_fiscal.security.human_identity import (
@@ -15,8 +16,6 @@ from kordena_fiscal.security.human_identity import (
     ScryptPasswordHasher,
 )
 from kordena_fiscal.web import create_app
-
-from test_bling_b02_operations import setup
 
 
 def login_client(tmp_path: Path, *, tenant: str = "tenant", unit: str = "unit",
