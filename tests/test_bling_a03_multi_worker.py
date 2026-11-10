@@ -229,6 +229,31 @@ def test_worker_rejects_missing_mapping_and_stale_binding(tmp_path: Path) -> Non
         assert scope.tenant_id != "drifted"
 
 
+def test_oauth_unavailable_leaves_fiscal_outbox_unclaimed(tmp_path: Path) -> None:
+    with database_fixture(tmp_path, "sqlite") as db:
+        store, views = setup_installations(db)
+        _, scope = views[0]
+        with db() as uow:
+            FiscalOutboxService(uow.outbox).enqueue(
+                scope=scope, operation=PROCESS_ORDER,
+                deduplication_key="oauth-recovery-preserve",
+                payload=b"oauth-recovery", created_at=datetime.now(UTC),
+            )
+            uow.commit()
+
+        class UnavailableOAuth:
+            def access_token(self, scope: ExecutionScope, installation_id: str) -> str:
+                raise RuntimeError("provider unavailable - do not claim")
+
+        worker = BlingMultiTenantWorkerComposition(db, store, oauth=UnavailableOAuth())
+        assert worker.run_cycle().claimed == 0
+        with db() as uow:
+            counts = uow.outbox.counts_by_status()
+            entries = uow.outbox.list_for_scope(scope)
+        assert counts[FiscalOutboxStatus.PENDING] == 1
+        assert entries[0].attempt_count == 0
+
+
 def test_worker_registry_cursor_and_pause(tmp_path: Path) -> None:
     with database_fixture(tmp_path, "sqlite") as db:
         store, views = setup_installations(db)

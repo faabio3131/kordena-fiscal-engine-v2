@@ -101,6 +101,9 @@ class BlingMultiTenantWorkerComposition:
         if mapping is None:
             # Do not claim orders if business status writeback cannot be delivered.
             raise RuntimeConfigurationError("Bling installation status policy unavailable")
+        # Preflight the installation's token BEFORE an outbox lease is acquired.
+        # A revoked/expired OAuth grant must not burn fiscal retry attempts.
+        self._oauth.access_token(scope, view.installation_id)
 
         def validate_binding() -> None:
             current = self._installations.get_for_scope(scope, view.installation_id)
