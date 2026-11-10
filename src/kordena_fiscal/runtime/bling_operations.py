@@ -23,7 +23,6 @@ from kordena_fiscal.domain import (
     FiscalEnvironment,
     FiscalValidationError,
 )
-from kordena_fiscal.integrations.bling_contracts import BlingInstallationState
 from kordena_fiscal.persistence.bling_installations import BlingInstallationRepository
 from kordena_fiscal.persistence.ports import PersistenceConflictError, PersistenceStateError
 from kordena_fiscal.runtime.bling_oauth_service import BlingOAuthUnavailable
