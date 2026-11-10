@@ -236,7 +236,7 @@ def test_provider_listing_validates_fixed_origin_pagination_and_identity() -> No
         connect.assert_called_once_with("api.bling.com.br", timeout=10)
         instance.request.assert_called_once_with(
             "GET", "/Api/v3/pedidos/vendas?pagina=2&limite=10",
-            headers={"Authorization": "Bearer token", "Accept": "application/json"},
+            headers={"Authorization": "Bearer token", "Accept": "application/json", "enable-jwt": "1"},
         )
         result.read.return_value = b'{"data":[{"id":10},{"id":10}]}'
         with pytest.raises(BlingApiError):
