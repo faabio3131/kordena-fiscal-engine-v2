@@ -80,6 +80,12 @@ MG_NATIONAL_CHANNEL_RULES = MappingProxyType({
     for ibge, from_date, source in _EXCLUSIVE_CHANNELS
 })
 _MG_W1_CODES = frozenset(item.municipality_ibge for item in MG_ECONOMIC_WAVE_1)
+# BH municipal notice (11/08/2026) confirms ME/EPP Simples already required
+# the National emitter in BH since the November 2025 competence.
+# https://prefeitura.pbh.gov.br/fazenda/bhiss/avisos?page=1
+_MG_EARLY_SIMPLES_CUTOFFS = MappingProxyType({
+    "3106200": date(2025, 11, 1),
+})
 
 if len(MG_NATIONAL_CHANNEL_RULES) != len(_EXCLUSIVE_CHANNELS):
     raise ValueError("Duplicate municipality in national issuer channel contract")
@@ -119,8 +125,12 @@ def require_mg_national_channel_eligibility(
     if tax_regime in (
         TaxRegimeCode.SIMPLES_NACIONAL,
         TaxRegimeCode.SIMPLES_NACIONAL_EXCESS_SUBLIMIT,
-    ) and competence_date >= _SIMPLES_NATIONAL_MANDATORY_FROM:
-        return
+    ):
+        cutoff = _MG_EARLY_SIMPLES_CUTOFFS.get(
+            municipality, _SIMPLES_NATIONAL_MANDATORY_FROM
+        )
+        if competence_date >= cutoff:
+            return
     exclusive = MG_NATIONAL_CHANNEL_RULES.get(municipality)
     if exclusive is not None and competence_date >= exclusive.effective_competence_from:
         return
