@@ -31,8 +31,8 @@ from kordena_fiscal.domain import (
 )
 from kordena_fiscal.issuance import NfseCanonicalDocument, NfseServiceLine
 from kordena_fiscal.persistence import SqliteFiscalDatabase
-from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
 from kordena_fiscal.persistence.ports import PersistenceConflictError
+from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
 
 NOW = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
 RETENTION = RetentionPolicyMetadata("dps-serial-test", 1)
