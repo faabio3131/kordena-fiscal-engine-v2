@@ -101,6 +101,7 @@ _OPERATION_PERMISSIONS: dict[str, PortalPermission] = {
     "queryFiscalDocument": PortalPermission.DOCUMENT_QUERY,
     "queryArchiveReference": PortalPermission.DOCUMENT_QUERY,
     "cancelFiscalDocument": PortalPermission.DOCUMENT_CANCEL,
+    "cancelExtremaNfse": PortalPermission.DOCUMENT_CANCEL,
     "inutilizeFiscalRange": PortalPermission.DOCUMENT_INUTILIZE,
     "reconcileFiscalOperation": PortalPermission.RECONCILIATION_EXECUTE,
 }
@@ -118,6 +119,7 @@ _IDEMPOTENT_MUTATIONS = {
     "updateUser",
     "issueFiscalDocument",
     "cancelFiscalDocument",
+    "cancelExtremaNfse",
     "inutilizeFiscalRange",
     "reconcileFiscalOperation",
 }
