@@ -53,3 +53,17 @@
 ## Registro de mudanças
 
 - **2026-11-07:** criação do cronograma, com MG definida como UF ativa (proposta) por ser a que já tinha mais evidência de progresso real na reconciliação de 05/11/2026.
+
+---
+
+## Revisão formal do sequenciamento e do escopo comercial — 11/11/2026
+
+**Decisão superveniente do proprietário:** este cronograma de 07/11 mantém valor histórico, mas a ordem após MG não é mais automaticamente SP. A **UF ativa continua MG**, com **escopo inicial alterado de apenas Belo Horizonte para 20 polos econômicos**. A segunda onda mineira pode ser executada depois. A sequência seguinte é **DF → GO → MT → MS** (fases de `AGENTS.md`). SP, RJ, RS, PR e demais UFs continuam no backlog e não perdem nenhuma implementação/contrato preexistente.
+
+**Municípios W1 (ranking PIB municipal 2023):** Belo Horizonte, Betim, Uberlândia, Contagem, Uberaba, Juiz de Fora, Extrema, Ipatinga, Sete Lagoas, Pouso Alegre, Montes Claros, Nova Lima, Poços de Caldas, Varginha, Divinópolis, Araxá, Governador Valadares, Patos de Minas, Congonhas e Itabira. Códigos IBGE, fontes e prioridade executável: `docs/NFCORE_MG_POLOS_ECONOMICOS_WAVE1_RECONCILIACAO_2026-11-11.md` e `src/kordena_fiscal/control_plane/mg_economic_priority_inventory.py`.
+
+**Duas certificações distintas:** `MG_W1_INTERNAL_COMPLETE` exige todas as células de engenharia implementadas e certificadas internamente com testes/CI, inclusive envelopes municipais; habilita estudo da próxima frente quando comprovado. `UF_100_COMPLETA` permanece sujeito ao checklist externo original (A1, contribuinte, homologação oficial) e **não é inferido** do primeiro gate. Ausência de credenciais externas é `EXTERNAL_BLOCKED`, não autorização para omitir construção. Nenhuma prefeitura sem envelope compatível confirmado pode ser declarada funcional.
+
+**Gate per-city NFS-e não negociável:** norma municipal vigente + competência/ISS/IM + schema XSD/hash + XMLDSig + envelope correto + endpoint e autenticação oficial + autorização/consulta/cancelamento/substituição conforme capacidade + arquivos XML/PDF + pré-auditoria + isolamento tenant/unidade + idempotência + Web/E2E + CI no SHA. Sem transpor simplesmente envelopes estaduais NF-e/NFC-e para serviços municipais.
+
+**Execução registrada na PR #423:** catálogo read-only dos 20 polos, matriz JSON de evidências, testes sintéticos de envelope DPS Nacional para BH/Betim/Uberlândia, negação de envio nacional para Contagem, resposta SEFIN exigindo XML oficial e `tipoAmbiente=2` explícito. **Isso não conclui nenhuma cidade**; arquivos e CI específicos devem ser conferidos. Alteração deliberadamente separada da PR #413 (governança) e da trilha Bling. Estado geral MG-W1 = `IMPLEMENTING`. Próximo gate é finalizar e certificar o HEAD desta PR, depois avançar no ciclo fiscal completo MG e contratos municipais um a um.
