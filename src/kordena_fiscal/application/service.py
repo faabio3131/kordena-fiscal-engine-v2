@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -542,7 +543,10 @@ class FiscalApplicationService:
         *,
         occurred_at: datetime,
         retention: RetentionPolicyMetadata,
-        extrema_intent: ExtremaRpsIntent | None = None,
+        extrema_intent_builder: Callable[
+            [FiscalNumberReservation], ExtremaRpsIntent
+        ] | None = None,
+        extrema_rps_series: int | None = None,
     ) -> DurablePreparedAuthorization:
         """Atomically reserve, validate and archive one provider-neutral NFS-e request."""
         if not isinstance(document, NfseCanonicalDocument):
@@ -550,18 +554,12 @@ class FiscalApplicationService:
         if not isinstance(retention, RetentionPolicyMetadata):
             raise FiscalValidationError("retention must be RetentionPolicyMetadata")
         request = NfseAuthorizationRequest.build(document)
-        municipal_entry: FiscalArchiveEntry | None = None
-        if extrema_intent is not None:
-            validate_extrema_intent(request, extrema_intent)
-            municipal_entry = FiscalArchiveEntry.build(
-                scope=document.scope,
-                document_reference=document.document_id,
-                kind=FiscalArchiveKind.OTHER,
-                content=encode_extrema_intent(extrema_intent),
-                media_type=EXTREMA_INTENT_MEDIA_TYPE,
-                archived_at=occurred_at,
-                retention=retention,
+        if (extrema_intent_builder is None) != (extrema_rps_series is None):
+            raise FiscalValidationError(
+                "WebISS intent builder and RPS numbering series must be supplied together"
             )
+        if extrema_intent_builder is not None and not callable(extrema_intent_builder):
+            raise FiscalValidationError("WebISS RPS builder must be trusted and callable")
         entry = FiscalArchiveEntry.build(
             scope=document.scope,
             document_reference=document.document_id,
@@ -588,15 +586,13 @@ class FiscalApplicationService:
                     raise PersistenceStateError("durable request is not NFS-e")
                 prior_intents = [
                     archived.content
-                    for archived in uow.archive.list_for_document(document.scope, document.document_id)
+                    for archived in uow.archive.list_for_document(
+                        document.scope, document.document_id,
+                    )
                     if archived.media_type == EXTREMA_INTENT_MEDIA_TYPE
                 ]
-                current_intent = (
-                    encode_extrema_intent(extrema_intent)
-                    if extrema_intent is not None else None
-                )
-                if len(prior_intents) > 1 or (
-                    (prior_intents[0] if prior_intents else None) != current_intent
+                if len(prior_intents) > 1 or bool(prior_intents) != (
+                    extrema_intent_builder is not None
                 ):
                     raise PersistenceConflictError(
                         "WebISS fiscal intent cannot change after idempotency reservation"
@@ -605,6 +601,43 @@ class FiscalApplicationService:
                 return DurablePreparedAuthorization(attempt, current, prepared, True)
             if current is not None:
                 raise PersistenceConflictError("document_id already belongs to an issuance")
+            municipal_entry: FiscalArchiveEntry | None = None
+            if extrema_intent_builder is not None:
+                assert extrema_rps_series is not None
+                if (
+                    not isinstance(extrema_rps_series, int)
+                    or isinstance(extrema_rps_series, bool)
+                    or not 0 <= extrema_rps_series <= 99_999
+                ):
+                    raise FiscalValidationError("Invalid scoped Extrema RPS series")
+                if (
+                    document.scope.environment is not FiscalEnvironment.HOMOLOGATION
+                    or not document.scope.host_namespace
+                    or document.issuer.address.jurisdiction.municipality_ibge_code
+                    != "3125101"
+                ):
+                    raise FiscalValidationError(
+                        "Atomic RPS reservation requires scoped Extrema homologation"
+                    )
+                key = FiscalSequenceKey.from_scope(
+                    document.scope,
+                    model=InternalFiscalSequenceStream.NFSE_RPS,
+                    series=extrema_rps_series,
+                )
+                numbered = uow.sequences.reserve_next(
+                    key, FiscalSequencePolicy(max_number=999_999_999_999_999),
+                )
+                approved_intent = extrema_intent_builder(numbered)
+                validate_extrema_intent(request, approved_intent)
+                municipal_entry = FiscalArchiveEntry.build(
+                    scope=document.scope,
+                    document_reference=document.document_id,
+                    kind=FiscalArchiveKind.OTHER,
+                    content=encode_extrema_intent(approved_intent),
+                    media_type=EXTREMA_INTENT_MEDIA_TYPE,
+                    archived_at=occurred_at,
+                    retention=retention,
+                )
             current = FiscalStateSnapshot.initial(document.document_id, document.issued_at)
             uow.lifecycle.add(current, scope=document.scope)
             for target, reason in (
@@ -1139,27 +1172,6 @@ class FiscalApplicationService:
                 uow.lifecycle.save(outcome.lifecycle, expected_version=requested.version)
             uow.commit()
         return DurableCancellationOutcome(result, outcome.lifecycle, archived.entry_id)
-
-    def reserve_extrema_rps_number(
-        self, *, scope: ExecutionScope, municipality_ibge: str,
-        series: int, policy: FiscalSequencePolicy | None = None,
-    ) -> FiscalNumberReservation:
-        """Atomically reserve an RPS number in a dedicated NFS-e partition.
-
-        The numeric stream identifier is internal-only and cannot be reused
-        as an NF-e access-key model or as a serial supplied by a browser.
-        """
-        if (
-            not isinstance(scope, ExecutionScope)
-            or not scope.host_namespace
-            or scope.environment is not FiscalEnvironment.HOMOLOGATION
-            or municipality_ibge != "3125101"
-        ):
-            raise FiscalValidationError("RPS numbering requires scoped Extrema homologation")
-        key = FiscalSequenceKey.from_scope(
-            scope, model=InternalFiscalSequenceStream.NFSE_RPS, series=series,
-        )
-        return self.reserve_number(key, policy)
 
     def reserve_number(
         self,
