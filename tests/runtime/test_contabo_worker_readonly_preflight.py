@@ -196,3 +196,23 @@ def test_no_go_inventory_must_exit_nonzero(monkeypatch, capsys) -> None:
     )
     assert audit.main() == 2
     assert "RESULT=NO_GO_GENERAL_WORKER" in capsys.readouterr().out
+
+
+def test_secret_mount_source_cannot_escape_nfcore_namespace(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    root = tmp_path / "nfcore"
+    other = tmp_path / "other-saas"
+    root.mkdir()
+    other.mkdir()
+    approved = root / "worker.json"
+    foreign = other / "worker.json"
+    approved.write_text("synthetic", encoding="utf-8")
+    foreign.write_text("synthetic", encoding="utf-8")
+    monkeypatch.setattr(audit, "ROOT", root)
+    assert audit.approved_nfcore_secret_source(approved)
+    assert not audit.approved_nfcore_secret_source(foreign)
+    alias = root / "foreign-alias"
+    alias.symlink_to(other, target_is_directory=True)
+    assert not audit.approved_nfcore_secret_source(alias / "worker.json")
+    assert not audit.approved_nfcore_secret_source(root / ".." / "other-saas" / "worker.json")
