@@ -193,7 +193,10 @@ def _validate_mg_authorization_scope(
     if model == 65:
         supplement = invoices[0].find(f"{{{NFE_NAMESPACE}}}infNFeSupl")
         qr = supplement.findtext(f"{{{NFE_NAMESPACE}}}qrCode") if supplement is not None else None
-        link = supplement.findtext(f"{{{NFE_NAMESPACE}}}urlChave") if supplement is not None else None
+        link = (
+            supplement.findtext(f"{{{NFE_NAMESPACE}}}urlChave")
+            if supplement is not None else None
+        )
         if not qr or not link:
             raise OfficialNfeTransportError("NFC-e MG65 requires QR Code and consultation URL")
         qr_parts, link_parts = urlsplit(qr), urlsplit(link)
