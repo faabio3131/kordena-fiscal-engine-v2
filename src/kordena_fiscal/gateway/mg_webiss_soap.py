@@ -253,9 +253,14 @@ def _verify_fiscal_issuer_identity(
     except (AttributeError, IndexError, TypeError, ValueError, etree.XMLSyntaxError):
         raise WebissMgContractError("Municipal fiscal issuer data is malformed") from None
     ns = {"a": "http://www.abrasf.org.br/nfse.xsd"}
-    if operation in (Abrasf203Operation.QUERY_BATCH, Abrasf203Operation.QUERY_ISSUED):
+    if operation in (
+        Abrasf203Operation.QUERY_BATCH, Abrasf203Operation.QUERY_RPS,
+        Abrasf203Operation.QUERY_ISSUED, Abrasf203Operation.QUERY_RANGE,
+    ):
         identities = [xml.findtext("a:Prestador/a:CpfCnpj/a:Cnpj", "", ns)]
-    elif operation is Abrasf203Operation.SUBMIT_BATCH:
+    elif operation is Abrasf203Operation.QUERY_RECEIVED:
+        identities = [xml.findtext("a:Consulente/a:CpfCnpj/a:Cnpj", "", ns)]
+    elif operation in (Abrasf203Operation.SUBMIT_BATCH, Abrasf203Operation.SUBMIT_BATCH_SYNC):
         identities = [xml.findtext("a:LoteRps/a:CpfCnpj/a:Cnpj", "", ns)]
         identities += [
             node.findtext("a:Prestador/a:CpfCnpj/a:Cnpj", "", ns)
@@ -285,6 +290,23 @@ def _verify_fiscal_issuer_identity(
         )
         if municipality != municipality_ibge:
             raise WebissMgContractError("Municipal cancellation mismatches bound issuer and city")
+    elif operation is Abrasf203Operation.SUBSTITUTE:
+        old_note = xml.find(
+            "a:SubstituicaoNfse/a:Pedido/a:InfPedidoCancelamento/"
+            "a:IdentificacaoNfse", ns,
+        )
+        new_info = xml.find(
+            "a:SubstituicaoNfse/a:Rps/a:InfDeclaracaoPrestacaoServico", ns,
+        )
+        if old_note is None or new_info is None:
+            raise WebissMgContractError("Municipal substitution identity missing")
+        municipality = old_note.findtext("a:CodigoMunicipio", "", ns)
+        if municipality != municipality_ibge:
+            raise WebissMgContractError("Substitution does not belong to bound municipality")
+        identities = [
+            old_note.findtext("a:CpfCnpj/a:Cnpj", "", ns),
+            new_info.findtext("a:Prestador/a:CpfCnpj/a:Cnpj", "", ns),
+        ]
     else:
         raise WebissMgContractError("Unsupported fiscal WebISS operation")
     if not identities or any(cnpj != issuer_cnpj.value for cnpj in identities):
