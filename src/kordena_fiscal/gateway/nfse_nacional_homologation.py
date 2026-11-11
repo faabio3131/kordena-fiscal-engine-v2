@@ -12,7 +12,13 @@ from datetime import UTC, date, datetime
 from urllib.error import HTTPError, URLError
 from urllib.request import HTTPSHandler, Request, build_opener
 
-from kordena_fiscal.domain import Cnpj, ExecutionScope, FiscalEnvironment, FiscalValidationError, TaxRegimeCode
+from kordena_fiscal.domain import (
+    Cnpj,
+    ExecutionScope,
+    FiscalEnvironment,
+    FiscalValidationError,
+    TaxRegimeCode,
+)
 from kordena_fiscal.gateway.authorization import (
     AuthorizationStatus,
     GatewayProviderMetadata,
