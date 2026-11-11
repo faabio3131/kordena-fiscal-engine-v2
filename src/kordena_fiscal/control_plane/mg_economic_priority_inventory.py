@@ -14,7 +14,7 @@ from kordena_fiscal.domain import BrazilianJurisdiction, FiscalValidationError
 
 IBGE_GDP_REFERENCE_YEAR = 2023
 IBGE_GDP_SOURCE = (
-    "https://www.ibge.gov.br/estatisticas/economicas/contas-nacionais/"
+    "https://www.ibge.gov.br/estatisticas/economicas/industria/"
     "9088-produto-interno-bruto-dos-municipios.html"
 )
 
