@@ -94,3 +94,30 @@ Esta trilha **não atualiza** `AGENTS.md` nem arquivos fiscais/municipais: outro
 - **Documentos de governança:** `AGENTS.md` pertence à trilha de expansão geográfica e não será alterado aqui. `agentes.md` exige evidências e certificação antes de produção. O EGM (Elephant-Goldfish Model) requer revisão independente nativa, relatório de drift e prova de isolamento de revisores. **Nenhuma execução Goldfish nativa é alegada nesta PR**; o gate EGM independente segue pendente até haver artefatos verificáveis.
 - **Canal operacional:** a tentativa de inspecionar a VPS via Desktop Commander em 11/11 retornou limite mensal de uso, sem executar comandos no host. Não inferir que o host atual corresponde ao inventário histórico. Usar apenas canal SSH autorizado, com host key previamente conferida e comandos read-only, ou o Plano B previamente aprovado. Não instalar/rotacionar credenciais, ativar workers, editar IAM, realizar DDL ou reboot como contorno.
 - **Certificação:** a PR #425 só pode avançar após CI completa no HEAD exato, inspeção/retorno read-only sanitizado, revisão EGM independente exigida e conciliação dos gates G0–G5. Mesmo com CI verde, identidade privada, `.env.worker`, bindings e execução E2E seguem não comprovados até validação no host. Sem merge/deploy automático.
+
+## Plano B — ampliação GSM sem Desktop Commander (11/11/2026)
+
+**Estado:** código candidato na PR #425. O comando GSM da auditoria remota ainda exige revisão, integração autorizada e atualização administrativa dos arquivos root-owned da VPS. Nenhuma nova execução GSM no host está certificada por esta seção.
+
+**Autoridade única:** manter `nfcoreaudit`, o mesmo environment `nfcore-contabo-audit` e o mesmo `sudoers` sem argumentos do Plano B. Não instalar outro serviço, outra autoridade de secrets, agente persistente, shell interativo, usuário Docker ou túnel. Não executar este fluxo em `pull_request`, branch desprotegida ou repositório não revisado.
+
+**Contrato SSH ampliado:**
+- `nfcore-audit <production_SHA40> <sha256_64>`: modo legado Bling, inalterado e compatível com o stdin original.
+- `nfcore-gsm-audit <production_SHA40> <sha256_64>`: novo modo GSM que transmite exclusivamente o marcador `gsm` e os dois digests para o helper sudoers root-owned.
+- O helper somente permite os destinos absolutos root-owned `/usr/local/libexec/nfcore-audit/bling-operational-host-audit.sh` ou `/usr/local/libexec/nfcore-audit/worker-readonly-preflight.py`, conforme o modo; nunca um path/argumento remoto livre. Valida owner, symlinks, ancestors e hash SHA-256 da opção selecionada.
+- GSM roda via `/usr/bin/python3 -I` com ambiente mínimo, sem importar código executável do checkout `/opt/fm/nfcore/src`; o script do checkout serve só como **referência auditável de hash**.
+- A auditoria não imprime chave privada, `.env.worker`, conteúdo de Secret Manager, Docker inspect bruto, dados de outro SaaS ou certificados. O GitHub filtra novamente a saída com vocabulário de status restrito.
+
+**Gate administrativo de instalação (HUMAN_APPROVAL_REQUIRED):** após review, CI e autorização específica, o operador legítimo deverá conferir que `main`, `production` e a árvore instalada correspondem às revisões autorizadas. Comparar os hashes dos scripts revisados; instalar em um único procedimento controlado `host-audit-command.sh` como `ssh-gate.sh`, `root-host-audit.sh` como `root-audit.sh` e `worker-readonly-preflight.py` como `worker-readonly-preflight.py` sob `/usr/local/libexec/nfcore-audit`, todos `root:root`, `0555`, nunca symlink ou group/world-writable. Preservar o script Bling existente. Validar sudoers e todos os ancestrais e provar que os dois modos funcionam sem shell. Preparar rollback dos arquivos anteriores e jamais sobrescrever parcialmente o par SSH/root gate. A PR não instala nada no host.
+
+**Auditoria após provisionamento do canal:** executar manualmente `NFCore Contabo GSM Read-only Audit (Plan B)` na branch **main protegida**, fornecendo o SHA exato da branch `production`. O workflow recusará mismatch de SHA, host key desconhecida, segredo ausente, digest divergente e qualquer relatório GSM incompleto. Se o worker ainda não existir, o resultado correto é `NO_GO_GENERAL_WORKER`, não um falso PASS.
+
+**Critérios independentes para ativar o GSM:**
+1. Release: `main` para auditoria revisada; `production`, checkout da VPS, `.deployed` e imagem worker compatíveis no SHA aprovado. Branch `main` por si só não autoriza executar código em produção.
+2. Identidade privada: confirmar **fora do GitHub e do chat** a chave privada da SA `nfcore-worker`, titularidade, validade/revogação, permissões IAM mínimas e acesso apenas aos SecretBindings aprovados. Metadados de arquivo/mount não comprovam autenticação Google; não gerar chave sem autorização.
+3. Configuração: `.env.worker` com proprietário/modo restritos, flags corretas, UID 10001, mount somente leitura, network interna, sem portas e sem `docker-compose up` automático. A auditoria não lê valores.
+4. Consumidores: inventário local de `nfcore-*` workers apenas; existência de worker de ensaio demanda revisão. **Railway**, outros hosts, cron/systemd, DB claims, leases/outbox e exclusividade entre workers permanecem `UNVERIFIED_EXTERNAL` até evidências autorizadas e atuais.
+5. Resiliência: backup verificável, restore ensaiado em destino isolado, rollback do worker e observabilidade; nenhum backup é considerado certificado somente pelo checksum.
+6. Aprovação: GO/NO-GO humano específico antes de provisionamento GSM, mudança de IAM, ativação de perfil Docker, deploy ou cutover. Nenhuma migração/ativação Bling é autorizada pela aprovação do GSM.
+
+**Isolamento:** esta trilha não modifica IRON, vault compartilhado, credenciais de outro SaaS, `AGENTS.md`, regiões/municípios ou branches/PRs da expansão nacional. A CI prova apenas o código e os contratos simulados; não substitui auditoria da VPS nem autorização externa.
