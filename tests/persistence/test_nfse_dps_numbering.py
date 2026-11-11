@@ -4,11 +4,13 @@ No real certificates, credentials, transmissions or production migrations.
 """
 from __future__ import annotations
 
+import os
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
 
+import psycopg
 import pytest
 
 from kordena_fiscal.application import FiscalApplicationService
@@ -29,6 +31,7 @@ from kordena_fiscal.domain import (
 )
 from kordena_fiscal.issuance import NfseCanonicalDocument, NfseServiceLine
 from kordena_fiscal.persistence import SqliteFiscalDatabase
+from kordena_fiscal.persistence.postgres import PostgresFiscalDatabase
 from kordena_fiscal.persistence.ports import PersistenceConflictError
 
 NOW = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
@@ -179,3 +182,30 @@ def test_concurrent_sqlite_writers_never_duplicate_legal_dps_serial(tmp_path) ->
     numbers = [result.request.document.dps_number for result in prepared]
     assert sorted(numbers) == list(range(1, 9))
     assert len(set(numbers)) == 8
+
+
+def test_concurrent_postgres_workers_do_not_allocate_duplicate_dps_numbers() -> None:
+    """Real PG row/advisory locks, not a mocked concurrent sequence store."""
+    dsn = os.environ.get("NFCORE_TEST_POSTGRES_DSN")
+    if not dsn:
+        pytest.skip("Dedicated NFCORE_TEST_POSTGRES_DSN is required")
+    with psycopg.connect(dsn, autocommit=True) as connection:
+        if not connection.info.dbname.endswith("_test"):
+            pytest.fail("Refusing destructive test isolation outside a _test database")
+        connection.execute("DROP SCHEMA public CASCADE")
+        connection.execute("CREATE SCHEMA public")
+    db = PostgresFiscalDatabase(dsn, min_pool_size=1, max_pool_size=10)
+    try:
+        applied = db.initialize()
+        assert 22 in applied
+        assert db.require_current_schema() == (*range(1, 20), 22)
+        documents = tuple(_document(i) for i in range(1, 9))
+        with ThreadPoolExecutor(max_workers=4) as workers:
+            prepared = tuple(workers.map(lambda d: _prepare(db, d), documents))
+        assert sorted(result.request.document.dps_number for result in prepared) == list(
+            range(1, 9)
+        )
+        for document in documents:
+            assert _prepare(db, document).replay
+    finally:
+        db.close()
