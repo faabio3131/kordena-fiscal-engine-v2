@@ -159,7 +159,10 @@ def prepare_extrema_webiss_soap(
     """
     if not isinstance(operation, ExtremaWebissOperation):
         raise FiscalValidationError("Unknown Extrema WebISS SOAP operation")
-    if not isinstance(scope, ExecutionScope) or scope.environment is not FiscalEnvironment.HOMOLOGATION:
+    if (
+        not isinstance(scope, ExecutionScope)
+        or scope.environment is not FiscalEnvironment.HOMOLOGATION
+    ):
         raise FiscalValidationError("Extrema contract restricted to homologation")
     if issuer_municipality_ibge != _EXTREMA or not isinstance(issuer_cnpj, Cnpj):
         raise FiscalValidationError("Extrema issuer municipality or identity mismatch")
@@ -194,7 +197,11 @@ def prepare_extrema_webiss_soap(
         body, f"{{{_SERVICE}}}{operation.method}Request", nsmap={"ws": _SERVICE},
     )
     etree.SubElement(request, "nfseCabecMsg").text = header_xml
-    etree.SubElement(request, "nfseDadosMsg").text = signed_or_query_xml.decode("utf-8")
+    try:
+        xml_text = signed_or_query_xml.decode("utf-8")
+    except UnicodeDecodeError:
+        raise FiscalValidationError("Extrema XML must be UTF-8") from None
+    etree.SubElement(request, "nfseDadosMsg").text = xml_text
     return ExtremaWebissSoapRequest(
         operation=operation,
         body=etree.tostring(envelope, encoding="utf-8", xml_declaration=True),
@@ -213,7 +220,10 @@ def parse_extrema_webiss_soap(
     The caller must subsequently correlate the returned identifiers, invoice,
     tenant, municipality and protocol with its persisted fiscal intention.
     """
-    if not isinstance(operation, ExtremaWebissOperation) or not isinstance(schema, ExtremaWebissSchema):
+    if (
+        not isinstance(operation, ExtremaWebissOperation)
+        or not isinstance(schema, ExtremaWebissSchema)
+    ):
         raise FiscalValidationError("Invalid Extrema response contract")
     outer = _safe_root(soap_response, limit=_MAX_SOAP_BYTES)
     if outer.tag != f"{{{_SOAP11}}}Envelope":
