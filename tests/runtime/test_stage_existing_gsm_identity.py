@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
@@ -136,3 +137,41 @@ def test_staged_multi_tenant_environment_passes_canonical_production_profile() -
     assert settings.require_https is True
     assert settings.public_hostname == "api.nfcore.com.br"
     assert settings.environment.value == "production"
+
+
+
+def test_exclusive_stage_file_rolls_back_if_post_link_fsync_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A crash or storage error after creating the target cannot strand a key."""
+    target = tmp_path / "worker-identity.json"
+    genuine_fsync = os.fsync
+    calls = 0
+
+    def failing_fsync(fd: int) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("synthetic directory sync failure")
+        genuine_fsync(fd)
+
+    monkeypatch.setattr(stager.os, "fsync", failing_fsync)
+    with pytest.raises(OSError, match="synthetic directory sync failure"):
+        stager.atomic_write_new(
+            target, b"synthetic-not-a-key", uid=os.getuid(), gid=os.getgid(),
+        )
+    assert calls == 2
+    assert not target.exists()
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_exclusive_stage_file_never_overwrites_existing_target(tmp_path: Path) -> None:
+    target = tmp_path / "worker-identity.json"
+    target.write_bytes(b"existing-private-file-must-be-preserved")
+    target.chmod(0o600)
+    with pytest.raises(stager.Denied, match="NO_GO_TARGET_EXISTS"):
+        stager.atomic_write_new(
+            target, b"replacement-denied", uid=os.getuid(), gid=os.getgid(),
+        )
+    assert target.read_bytes() == b"existing-private-file-must-be-preserved"
+    assert list(tmp_path.iterdir()) == [target]
