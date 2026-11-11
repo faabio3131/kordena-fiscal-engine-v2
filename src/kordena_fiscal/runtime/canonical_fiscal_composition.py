@@ -124,6 +124,8 @@ def _require_mg_binding(
     }.get(operation, "autorização MG")
     if scope.environment is not FiscalEnvironment.HOMOLOGATION:
         raise FiscalValidationError(f"Operação de {label} disponível apenas em homologação")
+    if scope.host_namespace is None or access_key.value[:2] != "31":
+        raise FiscalValidationError(f"Operação de {label} exige escopo e chave UF MG")
     if access_key.model.value == 55:
         kind = FiscalDocumentKind.NFE
         expected_provider = MG_NFE_HOMOLOGATION_PROVIDER_ID
