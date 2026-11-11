@@ -229,6 +229,8 @@ class NfseCanonicalDocument:
     services: tuple[NfseServiceLine, ...]
     service_taker_reference: str | None = None
     schema_version: int = 1
+    dps_series: int = 1
+    dps_number: int | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "document_id", _required(self.document_id, "document_id", 128))
@@ -265,6 +267,18 @@ class NfseCanonicalDocument:
             raise FiscalValidationError("schema_version must be an integer")
         if self.schema_version < 1:
             raise FiscalValidationError("schema_version must be >= 1")
+        if (
+            not isinstance(self.dps_series, int)
+            or isinstance(self.dps_series, bool)
+            or not 1 <= self.dps_series <= 99_999
+        ):
+            raise FiscalValidationError("DPS series must be between 1 and 99999")
+        if self.dps_number is not None and (
+            not isinstance(self.dps_number, int)
+            or isinstance(self.dps_number, bool)
+            or not 1 <= self.dps_number <= 999_999_999_999_999
+        ):
+            raise FiscalValidationError("DPS serial number is invalid")
 
     @property
     def totals(self) -> NfseDocumentTotals:
@@ -303,14 +317,14 @@ def build_nfse_issuance_key(document: NfseCanonicalDocument) -> IdempotencyKey:
 def build_nfse_request_fingerprint(document: NfseCanonicalDocument) -> str:
     if not isinstance(document, NfseCanonicalDocument):
         raise FiscalValidationError("document must be NfseCanonicalDocument")
-    scope_payload = {
+    scope_payload: dict[str, str] = {
         "tenant_id": document.scope.tenant_id,
         "unit_id": document.scope.unit_id,
         "environment": document.scope.environment.value,
     }
     if document.scope.host_namespace is not None:
         scope_payload["host_namespace"] = document.scope.host_namespace
-    payload = {
+    payload: dict[str, object] = {
         "scope": scope_payload,
         "source": document.source.canonical_tuple,
         "issued_at": document.issued_at.isoformat(),
@@ -342,6 +356,14 @@ def build_nfse_request_fingerprint(document: NfseCanonicalDocument) -> str:
             for line in document.services
         ],
     }
+    # Preserve the historic fingerprint of unnumbered/archived requests.
+    # On new preparations the UoW supplies a legally reserved DPS serial,
+    # and this serial is bound to the immutable request fingerprint.
+    if document.dps_number is not None:
+        payload["dps_numbering"] = {
+            "series": document.dps_series,
+            "number": document.dps_number,
+        }
     encoded = json.dumps(
         payload,
         ensure_ascii=False,

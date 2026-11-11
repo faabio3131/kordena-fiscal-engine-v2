@@ -92,6 +92,8 @@ def encode_prepared_nfse(request: NfseAuthorizationRequest) -> bytes:
         ],
         "service_taker_reference": document.service_taker_reference,
         "schema_version": document.schema_version,
+        "dps_series": document.dps_series,
+        "dps_number": document.dps_number,
         "idempotency_key": request.idempotency_key.value,
         "request_fingerprint": request.request_fingerprint,
     }
@@ -222,6 +224,8 @@ def decode_prepared_nfse(content: bytes, *, scope: ExecutionScope) -> NfseAuthor
                 root.get("service_taker_reference"), "service_taker_reference"
             ),
             schema_version=root["schema_version"],
+            dps_series=root.get("dps_series", 1),
+            dps_number=root.get("dps_number"),
         )
         request = NfseAuthorizationRequest.build(document)
         if request.idempotency_key.value != _text(root["idempotency_key"], "idempotency_key"):

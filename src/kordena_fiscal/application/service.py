@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from enum import StrEnum
 
@@ -41,6 +41,7 @@ from kordena_fiscal.issuance.nfe_nfse import (
     NfseCanonicalDocument,
     NfseGatewayClient,
     NfseQueryClient,
+    build_nfse_request_fingerprint,
 )
 from kordena_fiscal.issuance.nfse_archive import (
     NFSE_PREPARED_MEDIA_TYPE,
@@ -540,17 +541,29 @@ class FiscalApplicationService:
             raise FiscalValidationError("document must be NfseCanonicalDocument")
         if not isinstance(retention, RetentionPolicyMetadata):
             raise FiscalValidationError("retention must be RetentionPolicyMetadata")
-        request = NfseAuthorizationRequest.build(document)
-        entry = FiscalArchiveEntry.build(
-            scope=document.scope,
-            document_reference=document.document_id,
-            kind=FiscalArchiveKind.OTHER,
-            content=encode_prepared_nfse(request),
-            media_type=NFSE_PREPARED_MEDIA_TYPE,
-            archived_at=occurred_at,
-            retention=retention,
-        )
+        if document.dps_number is not None:
+            raise FiscalValidationError(
+                "DPS serial is assigned exclusively by the durable fiscal application"
+            )
         with self._uow_factory() as uow:
+            # Reserve before the prepared artifact, in the SAME transaction as
+            # idempotency, lifecycle, and archive. On any failure it rolls back.
+            serial = uow.dps_sequences.reserve(
+                document, input_fingerprint=build_nfse_request_fingerprint(document),
+            )
+            numbered_document = replace(
+                document, dps_series=serial.series, dps_number=serial.number,
+            )
+            request = NfseAuthorizationRequest.build(numbered_document)
+            entry = FiscalArchiveEntry.build(
+                scope=document.scope,
+                document_reference=document.document_id,
+                kind=FiscalArchiveKind.OTHER,
+                content=encode_prepared_nfse(request),
+                media_type=NFSE_PREPARED_MEDIA_TYPE,
+                archived_at=occurred_at,
+                retention=retention,
+            )
             reservation = uow.idempotency.reserve(
                 request.idempotency_key,
                 request.request_fingerprint,

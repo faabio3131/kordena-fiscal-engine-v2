@@ -1,6 +1,7 @@
 """Unit tests for the National NFS-e DPS builder (build_signed_dps)."""
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
@@ -98,6 +99,8 @@ def _document(*, issuer: FiscalProfile | None = None, services=None) -> NfseCano
         service_jurisdiction=BrazilianJurisdiction("SP", "3550308"),
         services=services if services is not None else (_service(),),
         service_taker_reference="taker-ref-1",
+        # Standalone builder fixture models an already-UoW-reserved number.
+        dps_number=1,
     )
 
 
@@ -126,17 +129,14 @@ def _certificate() -> EphemeralCertificateMaterial:
 def test_build_signed_dps_produces_schema_valid_and_signed_document() -> None:
     signed = build_signed_dps(_request(), _certificate())
 
-    # The builder validates its own UNSIGNED XML against the pinned XSD
-    # before handing it to sign_nfse_dps_xml() (see build_signed_dps's last
-    # two lines). Re-validating the SIGNED document against the full pinned
-    # schema (including xmldsig-core-schema.xsd's fixed RSA-SHA1
-    # SignatureMethod/DigestMethod) now also passes, since sign_nfse_dps_xml()
-    # signs the National DPS flow with RSA-SHA1 to match that constraint.
-    national_dps_validator("1.00").validate_document(signed)
+    # The 1.01 builder validates unsigned XML before signing. Its pinned
+    # official XMLDSig schema permits RSA-SHA256 for the signed document;
+    # the old 1.00 schema required the legacy SHA-1 method.
+    national_dps_validator("1.01").validate_document(signed)
 
     root = etree.fromstring(signed)
     assert root.tag == f"{{{_NFSE_NS}}}DPS"
-    assert root.get("versao") == "1.00"
+    assert root.get("versao") == "1.01"
     info = root.find(f"{{{_NFSE_NS}}}infDPS")
     assert info is not None
     dps_id = info.get("Id")
@@ -149,7 +149,7 @@ def test_build_signed_dps_produces_schema_valid_and_signed_document() -> None:
         ".//{http://www.w3.org/2000/09/xmldsig#}SignatureMethod"
     )
     assert signature_method is not None
-    assert signature_method.get("Algorithm") == "http://www.w3.org/2000/09/xmldsig#rsa-sha1"
+    assert signature_method.get("Algorithm") == "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"
 
 
 def test_build_signed_dps_is_deterministic_for_the_same_request() -> None:
@@ -159,6 +159,23 @@ def test_build_signed_dps_is_deterministic_for_the_same_request() -> None:
     first_id = etree.fromstring(first).find(f"{{{_NFSE_NS}}}infDPS").get("Id")
     second_id = etree.fromstring(second).find(f"{{{_NFSE_NS}}}infDPS").get("Id")
     assert first_id == second_id
+
+
+def test_builder_refuses_unreserved_fiscal_serial_instead_of_hash() -> None:
+    unreserved = replace(_document(), dps_number=None)
+    with pytest.raises(FiscalValidationError, match="not reserved"):
+        build_signed_dps(_request(unreserved), _certificate())
+
+
+def test_signed_dps_uses_exact_reserved_number_and_series_in_official_id() -> None:
+    document = replace(_document(), dps_number=2345, dps_series=17)
+    signed = build_signed_dps(_request(document), _certificate())
+    national_dps_validator("1.01").validate_document(signed)
+    info = etree.fromstring(signed).find(f"{{{_NFSE_NS}}}infDPS")
+    assert info is not None
+    assert info.findtext(f"{{{_NFSE_NS}}}serie") == "17"
+    assert info.findtext(f"{{{_NFSE_NS}}}nDPS") == "2345"
+    assert info.get("Id", "").endswith("00017" + "000000000002345")
 
 
 def test_build_signed_dps_rejects_more_than_one_service_line() -> None:
