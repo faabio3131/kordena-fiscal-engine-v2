@@ -96,14 +96,37 @@ def test_nfse_rejects_missing_xml_signature() -> None:
 
 
 def test_nfse_parses_offline_authorization_receipt() -> None:
-    xml = b"<NFSe xmlns='http://www.sped.fazenda.gov.br/nfse'/>"
+    key = "31" + "0" * 48
+    xml = (
+        f'<NFSe xmlns="{_NS}"><infNFSe Id="NFS{key}"/></NFSe>'
+    ).encode()
     response = json.dumps({
-        "chaveAcesso": "35000000000000000000000000000000000000000000000000",
+        "chaveAcesso": key,
         "nfseXmlGZipB64": base64.b64encode(gzip.compress(xml)).decode("ascii"),
     }).encode("utf-8")
     parsed = parse_nfse_homologation_response(response)
     assert parsed["status"] == "authorized"
     assert parsed["xml"] == xml.decode()
+
+
+@pytest.mark.parametrize(
+    ("key", "id_suffix"),
+    [
+        ("31" + "0" * 48, "31" + "1" * 48),
+        ("31" + "0" * 42, "31" + "0" * 42),
+        ("AB" + "0" * 48, "AB" + "0" * 48),
+    ],
+)
+def test_nfse_reply_requires_exact_fifty_digit_signed_document_identity(
+    key: str, id_suffix: str,
+) -> None:
+    xml = f'<NFSe xmlns="{_NS}"><infNFSe Id="NFS{id_suffix}"/></NFSe>'.encode()
+    response = json.dumps({
+        "chaveAcesso": key,
+        "nfseXmlGZipB64": base64.b64encode(gzip.compress(xml)).decode(),
+    }).encode()
+    with pytest.raises(OfficialNfseTransportError, match="XML retornado"):
+        parse_nfse_homologation_response(response)
 
 
 def test_nfse_rejects_invalid_response_without_secret_echo() -> None:
