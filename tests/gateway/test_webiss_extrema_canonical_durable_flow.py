@@ -41,6 +41,7 @@ from kordena_fiscal.gateway.authorization import AuthorizationStatus
 from kordena_fiscal.gateway.mg_webiss_soap import (
     EXTREMA_WEBISS_PROVIDER_ID,
     WebissExtremaHomologationTransport,
+    WebissMgContractError,
 )
 from kordena_fiscal.gateway.nfse_abrasf203_envelope import Abrasf203Operation
 from kordena_fiscal.gateway.webiss_2026_schema import load_pinned_extrema_webiss_rtc_schema
@@ -233,7 +234,7 @@ def test_builder_generates_real_xsd_valid_webiss_2026_rtc_rps(tmp_path):
     assert b"<CodigoNbs>123456789</CodigoNbs>" in xml
     assert b"<cClassTrib>000001</cClassTrib>" in xml
     assert b"<ValorIss>3.00</ValorIss>" in xml
-    assert b"<Aliquota>0.0300</Aliquota>" in xml
+    assert b"<Aliquota>3.0000</Aliquota>" in xml
     assert b"<Numero>1</Numero>" in xml
     assert decode_extrema_intent(
         encode_extrema_intent(intent), scope=request.document.scope, request=request,
@@ -271,20 +272,20 @@ def test_canonical_durable_issue_replay_query_without_resend(tmp_path):
     def exchange(data, soap_action, _context, _timeout):
         calls.append(soap_action)
         if "GerarNfse" in soap_action:
-            return _wrap_soap(
-                Abrasf203Operation.GENERATE,
-                b'<GerarNfseResposta xmlns="http://www.abrasf.org.br/nfse.xsd"/>',
-            )
+            raise WebissMgContractError("Synthetic ambiguous provider timeout")
         assert "ConsultarNfsePorRps" in soap_action
         return _success_response(Abrasf203Operation.QUERY_RPS, intent)
 
     gateway, resolver, cert, audit, service_audit = _gateway(restarted, intent, exchange)
-    first = restarted.authorize_prepared_document(
-        document_id=request.document.document_id, request=request,
-        gateway=NfseGatewayClient(gateway), occurred_at=NOW,
-    )
-    assert first.recovery_required
-    assert first.lifecycle.state is FiscalDocumentState.TRANSMITTING
+    with pytest.raises(WebissMgContractError, match="ambiguous"):
+        restarted.authorize_prepared_document(
+            document_id=request.document.document_id, request=request,
+            gateway=NfseGatewayClient(gateway), occurred_at=NOW,
+        )
+    with db() as uow:
+        current = uow.lifecycle.get(request.document.document_id)
+        assert current is not None
+        assert current.state is FiscalDocumentState.TRANSMITTING
     assert len(calls) == 1 and "GerarNfse" in calls[0]
     same = restarted.authorize_prepared_document(
         document_id=request.document.document_id, request=request,
