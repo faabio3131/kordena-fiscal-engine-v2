@@ -15,7 +15,6 @@ from test_mg_homologation_authorization import CNPJ, _request
 from test_mg_homologation_authorization import material as material
 from test_nfse_abrasf203_envelope import _CANCEL, _payload
 
-from kordena_fiscal.control_plane.commercial import ConfiguredFiscalOperation
 from kordena_fiscal.domain import (
     BrazilianJurisdiction,
     Cnpj,
