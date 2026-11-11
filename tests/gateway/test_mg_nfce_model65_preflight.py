@@ -146,9 +146,14 @@ def test_nfce_offline_contingency_is_blocked_until_qr_signature_port_exists() ->
         _validate_mg_authorization_scope(offline, model=65)
 
 
-def test_nfce_operations_refuse_wrong_legacy_adapter_until_model65_certification() -> None:
-    with pytest.raises(ValueError, match="model 65"):
-        SefazHomologationOperationsGateway(
-            target=HomologationAuthorizationTarget.MG_NFCE,
-            resolve_certificate=Mock(),
-        )
+def test_nfce_operations_model65_adapter_is_isolated_from_model55() -> None:
+    """The dedicated model65 adapter rejects 55 before reading Vault."""
+    vault = Mock()
+    gateway = SefazHomologationOperationsGateway(
+        target=HomologationAuthorizationTarget.MG_NFCE,
+        resolve_certificate=vault,
+    )
+    original = _request()
+    with pytest.raises(OfficialNfeOperationsError):
+        gateway.query(FiscalQueryRequest(original.scope, original.access_key))
+    vault.assert_not_called()
