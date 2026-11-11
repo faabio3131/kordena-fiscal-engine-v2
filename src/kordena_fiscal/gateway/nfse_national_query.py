@@ -77,7 +77,7 @@ def _parse_key(raw: bytes, municipality: str) -> str:
         raise OfficialNfseTransportError("Invalid national DPS query JSON") from None
     if not isinstance(payload, dict) or not isinstance(payload.get("chaveAcesso"), str):
         raise OfficialNfseTransportError("National DPS query has no confirmed access key")
-    key = payload["chaveAcesso"]
+    key: str = payload["chaveAcesso"]
     if not key.isascii() or not key.isdecimal() or len(key) != 50:
         raise OfficialNfseTransportError("Invalid official NFS-e access key")
     if not key.startswith(municipality[:2]):
