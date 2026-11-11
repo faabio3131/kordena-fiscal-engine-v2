@@ -116,9 +116,10 @@ def _require_mg_binding(
     application: FiscalApplicationService, scope: ExecutionScope,
     access_key: NfeAccessKey, operation: ConfiguredFiscalOperation,
 ) -> None:
-    label = (
-        "consulta MG" if operation is ConfiguredFiscalOperation.QUERY else "autorização MG"
-    )
+    label = {
+        ConfiguredFiscalOperation.QUERY: "consulta MG",
+        ConfiguredFiscalOperation.CANCEL: "cancelamento MG",
+    }.get(operation, "autorização MG")
     if scope.environment is not FiscalEnvironment.HOMOLOGATION:
         raise FiscalValidationError(f"Operação de {label} disponível apenas em homologação")
     if access_key.model.value != 55:
