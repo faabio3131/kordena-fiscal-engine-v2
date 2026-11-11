@@ -393,3 +393,6 @@ Fontes conferidas:
 
 
 **Revisão adicional do QR v3 (NT 2025.001 v1.03):** o preflight de NFC-e 65 verifica o formato **online exato** `p=<chNFe>|3|2`, não aceita campos sintéticos extras nem QR v2 neste alvo; contingência `tpEmis=9` fica bloqueada até haver geração/verificação de assinatura digital específica de seus oito campos. A origem e `urlChave` devem coincidir com os endereços oficiais de homologação MG. Referência primária: https://hom.nfe.fazenda.gov.br/portal/exibirArquivo.aspx?AspxAutoDetectCookieSupport=1&conteudo=uthum2eC3is%3D (NT v1.03, seção 04). **Status:** QR v3 ONLINE PREFLIGHT ONLY, não autorização, DANFE ou contingência certificados.
+
+
+**Gate MG65 síncrono adicional:** NF-e/NFC-e Nacional NT 2025.001 v1.03 exige autorização síncrona para lote com uma única NFC-e; o preflight MG65 agora rejeita `indSinc!=1` antes de A1/transporte, com teste de regressão. Isto não ativa consulta, cancelamento, inutilização ou contingência NFC-e. Evidence: `tests/gateway/test_mg_nfce_model65_preflight.py`, PR #423, CI do HEAD a comprovar.
