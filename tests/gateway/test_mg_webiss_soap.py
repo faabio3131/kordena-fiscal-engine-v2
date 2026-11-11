@@ -80,11 +80,32 @@ def _envelope(operation: Abrasf203Operation):
     ) if operation is Abrasf203Operation.QUERY_BATCH else None
 
 
-def _response(operation: Abrasf203Operation, *, xml: str = "<retorno/>") -> bytes:
+def _rejection_xml(operation: Abrasf203Operation) -> str:
+    roots = {
+        Abrasf203Operation.GENERATE: "GerarNfseResposta",
+        Abrasf203Operation.SUBMIT_BATCH: "EnviarLoteRpsResposta",
+        Abrasf203Operation.QUERY_BATCH: "ConsultarLoteRpsResposta",
+        Abrasf203Operation.CANCEL: "CancelarNfseResposta",
+    }
+    name = roots[operation]
+    situation = "<Situacao>4</Situacao>" if operation is Abrasf203Operation.QUERY_BATCH else ""
+    return (
+        f'<{name} xmlns="http://www.abrasf.org.br/nfse.xsd">'
+        + situation
+        + "<ListaMensagemRetorno><MensagemRetorno><Codigo>E160</Codigo>"
+        "<Mensagem>Rejeicao sintetica de teste</Mensagem>"
+        "</MensagemRetorno></ListaMensagemRetorno>"
+        f"</{name}>"
+    )
+
+
+def _response(operation: Abrasf203Operation, *, xml: str | None = None) -> bytes:
     root = etree.Element(f"{{{SOAP}}}Envelope", nsmap={"soap": SOAP})
     body = etree.SubElement(root, f"{{{SOAP}}}Body")
     wrapper = etree.SubElement(body, f"{{{WSDL}}}{operation.value[1]}Response")
-    etree.SubElement(wrapper, "outputXML").text = xml
+    etree.SubElement(wrapper, "outputXML").text = (
+        _rejection_xml(operation) if xml is None else xml
+    )
     return etree.tostring(root, encoding="utf-8")
 
 
@@ -125,7 +146,7 @@ def test_exact_municipal_binding_precedes_vault_and_transport(
     }
     resolver.resolve_provider_id.return_value = EXTREMA_WEBISS_PROVIDER_ID
     exchange.return_value = _response(operation)
-    assert gateway.exchange_prepared(**args) == b"<retorno/>"
+    assert gateway.exchange_prepared(**args) == _rejection_xml(operation).encode("utf-8")
     cert.assert_called_once_with(scope, CNPJ)
     exchange.assert_called_once()
     assert envelope.soap_action == exchange.call_args.args[1]
@@ -222,6 +243,8 @@ def test_soap_fault_or_cross_operation_never_appears_fiscally_authorized() -> No
         )
     with pytest.raises(WebissMgContractError, match="outputXML"):
         parse_webiss_soap_response(_response(query, xml="not-xml"), query)
+    with pytest.raises(WebissMgContractError, match="response XML root"):
+        parse_webiss_soap_response(_response(query, xml="<retorno/>"), query)
     with pytest.raises(WebissMgContractError, match="DTD"):
         parse_webiss_soap_response(
             _response(query, xml='<!DOCTYPE retorno [<!ENTITY x "untrusted">]><retorno/>'),
@@ -249,7 +272,7 @@ def test_uberaba_webiss_uses_the_same_transport_with_a_distinct_provider(materia
         competence_date=date(2026, 10, 31),
     )
     uberaba = BrazilianJurisdiction("MG", "3170107")
-    assert gateway.exchange_prepared(**args, jurisdiction=uberaba) == b"<retorno/>"
+    assert gateway.exchange_prepared(**args, jurisdiction=uberaba) == _rejection_xml(operation).encode("utf-8")
     assert resolver.resolve_provider_id.call_args.kwargs["jurisdiction"] == uberaba
     assert exchange.call_count == 1
     with pytest.raises(WebissMgContractError, match="scoped MG municipality"):
@@ -328,7 +351,7 @@ def test_municipal_cancellation_is_signed_and_scope_bound_before_send(
         issuer_tax_regime=TaxRegimeCode.NORMAL,
         competence_date=date(2026, 10, 31),
         jurisdiction=jurisdiction,
-    ) == b"<retorno/>"
+    ) == _rejection_xml(operation).encode("utf-8")
     assert resolver.resolve_provider_id.call_args.kwargs["operation"] == (
         ConfiguredFiscalOperation.CANCEL.value
     )
@@ -436,4 +459,41 @@ def test_generic_203_cannot_be_dispatched_as_webiss_2026_even_with_binding() -> 
         )
     resolver.resolve_provider_id.assert_not_called()
     certificate.assert_not_called()
+    exchange.assert_not_called()
+
+
+def test_signed_cancel_tamper_does_not_reach_webiss_http(material) -> None:
+    valid = prepare_abrasf203_soap(
+        operation=Abrasf203Operation.CANCEL, xml=_CANCEL.encode(),
+        scope=_request().scope, issuer_cnpj=Cnpj(CNPJ),
+        resolve_certificate=Mock(return_value=material),
+        preaudit=Mock(), preaudit_cancel=Mock(),
+        municipal_schema_version="2.02", municipal_validator=_validator(),
+    )
+    assert b"CodigoCancelamento" in valid.body
+    changed = valid.body.replace(
+        b"&lt;CodigoCancelamento&gt;1&lt;/CodigoCancelamento&gt;",
+        b"&lt;CodigoCancelamento&gt;2&lt;/CodigoCancelamento&gt;",
+        1,
+    )
+    assert changed != valid.body
+    resolver = Mock()
+    resolver.resolve_provider_id.return_value = EXTREMA_WEBISS_PROVIDER_ID
+    cert = Mock(return_value=material)
+    exchange = Mock(return_value=_response(Abrasf203Operation.CANCEL))
+    adapter = WebissExtremaHomologationTransport(
+        provider_resolver=resolver, resolve_certificate=cert,
+        municipal_schema_evidence=_synthetic_evidence("3125101"),
+        municipal_schema_validator=_validator(),
+        exchange=exchange,
+    )
+    with pytest.raises(WebissMgContractError, match="XMLDSig does not match"):
+        adapter.exchange_prepared(
+            envelope=replace(valid, body=changed),
+            operation=Abrasf203Operation.CANCEL,
+            scope=_request().scope, issuer_cnpj=Cnpj(CNPJ),
+            issuer_tax_regime=TaxRegimeCode.NORMAL,
+            competence_date=date(2026, 10, 31), jurisdiction=EXTREMA,
+        )
+    assert cert.call_count == 1
     exchange.assert_not_called()
