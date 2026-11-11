@@ -42,6 +42,13 @@ from kordena_fiscal.issuance.nfe_nfse import (
     NfseGatewayClient,
     NfseQueryClient,
 )
+from kordena_fiscal.issuance.webiss_extrema_builder import (
+    EXTREMA_INTENT_MEDIA_TYPE,
+    ExtremaRpsIntent,
+    decode_extrema_intent,
+    encode_extrema_intent,
+    validate_extrema_intent,
+)
 from kordena_fiscal.issuance.nfse_archive import (
     NFSE_PREPARED_MEDIA_TYPE,
     decode_prepared_nfse,
@@ -60,6 +67,7 @@ from kordena_fiscal.numbering import (
     FiscalNumberReservation,
     FiscalSequenceKey,
     FiscalSequencePolicy,
+    InternalFiscalSequenceStream,
 )
 from kordena_fiscal.operations import (
     CancellationRequest,
@@ -534,6 +542,7 @@ class FiscalApplicationService:
         *,
         occurred_at: datetime,
         retention: RetentionPolicyMetadata,
+        extrema_intent: ExtremaRpsIntent | None = None,
     ) -> DurablePreparedAuthorization:
         """Atomically reserve, validate and archive one provider-neutral NFS-e request."""
         if not isinstance(document, NfseCanonicalDocument):
@@ -541,6 +550,18 @@ class FiscalApplicationService:
         if not isinstance(retention, RetentionPolicyMetadata):
             raise FiscalValidationError("retention must be RetentionPolicyMetadata")
         request = NfseAuthorizationRequest.build(document)
+        municipal_entry: FiscalArchiveEntry | None = None
+        if extrema_intent is not None:
+            validate_extrema_intent(request, extrema_intent)
+            municipal_entry = FiscalArchiveEntry.build(
+                scope=document.scope,
+                document_reference=document.document_id,
+                kind=FiscalArchiveKind.OTHER,
+                content=encode_extrema_intent(extrema_intent),
+                media_type=EXTREMA_INTENT_MEDIA_TYPE,
+                archived_at=occurred_at,
+                retention=retention,
+            )
         entry = FiscalArchiveEntry.build(
             scope=document.scope,
             document_reference=document.document_id,
@@ -565,6 +586,21 @@ class FiscalApplicationService:
                 prepared = self._load_prepared_from_uow(uow, document.scope, document.document_id)
                 if not isinstance(prepared, NfseAuthorizationRequest):
                     raise PersistenceStateError("durable request is not NFS-e")
+                prior_intents = [
+                    archived.content
+                    for archived in uow.archive.list_for_document(document.scope, document.document_id)
+                    if archived.media_type == EXTREMA_INTENT_MEDIA_TYPE
+                ]
+                current_intent = (
+                    encode_extrema_intent(extrema_intent)
+                    if extrema_intent is not None else None
+                )
+                if len(prior_intents) > 1 or (
+                    (prior_intents[0] if prior_intents else None) != current_intent
+                ):
+                    raise PersistenceConflictError(
+                        "WebISS fiscal intent cannot change after idempotency reservation"
+                    )
                 uow.commit()
                 return DurablePreparedAuthorization(attempt, current, prepared, True)
             if current is not None:
@@ -587,8 +623,31 @@ class FiscalApplicationService:
                 uow.lifecycle.save(updated, expected_version=current.version)
                 current = updated
             uow.archive.append(entry)
+            if municipal_entry is not None:
+                uow.archive.append(municipal_entry)
             uow.commit()
             return DurablePreparedAuthorization(attempt, current, request, False)
+
+    def load_extrema_rps_intent(
+        self, scope: ExecutionScope, document_id: str,
+    ) -> ExtremaRpsIntent:
+        """Recover the original immutable municipal RPS intent and reserved number.
+
+        The request and provider-specific intent are read from the same scoped
+        archival transaction. An ambiguous or unprepared request fails closed.
+        """
+        with self._uow_factory() as uow:
+            prepared = self._load_prepared_from_uow(uow, scope, document_id)
+            if not isinstance(prepared, NfseAuthorizationRequest):
+                raise PersistenceStateError("Prepared document is not an NFS-e issuance")
+            entries = [
+                item for item in uow.archive.list_for_document(scope, document_id)
+                if item.kind is FiscalArchiveKind.OTHER
+                and item.media_type == EXTREMA_INTENT_MEDIA_TYPE
+            ]
+            if len(entries) != 1:
+                raise PersistenceStateError("WebISS requires exactly one prepared RPS intent")
+            return decode_extrema_intent(entries[0].content, scope=scope, request=prepared)
 
     def load_prepared_authorization(
         self, scope: ExecutionScope, document_id: str
@@ -1080,6 +1139,27 @@ class FiscalApplicationService:
                 uow.lifecycle.save(outcome.lifecycle, expected_version=requested.version)
             uow.commit()
         return DurableCancellationOutcome(result, outcome.lifecycle, archived.entry_id)
+
+    def reserve_extrema_rps_number(
+        self, *, scope: ExecutionScope, municipality_ibge: str,
+        series: int, policy: FiscalSequencePolicy | None = None,
+    ) -> FiscalNumberReservation:
+        """Atomically reserve an RPS number in a dedicated NFS-e partition.
+
+        The numeric stream identifier is internal-only and cannot be reused
+        as an NF-e access-key model or as a serial supplied by a browser.
+        """
+        if (
+            not isinstance(scope, ExecutionScope)
+            or not scope.host_namespace
+            or scope.environment is not FiscalEnvironment.HOMOLOGATION
+            or municipality_ibge != "3125101"
+        ):
+            raise FiscalValidationError("RPS numbering requires scoped Extrema homologation")
+        key = FiscalSequenceKey.from_scope(
+            scope, model=InternalFiscalSequenceStream.NFSE_RPS, series=series,
+        )
+        return self.reserve_number(key, policy)
 
     def reserve_number(
         self,
