@@ -260,6 +260,8 @@ def parse_webiss_soap_response(
     *,
     evidence: Webiss2026SchemaEvidence | None = None,
     municipal_validator: XmlSchemaValidator | None = None,
+    issuer_cnpj: Cnpj | None = None,
+    municipality_ibge: str | None = None,
 ) -> bytes:
     """Return only the XML response payload; never infer fiscal authorization."""
     if not isinstance(raw, bytes) or not 0 < len(raw) <= _RESPONSE_LIMIT:
@@ -310,6 +312,31 @@ def parse_webiss_soap_response(
         validate_webiss_official_xml(
             evidence=evidence, validator=municipal_validator, xml=xml,
         )
+    invoices = extracted.findall(
+        ".//{http://www.abrasf.org.br/nfse.xsd}CompNfse/"
+        "{http://www.abrasf.org.br/nfse.xsd}Nfse/"
+        "{http://www.abrasf.org.br/nfse.xsd}InfNfse"
+    )
+    if invoices and (not isinstance(issuer_cnpj, Cnpj) or not municipality_ibge):
+        raise WebissMgContractError(
+            "Verified municipal issuer scope is required for NFS-e receipts"
+        )
+    for invoice in invoices:
+        ns = "{http://www.abrasf.org.br/nfse.xsd}"
+        invoice_issuer = invoice.findtext(
+            f"{ns}PrestadorServico/{ns}IdentificacaoPrestador/"
+            f"{ns}CpfCnpj/{ns}Cnpj", "",
+        )
+        reported_municipality = invoice.findtext(
+            f"{ns}OrgaoGerador/{ns}CodigoMunicipio", "",
+        )
+        if (
+            invoice_issuer != issuer_cnpj.value
+            or reported_municipality != municipality_ibge
+        ):
+            raise WebissMgContractError(
+                "WebISS receipt NFS-e does not belong to issuer or municipality"
+            )
     # An ABRASF receipt can contain rejection messages, PENDING status or
     # invoice data. Parsing does NOT promote it to AUTHORIZED; only the
     # canonical fiscal application may finalize an official result.
@@ -538,6 +565,7 @@ class WebissMgHomologationTransport:
         _validate_request_envelope(
             envelope, operation, evidence=self._schema_evidence,
             municipal_validator=self._schema_validator,
+            issuer_cnpj=issuer_cnpj, municipality_ibge=self._municipality,
         )
         _verify_fiscal_issuer_identity(
             envelope=envelope,
