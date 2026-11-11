@@ -393,7 +393,20 @@ def parse_webiss_soap_response(
         reported_municipality = invoice.findtext(
             f"{ns}OrgaoGerador/{ns}CodigoMunicipio", "",
         )
-        if (
+        if operation is Abrasf203Operation.QUERY_RECEIVED:
+            # A received service legitimately has a DIFFERENT prestador.
+            # Correlate its legal tomador with the requesting fiscal unit.
+            received_by = invoice.findtext(
+                f"{ns}DeclaracaoPrestacaoServico/"
+                f"{ns}InfDeclaracaoPrestacaoServico/"
+                f"{ns}Tomador/{ns}IdentificacaoTomador/"
+                f"{ns}CpfCnpj/{ns}Cnpj", "",
+            )
+            if received_by != issuer_cnpj.value:
+                raise WebissMgContractError(
+                    "WebISS received invoice is not addressed to bound consulente"
+                )
+        elif (
             invoice_issuer != issuer_cnpj.value
             or reported_municipality != municipality_ibge
         ):
@@ -647,6 +660,19 @@ class WebissMgHomologationTransport:
         )
         if provider != _MG_WEBISS_PROVIDERS[self._municipality]:
             raise WebissMgContractError("No approved exact WebISS municipal binding")
+        if operation is Abrasf203Operation.SUBSTITUTE:
+            # Substitution both cancels an existing fiscal document AND emits a new one.
+            # A single cancellation binding must not grant implicit emission rights.
+            issuance_provider = self._resolver.resolve_provider_id(
+                scope=scope,
+                document_kind=FiscalDocumentKind.NFSE,
+                jurisdiction=jurisdiction,
+                operation=ConfiguredFiscalOperation.AUTHORIZE.value,
+            )
+            if issuance_provider != _MG_WEBISS_PROVIDERS[self._municipality]:
+                raise WebissMgContractError(
+                    "Substitution requires both cancellation and issuance bindings"
+                )
         if self._exchange is None:
             raise WebissMgContractError(
                 "WebISS city-specific homologation URL is not officially certified"
