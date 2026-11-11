@@ -10,7 +10,7 @@ import sqlite3
 
 from kordena_fiscal.domain import FiscalValidationError
 from kordena_fiscal.issuance.nfe_nfse import NfseCanonicalDocument
-from kordena_fiscal.numbering.dps import DpsNumberReservation, MAX_DPS_NUMBER
+from kordena_fiscal.numbering.dps import MAX_DPS_NUMBER, DpsNumberReservation
 
 from .ports import PersistenceConflictError
 
