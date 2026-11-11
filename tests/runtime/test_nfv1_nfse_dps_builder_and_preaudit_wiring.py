@@ -150,9 +150,13 @@ def _request(**service_overrides) -> NfseAuthorizationRequest:
 
 def _fake_exchange(payload: bytes, *_args) -> bytes:
     json.loads(payload)  # confirms the gateway sent well-formed JSON
-    xml = b'<NFSe xmlns="http://www.sped.fazenda.gov.br/nfse"/>'
+    key = "35" + "0" * 48
+    xml = (
+        f'<NFSe xmlns="http://www.sped.fazenda.gov.br/nfse">'
+        f'<infNFSe Id="NFS{key}"/></NFSe>'
+    ).encode()
     return json.dumps({
-        "tipoAmbiente": 2, "chaveAcesso": "35" + "0" * 42, "idDps": "dps-wiring-ok",
+        "tipoAmbiente": 2, "chaveAcesso": key, "idDps": "dps-wiring-ok",
         "nfseXmlGZipB64": base64.b64encode(gzip.compress(xml, mtime=0)).decode("ascii"),
     }).encode()
 
@@ -181,7 +185,7 @@ def test_real_builder_and_preaudit_authorize_a_valid_document_end_to_end() -> No
     gateway = _governed_gateway()
     result = gateway.authorize(_request())
     assert result.status is AuthorizationStatus.AUTHORIZED
-    assert result.invoice_reference == "35" + "0" * 42
+    assert result.invoice_reference == "35" + "0" * 48
 
 
 def test_real_preaudit_blocks_before_any_signing_on_rate_divergence() -> None:
