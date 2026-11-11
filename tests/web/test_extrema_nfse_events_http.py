@@ -22,7 +22,6 @@ from kordena_fiscal.security.human_identity import (
 )
 from kordena_fiscal.web.human_auth import CSRF_COOKIE, CSRF_HEADER
 
-
 # Pytest executes these files from repository root, and tests/web is not a
 # package on sys.path. Reuse the existing authenticated HTTP fixture explicitly.
 _fixture_path = Path(__file__).with_name("test_extrema_nfse_preparation_http.py")
