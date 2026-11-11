@@ -252,7 +252,7 @@ def _verify_fiscal_issuer_identity(
             "a:CodigoMunicipio", "", ns,
         )
         if municipality != municipality_ibge:
-            raise WebissMgContractError("Municipal cancellation belongs to another city")
+            raise WebissMgContractError("Municipal cancellation mismatches bound issuer and city")
     else:
         raise WebissMgContractError("Unsupported fiscal WebISS operation")
     if not identities or any(cnpj != issuer_cnpj.value for cnpj in identities):
