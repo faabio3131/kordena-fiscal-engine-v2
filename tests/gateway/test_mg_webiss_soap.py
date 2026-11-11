@@ -554,3 +554,33 @@ def test_webiss_unknown_uberaba_endpoint_never_resolves_a1() -> None:
         )
     resolver.resolve_provider_id.assert_called_once()
     certificate.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("other_issuer", "other_city"),
+    [(True, False), (False, True)],
+)
+def test_returned_nfse_must_belong_to_scoped_issuer_and_city(
+    other_issuer: bool, other_city: bool,
+) -> None:
+    # Isolated XML identity guard. This is intentionally NOT a municipal
+    # signed receipt fixture or XSD/IBSCBS homologation evidence.
+    issuer = "12345678000195" if other_issuer else CNPJ
+    municipality = "3170107" if other_city else "3125101"
+    inner = (
+        '<ConsultarLoteRpsResposta xmlns="http://www.abrasf.org.br/nfse.xsd">'
+        '<Situacao>4</Situacao><ListaNfse><CompNfse><Nfse><InfNfse>'
+        '<PrestadorServico><IdentificacaoPrestador><CpfCnpj>'
+        f"<Cnpj>{issuer}</Cnpj>"
+        '</CpfCnpj></IdentificacaoPrestador></PrestadorServico>'
+        f"<OrgaoGerador><CodigoMunicipio>{municipality}</CodigoMunicipio>"
+        "<Uf>MG</Uf></OrgaoGerador></InfNfse></Nfse></CompNfse>"
+        "</ListaNfse></ConsultarLoteRpsResposta>"
+    )
+    with pytest.raises(WebissMgContractError, match="issuer or municipality"):
+        parse_webiss_soap_response(
+            _response(Abrasf203Operation.QUERY_BATCH, xml=inner),
+            Abrasf203Operation.QUERY_BATCH,
+            issuer_cnpj=Cnpj(CNPJ),
+            municipality_ibge="3125101",
+        )
