@@ -35,15 +35,15 @@ from kordena_fiscal.events import (
     FiscalInboxReceiveResult,
     FiscalInboxService,
 )
-from kordena_fiscal.gateway.webiss_extrema_canonical import (
-    ExtremaCancellationOutcome,
-    WebissExtremaCanonicalNfseGateway,
-)
 from kordena_fiscal.gateway import (
     AuthorizationRequest,
     AuthorizationResult,
     AuthorizationStatus,
     FiscalGatewayClient,
+)
+from kordena_fiscal.gateway.webiss_extrema_canonical import (
+    ExtremaCancellationOutcome,
+    WebissExtremaCanonicalNfseGateway,
 )
 from kordena_fiscal.issuance.nfe_nfse import (
     NfseAuthorizationRequest,
