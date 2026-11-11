@@ -60,7 +60,7 @@ def _response_messages(xml: etree._Element) -> tuple[str, str] | None:
 def _invoice_reference(
     xml: etree._Element, request: NfseAuthorizationRequest,
     intent: ExtremaRpsIntent,
-) -> tuple[str, str] | None:
+) -> tuple[str, str, str] | None:
     invoices = xml.findall(
         f".//{_NS}CompNfse/{_NS}Nfse/{_NS}InfNfse"
     )
@@ -121,7 +121,7 @@ def _invoice_reference(
         )
     # An official invoice must carry both verification code and access key.
     # Those are external identifiers, not locally invented IDs.
-    return access_key, code
+    return access_key, code, invoice_number
 
 
 class WebissExtremaCanonicalNfseGateway:
@@ -189,6 +189,7 @@ class WebissExtremaCanonicalNfseGateway:
             return NfseAuthorizationResult(
                 status=AuthorizationStatus.AUTHORIZED,
                 invoice_reference=reference[0], verification_code=reference[1],
+                invoice_number=reference[2], authorized_xml=response,
                 scope=request.document.scope, document_id=request.document.document_id,
                 idempotency_key=request.idempotency_key,
                 request_fingerprint=request.request_fingerprint, provider=_PROVIDER,
