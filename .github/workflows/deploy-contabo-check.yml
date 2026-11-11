@@ -2,7 +2,7 @@ name: Deploy Contabo (config e teste)
 
 on:
   pull_request:
-    paths: ["deploy/contabo/**", ".github/workflows/deploy-contabo-check.yml", ".github/workflows/contabo-readonly-host-audit.yml"]
+    paths: ["deploy/contabo/**", ".github/workflows/deploy-contabo-check.yml", ".github/workflows/contabo-readonly-host-audit.yml", ".github/workflows/contabo-gsm-readonly-host-audit.yml"]
   push:
     branches: [main]
     paths: ["deploy/contabo/**"]
