@@ -232,7 +232,9 @@ def load_pinned_extrema_webiss_rtc_schema() -> tuple[Webiss2026SchemaEvidence, X
     try:
         xmlsig_bytes = gzip.decompress(compressed)
     except (EOFError, OSError):
-        raise WebissMunicipalSchemaUnverified("Invalid Extrema XMLDSig compressed resource") from None
+        raise WebissMunicipalSchemaUnverified(
+            "Invalid Extrema XMLDSig compressed resource"
+        ) from None
     if len(rtc_bytes) != 105916 or len(xmlsig_bytes) != 10467:
         raise WebissMunicipalSchemaUnverified("Unexpected Extrema schema resource size")
     if hashlib.sha256(rtc_bytes).hexdigest() != _EXTREMA_RTC_ROOT_SHA256:
