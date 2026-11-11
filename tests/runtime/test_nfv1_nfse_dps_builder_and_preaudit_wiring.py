@@ -68,11 +68,13 @@ def _pfx() -> bytes:
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Synthetic A1 entity")])
     encoded = _ISSUER_CNPJ.value.encode("ascii")
+    validity_now = datetime.now(UTC)
     cert = (
         x509.CertificateBuilder()
         .subject_name(name).issuer_name(name)
         .public_key(key.public_key()).serial_number(x509.random_serial_number())
-        .not_valid_before(_NOW - timedelta(days=1)).not_valid_after(_NOW + timedelta(days=30))
+        .not_valid_before(validity_now - timedelta(days=1))
+        .not_valid_after(validity_now + timedelta(days=30))
         .add_extension(
             x509.KeyUsage(
                 digital_signature=True, content_commitment=False, key_encipherment=False,
