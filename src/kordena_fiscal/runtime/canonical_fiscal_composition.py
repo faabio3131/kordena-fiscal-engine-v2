@@ -10,8 +10,8 @@ from collections.abc import Callable, Mapping
 from typing import Any
 
 from kordena_fiscal.application.service import FiscalApplicationService
-from kordena_fiscal.compliance.nfse_preaudit import extrema_nfse_preaudit
 from kordena_fiscal.archive import RetentionPolicyMetadata
+from kordena_fiscal.compliance.nfse_preaudit import extrema_nfse_preaudit
 from kordena_fiscal.control_plane.commercial import ConfiguredFiscalOperation
 from kordena_fiscal.control_plane.service import ControlPlaneNotFoundError
 from kordena_fiscal.domain import (
