@@ -217,6 +217,7 @@ def _gateway(app, intent, exchange):
         resolve_certificate=certificate,
         canonical_preaudit=canonical_preaudit,
         service_preaudit=service_preaudit,
+        cancellation_preaudit=Mock(),
         municipal_validator=validator,
     )
     return gateway, resolver, certificate, canonical_preaudit, service_preaudit
