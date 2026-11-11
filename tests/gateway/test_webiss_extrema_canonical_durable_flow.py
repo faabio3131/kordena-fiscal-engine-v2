@@ -6,15 +6,16 @@ HTTP, never impersonates a real taxpayer and never certifies live homologation.
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import Mock
 
 import pytest
-from test_nfv1_nfse_dps_builder_and_preaudit_wiring import (
-    _certificate,
-    _mg_request,
-)
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.serialization import pkcs12
+from cryptography.x509.oid import NameOID, ObjectIdentifier
 from test_webiss_extrema_official_rtc_accepted_receipts import (
     _accepted_xml,
     _wrap_soap,
@@ -24,10 +25,16 @@ from kordena_fiscal.application.service import FiscalApplicationService
 from kordena_fiscal.archive import RetentionPolicyMetadata
 from kordena_fiscal.domain import (
     BrazilianJurisdiction,
+    CnaeCode,
     Cnpj,
+    ExecutionScope,
+    FiscalAddress,
     FiscalEnvironment,
+    FiscalProfile,
     FiscalValidationError,
+    Money,
     SourceReference,
+    StateRegistration,
     TaxRegimeCode,
 )
 from kordena_fiscal.gateway.authorization import AuthorizationStatus
@@ -40,7 +47,13 @@ from kordena_fiscal.gateway.webiss_2026_schema import load_pinned_extrema_webiss
 from kordena_fiscal.gateway.webiss_extrema_canonical import (
     WebissExtremaCanonicalNfseGateway,
 )
-from kordena_fiscal.issuance import NfseAuthorizationRequest, NfseGatewayClient, NfseQueryClient
+from kordena_fiscal.issuance import (
+    NfseAuthorizationRequest,
+    NfseCanonicalDocument,
+    NfseGatewayClient,
+    NfseQueryClient,
+    NfseServiceLine,
+)
 from kordena_fiscal.issuance.webiss_extrema_builder import (
     ExtremaRpsIntent,
     ExtremaServiceTaker,
@@ -51,15 +64,83 @@ from kordena_fiscal.issuance.webiss_extrema_builder import (
 from kordena_fiscal.lifecycle import FiscalDocumentState
 from kordena_fiscal.persistence.ports import PersistenceConflictError, PersistenceStateError
 from kordena_fiscal.persistence.sqlite import SqliteFiscalDatabase
+from kordena_fiscal.vault import EphemeralCertificateMaterial
 
 NOW = datetime(2026, 11, 11, 12, tzinfo=UTC)
 RETENTION = RetentionPolicyMetadata(policy_id="nfcore-fiscal-archive", policy_version=1)
 
 
-def _request():
-    return _mg_request(
-        "3125101", "Extrema", tax_regime=TaxRegimeCode.NORMAL,
+_ISSUER_CNPJ = Cnpj("11222333000181")
+_PASSWORD = b"nfcore-synthetic-only"
+
+
+def _certificate() -> EphemeralCertificateMaterial:
+    """Generate an ephemeral test A1, never a real certificate or credential."""
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Synthetic Extrema A1")])
+    now = datetime.now(UTC)
+    cn = _ISSUER_CNPJ.value.encode("ascii")
+    cert = (
+        x509.CertificateBuilder().subject_name(name).issuer_name(name)
+        .public_key(key.public_key()).serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(days=1))
+        .not_valid_after(now + timedelta(days=30))
+        .add_extension(x509.KeyUsage(
+            digital_signature=True, content_commitment=False, key_encipherment=False,
+            data_encipherment=False, key_agreement=False, key_cert_sign=False,
+            crl_sign=False, encipher_only=False, decipher_only=False,
+        ), critical=True)
+        .add_extension(x509.SubjectAlternativeName([
+            x509.OtherName(
+                ObjectIdentifier("2.16.76.1.3.3"), bytes([0x04, len(cn)]) + cn,
+            ),
+        ]), critical=False)
+        .sign(key, hashes.SHA256())
     )
+    return EphemeralCertificateMaterial(
+        reference_id="synthetic:extrema-only",
+        pkcs12_bytes=pkcs12.serialize_key_and_certificates(
+            b"synthetic", key, cert, None,
+            serialization.BestAvailableEncryption(_PASSWORD),
+        ),
+        password=_PASSWORD,
+    )
+
+
+def _request() -> NfseAuthorizationRequest:
+    scope = ExecutionScope(
+        tenant_id="tenant-a", unit_id="unit-a",
+        environment=FiscalEnvironment.HOMOLOGATION,
+        correlation_id="corr-extrema-a", host_namespace="host-a",
+    )
+    city = BrazilianJurisdiction("MG", "3125101")
+    issuer = FiscalProfile(
+        profile_id="extrema-synthetic-issuer", scope=scope,
+        cnpj=_ISSUER_CNPJ, legal_name="Empresa Fiscal Sintetica de Extrema Ltda",
+        tax_regime=TaxRegimeCode.NORMAL,
+        state_registration=StateRegistration("MG", "123456789"),
+        primary_cnae=CnaeCode("6201501"),
+        address=FiscalAddress(
+            street="Rua de Teste", number="100", district="Centro",
+            municipality_name="Extrema", jurisdiction=city, postal_code="37640000",
+        ),
+        effective_from=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+    document = NfseCanonicalDocument(
+        document_id="nfse-extrema-doc-1", scope=scope,
+        source=SourceReference("service-order", "order-extrema-1"),
+        issued_at=datetime(2026, 11, 6, 12, tzinfo=UTC),
+        competence_date=datetime(2026, 11, 6, tzinfo=UTC).date(),
+        issuer=issuer, service_jurisdiction=city,
+        services=(NfseServiceLine(
+            line_number=1, municipal_service_code="0107",
+            national_taxation_code="010701", description="Servico sintetico",
+            gross_amount=Money(Decimal("100.00")), iss_amount=Money(Decimal("3.00")),
+            iss_withheld=False, rule_version=1, source_normative="SYNTHETIC-RTC-TEST",
+        ),),
+        service_taker_reference="taker-ref-1",
+    )
+    return NfseAuthorizationRequest.build(document)
 
 
 def _intent(request, reservation) -> ExtremaRpsIntent:
