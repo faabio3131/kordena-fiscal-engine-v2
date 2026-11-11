@@ -386,6 +386,58 @@ def test_trial_cannot_restart_after_activation_or_expiry(
             now=NOW + timedelta(days=14, minutes=1),
         )
 
+def test_unresolvable_published_plan_is_denied_before_email_reservation(
+    database: PostgresFiscalDatabase,
+) -> None:
+    comp = build_postgres_runtime_composition(database)
+    price = PriceDefinition(
+        price_id="unknown-edition-monthly",
+        currency="BRL",
+        cadence=BillingCadence.MONTHLY,
+        base_amount=Decimal("99.00"),
+    )
+    comp.pricing_administration.publish(
+        actor=AdminPrincipal(
+            actor_id="synthetic-pricing-admin",
+            permissions=frozenset({ControlPlanePermission.COMMERCIAL_CONFIG_WRITE}),
+            global_scope=True,
+        ),
+        configuration=CommercialPricingConfiguration(
+            configuration_id="cl12-invalid-edition",
+            version=1,
+            prices=(price,),
+            plans=(
+                PlanDefinition(
+                    plan_id="invalid-edition",
+                    display_name="Invalid Edition",
+                    edition_id="not-in-canonical-product-catalog",
+                    price_ids=(price.price_id,),
+                    trial_days=14,
+                ),
+            ),
+        ),
+        expected_version=None,
+        correlation_id="cl12-unresolvable-edition",
+        published_at=NOW,
+    )
+    with pytest.raises(CommercialFulfillmentError, match="not provisionable"):
+        comp.commercial_trial.begin(
+            plan_id="invalid-edition",
+            price_id=price.price_id,
+            buyer_email="no-reservation@example.test",
+            legal_name="Unresolvable Edition LTDA",
+            idempotency_key="cl12-invalid-edition-attempt",
+            now=NOW,
+        )
+    with database.connection() as conn:
+        rows = conn.execute(
+            "SELECT count(*) FROM fm_commercial_purchases WHERE buyer_email = ?",
+            ("no-reservation@example.test",),
+        ).fetchone()
+    assert rows is not None and rows[0] == 0
+    assert database.human_accounts().by_email("no-reservation@example.test") is None
+
+
 def test_trial_requires_explicit_trial_days_and_never_grants_fiscal_production(
     database: PostgresFiscalDatabase,
 ) -> None:
