@@ -5,8 +5,8 @@ This is NOT a production backup restoration. No production database is accessed.
 from __future__ import annotations
 
 import os
-from uuid import uuid4
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
+from uuid import uuid4
 
 import psycopg
 import pytest
