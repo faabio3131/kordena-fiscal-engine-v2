@@ -278,3 +278,22 @@ def test_nfse_national_access_key_without_official_xml_is_not_authorization() ->
     )
     with pytest.raises(FiscalValidationError, match="NFS-e Nacional"):
         gateway.authorize(_request())
+
+
+@pytest.mark.parametrize("tp_amb", [None, 1, "2"])
+def test_nfse_national_reply_requires_explicit_numeric_tpamb2(tp_amb: object) -> None:
+    """Never infer the environment from an omitted or string-valued field."""
+    xml = b'<NFSe xmlns="http://www.sped.fazenda.gov.br/nfse"/>'
+    body: dict[str, object] = {
+        "chaveAcesso": "35" + "0" * 42,
+        "nfseXmlGZipB64": base64.b64encode(gzip.compress(xml, mtime=0)).decode("ascii"),
+    }
+    if tp_amb is not None:
+        body["tipoAmbiente"] = tp_amb
+    gateway = NfseNacionalHomologationGateway(
+        resolve_certificate=lambda _scope, _cnpj: _certificate(),
+        build_signed_dps=build_signed_dps,
+        exchange=lambda *_args: json.dumps(body).encode(),
+    )
+    with pytest.raises(FiscalValidationError, match="homologação"):
+        gateway.authorize(_request())
