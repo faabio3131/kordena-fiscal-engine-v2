@@ -43,17 +43,17 @@ from kordena_fiscal.issuance.nfe_nfse import (
     NfseGatewayClient,
     NfseQueryClient,
 )
+from kordena_fiscal.issuance.nfse_archive import (
+    NFSE_PREPARED_MEDIA_TYPE,
+    decode_prepared_nfse,
+    encode_prepared_nfse,
+)
 from kordena_fiscal.issuance.webiss_extrema_builder import (
     EXTREMA_INTENT_MEDIA_TYPE,
     ExtremaRpsIntent,
     decode_extrema_intent,
     encode_extrema_intent,
     validate_extrema_intent,
-)
-from kordena_fiscal.issuance.nfse_archive import (
-    NFSE_PREPARED_MEDIA_TYPE,
-    decode_prepared_nfse,
-    encode_prepared_nfse,
 )
 from kordena_fiscal.lifecycle import (
     FiscalDocumentState,
