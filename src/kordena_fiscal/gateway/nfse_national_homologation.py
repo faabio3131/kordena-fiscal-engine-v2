@@ -115,7 +115,7 @@ def parse_nfse_homologation_response(raw: bytes) -> dict[str, str]:
             )
             if (
                 root.tag != "{http://www.sped.fazenda.gov.br/nfse}NFSe"
-                or root.getroottree().docinfo.doctype
+                or bool(getattr(root.getroottree().docinfo, "doctype", ""))
             ):
                 raise ValueError("Non-NFSe official document root")
         except (ValueError, OSError, etree.XMLSyntaxError):
