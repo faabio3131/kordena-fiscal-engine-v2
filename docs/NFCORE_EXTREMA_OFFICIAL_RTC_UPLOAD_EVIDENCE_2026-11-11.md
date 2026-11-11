@@ -1,6 +1,6 @@
 # Extrema/MG — Reconciliação de documentos WebISS RTC (11/11/2026)
 
-**Estado:** `OFFICIAL_PUBLIC_LINKS_VERIFIED / UPLOADED_BYTES_AUDITED / SCHEMA_BUNDLE_INCOMPLETE / NOT_INTERNALLY_CERTIFIED / NOT_EXTERNALLY_HOMOLOGATED`. Esta entrega é **somente documental**, baseada em arquivos compartilhados pelo proprietário. Nenhuma transmissão fiscal, certificado real, cadastro CeC, merge ou deploy.
+**Estado:** `OFFICIAL_PUBLIC_LINKS_VERIFIED / UPLOADED_BYTES_AUDITED / SCHEMA_COMPILED_OFFLINE_NOT_RUNTIME_PINNED / NOT_INTERNALLY_CERTIFIED / NOT_EXTERNALLY_HOMOLOGATED`. Esta entrega é **somente documental**, baseada em arquivos compartilhados pelo proprietário. Nenhuma transmissão fiscal, certificado real, cadastro CeC, merge ou deploy.
 
 ## Portal municipal e enlaces oficiais
 
@@ -35,7 +35,7 @@ O SHA do XSD coincide com o previamente documentado pela PR #423 como arquivo de
 - Dez elementos de envio e dez de resposta: gerar; lote assíncrono; lote síncrono; cancelar; substituir; consultar lote; consultar RPS; consultar serviços prestados; tomados; faixa.
 - Ordem `TCRTCInfoIBSCBS`: `finNFSe`, `indFinal?`, `cIndOp`, `tpOper?`, `gRefNFSe?`, `tpEnteGov?`, `indDest`, `dest?`, `imovel?`, `valores`. Em `dest`: escolha exclusiva `CNPJ/CPF/NIF/cNaoNIF` **primeiro**, depois `xNome`, `end?`, `fone?`, `email?`. Cobrir E160 sem reordenar assinatura.
 - `tcInfNfse/ChaveAcesso` obrigatória no schema de retorno; `CodigoNbs`, `InscricaoEstadual`, `TCInfoPisCofins`, `NifTomador` presentes no pacote/manual.
-- O XSD **importa** `xmldsig-core-schema20020212.xsd` por `http://www.w3.org/2000/09/xmldsig#`. Este arquivo não veio nos uploads; tentativa de `lxml.XMLSchema` falhou ao resolver `dsig:Signature`. **NÃO houve validação completa dos exemplos** e o arquivo SHA individual **não** é o `SchemaSet.package_sha256` do par. Não preencher `PINNED_WEBISS_MG_2026_SCHEMA_DIGESTS['3125101']` sem import original, hash do pacote e suíte golden revisada.
+- O XSD **importa** `xmldsig-core-schema20020212.xsd` por `http://www.w3.org/2000/09/xmldsig#`. Esse arquivo **foi recuperado em seguida** no ZIP `Material de Apoio WebService - Versão 5.0.zip`, vinculado pelo portal oficial. A compilação local do schema RTC+XMLDSig agora **PASSOU** com lxml 6.1.1, sem acesso à rede. O par ainda **não** está embutido/pinado no runtime da PR #423; não preencher `PINNED_WEBISS_MG_2026_SCHEMA_DIGESTS['3125101']` sem governança de distribuição dos bytes, SHA de pacote e golden tests revisados. Os exemplos foram validados contra o XSD completo e os **oito falharam por placeholders obrigatórios vazios**, portanto não são fixtures positivas.
 
 ## Exemplos recebidos: não constituem fixtures golden
 
@@ -49,6 +49,20 @@ O SHA do XSD coincide com o previamente documentado pela PR #423 como arquivo de
 
 O gateway `src/kordena_fiscal/gateway/mg_webiss_soap.py` da #423 cobre parcialmente cinco operações (gerar, lote não-síncrono, cancelar, consultar lote, consultar prestados), mas não expõe contratualmente lote síncrono, substituição, consulta por RPS, consulta de serviços tomados e por faixa. Completar **no adaptador canônico** sem duplicar o transporte; PR #429 foi encerrada por redundância. Além disso faltam builders ABRASF 2.02/RTC 5.2, assinatura real, retorno correlacionado, persistência e E2E API/Web, no contexto das provas do cronograma MG.
 
-Próximos gates: obter `xmldsig-core-schema20020212.xsd`; capturar WSDL e `soap:address` sem POST; montar pacote offline hash-pinned; validar mensagens totalmente preenchidas e assinadas; implementar cinco operações faltantes na #423 com vínculo/correlação/compensação e testes; executar Ruff, Mypy, Pytest, banco, frontend e CI no mesmo HEAD; aprovar homologação externa separadamente.
+Próximos gates: formalizar em artefato aprovado o pacote compilado e verificar licenciamento/proveniência; capturar WSDL vivo e `soap:address` sem POST; montar pacote offline hash-pinned; validar mensagens totalmente preenchidas e assinadas; implementar cinco operações faltantes na #423 com vínculo/correlação/compensação e testes; executar Ruff, Mypy, Pytest, banco, frontend e CI no mesmo HEAD; aprovar homologação externa separadamente.
 
 **Sem mudanças** em AGENTS.md, EGM, branches do Bling, workers, Contabo, `main` ou `production`; esta PR documental não certifica Extrema.
+
+## Atualização de evidências — pacote WebService de 2012 recuperado diretamente do link público (11/11/2026)
+
+- Link do arquivo exibido pelo usuário: `https://drive.google.com/file/d/0Bw7RBBzWF6breGxiS1c4ZVhwS2M/view?resourcekey=0-6QJapRF-I7HWOYG4I16DOA`.
+- ZIP `Material de Apoio WebService - Versão 5.0.zip`: **1.004.364 bytes**, SHA-256 `de34ca49c34866a326b81f435c57364182c47e9b3dff908a98531a298b136269`. Contém dois ZIPs internos (schemas e WSDL), dois PDFs ABRASF **novembro/2012** e tabela de erros `.xlsx`.
+- `schema_xml_nfse_v2-02.zip`: SHA-256 `be07167223779855fba935a3eada78ca40ba4b6d7ef5c2a65dbcbe5fe29228f6`. Contém `nfse v2 02.xsd` SHA `3be765d35f6b3ee0d42bc02f72a0f5f6e12544756fa78de0e9559854081a9d25` (**legado, não usar como substituto do XSD RTC**) e `xmldsig-core-schema20020212.xsd` SHA `13f29857c337bef574e59ea1023caaa9b407bcae0dea013c5c295385688708d4`.
+- **Verificação real**: `lxml.XMLSchema` compilou `nfse_v2_02-IBSCBS.xsd` (SHA `4caeadd9...`) junto com o XMLDSig desse pacote, com `resolve_entities=False`, `no_network=True`, e compilou separadamente o legado 2.02. Sem usar XSD da rede.
+- **Manifesto `SchemaSet.package_sha256`** seguindo o algoritmo do NFCore (sorted `resource.name`, NUL, SHA de arquivo, newline) para **exatamente** `nfse_v2_02-IBSCBS.xsd` e `xmldsig-core-schema20020212.xsd`: `8e0f2a9174cbfafa5a601a7003c5f3d4408ceadd01de1e87b9be12c09cc762ee`. É hash técnico do par verificado localmente, **não aprovação para habilitar transmissão**.
+- **8/8 modelos XML falharam a validação XSD** por campos obrigatórios vazios: os sete XMLs do ZIP de exemplos anteriormente enviado e `SubstituirNfseEnvio.xml` separado. Isso é esperado de templates em branco; nenhum golden positivo de emissão, assinatura e cancelamento foi homologado.
+- `wsdl_nfse_v2 02.zip` SHA `46f361f90aebb0dd86c6811d2eff72a7abd38803ed488d80b07eff30e53c86e3`, inclui `nfse.wsdl` SHA `ef24465f8ef05d466f6f2e6d226b7fe937e90bb727e4c4f372f762a389e25769`. **CRÍTICO:** `soap:address location="http://ws.pbh.gov.br"`. Trata-se de arquivo genérico/legado referente a Belo Horizonte, **nunca** fonte para o endpoint Extrema. As dez operações têm ações SOAP compatíveis com as páginas ASMX públicas, mas a `soap:address` municipal de homologação deve ser conferida no WSDL vivo divulgado pela prefeitura; não reutilizar esse endereço.
+- Planilha `Relacao_de_Erros_e_Alertas.xls.xlsx` SHA `a8c0ce4a93656f3207d41cc6ae2e800f291383b9c67269646fcbc11cc30f5857`, aba `Erros e Alertas`: código **E160** = "Arquivo em desacordo com o XML Schema", mensagem **genérica** ABRASF 2.02. A evidência de posição de `dest` no RTC é restrição de ordenação do XSD atual, não uma redefinição isolada desse código.
+- Links públicos `https://homologacao.webiss.com.br/ws/nfse.asmx?op=GerarNfse` expõem exemplo SOAP 1.1 do próprio domínio de homologação, **sem execução POST**. Ainda resta inspecionar autoridade do WSDL vivo e aprovar composição fiscal/credenciamento.
+
+Nenhuma alteração de runtime, ponte do cofre, certificado, dados de contribuinte ou ativação do provedor foi feita. A PR #432 continua documental; certificação interna completa de Extrema **NÃO** está fechada.
