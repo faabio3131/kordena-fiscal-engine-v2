@@ -32,12 +32,12 @@ from kordena_fiscal.domain import FiscalValidationError
 from kordena_fiscal.events import FiscalInboxEntry, FiscalInboxReceiveResult
 from kordena_fiscal.issuance.nfe_nfse import NfseCanonicalDocument
 from kordena_fiscal.lifecycle import IdempotencyKey, IdempotencyReservation
-from kordena_fiscal.numbering.dps import DpsNumberReservation
 from kordena_fiscal.numbering import (
     FiscalNumberReservation,
     FiscalSequenceKey,
     FiscalSequencePolicy,
 )
+from kordena_fiscal.numbering.dps import DpsNumberReservation
 from kordena_fiscal.security.human_administration import (
     HumanAdministrationConflictError,
     HumanAdministrationNotFoundError,
