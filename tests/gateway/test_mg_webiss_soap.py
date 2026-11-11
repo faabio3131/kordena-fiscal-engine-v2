@@ -77,7 +77,9 @@ def _envelope(operation: Abrasf203Operation):
         preaudit=Mock(),
         municipal_schema_version="2.02",
         municipal_validator=_validator(),
-    ) if operation is Abrasf203Operation.QUERY_BATCH else None
+    ) if operation in (
+        Abrasf203Operation.QUERY_BATCH, Abrasf203Operation.QUERY_ISSUED,
+    ) else None
 
 
 def _rejection_xml(operation: Abrasf203Operation) -> str:
@@ -85,6 +87,7 @@ def _rejection_xml(operation: Abrasf203Operation) -> str:
         Abrasf203Operation.GENERATE: "GerarNfseResposta",
         Abrasf203Operation.SUBMIT_BATCH: "EnviarLoteRpsResposta",
         Abrasf203Operation.QUERY_BATCH: "ConsultarLoteRpsResposta",
+        Abrasf203Operation.QUERY_ISSUED: "ConsultarNfseServicoPrestadoResposta",
         Abrasf203Operation.CANCEL: "CancelarNfseResposta",
     }
     name = roots[operation]
@@ -611,3 +614,30 @@ def test_extrema_has_no_implicit_municipal_http_route_before_wsdl_approval() -> 
         )
     assert provider.resolve_provider_id.call_count == 1
     certificate.assert_not_called()
+
+
+def test_extrema_issued_invoice_query_matches_official_soap_method(material) -> None:
+    """The city publishes ConsultarNfseServicoPrestado, not just batch lookup."""
+    op = Abrasf203Operation.QUERY_ISSUED
+    resolver = Mock()
+    resolver.resolve_provider_id.return_value = EXTREMA_WEBISS_PROVIDER_ID
+    cert = Mock(return_value=material)
+    exchange = Mock(return_value=_response(op))
+    gateway = WebissExtremaHomologationTransport(
+        provider_resolver=resolver, resolve_certificate=cert, exchange=exchange,
+        municipal_schema_evidence=_synthetic_evidence("3125101"),
+        municipal_schema_validator=_validator(),
+    )
+    prepared = _envelope(op)
+    assert prepared is not None
+    assert prepared.soap_action == '"http://nfse.abrasf.org.br/ConsultarNfseServicoPrestado"'
+    assert gateway.exchange_prepared(
+        envelope=prepared, operation=op, scope=_request().scope,
+        issuer_cnpj=Cnpj(CNPJ), issuer_tax_regime=TaxRegimeCode.NORMAL,
+        competence_date=date(2026, 10, 31), jurisdiction=EXTREMA,
+    ) == _rejection_xml(op).encode()
+    assert resolver.resolve_provider_id.call_args.kwargs["operation"] == (
+        ConfiguredFiscalOperation.QUERY.value
+    )
+    cert.assert_called_once()
+    exchange.assert_called_once()

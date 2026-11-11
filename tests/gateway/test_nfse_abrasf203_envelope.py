@@ -46,6 +46,11 @@ def _payload(operation):
             f'<Prestador><CpfCnpj><Cnpj>{CNPJ}</Cnpj></CpfCnpj></Prestador>'
             '<Protocolo>123456</Protocolo>'
         )
+    elif operation is Abrasf203Operation.QUERY_ISSUED:
+        body = (
+            f'<Prestador><CpfCnpj><Cnpj>{CNPJ}</Cnpj></CpfCnpj></Prestador>'
+            '<NumeroNfse>123</NumeroNfse>'
+        )
     return f'<{name} xmlns="{_A}">{body}</{name}>'.encode()
 
 
@@ -53,6 +58,7 @@ def _payload(operation):
     (Abrasf203Operation.GENERATE, 1),
     (Abrasf203Operation.SUBMIT_BATCH, 2),
     (Abrasf203Operation.QUERY_BATCH, 0),
+    (Abrasf203Operation.QUERY_ISSUED, 0),
 ])
 def test_soap_contains_correct_parts_and_verifiable_signatures(material, operation, count):
     calls = Mock()
