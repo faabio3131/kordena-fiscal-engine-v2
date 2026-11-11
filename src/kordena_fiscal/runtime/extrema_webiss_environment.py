@@ -22,7 +22,10 @@ class ExtremaWebissNetworkError(FiscalValidationError):
 
 
 class _NoRedirects(HTTPRedirectHandler):
-    def redirect_request(self, request, fp, code, msg, headers, newurl):
+    def redirect_request(  # type: ignore[override]
+        self, request: Request, fp: object, code: int, msg: str,
+        headers: Mapping[str, str], newurl: str,
+    ) -> None:
         raise ExtremaWebissNetworkError("WebISS redirect forbidden")
 
 
