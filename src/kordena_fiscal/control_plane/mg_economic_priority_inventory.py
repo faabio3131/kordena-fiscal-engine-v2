@@ -38,6 +38,13 @@ class MgEconomicPriorityMunicipality:
             raise FiscalValidationError("MG economic first-wave rank out of scope")
         if not self.municipality.strip():
             raise FiscalValidationError("MG first-wave municipality name is required")
+        if (
+            len(self.municipality_ibge) != 7
+            or not self.municipality_ibge.isascii()
+            or not self.municipality_ibge.isdecimal()
+            or not self.municipality_ibge.startswith("31")
+        ):
+            raise FiscalValidationError("MG municipality IBGE code must have prefix 31")
         BrazilianJurisdiction("MG", self.municipality_ibge)
         if not isinstance(self.research_state, MgMunicipalResearchState):
             raise FiscalValidationError("MG first-wave research state is not recognized")
