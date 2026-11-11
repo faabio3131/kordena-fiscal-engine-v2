@@ -1,6 +1,6 @@
 """Public fiscal-numbering surface."""
 
-from .dps import DpsNumberReservation, DpsNumberingStore
+from .dps import DpsNumberingStore, DpsNumberReservation
 from .manager import (
     FiscalNumberReservation,
     FiscalSequenceKey,
