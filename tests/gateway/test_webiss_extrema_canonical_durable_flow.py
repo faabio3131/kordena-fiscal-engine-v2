@@ -27,6 +27,7 @@ from kordena_fiscal.domain import (
     Cnpj,
     FiscalEnvironment,
     FiscalValidationError,
+    SourceReference,
     TaxRegimeCode,
 )
 from kordena_fiscal.gateway.authorization import AuthorizationStatus
@@ -39,7 +40,7 @@ from kordena_fiscal.gateway.webiss_2026_schema import load_pinned_extrema_webiss
 from kordena_fiscal.gateway.webiss_extrema_canonical import (
     WebissExtremaCanonicalNfseGateway,
 )
-from kordena_fiscal.issuance import NfseGatewayClient, NfseQueryClient
+from kordena_fiscal.issuance import NfseAuthorizationRequest, NfseGatewayClient, NfseQueryClient
 from kordena_fiscal.issuance.webiss_extrema_builder import (
     ExtremaRpsIntent,
     ExtremaServiceTaker,
@@ -48,6 +49,7 @@ from kordena_fiscal.issuance.webiss_extrema_builder import (
     encode_extrema_intent,
 )
 from kordena_fiscal.lifecycle import FiscalDocumentState
+from kordena_fiscal.persistence.ports import PersistenceConflictError, PersistenceStateError
 from kordena_fiscal.persistence.sqlite import SqliteFiscalDatabase
 
 NOW = datetime(2026, 11, 11, 12, tzinfo=UTC)
@@ -190,7 +192,7 @@ def test_canonical_durable_issue_replay_query_without_resend(tmp_path):
         if "GerarNfse" in soap_action:
             return _wrap_soap(
                 Abrasf203Operation.GENERATE,
-                ('<GerarNfseResposta xmlns="http://www.abrasf.org.br/nfse.xsd"/>').encode(),
+                b'<GerarNfseResposta xmlns="http://www.abrasf.org.br/nfse.xsd"/>',
             )
         assert "ConsultarNfsePorRps" in soap_action
         return _success_response(Abrasf203Operation.QUERY_RPS, intent)
@@ -227,8 +229,6 @@ def test_no_duplicate_reserved_rps_or_cross_tenant_use(tmp_path):
     app = FiscalApplicationService(db)
     request = _request()
     first = _prepare(app, request)
-    from kordena_fiscal.domain import SourceReference
-    from kordena_fiscal.issuance import NfseAuthorizationRequest
     second_request = NfseAuthorizationRequest.build(
         replace(
             request.document, document_id="nfse-2",
@@ -239,7 +239,7 @@ def test_no_duplicate_reserved_rps_or_cross_tenant_use(tmp_path):
     assert first.reservation.number + 1 == second.reservation.number
     assert first.reservation.reservation_token != second.reservation.reservation_token
     other = replace(request.document.scope, tenant_id="attacker")
-    with pytest.raises(Exception):
+    with pytest.raises((PersistenceConflictError, PersistenceStateError)):
         app.load_extrema_rps_intent(other, request.document.document_id)
     with pytest.raises(FiscalValidationError):
         build_extrema_rps_xml(
@@ -265,7 +265,6 @@ def test_tampered_immutable_archive_and_rtc_rejected_before_a1(tmp_path):
             json.dumps(mutation).encode(), scope=request.document.scope, request=request,
         )
     bad_scope = replace(request.document.scope, environment=FiscalEnvironment.PRODUCTION)
-    from kordena_fiscal.issuance import NfseAuthorizationRequest
     with pytest.raises(FiscalValidationError):
         app.prepare_nfse_authorization(
             replace(request.document, scope=bad_scope),
@@ -276,7 +275,6 @@ def test_tampered_immutable_archive_and_rtc_rejected_before_a1(tmp_path):
     wrong_muni = replace(
         request.document, service_jurisdiction=BrazilianJurisdiction("MG", "3170107"),
     )
-    from kordena_fiscal.issuance import NfseAuthorizationRequest
     with pytest.raises(FiscalValidationError):
         build_extrema_rps_xml(
             NfseAuthorizationRequest.build(wrong_muni),
