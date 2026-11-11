@@ -135,6 +135,8 @@ def _request(**service_overrides) -> NfseAuthorizationRequest:
         service_jurisdiction=BrazilianJurisdiction("SP", "3550308"),
         services=(NfseServiceLine(**service_fields),),
         service_taker_reference="taker-ref-1",
+        # Synthetic fixture uses a reserved number; never hash-derived.
+        dps_number=1,
     )
     return NfseAuthorizationRequest.build(document)
 
