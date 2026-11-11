@@ -71,7 +71,7 @@ class VerifiedExtremaHomologationEndpoint:
             or port not in (None, 443)
             or parsed.path != "/ws/nfse.asmx"
             or parsed.query or parsed.fragment
-            or self.url == EXTREMA_WEBISS_PUBLIC_SERVICE
+            or parsed.hostname == urlsplit(EXTREMA_WEBISS_PUBLIC_SERVICE).hostname
             or source.scheme != "https"
             or source.hostname not in {"extremamg.webiss.com.br", "extrema.mg.gov.br"}
             or not re.fullmatch(r"[0-9a-f]{64}", self.evidence_sha256)
