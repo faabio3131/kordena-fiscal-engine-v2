@@ -82,7 +82,7 @@
       "ibge": "3118601",
       "municipality": "Contagem",
       "economic_priority": 4,
-      "nfse_emitter_evidence": "MUNICIPAL_NATIONAL_LAYOUT_JSON",
+      "nfse_emitter_evidence": "MUNICIPAL_WITH_FEDERAL_SIMPLES_NATIONAL",
       "municipal_source": "https://receita.contagem.mg.gov.br/nfe/",
       "state": "CHANNEL_RESEARCHED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
@@ -99,7 +99,8 @@
         "cancel": "NOT_CERTIFIED",
         "substitute": "NOT_CERTIFIED"
       },
-      "production_approved": false
+      "production_approved": false,
+      "issuer_channel_scope_note": "Normal/competência histórica: ISS Digital municipal e contrato municipal a comprovar; ME/EPP Simples competência >= 2026-11-01: SEFIN Nacional obrigatório"
     },
     {
       "ibge": "3170107",
@@ -128,9 +129,9 @@
       "ibge": "3136702",
       "municipality": "Juiz de Fora",
       "economic_priority": 6,
-      "nfse_emitter_evidence": "UNVERIFIED",
-      "municipal_source": null,
-      "state": "RESEARCH_REQUIRED",
+      "nfse_emitter_evidence": "NATIONAL_EMITTER_MUNICIPAL_DEADLINE",
+      "municipal_source": "https://nfse.pjf.mg.gov.br/ComunicadoNfseNacional.html",
+      "state": "CHANNEL_RESEARCHED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
       "nfce_mg65_state": "INTERNAL_IMPLEMENTATION_PENDING",
       "nfse_envelope_contract_version": null,
@@ -145,7 +146,8 @@
         "cancel": "NOT_CERTIFIED",
         "substitute": "NOT_CERTIFIED"
       },
-      "production_approved": false
+      "production_approved": false,
+      "issuer_channel_scope_note": "Emissor Nacional exclusivo a partir de 2026-09-01; escrituração e DAM permanecem municipais"
     },
     {
       "ibge": "3125101",
@@ -174,9 +176,9 @@
       "ibge": "3131307",
       "municipality": "Ipatinga",
       "economic_priority": 8,
-      "nfse_emitter_evidence": "UNVERIFIED",
-      "municipal_source": null,
-      "state": "RESEARCH_REQUIRED",
+      "nfse_emitter_evidence": "MUNICIPAL_NATIONAL_TRANSITION_REVIEW",
+      "municipal_source": "https://cultura.ipatinga.mg.gov.br/detalhe-da-materia/info/ipatinga-adequa-sistema-de-emissao-de-notas-fiscais-ao-padrao-nacional-a-partir-de-2026/109702",
+      "state": "CHANNEL_RESEARCHED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
       "nfce_mg65_state": "INTERNAL_IMPLEMENTATION_PENDING",
       "nfse_envelope_contract_version": null,
@@ -191,15 +193,16 @@
         "cancel": "NOT_CERTIFIED",
         "substitute": "NOT_CERTIFIED"
       },
-      "production_approved": false
+      "production_approved": false,
+      "issuer_channel_scope_note": "Revisar regime/competência; não supor equivalência entre padrão nacional e host de emissão"
     },
     {
       "ibge": "3167202",
       "municipality": "Sete Lagoas",
       "economic_priority": 9,
-      "nfse_emitter_evidence": "UNVERIFIED",
-      "municipal_source": null,
-      "state": "RESEARCH_REQUIRED",
+      "nfse_emitter_evidence": "NATIONAL_EMITTER_MUNICIPAL_DEADLINE",
+      "municipal_source": "https://ibs.setelagoas.mg.gov.br/nfse.html",
+      "state": "CHANNEL_RESEARCHED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
       "nfce_mg65_state": "INTERNAL_IMPLEMENTATION_PENDING",
       "nfse_envelope_contract_version": null,
@@ -214,15 +217,16 @@
         "cancel": "NOT_CERTIFIED",
         "substitute": "NOT_CERTIFIED"
       },
-      "production_approved": false
+      "production_approved": false,
+      "issuer_channel_scope_note": "Emissor Nacional obrigatório desde 2026-01-01 para demais contribuintes; guia ISS no município"
     },
     {
       "ibge": "3152501",
       "municipality": "Pouso Alegre",
       "economic_priority": 10,
-      "nfse_emitter_evidence": "UNVERIFIED",
-      "municipal_source": null,
-      "state": "RESEARCH_REQUIRED",
+      "nfse_emitter_evidence": "MUNICIPAL_UNTIL_2026_FOR_NON_SIMPLES",
+      "municipal_source": "https://pousoalegre.atende.net/autoatendimento/servicos/consulta-de-autenticidade-de-nota-fiscal-eletronica-nfse/detalhar/1",
+      "state": "CHANNEL_RESEARCHED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
       "nfce_mg65_state": "INTERNAL_IMPLEMENTATION_PENDING",
       "nfse_envelope_contract_version": null,
@@ -237,15 +241,16 @@
         "cancel": "NOT_CERTIFIED",
         "substitute": "NOT_CERTIFIED"
       },
-      "production_approved": false
+      "production_approved": false,
+      "issuer_channel_scope_note": "Simples nacional de 2026-11-01; não Simples municipal até 2026-12-31; nacional a partir de 2027-01-01"
     },
     {
       "ibge": "3143302",
       "municipality": "Montes Claros",
       "economic_priority": 11,
-      "nfse_emitter_evidence": "UNVERIFIED",
-      "municipal_source": null,
-      "state": "RESEARCH_REQUIRED",
+      "nfse_emitter_evidence": "NATIONAL_EMITTER_WITH_MUNICIPAL_ACCESS",
+      "municipal_source": "https://financas.montesclaros.mg.gov.br/nota-fiscal-de-servicos-eletronica-nacional",
+      "state": "CHANNEL_RESEARCHED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
       "nfce_mg65_state": "INTERNAL_IMPLEMENTATION_PENDING",
       "nfse_envelope_contract_version": null,
@@ -260,15 +265,16 @@
         "cancel": "NOT_CERTIFIED",
         "substitute": "NOT_CERTIFIED"
       },
-      "production_approved": false
+      "production_approved": false,
+      "issuer_channel_scope_note": "Emissor nacional; CMC/IM, códigos municipais e acesso do contribuinte são necessários; guia e DEISS municipais"
     },
     {
       "ibge": "3144805",
       "municipality": "Nova Lima",
       "economic_priority": 12,
-      "nfse_emitter_evidence": "UNVERIFIED",
-      "municipal_source": null,
-      "state": "RESEARCH_REQUIRED",
+      "nfse_emitter_evidence": "NATIONAL_EMITTER_MUNICIPAL_DEADLINE",
+      "municipal_source": "https://novalima.mg.gov.br/inicio/noticias/nova_lima_adere_ao_padrao_nacional_da_nota_fiscal_de_servicos_eletronica_nfs_e",
+      "state": "CHANNEL_RESEARCHED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
       "nfce_mg65_state": "INTERNAL_IMPLEMENTATION_PENDING",
       "nfse_envelope_contract_version": null,
@@ -283,15 +289,16 @@
         "cancel": "NOT_CERTIFIED",
         "substitute": "NOT_CERTIFIED"
       },
-      "production_approved": false
+      "production_approved": false,
+      "issuer_channel_scope_note": "Emissor Nacional exclusivo desde 2026-01-01; guias ISS permanecem no município"
     },
     {
       "ibge": "3151800",
       "municipality": "Poços de Caldas",
       "economic_priority": 13,
-      "nfse_emitter_evidence": "UNVERIFIED",
-      "municipal_source": null,
-      "state": "RESEARCH_REQUIRED",
+      "nfse_emitter_evidence": "MUNICIPAL_NATIONAL_LAYOUT_TRANSITION",
+      "municipal_source": "https://pocosdecaldas.mg.gov.br/noticias/prefeitura-orienta-contribuintes-sobre-emissao-da-nota-fiscal-de-servicos-no-padrao-nacional/",
+      "state": "CHANNEL_RESEARCHED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
       "nfce_mg65_state": "INTERNAL_IMPLEMENTATION_PENDING",
       "nfse_envelope_contract_version": null,
@@ -306,15 +313,16 @@
         "cancel": "NOT_CERTIFIED",
         "substitute": "NOT_CERTIFIED"
       },
-      "production_approved": false
+      "production_approved": false,
+      "issuer_channel_scope_note": "NFe-Cidades municipal ainda operacional para seus regimes; Simples competência >=2026-11-01 nacional pela regra federal"
     },
     {
       "ibge": "3170701",
       "municipality": "Varginha",
       "economic_priority": 14,
-      "nfse_emitter_evidence": "UNVERIFIED",
-      "municipal_source": null,
-      "state": "RESEARCH_REQUIRED",
+      "nfse_emitter_evidence": "MUNICIPAL_CHANNEL_REVIEW",
+      "municipal_source": "https://www.varginha.mg.gov.br/portal/servicos/1038/servicos/",
+      "state": "CHANNEL_RESEARCHED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
       "nfce_mg65_state": "INTERNAL_IMPLEMENTATION_PENDING",
       "nfse_envelope_contract_version": null,
@@ -329,15 +337,16 @@
         "cancel": "NOT_CERTIFIED",
         "substitute": "NOT_CERTIFIED"
       },
-      "production_approved": false
+      "production_approved": false,
+      "issuer_channel_scope_note": "Portal municipal possui serviços fiscais; canal autorizado por regime/competência ainda requer confirmação"
     },
     {
       "ibge": "3122306",
       "municipality": "Divinópolis",
       "economic_priority": 15,
-      "nfse_emitter_evidence": "UNVERIFIED",
-      "municipal_source": null,
-      "state": "RESEARCH_REQUIRED",
+      "nfse_emitter_evidence": "NATIONAL_FOR_AUTONOMOUS_ONLY_RESEARCH",
+      "municipal_source": "https://www.divinopolis.mg.gov.br/portal/servicos/1102/roteiro-nota-fiscal---pessoa-fisica",
+      "state": "CHANNEL_RESEARCHED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
       "nfce_mg65_state": "INTERNAL_IMPLEMENTATION_PENDING",
       "nfse_envelope_contract_version": null,
@@ -352,15 +361,16 @@
         "cancel": "NOT_CERTIFIED",
         "substitute": "NOT_CERTIFIED"
       },
-      "production_approved": false
+      "production_approved": false,
+      "issuer_channel_scope_note": "Canal nacional confirmado para pessoa física/autônomo desde 2026-01-01; não generalizar para todos os regimes PJ"
     },
     {
       "ibge": "3104007",
       "municipality": "Araxá",
       "economic_priority": 16,
-      "nfse_emitter_evidence": "UNVERIFIED",
-      "municipal_source": null,
-      "state": "RESEARCH_REQUIRED",
+      "nfse_emitter_evidence": "NATIONAL_EMITTER_MUNICIPAL_DEADLINE",
+      "municipal_source": "https://araxa.mg.gov.br/noticia/8610/prefeitura-de-araxa-orienta-prestadores-de-servico-sobre-nova-forma-de-emitir-nota-fiscal-em-2026",
+      "state": "CHANNEL_RESEARCHED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
       "nfce_mg65_state": "INTERNAL_IMPLEMENTATION_PENDING",
       "nfse_envelope_contract_version": null,
@@ -375,7 +385,8 @@
         "cancel": "NOT_CERTIFIED",
         "substitute": "NOT_CERTIFIED"
       },
-      "production_approved": false
+      "production_approved": false,
+      "issuer_channel_scope_note": "Emissor Nacional exclusivo desde 2026-01-01"
     },
     {
       "ibge": "3127701",
@@ -404,9 +415,9 @@
       "ibge": "3148004",
       "municipality": "Patos de Minas",
       "economic_priority": 18,
-      "nfse_emitter_evidence": "UNVERIFIED",
-      "municipal_source": null,
-      "state": "RESEARCH_REQUIRED",
+      "nfse_emitter_evidence": "NATIONAL_EMITTER_MUNICIPAL_DEADLINE",
+      "municipal_source": "https://www.patosdeminas.mg.gov.br/portal/secretarias-paginas/76/nfs-e-nacional/",
+      "state": "CHANNEL_RESEARCHED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
       "nfce_mg65_state": "INTERNAL_IMPLEMENTATION_PENDING",
       "nfse_envelope_contract_version": null,
@@ -421,15 +432,16 @@
         "cancel": "NOT_CERTIFIED",
         "substitute": "NOT_CERTIFIED"
       },
-      "production_approved": false
+      "production_approved": false,
+      "issuer_channel_scope_note": "Emissor Nacional para todas PJ desde 2026-01-01; cronograma prévio por categorias"
     },
     {
       "ibge": "3118007",
       "municipality": "Congonhas",
       "economic_priority": 19,
-      "nfse_emitter_evidence": "UNVERIFIED",
-      "municipal_source": null,
-      "state": "RESEARCH_REQUIRED",
+      "nfse_emitter_evidence": "NATIONAL_EMITTER_MUNICIPAL_DEADLINE",
+      "municipal_source": "https://www.congonhas.mg.gov.br/index.php/congonhas-adota-novo-modelo-nacional-de-emissao-da-nota-fiscal-de-servicos-eletronica-nfs-e/",
+      "state": "CHANNEL_RESEARCHED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
       "nfce_mg65_state": "INTERNAL_IMPLEMENTATION_PENDING",
       "nfse_envelope_contract_version": null,
@@ -444,7 +456,8 @@
         "cancel": "NOT_CERTIFIED",
         "substitute": "NOT_CERTIFIED"
       },
-      "production_approved": false
+      "production_approved": false,
+      "issuer_channel_scope_note": "Emissor Nacional desde 2026-01-01, guias ISS seguem municipais"
     },
     {
       "ibge": "3131703",
@@ -469,5 +482,21 @@
       },
       "production_approved": false
     }
-  ]
+  ],
+  "federal_national_simples_rule": {
+    "source": "https://www.gov.br/nfse/pt-br/noticias/nfs-e-informa-diretrizes-sobre-a-obrigatoriedade-da-emissao-da-nfs-e-nacional-para-optantes-do-simples-nacional",
+    "published": "2026-10-29",
+    "effective_competence_from": "2026-11-01",
+    "applies_to": "ME/EPP optantes do Simples Nacional, em qualquer municipio com emissor proprio",
+    "national_channel_required": true,
+    "historical_municipal_issuance_rule": "Para competencias anteriores à data de corte, verificar regra municipal vigente e recusar SEFIN quando emissor local for o autorizado",
+    "source_class": "OFFICIAL_LEGISLATION_RESEARCH_NOT_RUNTIME_AUTHORITY"
+  },
+  "coverage_summary": {
+    "total": 20,
+    "municipal_official_source_mapped": 16,
+    "municipal_contract_version_and_envelope_certified": 0,
+    "external_homologated": 0,
+    "source_verified_not_homologated": true
+  }
 }
