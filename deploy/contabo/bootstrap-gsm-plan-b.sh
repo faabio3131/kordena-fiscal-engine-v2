@@ -4,6 +4,7 @@
 # NEVER grants sudo/Docker rights, edits credentials or starts containers.
 set -Eeuo pipefail
 umask 077
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 
 usage() {
   printf '%s\n' 'usage: bootstrap-gsm-plan-b.sh --check|--apply <approved-main-sha40>' >&2
@@ -40,8 +41,8 @@ done
 command -v visudo >/dev/null || { echo 'NO_GO_VISUDO_UNAVAILABLE'; exit 42; }
 visudo -c >/dev/null || { echo 'NO_GO_SUDOERS_INVALID'; exit 42; }
 
-# Fetch only source refs; do NOT checkout main, mutate deployed app or run code from checkout.
-git -C "$REPO" fetch --quiet --no-tags origin main
+# Source checkout must already have the reviewed main ref, fetched separately by unprivileged operator.
+# No network, hooks or Git fetch are invoked as root; checkout and application stay unchanged.
 current_main=$(git -C "$REPO" rev-parse --verify refs/remotes/origin/main)
 [[ "$current_main" == "$sha" ]] || { echo 'NO_GO_UNAPPROVED_MAIN_SHA'; exit 42; }
 
