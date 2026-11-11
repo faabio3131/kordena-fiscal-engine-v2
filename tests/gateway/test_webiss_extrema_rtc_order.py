@@ -20,7 +20,7 @@ def _rps(destination: str) -> bytes:
         f'<GerarNfseEnvio xmlns="{_NS}"><Rps><InfDeclaracaoPrestacaoServico>'
         f"<IBSCBS><dest>{destination}</dest></IBSCBS>"
         "</InfDeclaracaoPrestacaoServico></Rps></GerarNfseEnvio>"
-    ).encode("utf-8")
+    ).encode()
 
 
 @pytest.mark.parametrize(
