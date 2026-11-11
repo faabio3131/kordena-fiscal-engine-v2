@@ -167,7 +167,15 @@ def collect(expected_sha: str) -> dict[str, str]:
     }
     source_sha = command_sha()
     try:
-        deployed = (ROOT / ".deployed").read_text(encoding="ascii").strip()
+        state_lines = (ROOT / ".deployed").read_text(encoding="ascii").splitlines()
+        # deploy.sh writes exactly SHA=<40-char commit>, not a bare commit SHA.
+        deployed = (
+            state_lines[0][4:]
+            if len(state_lines) == 1
+            and state_lines[0].startswith("SHA=")
+            and SHA_RE.fullmatch(state_lines[0][4:])
+            else ""
+        )
     except (OSError, UnicodeError):
         deployed = ""
     output["SOURCE_VS_DEPLOYED"] = (
@@ -255,7 +263,7 @@ def main() -> int:
             raise RuntimeError("inventory value invalid")
         print(key + "=" + value)
     # A successful inventory run is NOT an authorization to launch workers.
-    return 0 if report["HOST"] == "PASS" and report.get("DOCKER_ACCESS") == "PASS" else 2
+    return 2 if report["RESULT"].startswith("NO_GO") else 0
 
 
 if __name__ == "__main__":
