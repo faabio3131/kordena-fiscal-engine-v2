@@ -154,6 +154,19 @@ def require_extrema_rtc_destination_order(xml: bytes) -> None:
     except etree.XMLSyntaxError:
         raise WebissMunicipalSchemaUnverified("Invalid municipal RTC XML") from None
     namespace = "http://www.abrasf.org.br/nfse.xsd"
+    for ibscbs in root.iter(f"{{{namespace}}}IBSCBS"):
+        indicator = ibscbs.findtext(f"{{{namespace}}}indDest")
+        recipient = ibscbs.find(f"{{{namespace}}}dest")
+        # Cross-field condition in the published WebISS 2.02 RTC schema:
+        # indDest=0 means the acquirer is the recipient (no separate <dest>);
+        # indDest=1 means a distinct recipient must be identified.
+        # This check complements the official XSD without computing tax.
+        if (indicator == "0" and recipient is not None) or (
+            indicator == "1" and recipient is None
+        ):
+            raise WebissMunicipalSchemaUnverified(
+                "Extrema WebISS RTC recipient group conflicts with indDest"
+            )
     for destination in root.iter(f"{{{namespace}}}dest"):
         if not any(
             ancestor.tag == f"{{{namespace}}}IBSCBS"
