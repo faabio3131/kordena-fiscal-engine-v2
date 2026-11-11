@@ -55,10 +55,7 @@ def _request():
     )
 
 
-def _intent(app: FiscalApplicationService, request) -> ExtremaRpsIntent:
-    reservation = app.reserve_extrema_rps_number(
-        scope=request.document.scope, municipality_ibge="3125101", series=1,
-    )
+def _intent(request, reservation) -> ExtremaRpsIntent:
     return ExtremaRpsIntent(
         request_fingerprint=request.request_fingerprint,
         issuer_cnpj=request.document.issuer.cnpj,
@@ -77,6 +74,17 @@ def _intent(app: FiscalApplicationService, request) -> ExtremaRpsIntent:
             cnpj=Cnpj("12345678000195"),
             legal_name="Tomador de teste sintético",
         ),
+    )
+
+
+def _prepare(app: FiscalApplicationService, request) -> ExtremaRpsIntent:
+    app.prepare_nfse_authorization(
+        request.document, occurred_at=NOW, retention=RETENTION,
+        extrema_intent_builder=lambda reservation: _intent(request, reservation),
+        extrema_rps_series=1,
+    )
+    return app.load_extrema_rps_intent(
+        request.document.scope, request.document.document_id,
     )
 
 
@@ -130,7 +138,7 @@ def test_builder_generates_real_xsd_valid_webiss_2026_rtc_rps(tmp_path):
     database.initialize()
     app = FiscalApplicationService(database)
     request = _request()
-    intent = _intent(app, request)
+    intent = _prepare(app, request)
     _, validator = load_pinned_extrema_webiss_rtc_schema()
     xml = build_extrema_rps_xml(request, intent, validator=validator)
     validator.validate_document(xml)
@@ -154,10 +162,7 @@ def test_canonical_durable_issue_replay_query_without_resend(tmp_path):
     db.initialize()
     app = FiscalApplicationService(db)
     request = _request()
-    intent = _intent(app, request)
-    app.prepare_nfse_authorization(
-        request.document, occurred_at=NOW, retention=RETENTION, extrema_intent=intent,
-    )
+    intent = _prepare(app, request)
     restarted = FiscalApplicationService(SqliteFiscalDatabase(db.path))
     assert restarted.load_extrema_rps_intent(
         request.document.scope, request.document.document_id,
@@ -165,8 +170,15 @@ def test_canonical_durable_issue_replay_query_without_resend(tmp_path):
     with pytest.raises(Exception, match="cannot change"):
         restarted.prepare_nfse_authorization(
             request.document, occurred_at=NOW, retention=RETENTION,
-            extrema_intent=replace(intent, rtc_tax_class="000002"),
         )
+    replay = restarted.prepare_nfse_authorization(
+        request.document, occurred_at=NOW, retention=RETENTION,
+        extrema_intent_builder=lambda _reservation: pytest.fail(
+            "replay must never allocate a new RPS number"
+        ),
+        extrema_rps_series=1,
+    )
+    assert replay.replay
     calls = []
     def exchange(data, soap_action, _context, _timeout):
         calls.append(soap_action)
@@ -209,12 +221,18 @@ def test_no_duplicate_reserved_rps_or_cross_tenant_use(tmp_path):
     db.initialize()
     app = FiscalApplicationService(db)
     request = _request()
-    first = _intent(app, request)
-    second = _intent(app, request)
-    assert first.reservation.number + 1 == second.reservation.number
-    app.prepare_nfse_authorization(
-        request.document, occurred_at=NOW, retention=RETENTION, extrema_intent=first,
+    first = _prepare(app, request)
+    from kordena_fiscal.domain import SourceReference
+    from kordena_fiscal.issuance import NfseAuthorizationRequest
+    second_request = NfseAuthorizationRequest.build(
+        replace(
+            request.document, document_id="nfse-2",
+            source=SourceReference("service-order", "order-other-2"),
+        )
     )
+    second = _prepare(app, second_request)
+    assert first.reservation.number + 1 == second.reservation.number
+    assert first.reservation.reservation_token != second.reservation.reservation_token
     other = replace(request.document.scope, tenant_id="attacker")
     with pytest.raises(Exception):
         app.load_extrema_rps_intent(other, request.document.document_id)
@@ -232,16 +250,23 @@ def test_tampered_immutable_archive_and_rtc_rejected_before_a1(tmp_path):
     db.initialize()
     app = FiscalApplicationService(db)
     request = _request()
-    intent = _intent(app, request)
-    bad_raw = encode_extrema_intent(intent).replace(b"000001", b"000002")
-    altered = decode_extrema_intent(
-        bad_raw, scope=request.document.scope, request=request,
-    )
-    assert altered != intent
+    intent = _prepare(app, request)
+    original = encode_extrema_intent(intent)
+    import json
+    mutation = json.loads(original)
+    mutation["reservation"]["token"] = "0" * 64
+    with pytest.raises(FiscalValidationError, match="invalid or mutated"):
+        decode_extrema_intent(
+            json.dumps(mutation).encode(), scope=request.document.scope, request=request,
+        )
     bad_scope = replace(request.document.scope, environment=FiscalEnvironment.PRODUCTION)
+    from kordena_fiscal.issuance import NfseAuthorizationRequest
     with pytest.raises(FiscalValidationError):
-        app.reserve_extrema_rps_number(
-            scope=bad_scope, municipality_ibge="3125101", series=1,
+        app.prepare_nfse_authorization(
+            replace(request.document, scope=bad_scope),
+            occurred_at=NOW, retention=RETENTION,
+            extrema_intent_builder=lambda reservation: _intent(request, reservation),
+            extrema_rps_series=1,
         )
     wrong_muni = replace(
         request.document, service_jurisdiction=BrazilianJurisdiction("MG", "3170107"),
