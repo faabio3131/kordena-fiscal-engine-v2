@@ -15,7 +15,7 @@ import base64
 import gzip
 import json
 from dataclasses import replace
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import Mock
 
@@ -197,12 +197,19 @@ def test_real_preaudit_blocks_before_any_signing_on_missing_c_trib_nac() -> None
         gateway.authorize(request)
 
 
-def _mg_request(municipality_ibge: str, name: str) -> NfseAuthorizationRequest:
+def _mg_request(
+    municipality_ibge: str,
+    name: str,
+    *,
+    tax_regime: TaxRegimeCode = TaxRegimeCode.SIMPLES_NACIONAL,
+    competence_date: date | None = None,
+) -> NfseAuthorizationRequest:
     """Only synthetic contract cases; not municipal emitter certification."""
     base = _request()
     municipality = BrazilianJurisdiction("MG", municipality_ibge)
     issuer = replace(
         base.document.issuer,
+        tax_regime=tax_regime,
         state_registration=StateRegistration("MG", "123456789"),
         address=replace(
             base.document.issuer.address,
@@ -211,7 +218,10 @@ def _mg_request(municipality_ibge: str, name: str) -> NfseAuthorizationRequest:
         ),
     )
     document = replace(
-        base.document, issuer=issuer, service_jurisdiction=municipality,
+        base.document,
+        issuer=issuer,
+        service_jurisdiction=municipality,
+        competence_date=competence_date or base.document.competence_date,
     )
     return NfseAuthorizationRequest.build(document)
 
@@ -245,13 +255,20 @@ def test_mg_national_channel_generates_signed_schema_valid_dps_envelope(
     assert info.get("Id", "").startswith("DPS" + ibge)
 
 
-def test_contagem_municipal_issuer_cannot_use_sefin_nacional_even_with_binding() -> None:
-    """Contagem's national-layout municipal API is not the SEFIN Nacional issuer.
-
-    Verify fail-closed BEFORE A1 Vault access, XMLDSig and HTTP dispatch.
-    A municipal endpoint must be built from the municipality's own contract.
-    """
-    request = _mg_request("3118601", "Contagem")
+@pytest.mark.parametrize(
+    ("regime", "competence"),
+    [
+        (TaxRegimeCode.NORMAL, date(2026, 11, 6)),
+        (TaxRegimeCode.SIMPLES_NACIONAL, date(2026, 10, 31)),
+    ],
+)
+def test_contagem_municipal_issuer_denies_national_for_ineligible_competences(
+    regime: TaxRegimeCode, competence: date,
+) -> None:
+    """Prevent wrong endpoint before vault/signing/HTTP, preserving old competence."""
+    request = _mg_request(
+        "3118601", "Contagem", tax_regime=regime, competence_date=competence,
+    )
     resolve_certificate = Mock(side_effect=AssertionError("Vault accessed"))
     prepare_dps = Mock(side_effect=AssertionError("DPS signed"))
     exchange = Mock(side_effect=AssertionError("HTTP dispatched"))
@@ -297,3 +314,31 @@ def test_nfse_national_reply_requires_explicit_numeric_tpamb2(tp_amb: object) ->
     )
     with pytest.raises(FiscalValidationError, match="homologação"):
         gateway.authorize(_request())
+
+
+@pytest.mark.parametrize(
+    ("regime", "competence"),
+    [
+        (TaxRegimeCode.SIMPLES_NACIONAL, date(2026, 11, 1)),
+        (TaxRegimeCode.SIMPLES_NACIONAL_EXCESS_SUBLIMIT, date(2026, 11, 6)),
+        (TaxRegimeCode.MEI, date(2026, 11, 6)),
+    ],
+)
+def test_contagem_requires_federal_national_channel_for_eligible_simples(
+    regime: TaxRegimeCode, competence: date,
+) -> None:
+    """Federal guidance 29/10/2026 overrides municipal emitter for new competence.
+
+    Still requires scoped A1, signed DPS, approved binding at runtime and response
+    XML; this synthetic test does not certify the taxpayer or municipality.
+    """
+    request = _mg_request(
+        "3118601", "Contagem", tax_regime=regime, competence_date=competence,
+    )
+    gateway = NfseNacionalHomologationGateway(
+        resolve_certificate=lambda _scope, _cnpj: _certificate(),
+        build_signed_dps=build_signed_dps,
+        exchange=_fake_exchange,
+    )
+    result = gateway.authorize(request)
+    assert result.status is AuthorizationStatus.AUTHORIZED
