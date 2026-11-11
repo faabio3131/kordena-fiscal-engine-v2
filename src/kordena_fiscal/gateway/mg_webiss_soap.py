@@ -185,6 +185,72 @@ def _validate_request_envelope(
                     raise WebissMgContractError("WebISS XMLDSig reference is ambiguous")
 
 
+def _verify_fiscal_issuer_identity(
+    *,
+    envelope: Abrasf203Envelope,
+    operation: Abrasf203Operation,
+    issuer_cnpj: Cnpj,
+    municipality_ibge: str,
+) -> None:
+    """Never allow a correctly signed SOAP envelope to change legal issuer.
+
+    Consultation is unsigned and therefore MUST have its requester CNPJ
+    checked against the scoped A1 before any network access. Issuance and
+    cancellation are also checked before extracting tenant secrets.
+    """
+    try:
+        soap = etree.fromstring(
+            envelope.body,
+            parser=etree.XMLParser(resolve_entities=False, no_network=True),
+        )
+        part = soap.find(f"{{{_SOAP}}}Body")[0][0]
+        xml = etree.fromstring(
+            str(part.findtext("nfseDadosMsg")).encode("utf-8"),
+            parser=etree.XMLParser(resolve_entities=False, no_network=True),
+        )
+    except (AttributeError, IndexError, TypeError, etree.XMLSyntaxError):
+        raise WebissMgContractError("Municipal fiscal issuer data is malformed") from None
+    ns = {"a": "http://www.abrasf.org.br/nfse.xsd"}
+    if operation is Abrasf203Operation.QUERY_BATCH:
+        identities = [xml.findtext("a:Prestador/a:CpfCnpj/a:Cnpj", "", ns)]
+    elif operation is Abrasf203Operation.SUBMIT_BATCH:
+        identities = [xml.findtext("a:LoteRps/a:CpfCnpj/a:Cnpj", "", ns)]
+        identities += [
+            node.findtext("a:Prestador/a:CpfCnpj/a:Cnpj", "", ns)
+            for node in xml.findall(
+                "a:LoteRps/a:ListaRps/a:Rps/a:InfDeclaracaoPrestacaoServico", ns
+            )
+        ]
+        if len(identities) <= 1:
+            raise WebissMgContractError("Municipal issuance lacks RPS issuer identities")
+    elif operation is Abrasf203Operation.GENERATE:
+        identities = [
+            xml.findtext(
+                "a:Rps/a:InfDeclaracaoPrestacaoServico/a:Prestador/a:CpfCnpj/a:Cnpj",
+                "", ns,
+            )
+        ]
+    elif operation is Abrasf203Operation.CANCEL:
+        identities = [
+            xml.findtext(
+                "a:Pedido/a:InfPedidoCancelamento/a:IdentificacaoNfse/"
+                "a:CpfCnpj/a:Cnpj", "", ns,
+            )
+        ]
+        municipality = xml.findtext(
+            "a:Pedido/a:InfPedidoCancelamento/a:IdentificacaoNfse/"
+            "a:CodigoMunicipio", "", ns,
+        )
+        if municipality != municipality_ibge:
+            raise WebissMgContractError("Municipal cancellation belongs to another city")
+    else:
+        raise WebissMgContractError("Unsupported fiscal WebISS operation")
+    if not identities or any(cnpj != issuer_cnpj.value for cnpj in identities):
+        raise WebissMgContractError(
+            "Municipal issuer CNPJ does not match the authorized tenant unit"
+        )
+
+
 def parse_webiss_soap_response(
     raw: bytes,
     operation: Abrasf203Operation,
@@ -417,8 +483,23 @@ class WebissMgHomologationTransport:
         self._schema_validator = municipal_schema_validator
         self._resolver = provider_resolver
         self._certificate = resolve_certificate
-        self._exchange = exchange or _webiss_exchange
+        # No municipality-specific verified Uberaba homologation endpoint yet.
+        # Never leak an Uberaba document to the Extrema default URL.
+        self._exchange = (
+            exchange if exchange is not None
+            else _webiss_exchange if municipality_ibge == EXTREMA_IBGE
+            else self._unsupported_municipal_transport
+        )
         self._timeout = timeout_seconds
+
+    @staticmethod
+    def _unsupported_municipal_transport(
+        body: bytes, soap_action: str, context: ssl.SSLContext, timeout: float,
+    ) -> bytes:
+        del body, soap_action, context, timeout
+        raise WebissMgContractError(
+            "WebISS city-specific homologation URL is not officially certified"
+        )
 
     def exchange_prepared(
         self,
@@ -438,6 +519,8 @@ class WebissMgHomologationTransport:
             or jurisdiction != BrazilianJurisdiction("MG", self._municipality)
         ):
             raise WebissMgContractError("WebISS is restricted to the scoped MG municipality")
+        if not isinstance(issuer_cnpj, Cnpj):
+            raise WebissMgContractError("Issuer CNPJ is required")
         if not isinstance(issuer_tax_regime, TaxRegimeCode) or not isinstance(
             competence_date, date
         ):
@@ -460,38 +543,12 @@ class WebissMgHomologationTransport:
             envelope, operation, evidence=self._schema_evidence,
             municipal_validator=self._schema_validator,
         )
-        if operation is Abrasf203Operation.CANCEL:
-            # A signed municipal cancellation must use the bound issuer/city;
-            # SOAPAction alone is never sufficient to authorize a fiscal event.
-            soap = etree.fromstring(
-                envelope.body,
-                parser=etree.XMLParser(resolve_entities=False, no_network=True),
-            )
-            raw_xml = soap[0][0].findtext("nfseDadosMsg")
-            try:
-                fiscal = etree.fromstring(
-                    str(raw_xml).encode("utf-8"),
-                    parser=etree.XMLParser(resolve_entities=False, no_network=True),
-                )
-            except etree.XMLSyntaxError:
-                raise WebissMgContractError("Invalid signed cancellation XML") from None
-            ns = {"a": "http://www.abrasf.org.br/nfse.xsd"}
-            identifier = fiscal.find(
-                "a:Pedido/a:InfPedidoCancelamento/a:IdentificacaoNfse", ns,
-            )
-            if (
-                identifier is None
-                or identifier.findtext("a:CodigoMunicipio", "", ns)
-                != self._municipality
-                or identifier.findtext("a:CpfCnpj/a:Cnpj", "", ns)
-                != issuer_cnpj.value
-                or fiscal.find(
-                    "a:Pedido/{http://www.w3.org/2000/09/xmldsig#}Signature", ns,
-                ) is None
-            ):
-                raise WebissMgContractError(
-                    "Municipal cancellation does not match bound issuer and city"
-                )
+        _verify_fiscal_issuer_identity(
+            envelope=envelope,
+            operation=operation,
+            issuer_cnpj=issuer_cnpj,
+            municipality_ibge=self._municipality,
+        )
         provider = self._resolver.resolve_provider_id(
             scope=scope,
             document_kind=FiscalDocumentKind.NFSE,
@@ -500,8 +557,6 @@ class WebissMgHomologationTransport:
         )
         if provider != _MG_WEBISS_PROVIDERS[self._municipality]:
             raise WebissMgContractError("No approved exact WebISS municipal binding")
-        if not isinstance(issuer_cnpj, Cnpj):
-            raise WebissMgContractError("Issuer CNPJ is required")
         material = self._certificate(scope, issuer_cnpj.value)
         validate_a1_for_issuer(
             material.pkcs12_bytes, material.password,
