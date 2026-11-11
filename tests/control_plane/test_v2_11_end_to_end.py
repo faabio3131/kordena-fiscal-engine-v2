@@ -663,6 +663,7 @@ def test_migration_v4_is_idempotent_and_preserves_certified_history(tmp_path) ->
         (17, "external_secret_bindings"),
         (18, "public_trial_rate_windows"),
         (19, "cognitive_token_reservations"),
+        (22, "nat_mg_dps_legal_issuer_sequence"),
     ]
     assert {
         "fm_control_plane_organizations",

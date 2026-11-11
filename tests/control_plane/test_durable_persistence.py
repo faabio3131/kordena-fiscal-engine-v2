@@ -213,8 +213,8 @@ def test_v2_11_migration_v4_is_explicit_and_upgrades_v2_08_checkpoint(tmp_path) 
         _remove_v4(connection)
         connection.commit()
 
-    assert database.applied_migrations() == (1, 2, 3)
-    assert database.initialize() == (4, 5, 13, 14, 17, 18, 19, 22)
+    assert database.applied_migrations() == (1, 2, 3, 22)
+    assert database.initialize() == (4, 5, 13, 14, 17, 18, 19)
     assert database.applied_migrations() == (1, 2, 3, 4, 5, 13, 14, 17, 18, 19, 22)
 
     with sqlite3.connect(database.path) as connection:

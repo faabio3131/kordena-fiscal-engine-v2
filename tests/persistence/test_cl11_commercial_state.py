@@ -383,7 +383,7 @@ def test_migration_10_upgrades_existing_version_9_state() -> None:
 
     database = PostgresFiscalDatabase(dsn)
     try:
-        assert database.initialize() == (10, 22)
+        assert database.initialize() == (10,)
         assert database.applied_migrations() == (*range(1, 20), 22)
         with database.connection() as connection:
             columns = connection.execute(
@@ -455,7 +455,7 @@ def test_migration_11_upgrades_existing_version_10_state() -> None:
 
     database = PostgresFiscalDatabase(dsn)
     try:
-        assert database.initialize() == (11, 22)
+        assert database.initialize() == (11,)
         assert database.applied_migrations() == (*range(1, 20), 22)
         with database.connection() as connection:
             assert connection.execute(
@@ -484,7 +484,7 @@ def test_migration_12_upgrades_existing_version_11_state() -> None:
 
     database = PostgresFiscalDatabase(dsn)
     try:
-        assert database.initialize() == (12, 22)
+        assert database.initialize() == (12,)
         assert database.applied_migrations() == (*range(1, 20), 22)
         with database.connection() as connection:
             columns = connection.execute(
