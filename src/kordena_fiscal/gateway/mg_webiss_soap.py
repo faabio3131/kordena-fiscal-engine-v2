@@ -40,9 +40,16 @@ from kordena_fiscal.vault import EphemeralCertificateMaterial
 from kordena_fiscal.vault.a1_preflight import validate_a1_for_issuer
 
 EXTREMA_IBGE = "3125101"
+UBERABA_IBGE = "3170107"
 EXTREMA_WEBISS_PROVIDER_ID = "webiss-extrema-mg-homologation"
+UBERABA_WEBISS_PROVIDER_ID = "webiss-uberaba-mg-homologation"
 EXTREMA_WEBISS_HOMOLOGATION_URL = "https://homologacao.webiss.com.br/ws/nfse.asmx"
 EXTREMA_WEBISS_PUBLIC_SERVICE = "https://extremamg.webiss.com.br/ws/nfse.asmx"
+UBERABA_WEBISS_PUBLIC_SERVICE = "https://uberabamg.webiss.com.br/ws/nfse.asmx"
+_MG_WEBISS_PROVIDERS = {
+    EXTREMA_IBGE: EXTREMA_WEBISS_PROVIDER_ID,
+    UBERABA_IBGE: UBERABA_WEBISS_PROVIDER_ID,
+}
 _SOAP = "http://schemas.xmlsoap.org/soap/envelope/"
 _WSDL = "http://nfse.abrasf.org.br"
 _RESPONSE_LIMIT = 2_097_152
@@ -161,14 +168,15 @@ def _webiss_exchange(
         ) from None
 
 
-class WebissExtremaHomologationTransport:
-    """A bound, issuer-matched transport primitive; NEVER a provider selector."""
+class WebissMgHomologationTransport:
+    """Shared WebISS transport for two sourced cities, no second provider authority."""
 
     def __init__(
         self,
         *,
         provider_resolver: ProviderSelectionResolver,
         resolve_certificate: Callable[[ExecutionScope, str], EphemeralCertificateMaterial],
+        municipality_ibge: str,
         exchange: Callable[[bytes, str, ssl.SSLContext, float], bytes] | None = None,
         timeout_seconds: float = 15,
     ) -> None:
@@ -178,6 +186,9 @@ class WebissExtremaHomologationTransport:
             or not 0 < timeout_seconds <= 30
         ):
             raise ValueError("WebISS requires canonical provider, A1 resolver and timeout")
+        if municipality_ibge not in _MG_WEBISS_PROVIDERS:
+            raise ValueError("Only sourced WebISS MG municipal channels are allowed")
+        self._municipality = municipality_ibge
         self._resolver = provider_resolver
         self._certificate = resolve_certificate
         self._exchange = exchange or _webiss_exchange
@@ -198,9 +209,9 @@ class WebissExtremaHomologationTransport:
             not isinstance(scope, ExecutionScope)
             or scope.host_namespace is None
             or scope.environment is not FiscalEnvironment.HOMOLOGATION
-            or jurisdiction != BrazilianJurisdiction("MG", EXTREMA_IBGE)
+            or jurisdiction != BrazilianJurisdiction("MG", self._municipality)
         ):
-            raise WebissMgContractError("WebISS is restricted to Extrema homologation")
+            raise WebissMgContractError("WebISS is restricted to the scoped MG municipality")
         if not isinstance(issuer_tax_regime, TaxRegimeCode) or not isinstance(
             competence_date, date
         ):
@@ -222,7 +233,7 @@ class WebissExtremaHomologationTransport:
             jurisdiction=jurisdiction,
             operation=_ACTIONS[operation].value,
         )
-        if provider != EXTREMA_WEBISS_PROVIDER_ID:
+        if provider != _MG_WEBISS_PROVIDERS[self._municipality]:
             raise WebissMgContractError("No approved exact WebISS municipal binding")
         if not isinstance(issuer_cnpj, Cnpj):
             raise WebissMgContractError("Issuer CNPJ is required")
@@ -236,3 +247,43 @@ class WebissExtremaHomologationTransport:
             build_fiscal_tls_context(material), self._timeout,
         )
         return parse_webiss_soap_response(raw, operation)
+
+
+class WebissExtremaHomologationTransport(WebissMgHomologationTransport):
+    """Extrema WebISS operation via the single shared municipal transport."""
+
+    def __init__(
+        self,
+        *,
+        provider_resolver: ProviderSelectionResolver,
+        resolve_certificate: Callable[[ExecutionScope, str], EphemeralCertificateMaterial],
+        exchange: Callable[[bytes, str, ssl.SSLContext, float], bytes] | None = None,
+        timeout_seconds: float = 15,
+    ) -> None:
+        super().__init__(
+            provider_resolver=provider_resolver,
+            resolve_certificate=resolve_certificate,
+            municipality_ibge=EXTREMA_IBGE,
+            exchange=exchange,
+            timeout_seconds=timeout_seconds,
+        )
+
+
+class WebissUberabaHomologationTransport(WebissMgHomologationTransport):
+    """Uberaba WebISS operation via the same signed envelope/TLS boundary."""
+
+    def __init__(
+        self,
+        *,
+        provider_resolver: ProviderSelectionResolver,
+        resolve_certificate: Callable[[ExecutionScope, str], EphemeralCertificateMaterial],
+        exchange: Callable[[bytes, str, ssl.SSLContext, float], bytes] | None = None,
+        timeout_seconds: float = 15,
+    ) -> None:
+        super().__init__(
+            provider_resolver=provider_resolver,
+            resolve_certificate=resolve_certificate,
+            municipality_ibge=UBERABA_IBGE,
+            exchange=exchange,
+            timeout_seconds=timeout_seconds,
+        )
