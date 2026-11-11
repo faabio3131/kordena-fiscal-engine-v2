@@ -43,7 +43,7 @@ visudo -c >/dev/null || { echo 'NO_GO_SUDOERS_INVALID'; exit 42; }
 
 # Source checkout must already have the reviewed main ref, fetched separately by unprivileged operator.
 # No network, hooks or Git fetch are invoked as root; checkout and application stay unchanged.
-current_main=$(git -C "$REPO" rev-parse --verify refs/remotes/origin/main)
+current_main=$(git -c safe.directory="$REPO" -C "$REPO" rev-parse --verify refs/remotes/origin/main)
 [[ "$current_main" == "$sha" ]] || { echo 'NO_GO_UNAPPROVED_MAIN_SHA'; exit 42; }
 
 stage=$(mktemp -d /tmp/nfcore-gsm-bootstrap.XXXXXXXX)
@@ -73,9 +73,10 @@ trap 'exit 130' INT TERM HUP
 names=(worker-readonly-preflight.py root-audit.sh ssh-gate.sh)
 sources=(deploy/contabo/worker-readonly-preflight.py deploy/contabo/root-host-audit.sh deploy/contabo/host-audit-command.sh)
 for i in "${!names[@]}"; do
-  git -C "$REPO" show "$sha:${sources[i]}" > "$stage/${names[i]}"
+  git -c safe.directory="$REPO" -C "$REPO" show "$sha:${sources[i]}" > "$stage/${names[i]}"
 done
-bash -n "$stage/root-audit.sh" "$stage/ssh-gate.sh"
+bash -n "$stage/root-audit.sh"
+bash -n "$stage/ssh-gate.sh"
 python3 -I -c 'import ast,sys; ast.parse(open(sys.argv[1], encoding="utf-8").read())' "$stage/worker-readonly-preflight.py"
 for name in "${names[@]}"; do
   printf 'REVIEWED_' 
@@ -113,7 +114,8 @@ for name in "${names[@]}"; do
   cmp -s -- "$stage/$name" "$dest" || { echo 'NO_GO_FILE_MISMATCH'; exit 42; }
   trusted "$dest" || { echo 'NO_GO_UNTRUSTED_INSTALLED_FILE'; exit 42; }
 done
-bash -n "$AUDIT_DIR/root-audit.sh" "$AUDIT_DIR/ssh-gate.sh"
+bash -n "$AUDIT_DIR/root-audit.sh"
+bash -n "$AUDIT_DIR/ssh-gate.sh"
 visudo -c >/dev/null
 echo 'GSM_PLAN_B_GATE_INSTALLED_AUDIT_ONLY'
 echo 'NEXT=RUN_PROTECTED_MAIN_GSM_READONLY_WORKFLOW'
