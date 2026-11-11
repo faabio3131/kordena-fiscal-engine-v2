@@ -37,6 +37,7 @@ class Abrasf203Operation(Enum):
     GENERATE = ("GerarNfseEnvio", "GerarNfse")
     SUBMIT_BATCH = ("EnviarLoteRpsEnvio", "RecepcionarLoteRps")
     QUERY_BATCH = ("ConsultarLoteRpsEnvio", "ConsultarLoteRps")
+    CANCEL = ("CancelarNfseEnvio", "CancelarNfse")
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +49,16 @@ class AbrasfServiceFacts:
     incidence_municipality: str | None
     iss_rate: str | None
     iss_withheld: str
+
+
+@dataclass(frozen=True, slots=True)
+class AbrasfCancellationFacts:
+    """Inputs for the existing fiscal cancellation-policy authority."""
+
+    issuer_cnpj: str
+    municipality_ibge: str
+    invoice_number: str
+    cancellation_code: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +90,7 @@ def prepare_abrasf203_soap(
     issuer_cnpj: Cnpj,
     resolve_certificate: Callable[[ExecutionScope, str], EphemeralCertificateMaterial],
     preaudit: Callable[[tuple[AbrasfServiceFacts, ...]], None],
+    preaudit_cancel: Callable[[AbrasfCancellationFacts], None] | None = None,
 ) -> Abrasf203Envelope:
     """Validate, audit and sign RPS before lot, then serialize SOAP string parts."""
     if scope.environment is not FiscalEnvironment.HOMOLOGATION:
@@ -109,6 +121,46 @@ def prepare_abrasf203_soap(
     if operation is Abrasf203Operation.QUERY_BATCH:
         if root.findtext("a:Prestador/a:CpfCnpj/a:Cnpj", namespaces=ns) != issuer_cnpj.value:
             raise FiscalValidationError("ABRASF query issuer mismatch")
+    elif operation is Abrasf203Operation.CANCEL:
+        pedido = root.find("a:Pedido", ns)
+        info = pedido.find("a:InfPedidoCancelamento", ns) if pedido is not None else None
+        identification = (
+            info.find("a:IdentificacaoNfse", ns) if info is not None else None
+        )
+        if identification is None or info is None or pedido is None:
+            raise FiscalValidationError("ABRASF cancellation request is incomplete")
+        cancellation_cnpj = identification.findtext("a:CpfCnpj/a:Cnpj", "", ns)
+        number = identification.findtext("a:Numero", "", ns)
+        municipality = identification.findtext("a:CodigoMunicipio", "", ns)
+        code = info.findtext("a:CodigoCancelamento", "", ns)
+        if (
+            cancellation_cnpj != issuer_cnpj.value
+            or not number or not number.isdecimal()
+            or not municipality or not municipality.isdecimal()
+            or code not in ("1", "2", "3", "4", "5")
+            or not info.get("Id")
+            or len(root.xpath("//*[@Id=$id]", id=info.get("Id"))) != 1
+        ):
+            raise FiscalValidationError("ABRASF cancellation fiscal identity mismatch")
+        if not callable(preaudit_cancel):
+            raise FiscalValidationError("Explicit cancellation preaudit is required")
+        preaudit_cancel(AbrasfCancellationFacts(
+            issuer_cnpj=cancellation_cnpj,
+            municipality_ibge=municipality,
+            invoice_number=number,
+            cancellation_code=code,
+        ))
+        material = resolve_certificate(scope, issuer_cnpj.value)
+        validate_a1_for_issuer(
+            material.pkcs12_bytes, material.password,
+            issuer_cnpj=issuer_cnpj, at=datetime.now(UTC),
+        )
+        key, cert, _ = pkcs12.load_key_and_certificates(
+            material.pkcs12_bytes, material.password
+        )
+        if not isinstance(key, rsa.RSAPrivateKey) or cert is None:
+            raise FiscalValidationError("ABRASF cancel signature requires RSA A1")
+        append_nfse_signature(pedido, info, key, cert, legacy_abrasf=True)
     else:
         rps_path = "a:Rps"
         batch = root.find("a:LoteRps", ns)
