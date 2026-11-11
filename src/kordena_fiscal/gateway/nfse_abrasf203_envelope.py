@@ -37,6 +37,7 @@ class Abrasf203Operation(Enum):
     GENERATE = ("GerarNfseEnvio", "GerarNfse")
     SUBMIT_BATCH = ("EnviarLoteRpsEnvio", "RecepcionarLoteRps")
     QUERY_BATCH = ("ConsultarLoteRpsEnvio", "ConsultarLoteRps")
+    QUERY_ISSUED = ("ConsultarNfseServicoPrestadoEnvio", "ConsultarNfseServicoPrestado")
     CANCEL = ("CancelarNfseEnvio", "CancelarNfse")
 
 
@@ -133,7 +134,7 @@ def prepare_abrasf203_soap(
         if lot is None or lot.get("versao") != schema_version:
             raise FiscalValidationError("ABRASF lot version does not match provider schema")
 
-    if operation is Abrasf203Operation.QUERY_BATCH:
+    if operation in (Abrasf203Operation.QUERY_BATCH, Abrasf203Operation.QUERY_ISSUED):
         if root.findtext("a:Prestador/a:CpfCnpj/a:Cnpj", namespaces=ns) != issuer_cnpj.value:
             raise FiscalValidationError("ABRASF query issuer mismatch")
     elif operation is Abrasf203Operation.CANCEL:
