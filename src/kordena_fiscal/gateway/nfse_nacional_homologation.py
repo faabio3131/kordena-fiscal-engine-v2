@@ -126,7 +126,7 @@ class NfseNacionalHomologationGateway:
             raise OfficialNfseTransportError("Resposta SEFIN inválida")
         try:
             result = json.loads(response)
-            if not isinstance(result, dict) or result.get("tipoAmbiente", 2) != 2:
+            if not isinstance(result, dict) or result.get("tipoAmbiente") != 2:
                 raise ValueError
         except (ValueError, UnicodeDecodeError):
             raise OfficialNfseTransportError("Resposta SEFIN sem homologação válida") from None
