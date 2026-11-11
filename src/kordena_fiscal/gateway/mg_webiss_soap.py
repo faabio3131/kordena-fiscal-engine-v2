@@ -111,6 +111,23 @@ class WebissMgContractError(FiscalValidationError):
     """Sanitized municipal mismatch, response error or ambiguous transport."""
 
 
+def _expected_webiss_signature_count(
+    operation: Abrasf203Operation, fiscal_xml: etree._Element,
+) -> int:
+    if operation in (
+        Abrasf203Operation.SUBMIT_BATCH, Abrasf203Operation.SUBMIT_BATCH_SYNC,
+    ):
+        rps = fiscal_xml.findall(
+            "{http://www.abrasf.org.br/nfse.xsd}LoteRps/"
+            "{http://www.abrasf.org.br/nfse.xsd}ListaRps/"
+            "{http://www.abrasf.org.br/nfse.xsd}Rps"
+        )
+        if not rps:
+            raise WebissMgContractError("WebISS requires at least one signed RPS")
+        return len(rps) + 1
+    return _EXPECTED_SIGNATURE_COUNTS[operation]
+
+
 def _validate_request_envelope(
     envelope: Abrasf203Envelope,
     operation: Abrasf203Operation,
@@ -191,7 +208,7 @@ def _validate_request_envelope(
                 )
         if part.tag == "nfseDadosMsg":
             signatures = inner.findall(f".//{{{_DS}}}Signature")
-            if len(signatures) != _EXPECTED_SIGNATURE_COUNTS[operation]:
+            if len(signatures) != _expected_webiss_signature_count(operation, inner):
                 raise WebissMgContractError(
                     "Unexpected WebISS signature count for fiscal operation"
                 )
@@ -378,7 +395,13 @@ def _verify_webiss_signature_with_scoped_a1(
     with the SHA-256 signature of the National DPS 1.01. A tampered, wrapped
     or differently signed request is rejected even if its XML is XSD-valid.
     """
-    if operation in (Abrasf203Operation.QUERY_BATCH, Abrasf203Operation.QUERY_ISSUED):
+    if operation in (
+        Abrasf203Operation.QUERY_BATCH,
+        Abrasf203Operation.QUERY_RPS,
+        Abrasf203Operation.QUERY_ISSUED,
+        Abrasf203Operation.QUERY_RECEIVED,
+        Abrasf203Operation.QUERY_RANGE,
+    ):
         return
     try:
         root = etree.fromstring(
@@ -399,7 +422,7 @@ def _verify_webiss_signature_with_scoped_a1(
             material.pkcs12_bytes, material.password,
         )
         if key is None or cert is None or len(signatures) != (
-            _EXPECTED_SIGNATURE_COUNTS[operation]
+            _expected_webiss_signature_count(operation, fiscal)
         ):
             raise ValueError
         public_key = cert.public_key()
