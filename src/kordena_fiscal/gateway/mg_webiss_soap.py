@@ -34,6 +34,7 @@ from kordena_fiscal.gateway.fiscal_tls import (
 from kordena_fiscal.gateway.nfse_abrasf203_envelope import (
     Abrasf203Envelope,
     Abrasf203Operation,
+    _validator,
 )
 from kordena_fiscal.gateway.provider import ProviderSelectionResolver
 from kordena_fiscal.vault import EphemeralCertificateMaterial
@@ -103,6 +104,39 @@ def _validate_request_envelope(
         or any(not v.text for v in values)
     ):
         raise WebissMgContractError("WebISS request is missing signed XML or header")
+    schema = _validator()
+    for part in values:
+        encoded = str(part.text).encode("utf-8")
+        if len(encoded) > _RESPONSE_LIMIT:
+            raise WebissMgContractError("WebISS inner XML exceeds limit")
+        try:
+            inner = etree.fromstring(
+                encoded, parser=etree.XMLParser(resolve_entities=False, no_network=True),
+            )
+        except etree.XMLSyntaxError:
+            raise WebissMgContractError("WebISS inner XML is malformed") from None
+        if getattr(inner.getroottree().docinfo, "doctype", None):
+            raise WebissMgContractError("WebISS inner XML DTD is prohibited")
+        schema.validate_document(encoded)
+        if part.tag == "nfseDadosMsg":
+            signatures = inner.findall(
+                ".//{http://www.w3.org/2000/09/xmldsig#}Signature"
+            )
+            if operation is Abrasf203Operation.QUERY_BATCH:
+                if signatures:
+                    raise WebissMgContractError("Unexpected signature in read-only query")
+            elif not signatures:
+                raise WebissMgContractError("Signed municipal fiscal operation required")
+            for signature in signatures:
+                ref = signature.find(
+                    "{http://www.w3.org/2000/09/xmldsig#}SignedInfo/"
+                    "{http://www.w3.org/2000/09/xmldsig#}Reference"
+                )
+                if ref is None or not ref.get("URI", "").startswith("#"):
+                    raise WebissMgContractError("WebISS XMLDSig reference is missing")
+                referenced_id = ref.get("URI", "")[1:]
+                if len(inner.xpath("//*[@Id=$ident]", ident=referenced_id)) != 1:
+                    raise WebissMgContractError("WebISS XMLDSig reference is ambiguous")
 
 
 def parse_webiss_soap_response(raw: bytes, operation: Abrasf203Operation) -> bytes:
