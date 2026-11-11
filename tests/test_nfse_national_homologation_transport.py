@@ -140,7 +140,10 @@ def test_nfse_rejects_invalid_response_without_secret_echo() -> None:
         b"<root/>",
         b'<NFSe xmlns="https://untrusted.example/"/>',
         b'<Envelope xmlns="http://schemas.xmlsoap.org/soap/envelope/"/>',
-        b'<!DOCTYPE NFSe [<!ENTITY x "untrusted">]><NFSe xmlns="http://www.sped.fazenda.gov.br/nfse"/>',
+        (
+            b'<!DOCTYPE NFSe [<!ENTITY x "untrusted">]>'
+            b'<NFSe xmlns="http://www.sped.fazenda.gov.br/nfse"/>'
+        ),
     ],
 )
 def test_nfse_receipt_refuses_unrelated_root_or_dtd(payload: bytes) -> None:
