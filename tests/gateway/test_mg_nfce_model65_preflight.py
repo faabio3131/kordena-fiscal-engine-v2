@@ -27,8 +27,10 @@ from kordena_fiscal.gateway.nfe_sp_homologation import (
     build_mg_nfce_homologation_gateway,
 )
 from kordena_fiscal.gateway.nfe_sp_operations_homologation import (
+    OfficialNfeOperationsError,
     SefazHomologationOperationsGateway,
 )
+from kordena_fiscal.operations import FiscalQueryRequest
 
 
 def _with_qr(
