@@ -1,6 +1,7 @@
 """Unit tests for the National NFS-e DPS builder (build_signed_dps)."""
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
@@ -161,6 +162,23 @@ def test_build_signed_dps_is_deterministic_for_the_same_request() -> None:
     first_id = etree.fromstring(first).find(f"{{{_NFSE_NS}}}infDPS").get("Id")
     second_id = etree.fromstring(second).find(f"{{{_NFSE_NS}}}infDPS").get("Id")
     assert first_id == second_id
+
+
+def test_builder_refuses_unreserved_fiscal_serial_instead_of_hash() -> None:
+    unreserved = replace(_document(), dps_number=None)
+    with pytest.raises(FiscalValidationError, match="not reserved"):
+        build_signed_dps(_request(unreserved), _certificate())
+
+
+def test_signed_dps_uses_exact_reserved_number_and_series_in_official_id() -> None:
+    document = replace(_document(), dps_number=2345, dps_series=17)
+    signed = build_signed_dps(_request(document), _certificate())
+    national_dps_validator("1.00").validate_document(signed)
+    info = etree.fromstring(signed).find(f"{{{_NFSE_NS}}}infDPS")
+    assert info is not None
+    assert info.findtext(f"{{{_NFSE_NS}}}serie") == "17"
+    assert info.findtext(f"{{{_NFSE_NS}}}nDPS") == "2345"
+    assert info.get("Id", "").endswith("00017" + "000000000002345")
 
 
 def test_build_signed_dps_rejects_more_than_one_service_line() -> None:
