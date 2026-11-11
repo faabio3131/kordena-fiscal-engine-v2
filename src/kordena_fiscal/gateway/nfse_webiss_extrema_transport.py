@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 import ssl
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
@@ -36,18 +37,30 @@ class ExtremaWebissTransportError(FiscalValidationError):
     """Sanitized municipal communication failure without upstream body or secrets."""
 
 
+@dataclass(frozen=True, slots=True)
 class VerifiedExtremaHomologationEndpoint:
-    """Immutable engineering-side destination: not accepted from tenant HTTP data.
+    """Structurally safe destination bound to an immutable evidence reference.
 
-    Construction verifies URI structure, not an external administrative approval.
-    The provenance and source must be reviewed independently before registration.
+    The registrar must still independently review the authenticity and
+    applicability of the cited official source before activating a binding.
     """
 
-    def __init__(self, *, url: str, evidence_source_url: str, evidence_sha256: str):
-        if not all(isinstance(part, str) for part in (url, evidence_source_url, evidence_sha256)):
+    url: str
+    evidence_source_url: str
+    evidence_sha256: str
+
+    def __post_init__(self) -> None:
+        if not all(
+            isinstance(part, str)
+            for part in (self.url, self.evidence_source_url, self.evidence_sha256)
+        ):
             raise FiscalValidationError("Extrema homologation evidence is incomplete")
-        parsed = urlsplit(url)
-        source = urlsplit(evidence_source_url)
+        try:
+            parsed = urlsplit(self.url)
+            source = urlsplit(self.evidence_source_url)
+            port = parsed.port
+        except ValueError:
+            raise FiscalValidationError("Invalid Extrema homologation URL") from None
         if (
             parsed.scheme != "https"
             or not parsed.hostname
@@ -55,19 +68,15 @@ class VerifiedExtremaHomologationEndpoint:
             or "extrema" not in parsed.hostname
             or parsed.username is not None
             or parsed.password is not None
-            or parsed.port not in (None, 443)
+            or port not in (None, 443)
             or parsed.path != "/ws/nfse.asmx"
             or parsed.query or parsed.fragment
-            or url == EXTREMA_WEBISS_PUBLIC_SERVICE
+            or self.url == EXTREMA_WEBISS_PUBLIC_SERVICE
             or source.scheme != "https"
             or source.hostname not in {"extremamg.webiss.com.br", "extrema.mg.gov.br"}
-            or not re.fullmatch(r"[0-9a-f]{64}", evidence_sha256)
+            or not re.fullmatch(r"[0-9a-f]{64}", self.evidence_sha256)
         ):
             raise FiscalValidationError("Unverified or unsafe Extrema homologation endpoint")
-        self.url = url
-        self.evidence_source_url = evidence_source_url
-        self.evidence_sha256 = evidence_sha256
-
 
 def _exchange_webiss(
     request: ExtremaWebissSoapRequest, context: ssl.SSLContext,
