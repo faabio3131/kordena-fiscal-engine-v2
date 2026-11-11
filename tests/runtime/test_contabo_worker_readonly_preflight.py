@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import importlib.util
 import json
-import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -119,7 +118,7 @@ def host(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     monkeypatch.setattr(audit, "ROOT", tmp_path)
     monkeypatch.setattr(audit.os, "uname", lambda: SimpleNamespace(nodename=audit.HOST))
     monkeypatch.setattr(audit, "command_sha", lambda: SHA)
-    (tmp_path / ".deployed").write_text(SHA, encoding="ascii")
+    (tmp_path / ".deployed").write_text(f"SHA={SHA}\n", encoding="ascii")
 
     def configure(containers: dict[str, dict]):
         names = set(containers)
@@ -176,3 +175,22 @@ def test_policy_failure_is_not_hidden_by_healthy_status(
     result = audit.collect(SHA)
     assert result["RESULT"] == "NO_GO_WORKER_SECURITY"
     assert "private-content-do-not-print" not in str(result)
+
+
+def test_deployment_marker_must_match_real_deploy_format(host, monkeypatch, tmp_path: Path) -> None:
+    host({name: _worker_info() for name in ("nfcore-db", "nfcore-api", "nfcore-portal")})
+    state = tmp_path / ".deployed"
+    assert audit.collect(SHA)["SOURCE_VS_DEPLOYED"] == "PASS"
+    state.write_text(SHA, encoding="ascii")
+    assert audit.collect(SHA)["RESULT"] == "NO_GO_RELEASE_OR_HOST_PIN"
+    state.write_text(f"SHA={SHA}\nSHA={SHA}\n", encoding="ascii")
+    assert audit.collect(SHA)["RESULT"] == "NO_GO_RELEASE_OR_HOST_PIN"
+
+
+def test_no_go_inventory_must_exit_nonzero(monkeypatch, capsys) -> None:
+    monkeypatch.setattr(audit, "collect", lambda _sha: {
+        "HOST": "PASS", "DOCKER_ACCESS": "PASS", "RESULT": "NO_GO_GENERAL_WORKER",
+    })
+    monkeypatch.setattr("sys.argv", ["worker-readonly-preflight.py", "--expected-production-sha", SHA])
+    assert audit.main() == 2
+    assert "RESULT=NO_GO_GENERAL_WORKER" in capsys.readouterr().out
