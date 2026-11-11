@@ -75,7 +75,6 @@ from .activation_email import build_activation_delivery_from_environ
 from .ai_secrets import build_production_openai_key_readers
 from .alert_rules import InternalAlertMonitor, OperationalSignals
 from .api_staging_gsm_probe import staging_probe_verifier
-from .extrema_webiss_environment import build_extrema_webiss_exchange
 from .bling_ingress import build_bling_ingress
 from .bling_multitenant_ingress import build_multitenant_bling_ingress
 from .bling_oauth_factory import build_bling_oauth_service
@@ -103,6 +102,7 @@ from .development_commercial_ingress import (
     development_commercial_ingress,
 )
 from .development_fiscal_ingress import development_fiscal_ingress
+from .extrema_webiss_environment import build_extrema_webiss_exchange
 from .fiscal_runtime import FiscalOperationHandler
 from .observability import (
     MetricsRegistry,
