@@ -92,10 +92,24 @@ def test_municipal_envelopes_must_be_verified_individually() -> None:
     assert by_code["3106200"]["nfse_emitter_evidence"] == "NATIONAL_DPS_JSON"
     assert by_code["3106705"]["nfse_emitter_evidence"] == "NATIONAL_DPS_JSON"
     assert by_code["3170206"]["nfse_emitter_evidence"] == "NATIONAL_ANNOUNCED"
-    assert by_code["3118601"]["nfse_emitter_evidence"] == "MUNICIPAL_NATIONAL_LAYOUT_JSON"
-    assert sum(x["nfse_emitter_evidence"] == "UNVERIFIED" for x in by_code.values()) == 16
+    assert by_code["3118601"]["nfse_emitter_evidence"] == "MUNICIPAL_WITH_FEDERAL_SIMPLES_NATIONAL"
+    assert sum(x["nfse_emitter_evidence"] == "UNVERIFIED" for x in by_code.values()) == 4
+    assert doc["coverage_summary"]["municipal_official_source_mapped"] == 16
+    assert doc["coverage_summary"]["municipal_contract_version_and_envelope_certified"] == 0
+    assert doc["coverage_summary"]["external_homologated"] == 0
+    assert doc["federal_national_simples_rule"]["effective_competence_from"] == "2026-11-01"
+    assert doc["federal_national_simples_rule"]["national_channel_required"] is True
+    assert by_code["3136702"]["nfse_emitter_evidence"] == "NATIONAL_EMITTER_MUNICIPAL_DEADLINE"
+    assert by_code["3152501"]["nfse_emitter_evidence"] == "MUNICIPAL_UNTIL_2026_FOR_NON_SIMPLES"
     for cell in doc["municipal_cells"]:
-        assert cell["state"] in {"CHANNEL_RESEARCHED", "RESEARCH_REQUIRED", "IMPLEMENTING"} | _FINISHED_STATES
+        valid_states = {
+            "CHANNEL_RESEARCHED", "RESEARCH_REQUIRED", "IMPLEMENTING",
+        } | _FINISHED_STATES
+        assert cell["state"] in valid_states
+        if cell["state"] == "CHANNEL_RESEARCHED":
+            source = urlsplit(cell["municipal_source"])
+            assert source.scheme == "https"
+            assert source.hostname
         _validate_completed_cell(cell)
         if cell["state"] not in _FINISHED_STATES:
             assert not cell["production_approved"]
