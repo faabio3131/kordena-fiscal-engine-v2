@@ -139,7 +139,7 @@ def require_extrema_rtc_destination_order(xml: bytes) -> None:
     No elements are repaired/reordered after signing, which would invalidate
     XMLDSig and could change the recipient's legal identity.
 
-    Source: Senior eDocs 5.8.16.59, Extrema WebISS 2.02 + RTC E160 notice.
+    Source: Senior eDocs 5.8.16, Extrema WebISS 2.02 + RTC E160 notice.
     """
     if not isinstance(xml, bytes) or not 0 < len(xml) <= 2_097_152:
         raise WebissMunicipalSchemaUnverified(

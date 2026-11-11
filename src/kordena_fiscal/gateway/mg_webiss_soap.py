@@ -47,6 +47,7 @@ from kordena_fiscal.gateway.webiss_2026_schema import (
     WEBISS_RTC_LAYOUT_VERSION,
     Webiss2026SchemaEvidence,
     WebissMunicipalSchemaUnverified,
+    require_extrema_rtc_destination_order,
     validate_webiss_official_xml,
 )
 from kordena_fiscal.vault import EphemeralCertificateMaterial
@@ -156,6 +157,9 @@ def _validate_request_envelope(
         validate_webiss_official_xml(
             evidence=evidence, validator=municipal_validator, xml=encoded,
         )
+        if part.tag == "nfseDadosMsg" and evidence.municipality_ibge == EXTREMA_IBGE:
+            # Independently sourced E160 regression, in addition to pinned XSD.
+            require_extrema_rtc_destination_order(encoded)
         if part.tag == "nfseCabecMsg":
             if (
                 inner.tag != "{http://www.abrasf.org.br/nfse.xsd}cabecalho"
