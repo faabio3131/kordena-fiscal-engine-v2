@@ -27,8 +27,11 @@ jobs:
         run: |
           bash deploy/contabo/test-worker-opt-in.sh
           bash deploy/contabo/test-bling-api-opt-in.sh
+          bash deploy/contabo/test-bling-worker-opt-in.sh
       - name: Auditar preflight Bling sem host/segredos
         run: bash deploy/contabo/test-bling-operational-host-audit.sh
+      - name: Classificacao separada do canal SSH e readiness Bling
+        run: bash deploy/contabo/test-readonly-host-audit-classification.sh
       - name: Validar comando SSH restrito sem host/segredos
         run: bash deploy/contabo/test-host-audit-command.sh
       - name: Validar chain of trust e privilegio Docker restrito
