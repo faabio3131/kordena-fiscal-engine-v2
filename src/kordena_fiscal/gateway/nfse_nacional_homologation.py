@@ -101,6 +101,16 @@ class NfseNacionalHomologationGateway:
         issuer_municipality = document.issuer.address.jurisdiction.municipality_ibge_code
         if issuer_municipality is None:
             raise OfficialNfseTransportError("DPS requires an issuer municipality")
+        # Contagem/MG (IBGE 3118601) publishes a municipal ISS Digital
+        # webservice using national-layout XML/JSON. Layout compatibility
+        # DOES NOT authorize dispatch to the SEFIN Nacional endpoint.
+        # Source: https://receita.contagem.mg.gov.br/nfe/ (11/11/2026).
+        # Fail before opening the tenant A1 vault, signing or performing I/O.
+        if issuer_municipality == "3118601":
+            raise OfficialNfseTransportError(
+                "NFS-e de Contagem/MG exige contrato do emissor municipal; "
+                "transporte SEFIN Nacional nao autorizado"
+            )
         material = self._resolve_certificate(document.scope, issuer_cnpj)
         validate_a1_for_issuer(
             material.pkcs12_bytes, material.password, issuer_cnpj=Cnpj(issuer_cnpj),
