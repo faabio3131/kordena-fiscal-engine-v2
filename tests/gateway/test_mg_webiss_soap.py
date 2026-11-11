@@ -9,7 +9,7 @@ import pytest
 from lxml import etree
 from test_mg_homologation_authorization import CNPJ, _request
 from test_mg_homologation_authorization import material as material
-from test_nfse_abrasf203_envelope import _payload
+from test_nfse_abrasf203_envelope import _CANCEL, _payload
 
 from kordena_fiscal.control_plane.commercial import ConfiguredFiscalOperation
 from kordena_fiscal.domain import (
@@ -235,6 +235,92 @@ def test_uberaba_legacy_webiss_is_blocked_after_federal_simples_cutover() -> Non
             issuer_cnpj=Cnpj(CNPJ),
             issuer_tax_regime=TaxRegimeCode.SIMPLES_NACIONAL,
             competence_date=date(2026, 11, 1),
+            jurisdiction=BrazilianJurisdiction("MG", "3170107"),
+        )
+    resolver.resolve_provider_id.assert_not_called()
+    certificate.assert_not_called()
+    exchange.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("city_ibge", "cls", "provider_id"),
+    [
+        ("3125101", WebissExtremaHomologationTransport, EXTREMA_WEBISS_PROVIDER_ID),
+        ("3170107", WebissUberabaHomologationTransport, UBERABA_WEBISS_PROVIDER_ID),
+    ],
+)
+def test_municipal_cancellation_is_signed_and_scope_bound_before_send(
+    city_ibge, cls, provider_id, material,
+) -> None:
+    from unittest.mock import Mock
+
+    resolved = Mock(return_value=material)
+    cancelled = prepare_abrasf203_soap(
+        operation=Abrasf203Operation.CANCEL,
+        xml=_CANCEL.replace("3125101", city_ibge).encode(),
+        scope=_request().scope,
+        issuer_cnpj=Cnpj(CNPJ),
+        resolve_certificate=resolved,
+        preaudit=Mock(),
+        preaudit_cancel=Mock(),
+    )
+    resolver = Mock()
+    resolver.resolve_provider_id.return_value = provider_id
+    exchange = Mock(return_value=_response(Abrasf203Operation.CANCEL))
+    adapter = cls(
+        provider_resolver=resolver,
+        resolve_certificate=Mock(return_value=material),
+        exchange=exchange,
+    )
+    jurisdiction = BrazilianJurisdiction("MG", city_ibge)
+    assert adapter.exchange_prepared(
+        envelope=cancelled,
+        operation=Abrasf203Operation.CANCEL,
+        scope=_request().scope,
+        issuer_cnpj=Cnpj(CNPJ),
+        issuer_tax_regime=TaxRegimeCode.NORMAL,
+        competence_date=date(2026, 10, 31),
+        jurisdiction=jurisdiction,
+    ) == b"<retorno/>"
+    assert resolver.resolve_provider_id.call_args.kwargs["operation"] == (
+        ConfiguredFiscalOperation.CANCEL.value
+    )
+    assert exchange.call_args.args[1] == '"http://nfse.abrasf.org.br/CancelarNfse"'
+    fake_scope = BrazilianJurisdiction(
+        "MG", "3170107" if city_ibge == "3125101" else "3125101"
+    )
+    with pytest.raises(WebissMgContractError, match="scoped MG municipality"):
+        adapter.exchange_prepared(
+            envelope=cancelled,
+            operation=Abrasf203Operation.CANCEL,
+            scope=_request().scope, issuer_cnpj=Cnpj(CNPJ),
+            issuer_tax_regime=TaxRegimeCode.NORMAL,
+            competence_date=date(2026, 10, 31),
+            jurisdiction=fake_scope,
+        )
+    assert exchange.call_count == 1
+
+
+def test_municipal_cancellation_cross_city_payload_is_not_accepted(material) -> None:
+    cancelled = prepare_abrasf203_soap(
+        operation=Abrasf203Operation.CANCEL,
+        xml=_CANCEL.encode(), scope=_request().scope,
+        issuer_cnpj=Cnpj(CNPJ),
+        resolve_certificate=Mock(return_value=material),
+        preaudit=Mock(), preaudit_cancel=Mock(),
+    )
+    resolver, exchange, certificate = Mock(), Mock(), Mock()
+    adapter = WebissUberabaHomologationTransport(
+        provider_resolver=resolver,
+        resolve_certificate=certificate,
+        exchange=exchange,
+    )
+    with pytest.raises(WebissMgContractError, match="bound issuer and city"):
+        adapter.exchange_prepared(
+            envelope=cancelled, operation=Abrasf203Operation.CANCEL,
+            scope=_request().scope, issuer_cnpj=Cnpj(CNPJ),
+            issuer_tax_regime=TaxRegimeCode.NORMAL,
+            competence_date=date(2026, 10, 31),
             jurisdiction=BrazilianJurisdiction("MG", "3170107"),
         )
     resolver.resolve_provider_id.assert_not_called()
