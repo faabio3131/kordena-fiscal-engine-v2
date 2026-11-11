@@ -23,8 +23,8 @@ from kordena_fiscal.gateway.mg_webiss_soap import (
     WebissMgContractError,
 )
 from kordena_fiscal.gateway.nfse_abrasf203_envelope import (
-    Abrasf203Operation,
     Abrasf203Envelope,
+    Abrasf203Operation,
     AbrasfCancellationFacts,
     AbrasfServiceFacts,
     prepare_abrasf203_soap,
