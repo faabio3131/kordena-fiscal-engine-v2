@@ -93,7 +93,15 @@ def only_expected_mount(info: dict[str, Any], dest: str, kind: str) -> str:
     source = mount.get("Source")
     if not isinstance(source, str) or not source.startswith("/"):
         return "INVALID_SOURCE"
-    return metadata(Path(source), directory=kind == "directory")
+    if source == "/opt/fm/ironfit" or source.startswith("/opt/fm/ironfit/"):
+        return "CROSS_SAAS_SOURCE_DENIED"
+    state = metadata(Path(source), directory=kind == "directory")
+    if state != "RESTRICTED":
+        return state
+    try:
+        return "RESTRICTED" if Path(source).lstat().st_uid == 10001 else "OWNER_MISMATCH"
+    except OSError:
+        return "UNVERIFIED"
 
 
 def worker_policy(info: dict[str, Any], *, bling: bool) -> dict[str, str]:
@@ -114,6 +122,7 @@ def worker_policy(info: dict[str, Any], *, bling: bool) -> dict[str, str]:
         "POLICY_NO_PORTS": "PASS" if not host.get("PortBindings") else "NO_GO",
         "POLICY_NO_NEW_PRIVS": "PASS" if "no-new-privileges:true" in (host.get("SecurityOpt") or []) else "NO_GO",
         "POLICY_CAP_DROP": "PASS" if "ALL" in (host.get("CapDrop") or []) else "NO_GO",
+        "POLICY_INTERNAL_NET": "PASS" if set(((info.get("NetworkSettings") or {}).get("Networks") or {})) == {"nfcore_internal"} else "NO_GO",
         "POLICY_ENV": "PASS" if env.get("NFCORE_ENVIRONMENT") == "production"
             and env.get("NFCORE_SECRET_BACKEND") == "external" else "NO_GO",
         "POLICY_MOUNT": only_expected_mount(info, target, "directory" if bling else "file"),
@@ -193,10 +202,38 @@ def collect(expected_sha: str) -> dict[str, str]:
         if output.get("NFCORE_" + suffix) != "HEALTHY":
             output["RESULT"] = "NO_GO_HOST_BASELINE"
             return output
+    if (
+        output["HOST"] != "PASS"
+        or output["SOURCE_VS_DEPLOYED"] != "PASS"
+        or output["DEPLOY_VS_PIN"] != "PASS"
+    ):
+        output["RESULT"] = "NO_GO_RELEASE_OR_HOST_PIN"
+        return output
+    for component, file_gate in (
+        ("NFCORE_WORKER", "WORKER_ENV"),
+        ("NFCORE_BLING_WORKER", "BLING_WORKER_ENV"),
+    ):
+        if output.get(component) != "HEALTHY":
+            continue
+        if output.get(file_gate) != "RESTRICTED":
+            output["RESULT"] = "NO_GO_WORKER_CONFIGURATION"
+            return output
+        check_prefix = component + "_POLICY_"
+        if any(
+            val not in ("PASS", "RESTRICTED")
+            for key, val in output.items()
+            if key.startswith(check_prefix) and key != component + "_POLICY_RESTART"
+        ):
+            output["RESULT"] = "NO_GO_WORKER_SECURITY"
+            return output
     if output.get("NFCORE_WORKER") != "HEALTHY":
         output["RESULT"] = "NO_GO_GENERAL_WORKER"
+    elif output.get("NFCORE_WORKER_POLICY_RESTART") != "PRESENT":
+        output["RESULT"] = "GENERAL_WORKER_RUNNING_RECOVERY_NOT_CERTIFIED"
     elif output.get("NFCORE_BLING_WORKER") != "HEALTHY":
         output["RESULT"] = "GENERAL_WORKER_PRESENT_BLING_NOT_ACTIVE"
+    elif output.get("NFCORE_BLING_WORKER_POLICY_RESTART") != "PRESENT":
+        output["RESULT"] = "BLING_WORKER_RUNNING_RECOVERY_NOT_CERTIFIED"
     else:
         output["RESULT"] = "WORKERS_PRESENT_EXTERNAL_E2E_UNVERIFIED"
     return output
