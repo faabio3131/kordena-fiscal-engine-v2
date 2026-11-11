@@ -8,11 +8,11 @@ from __future__ import annotations
 import json
 import ssl
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from urllib.error import HTTPError, URLError
 from urllib.request import HTTPSHandler, Request, build_opener
 
-from kordena_fiscal.domain import Cnpj, ExecutionScope, FiscalEnvironment, FiscalValidationError
+from kordena_fiscal.domain import Cnpj, ExecutionScope, FiscalEnvironment, FiscalValidationError, TaxRegimeCode
 from kordena_fiscal.gateway.authorization import (
     AuthorizationStatus,
     GatewayProviderMetadata,
@@ -102,16 +102,33 @@ class NfseNacionalHomologationGateway:
         issuer_municipality = document.issuer.address.jurisdiction.municipality_ibge_code
         if issuer_municipality is None:
             raise OfficialNfseTransportError("DPS requires an issuer municipality")
-        # Contagem/MG (IBGE 3118601) publishes a municipal ISS Digital
-        # webservice using national-layout XML/JSON. Layout compatibility
-        # DOES NOT authorize dispatch to the SEFIN Nacional endpoint.
-        # Source: https://receita.contagem.mg.gov.br/nfe/ (11/11/2026).
-        # Fail before opening the tenant A1 vault, signing or performing I/O.
+        # Contagem/MG (IBGE 3118601) has its own ISS Digital channel,
+        # BUT the federal NFS-e guidance of 29/10/2026 mandates national
+        # issuance for Simples Nacional ME/EPP from competence 01/11/2026,
+        # even in municipalities with their own emitter. Retroactive
+        # competences remain under their historical municipal contract.
+        # MEI uses the national emitter under its own prior federal rule.
+        # Sources:
+        # https://receita.contagem.mg.gov.br/nfe/
+        # https://www.gov.br/nfse/pt-br/noticias/nfs-e-informa-diretrizes-sobre-a-obrigatoriedade-da-emissao-da-nfs-e-nacional-para-optantes-do-simples-nacional
+        # This is a negative eligibility guard, never a provider binding.
         if issuer_municipality == "3118601":
-            raise OfficialNfseTransportError(
-                "NFS-e de Contagem/MG exige contrato do emissor municipal; "
-                "transporte SEFIN Nacional nao autorizado"
+            regime = document.issuer.tax_regime
+            national_allowed = (
+                regime is TaxRegimeCode.MEI
+                or (
+                    regime in {
+                        TaxRegimeCode.SIMPLES_NACIONAL,
+                        TaxRegimeCode.SIMPLES_NACIONAL_EXCESS_SUBLIMIT,
+                    }
+                    and document.competence_date >= date(2026, 11, 1)
+                )
             )
+            if not national_allowed:
+                raise OfficialNfseTransportError(
+                    "Contagem/MG: para regime e competencia informados exige "
+                    "emissor municipal; SEFIN Nacional nao autorizada"
+                )
         material = self._resolve_certificate(document.scope, issuer_cnpj)
         validate_a1_for_issuer(
             material.pkcs12_bytes, material.password, issuer_cnpj=Cnpj(issuer_cnpj),
