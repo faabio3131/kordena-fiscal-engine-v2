@@ -80,3 +80,27 @@ def test_unrelated_abrasf_query_remains_unmodified() -> None:
         "<Protocolo>123</Protocolo></ConsultarLoteRpsEnvio>"
     ).encode()
     require_extrema_rtc_destination_order(query)
+
+
+@pytest.mark.parametrize(
+    ("indicator", "recipient", "must_reject"),
+    [
+        ("0", "", False),
+        ("1", "<dest><CNPJ>11222333000181</CNPJ><xNome>Outro</xNome></dest>", False),
+        ("0", "<dest><CNPJ>11222333000181</CNPJ><xNome>Outro</xNome></dest>", True),
+        ("1", "", True),
+    ],
+)
+def test_extrema_rtc_inddest_and_optional_recipient_must_agree(
+    indicator: str, recipient: str, must_reject: bool,
+) -> None:
+    xml = (
+        f'<GerarNfseEnvio xmlns="{_NS}"><Rps><InfDeclaracaoPrestacaoServico>'
+        f"<IBSCBS><indDest>{indicator}</indDest>{recipient}</IBSCBS>"
+        "</InfDeclaracaoPrestacaoServico></Rps></GerarNfseEnvio>"
+    ).encode()
+    if must_reject:
+        with pytest.raises(WebissMunicipalSchemaUnverified, match="indDest"):
+            require_extrema_rtc_destination_order(xml)
+    else:
+        require_extrema_rtc_destination_order(xml)
