@@ -322,6 +322,8 @@ def parse_webiss_soap_response(
             "Verified municipal issuer scope is required for NFS-e receipts"
         )
     for invoice in invoices:
+        if not isinstance(issuer_cnpj, Cnpj):
+            raise WebissMgContractError("Invoice issuer scope is not trusted")
         ns = "{http://www.abrasf.org.br/nfse.xsd}"
         invoice_issuer = invoice.findtext(
             f"{ns}PrestadorServico/{ns}IdentificacaoPrestador/"
