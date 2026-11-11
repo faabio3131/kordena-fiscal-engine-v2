@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 from fastapi.testclient import TestClient
 
@@ -88,7 +89,10 @@ def _database(path: Path) -> SqliteFiscalDatabase:
     return db
 
 
-def _client(db: SqliteFiscalDatabase, *, role: PortalRole) -> TestClient:
+def _client(
+    db: SqliteFiscalDatabase, *, role: PortalRole,
+    operation_executor: Any | None = None,
+) -> TestClient:
     password = "only-synthetic-test-password-2026"
     hasher = ScryptPasswordHasher()
     accounts = InMemoryHumanAccountRepository((HumanAccount(
@@ -104,7 +108,9 @@ def _client(db: SqliteFiscalDatabase, *, role: PortalRole) -> TestClient:
     )
     web = TestClient(create_app(
         human_identity=identity,
-        portal_executor=DurableHumanPortalExecutor(db),
+        portal_executor=DurableHumanPortalExecutor(
+            db, operation_executor=operation_executor,
+        ),
     ), base_url="https://nfcore.test")
     response = web.post("/v1/auth/login", json={
         "email": role.value + "@example.com", "password": password,
