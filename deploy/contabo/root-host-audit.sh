@@ -6,7 +6,9 @@ set -Eeuo pipefail
 umask 077
 
 readonly ROOT_AUDIT_DIR=/usr/local/libexec/nfcore-audit
-readonly ROOT_AUDIT_SCRIPT=$ROOT_AUDIT_DIR/bling-operational-host-audit.sh
+readonly BLING_AUDIT_SCRIPT=$ROOT_AUDIT_DIR/bling-operational-host-audit.sh
+readonly GSM_AUDIT_SCRIPT=$ROOT_AUDIT_DIR/worker-readonly-preflight.py
+ROOT_AUDIT_SCRIPT=''
 
 # Reject symlinks, non-owner-controlled files and writable ancestors.
 # Callers may supply an expected owner for pure, unprivileged CI tests only.
@@ -36,13 +38,17 @@ check_trusted_audit_chain() {
 # -n 106 caps untrusted first-line data; a trailing extra line is forbidden.
 parse_root_audit_request() {
   local payload='' trailing=''
-  IFS= read -r -n 106 -t 3 payload || return 1
+  # Bling legacy pair = 105 characters; GSM tagged pair = 109.
+  IFS= read -r -n 110 -t 3 payload || return 1
   if IFS= read -r -n 1 -t 1 trailing || [[ -n "$trailing" ]]; then
     return 1
   fi
-  if [[ "$payload" =~ ^([0-9a-f]{40})[[:space:]]([0-9a-f]{64})$ ]]; then
-    ROOT_AUDIT_SHA="${BASH_REMATCH[1]}"
-    ROOT_AUDIT_DIGEST="${BASH_REMATCH[2]}"
+  local request_pattern='^(gsm )?([0-9a-f]{40}) ([0-9a-f]{64})$'
+  if [[ "$payload" =~ $request_pattern ]]; then
+    ROOT_AUDIT_KIND="bling"
+    [[ -n "${BASH_REMATCH[1]}" ]] && ROOT_AUDIT_KIND="gsm"
+    ROOT_AUDIT_SHA="${BASH_REMATCH[2]}"
+    ROOT_AUDIT_DIGEST="${BASH_REMATCH[3]}"
     return 0
   fi
   return 1
@@ -50,11 +56,17 @@ parse_root_audit_request() {
 
 main() {
   [[ "$(id -u)" == 0 ]] || { echo 'NO_GO_ROOT_AUDIT_PRIVILEGE' >&2; exit 42; }
-  check_trusted_audit_chain || exit 42
   if ! parse_root_audit_request; then
     echo 'NO_GO_ROOT_AUDIT_REQUEST' >&2
     exit 42
   fi
+  # Select only a fixed root-owned audit program, never a caller path.
+  if [[ "$ROOT_AUDIT_KIND" == "gsm" ]]; then
+    ROOT_AUDIT_SCRIPT=$GSM_AUDIT_SCRIPT
+  else
+    ROOT_AUDIT_SCRIPT=$BLING_AUDIT_SCRIPT
+  fi
+  check_trusted_audit_chain || exit 42
   local calculated_digest
   calculated_digest=$(sha256sum "$ROOT_AUDIT_SCRIPT")
   calculated_digest="${calculated_digest%% *}"
@@ -65,6 +77,11 @@ main() {
 
   # Never eval a caller's command or run code from /opt/fm/nfcore/src.
   # Docker inspection is permitted only inside this fixed, root-owned script.
+  if [[ "$ROOT_AUDIT_KIND" == "gsm" ]]; then
+    exec /usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C HOME=/nonexistent \
+      /usr/bin/python3 -I "$ROOT_AUDIT_SCRIPT" \
+        --expected-production-sha "$ROOT_AUDIT_SHA" </dev/null
+  fi
   exec /usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C HOME=/nonexistent \
     /bin/bash "$ROOT_AUDIT_SCRIPT" "$ROOT_AUDIT_SHA" </dev/null
 }

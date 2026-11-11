@@ -40,6 +40,12 @@ sha=61015a837be8b2e5e3b0f1cdb5fb14c5c875fb91
 digest=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 parse_root_audit_request < <(printf '%s %s\n' "$sha" "$digest")
 [[ "$ROOT_AUDIT_SHA" == "$sha" && "$ROOT_AUDIT_DIGEST" == "$digest" ]]
+[[ "$ROOT_AUDIT_KIND" == "bling" ]]
+parse_root_audit_request < <(printf 'gsm %s %s\n' "$sha" "$digest")
+[[ "$ROOT_AUDIT_SHA" == "$sha" && "$ROOT_AUDIT_DIGEST" == "$digest" ]]
+[[ "$ROOT_AUDIT_KIND" == "gsm" ]]
+grep -Fq 'ROOT_AUDIT_SCRIPT=$GSM_AUDIT_SCRIPT' "$here/root-host-audit.sh"
+grep -Fq '/usr/bin/python3 -I "$ROOT_AUDIT_SCRIPT"' "$here/root-host-audit.sh"
 
 for invalid in \
   "not-an-audit" \
@@ -62,6 +68,21 @@ if parse_root_audit_request < <(printf '%s %s\n\n' "$sha" "$digest"); then
 fi
 if parse_root_audit_request < <(printf '%s %s' "$sha" "$digest"); then
   echo 'FAIL: unterminated request accepted' >&2
+  exit 1
+fi
+for invalid in \
+  "gsm $sha" \
+  "gsm $sha $digest extra" \
+  "gsm $sha $digest;id" \
+  "other $sha $digest" \
+  "gsm $sha ${digest:0:63}"; do
+  if parse_root_audit_request < <(printf '%s\n' "$invalid"); then
+    echo 'FAIL: invalid privileged GSM request accepted' >&2
+    exit 1
+  fi
+done
+if parse_root_audit_request < <(printf 'gsm %s %s\nwhoami\n' "$sha" "$digest"); then
+  echo 'FAIL: multiline GSM request accepted' >&2
   exit 1
 fi
 if parse_root_audit_request < <(printf 'A%.0s' {1..256}); then
