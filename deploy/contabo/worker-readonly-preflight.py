@@ -115,14 +115,16 @@ def worker_policy(info: dict[str, Any], *, bling: bool) -> dict[str, str]:
             env[name] = value
     expected_mode = "multi-tenant-production-sa-v1"
     target = "/run/nfcore/bling" if bling else "/run/nfcore/worker-identity.json"
+    network_names = set((info.get("NetworkSettings") or {}).get("Networks") or {})
+    no_new_privileges = "no-new-privileges:true" in (host.get("SecurityOpt") or [])
     checks = {
         "POLICY_NONROOT": "PASS" if cfg.get("User") == "10001:10001" else "NO_GO",
         "POLICY_READONLY_FS": "PASS" if host.get("ReadonlyRootfs") is True else "NO_GO",
         "POLICY_UNPRIVILEGED": "PASS" if host.get("Privileged") is False else "NO_GO",
         "POLICY_NO_PORTS": "PASS" if not host.get("PortBindings") else "NO_GO",
-        "POLICY_NO_NEW_PRIVS": "PASS" if "no-new-privileges:true" in (host.get("SecurityOpt") or []) else "NO_GO",
+        "POLICY_NO_NEW_PRIVS": "PASS" if no_new_privileges else "NO_GO",
         "POLICY_CAP_DROP": "PASS" if "ALL" in (host.get("CapDrop") or []) else "NO_GO",
-        "POLICY_INTERNAL_NET": "PASS" if set(((info.get("NetworkSettings") or {}).get("Networks") or {})) == {"nfcore_internal"} else "NO_GO",
+        "POLICY_INTERNAL_NET": "PASS" if network_names == {"nfcore_internal"} else "NO_GO",
         "POLICY_ENV": "PASS" if env.get("NFCORE_ENVIRONMENT") == "production"
             and env.get("NFCORE_SECRET_BACKEND") == "external" else "NO_GO",
         "POLICY_MOUNT": only_expected_mount(info, target, "directory" if bling else "file"),
