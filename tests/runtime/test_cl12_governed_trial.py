@@ -200,6 +200,50 @@ def test_trial_new_request_key_never_changes_existing_company_or_plan(
     assert org is not None and org.legal_name == "Canonical Customer LTDA"
 
 
+
+def test_trial_recovery_denies_foreign_or_elevated_owner_even_with_matching_offer(
+    database: PostgresFiscalDatabase,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from dataclasses import replace
+    from types import SimpleNamespace
+
+    _publish_trial_pricing(database)
+    composition = build_postgres_runtime_composition(database)
+    first = composition.commercial_trial.begin(
+        plan_id="growth",
+        price_id="growth-monthly",
+        buyer_email="isolated@example.com",
+        legal_name="Isolated Customer LTDA",
+        idempotency_key="cl12-trial-isolated-0001",
+        now=NOW,
+    )
+    owner = database.human_accounts().by_email("isolated@example.com")
+    assert owner is not None
+    assert first.purchase.tenant_id == owner.tenant_id
+
+    for forged in (
+        replace(owner, tenant_id="another-tenant"),
+        replace(owner, platform_admin=True),
+        replace(owner, enabled=False),
+    ):
+        monkeypatch.setattr(
+            composition.commercial_trial,
+            "_accounts",
+            SimpleNamespace(by_email=lambda _email, forged=forged: forged),
+        )
+        with pytest.raises(CommercialFulfillmentError):
+            composition.commercial_trial.begin(
+                plan_id="growth",
+                price_id="growth-monthly",
+                buyer_email="isolated@example.com",
+                legal_name="Isolated Customer LTDA",
+                idempotency_key="cl12-trial-isolated-0002",
+                now=NOW + timedelta(minutes=1),
+            )
+
+
+
 def test_trial_recovers_committed_reservation_after_interrupted_provisioning(
     database: PostgresFiscalDatabase,
     monkeypatch: pytest.MonkeyPatch,
