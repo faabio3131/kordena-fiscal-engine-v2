@@ -12,6 +12,7 @@ import json
 import re
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
+from typing import cast
 
 from lxml import etree
 
@@ -100,12 +101,15 @@ class ExtremaRpsIntent:
             or not re.fullmatch(r"[0-9]{6}", self.rtc_tax_class)
         ):
             raise FiscalValidationError("Invalid WebISS RTC classification fields")
+        precision = self.iss_rate_fraction.as_tuple().exponent if isinstance(
+            self.iss_rate_fraction, Decimal
+        ) else None
         if (
             not isinstance(self.iss_rate_fraction, Decimal)
             or not self.iss_rate_fraction.is_finite()
             or not Decimal("0") <= self.iss_rate_fraction <= Decimal("1")
-            or not isinstance(self.iss_rate_fraction.as_tuple().exponent, int)
-            or self.iss_rate_fraction.as_tuple().exponent < -4
+            or not isinstance(precision, int)
+            or precision < -4
         ):
             raise FiscalValidationError("ISS rate must be a 0..1 fraction with <=4 places")
         if not isinstance(self.incentive_fiscal, bool):
@@ -183,7 +187,9 @@ def build_extrema_rps_xml(
     document = request.document
     issuer = document.issuer
     line = document.services[0]
-    root = etree.Element(f"{{{_NS}}}GerarNfseEnvio", nsmap={"a": _NS})
+    root = etree.Element(
+        f"{{{_NS}}}GerarNfseEnvio", nsmap=cast(dict[str, str], {None: _NS}),
+    )
     rps = etree.SubElement(root, f"{{{_NS}}}Rps")
     information = etree.SubElement(
         rps, f"{{{_NS}}}InfDeclaracaoPrestacaoServico",
