@@ -57,6 +57,13 @@ def ensure_trusted_directory(
     require(stat.S_IMODE(st.st_mode) & 0o022 == 0, "NO_GO_WRITABLE_DIRECTORY")
 
 
+def ensure_private_root_directory(path: Path) -> None:
+    """The credential inbox and identity namespace must be root-only 0700."""
+    ensure_trusted_directory(path)
+    require(stat.S_IMODE(path.lstat().st_mode) == 0o700,
+            "NO_GO_PRIVATE_DIRECTORY_PERMISSIONS")
+
+
 def parse_existing_identity(raw: bytes) -> str:
     """Validate exact SA JSON metadata without exposing private key material."""
     try:
@@ -157,6 +164,7 @@ def read_existing_identity(source: Path) -> tuple[bytes, str]:
             "NO_GO_SOURCE_NOT_IN_NFCORE_INBOX")
     for parent in (Path("/"), Path("/etc"), Path("/etc/nfcore"), INBOX_DIR):
         ensure_trusted_directory(parent)
+    ensure_private_root_directory(INBOX_DIR)
     require(not source.is_symlink(), "NO_GO_SYMLINK")
     try:
         previous = source.lstat()
@@ -260,7 +268,7 @@ def main() -> int:
             if not WORKER_DIR.exists():
                 WORKER_DIR.mkdir(mode=0o700)
                 created_worker_dir = True
-            ensure_trusted_directory(WORKER_DIR)
+            ensure_private_root_directory(WORKER_DIR)
             for target, payload, owner, group in (
                 (TARGET_IDENTITY, raw, 10001, 10001),
                 (WORKER_ENV, env_data, operator.pw_uid, operator.pw_gid),
