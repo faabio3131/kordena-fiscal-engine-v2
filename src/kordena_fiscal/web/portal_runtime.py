@@ -797,6 +797,18 @@ class DurableHumanPortalExecutor:
                 payload=payload,
                 idempotency_key=idempotency_key,
             )
+        if operation_id == "substituteExtremaNfse":
+            try:
+                unit = payload.get("unit_id")
+                if not isinstance(unit, str) or not unit.strip():
+                    raise HumanAuthorizationError("Fiscal unit required")
+                authority.assert_permission(PortalPermission.DOCUMENT_ISSUE, unit_id=unit)
+                authority.assert_permission(PortalPermission.DOCUMENT_CANCEL, unit_id=unit)
+            except HumanAuthorizationError as exc:
+                raise _portal_error(
+                    403, "EXTREMA_SUBSTITUTION_FORBIDDEN",
+                    "Authorized issuance and cancellation are both required",
+                ) from exc
         from .fiscal_intent_recovery import PERMISSIONS
 
         if operation_id in PERMISSIONS:
