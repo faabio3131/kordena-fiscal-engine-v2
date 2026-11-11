@@ -296,6 +296,58 @@ def test_sp_cancellation_remains_in_legacy_adapter():
     application.resolve_configured_provider_id.assert_not_called()
 
 
+def test_canonical_provider_factory_selects_model65_gateway_only_with_binding(
+    monkeypatch,
+):
+    """Proof of composition: exactly bound model65 selects SEFAZ/MG NFC-e.
+
+    The provider itself still enforces QR, XSD, XMLDSig and A1 on authorize.
+    """
+    import kordena_fiscal.runtime.canonical_fiscal_composition as composition
+
+    nfe_adapter, nfce_adapter = Mock(), Mock()
+    monkeypatch.setattr(
+        composition, "build_mg_nfe_homologation_gateway",
+        lambda **_kwargs: nfe_adapter,
+    )
+    monkeypatch.setattr(
+        composition, "build_mg_nfce_homologation_gateway",
+        lambda **_kwargs: nfce_adapter,
+    )
+    captured = {}
+
+    def capture_handlers(_operations, **kwargs):
+        captured.update(kwargs)
+        return {
+            "issueFiscalDocument": object(),
+            "queryFiscalDocument": object(),
+            "cancelFiscalDocument": object(),
+            "reconcileFiscalOperation": object(),
+        }
+
+    monkeypatch.setattr(composition, "build_provider_operation_handlers", capture_handlers)
+    app, vault = Mock(), Mock()
+    composition.build_runtime_fiscal_handler_factory(certificate_vault=vault)(app)
+    select = captured["select_xml_gateway"]
+    model65 = _request(model=ElectronicInvoiceModel.NFCE)
+    app.resolve_configured_provider_id.return_value = "wrong-provider"
+    with pytest.raises(FiscalValidationError, match="incompatível"):
+        select(model65)
+    assert vault.resolve.call_count == 0
+
+    app.resolve_configured_provider_id.return_value = MG_NFCE_HOMOLOGATION_PROVIDER_ID
+    assert select(model65)._gateway is nfce_adapter
+    kwargs = app.resolve_configured_provider_id.call_args.kwargs
+    assert kwargs["document_kind"] is FiscalDocumentKind.NFCE
+    assert kwargs["operation"] == ConfiguredFiscalOperation.AUTHORIZE.value
+    assert kwargs["jurisdiction"] == BrazilianJurisdiction("MG")
+
+    app.resolve_configured_provider_id.return_value = MG_NFE_HOMOLOGATION_PROVIDER_ID
+    assert select(_request())._gateway is nfe_adapter
+    assert select(_request(uf="35"))._gateway is not nfce_adapter
+    assert vault.resolve.call_count == 0
+
+
 def test_mg_cancellation_is_signed_xsd_valid_and_correlated(material):
     original = _cancel()
     exchange = Mock(return_value=_soap(
