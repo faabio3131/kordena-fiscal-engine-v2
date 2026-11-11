@@ -87,7 +87,8 @@ def test_wrong_tenant_scope_fails_before_vault_or_transport(synthetic_schema):
             scope=replace(_request().scope, environment=FiscalEnvironment.PRODUCTION),
             issuer_cnpj=Cnpj(CNPJ), issuer_municipality_ibge="3125101",
         )
-    calls.assert_not_called()
+    calls.resolve.assert_not_called()
+    calls.exchange.assert_not_called()
 
 
 def test_wrong_issuer_fails_before_vault_or_transport(synthetic_schema):
