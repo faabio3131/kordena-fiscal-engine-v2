@@ -24,8 +24,8 @@ from kordena_fiscal.gateway.mg_webiss_soap import (
     EXTREMA_WEBISS_PROVIDER_ID,
     UBERABA_WEBISS_PROVIDER_ID,
     WebissExtremaHomologationTransport,
-    WebissUberabaHomologationTransport,
     WebissMgContractError,
+    WebissUberabaHomologationTransport,
     parse_webiss_soap_response,
 )
 from kordena_fiscal.gateway.nfse_abrasf203_envelope import (
