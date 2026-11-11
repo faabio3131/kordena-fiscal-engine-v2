@@ -42,6 +42,19 @@ def metadata(path: Path, *, directory: bool = False) -> str:
     return "RESTRICTED"
 
 
+def approved_nfcore_secret_source(path: Path) -> bool:
+    """Fail closed before inspecting any mount source from another SaaS."""
+    if not path.is_absolute() or ".." in path.parts:
+        return False
+    try:
+        resolved = path.resolve(strict=True)
+    except (OSError, RuntimeError):
+        return False
+    # Do not follow a symlink outside an approved NFCore-owned namespace.
+    allowed = (ROOT, Path("/etc/nfcore"), Path("/run/nfcore"))
+    return any(path.is_relative_to(base) and resolved.is_relative_to(base) for base in allowed)
+
+
 def docker(args: list[str]) -> str | None:
     try:
         result = subprocess.run(
@@ -93,7 +106,7 @@ def only_expected_mount(info: dict[str, Any], dest: str, kind: str) -> str:
     source = mount.get("Source")
     if not isinstance(source, str) or not source.startswith("/"):
         return "INVALID_SOURCE"
-    if source == "/opt/fm/ironfit" or source.startswith("/opt/fm/ironfit/"):
+    if not approved_nfcore_secret_source(Path(source)):
         return "CROSS_SAAS_SOURCE_DENIED"
     state = metadata(Path(source), directory=kind == "directory")
     if state != "RESTRICTED":
