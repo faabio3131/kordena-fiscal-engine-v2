@@ -34,8 +34,14 @@ from kordena_fiscal.gateway.fiscal_tls import (
 from kordena_fiscal.gateway.nfse_abrasf203_envelope import (
     Abrasf203Envelope,
     Abrasf203Operation,
-    _validator,
 )
+from kordena_fiscal.gateway.webiss_2026_schema import (
+    WEBISS_RTC_LAYOUT_VERSION,
+    Webiss2026SchemaEvidence,
+    WebissMunicipalSchemaUnverified,
+    validate_webiss_official_xml,
+)
+from kordena_fiscal.xml.schema import XmlSchemaValidator
 from kordena_fiscal.gateway.provider import ProviderSelectionResolver
 from kordena_fiscal.vault import EphemeralCertificateMaterial
 from kordena_fiscal.vault.a1_preflight import validate_a1_for_issuer
@@ -67,7 +73,11 @@ class WebissMgContractError(FiscalValidationError):
 
 
 def _validate_request_envelope(
-    envelope: Abrasf203Envelope, operation: Abrasf203Operation,
+    envelope: Abrasf203Envelope,
+    operation: Abrasf203Operation,
+    *,
+    evidence: Webiss2026SchemaEvidence,
+    municipal_validator: XmlSchemaValidator,
 ) -> None:
     if not isinstance(envelope, Abrasf203Envelope) or not isinstance(
         operation, Abrasf203Operation
@@ -82,6 +92,13 @@ def _validate_request_envelope(
     method = operation.value[1]
     if envelope.soap_action != f'"{_WSDL}/{method}"':
         raise WebissMgContractError("SOAPAction does not match prepared operation")
+    if (
+        envelope.schema_version != WEBISS_RTC_LAYOUT_VERSION
+        or envelope.schema_package_sha256 != evidence.schema_package_sha256
+    ):
+        raise WebissMunicipalSchemaUnverified(
+            "WebISS 2.02 RTC envelope has no certified municipal schema digest"
+        )
     try:
         root = etree.fromstring(
             envelope.body,
@@ -104,7 +121,6 @@ def _validate_request_envelope(
         or any(not v.text for v in values)
     ):
         raise WebissMgContractError("WebISS request is missing signed XML or header")
-    schema = _validator()
     for part in values:
         encoded = str(part.text).encode("utf-8")
         if len(encoded) > _RESPONSE_LIMIT:
@@ -117,7 +133,20 @@ def _validate_request_envelope(
             raise WebissMgContractError("WebISS inner XML is malformed") from None
         if getattr(inner.getroottree().docinfo, "doctype", None):
             raise WebissMgContractError("WebISS inner XML DTD is prohibited")
-        schema.validate_document(encoded)
+        validate_webiss_official_xml(
+            evidence=evidence, validator=municipal_validator, xml=encoded,
+        )
+        if part.tag == "nfseCabecMsg":
+            if (
+                inner.tag != "{http://www.abrasf.org.br/nfse.xsd}cabecalho"
+                or inner.get("versao") != WEBISS_RTC_LAYOUT_VERSION
+                or inner.findtext(
+                    "{http://www.abrasf.org.br/nfse.xsd}versaoDados"
+                ) != WEBISS_RTC_LAYOUT_VERSION
+            ):
+                raise WebissMunicipalSchemaUnverified(
+                    "WebISS SOAP header must use certified RTC layout version 2.02"
+                )
         if part.tag == "nfseDadosMsg":
             signatures = inner.findall(
                 ".//{http://www.w3.org/2000/09/xmldsig#}Signature"
@@ -212,6 +241,8 @@ class WebissMgHomologationTransport:
         provider_resolver: ProviderSelectionResolver,
         resolve_certificate: Callable[[ExecutionScope, str], EphemeralCertificateMaterial],
         municipality_ibge: str,
+        municipal_schema_evidence: Webiss2026SchemaEvidence | None = None,
+        municipal_schema_validator: XmlSchemaValidator | None = None,
         exchange: Callable[[bytes, str, ssl.SSLContext, float], bytes] | None = None,
         timeout_seconds: float = 15,
     ) -> None:
@@ -223,7 +254,16 @@ class WebissMgHomologationTransport:
             raise ValueError("WebISS requires canonical provider, A1 resolver and timeout")
         if municipality_ibge not in _MG_WEBISS_PROVIDERS:
             raise ValueError("Only sourced WebISS MG municipal channels are allowed")
+        if (municipal_schema_evidence is None) != (municipal_schema_validator is None):
+            raise ValueError("WebISS RTC schema evidence and validator must match")
+        if (
+            municipal_schema_evidence is not None
+            and municipal_schema_evidence.municipality_ibge != municipality_ibge
+        ):
+            raise ValueError("WebISS schema evidence belongs to another municipality")
         self._municipality = municipality_ibge
+        self._schema_evidence = municipal_schema_evidence
+        self._schema_validator = municipal_schema_validator
         self._resolver = provider_resolver
         self._certificate = resolve_certificate
         self._exchange = exchange or _webiss_exchange
@@ -261,7 +301,14 @@ class WebissMgHomologationTransport:
             raise WebissMgContractError(
                 "Competence/regime requires Emissor Nacional, not municipal WebISS"
             )
-        _validate_request_envelope(envelope, operation)
+        if self._schema_evidence is None or self._schema_validator is None:
+            raise WebissMunicipalSchemaUnverified(
+                "Official WebISS municipal RTC XSD not installed; transmission denied"
+            )
+        _validate_request_envelope(
+            envelope, operation, evidence=self._schema_evidence,
+            municipal_validator=self._schema_validator,
+        )
         if operation is Abrasf203Operation.CANCEL:
             # A signed municipal cancellation must use the bound issuer/city;
             # SOAPAction alone is never sufficient to authorize a fiscal event.
@@ -324,6 +371,8 @@ class WebissExtremaHomologationTransport(WebissMgHomologationTransport):
         *,
         provider_resolver: ProviderSelectionResolver,
         resolve_certificate: Callable[[ExecutionScope, str], EphemeralCertificateMaterial],
+        municipal_schema_evidence: Webiss2026SchemaEvidence | None = None,
+        municipal_schema_validator: XmlSchemaValidator | None = None,
         exchange: Callable[[bytes, str, ssl.SSLContext, float], bytes] | None = None,
         timeout_seconds: float = 15,
     ) -> None:
@@ -331,6 +380,8 @@ class WebissExtremaHomologationTransport(WebissMgHomologationTransport):
             provider_resolver=provider_resolver,
             resolve_certificate=resolve_certificate,
             municipality_ibge=EXTREMA_IBGE,
+            municipal_schema_evidence=municipal_schema_evidence,
+            municipal_schema_validator=municipal_schema_validator,
             exchange=exchange,
             timeout_seconds=timeout_seconds,
         )
@@ -344,6 +395,8 @@ class WebissUberabaHomologationTransport(WebissMgHomologationTransport):
         *,
         provider_resolver: ProviderSelectionResolver,
         resolve_certificate: Callable[[ExecutionScope, str], EphemeralCertificateMaterial],
+        municipal_schema_evidence: Webiss2026SchemaEvidence | None = None,
+        municipal_schema_validator: XmlSchemaValidator | None = None,
         exchange: Callable[[bytes, str, ssl.SSLContext, float], bytes] | None = None,
         timeout_seconds: float = 15,
     ) -> None:
@@ -351,6 +404,8 @@ class WebissUberabaHomologationTransport(WebissMgHomologationTransport):
             provider_resolver=provider_resolver,
             resolve_certificate=resolve_certificate,
             municipality_ibge=UBERABA_IBGE,
+            municipal_schema_evidence=municipal_schema_evidence,
+            municipal_schema_validator=municipal_schema_validator,
             exchange=exchange,
             timeout_seconds=timeout_seconds,
         )
