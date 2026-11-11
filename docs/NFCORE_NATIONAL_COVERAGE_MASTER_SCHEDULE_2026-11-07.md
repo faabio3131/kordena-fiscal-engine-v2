@@ -89,3 +89,11 @@
 **Gates para próxima certificação:** A) versão XSD correta em homologação e produção, schemas/hash/RTC, B) DPS sequencial durável por CNPJ sem novo provedor de autoridade, C) NF-e 55 e NFC-e 65 ciclos completos, D) contrato municipal/envelope/eventos/ISS para cada cidade, E) API+Web+PG+RBAC/E2E+CI+EGM auditável, F) externa A1/credenciamento e prova oficial, G) autorização humana para produção. Atualizar a PR/cronograma a cada marco; sem mover DF à frente de MG-W1.
 
  **Regra local BH adicional:** aviso BHISS de 11/08/2026 confirma que ME/EPP Simples em Belo Horizonte já utilizam Emissor Nacional desde a competência novembro/2025; a regra federal nacional de novembro/2026 não substitui o corte municipal anterior. Fonte: https://prefeitura.pbh.gov.br/fazenda/bhiss/avisos?page=1 .
+
+
+### Incremento fiscal MG65 — preflight separado, sem ativação (11/11/2026)
+
+- `SefazHomologationAuthorizationGateway` mantém a mesma implementação e agora reconhece `MG_NFCE` (modelo 65) com provedor e endpoint próprios da SEFAZ/MG; **não reutiliza o endereço de NF-e 55**. Fonte oficial: https://portalsped.fazenda.mg.gov.br/spedmg/nfce/web-services/ . O alvo é configurável em código de homologação mas não foi conectado ao runtime canônico para clientes.
+- Guarda antecipada valida chave MG/65, tpAmb=2, `infNFeSupl` com QR Code apontando ao host/path oficial e `urlChave` ao portal de homologação; bloqueia QR spoofed e modelo 55 antes de Vault A1, assinatura ou HTTP. Sem prova de montagem criptográfica final do QR v3, CSC onde cabível, contingência e eventos: **NFC-e 65 permanece PREFLIGHT_IMPLEMENTED_NOT_CERTIFIED**.
+- Adaptador de operações do modelo 55/SP recusa explicitamente alvo MG65, impedindo roteamento por fallback. Testes negativos dedicados `tests/gateway/test_mg_nfce_model65_preflight.py` e matriz `docs/coverage/NFCORE_MG_W1_MUNICIPAL_CELLS_2026-11-11.json` preservam o bloqueio.
+- Estado atual do PR: Draft, sem merge e sem deploy; **a CI deve ser verificada no HEAD exato após estes commits**, sucesso anterior não serve de certificado deste incremento. Issue canônica de fechamento MG-W1: https://github.com/faabio3131/nf-core-v001/issues/426 . EGM original não foi executado. Próximo delta exige QR v3 assinado, composição exata no Control Plane, consulta/cancelamento/inutilização, teste XML completo e Web/E2E.
