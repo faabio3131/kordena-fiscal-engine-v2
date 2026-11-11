@@ -9,7 +9,12 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 
-from kordena_fiscal.archive import FiscalArchiveEntry, FiscalArchiveKind, RetentionPolicyMetadata
+from kordena_fiscal.archive import (
+    FiscalArchiveEntry,
+    FiscalArchiveKind,
+    FiscalArchiveVerifier,
+    RetentionPolicyMetadata,
+)
 from kordena_fiscal.contingency import (
     FiscalOutboxEnqueueResult,
     FiscalOutboxEntry,
@@ -29,6 +34,10 @@ from kordena_fiscal.events import (
     FiscalInboxEntry,
     FiscalInboxReceiveResult,
     FiscalInboxService,
+)
+from kordena_fiscal.gateway.webiss_extrema_canonical import (
+    ExtremaCancellationOutcome,
+    WebissExtremaCanonicalNfseGateway,
 )
 from kordena_fiscal.gateway import (
     AuthorizationRequest,
@@ -168,6 +177,12 @@ class DurableNfseRecoveryOutcome:
 @dataclass(frozen=True, slots=True)
 class DurableCancellationOutcome:
     result: CancellationResult
+    lifecycle: FiscalStateSnapshot
+    archive_reference: str
+
+@dataclass(frozen=True, slots=True)
+class DurableExtremaCancellationOutcome:
+    result: ExtremaCancellationOutcome
     lifecycle: FiscalStateSnapshot
     archive_reference: str
 
@@ -1178,6 +1193,104 @@ class FiscalApplicationService:
                 uow.lifecycle.save(outcome.lifecycle, expected_version=requested.version)
             uow.commit()
         return DurableCancellationOutcome(result, outcome.lifecycle, archived.entry_id)
+
+    def cancel_prepared_extrema_nfse(
+        self, *, scope: ExecutionScope, document_id: str, cancellation_code: str,
+        gateway: WebissExtremaCanonicalNfseGateway,
+        occurred_at: datetime, retention: RetentionPolicyMetadata,
+    ) -> DurableExtremaCancellationOutcome:
+        """Cancel an authorized Extrema NFS-e exactly once; never blindly resend.
+
+        Validate the archived official XML, sign from the original issuer,
+        commit CANCEL_REQUESTED before SOAP I/O, then atomically archive
+        the official answer and final lifecycle. An ambiguous POST remains
+        CANCEL_REQUESTED and must be consulted; no automatic retry is allowed.
+        """
+        if (
+            not isinstance(scope, ExecutionScope)
+            or not isinstance(gateway, WebissExtremaCanonicalNfseGateway)
+            or not isinstance(retention, RetentionPolicyMetadata)
+            or not isinstance(occurred_at, datetime)
+            or occurred_at.tzinfo is None
+        ):
+            raise FiscalValidationError("Invalid scoped Extrema cancellation dependencies")
+        request = self.load_prepared_nfse_authorization(scope, document_id)
+        self.load_extrema_rps_intent(scope, document_id)
+        with self._uow_factory() as uow:
+            uow.lifecycle.assert_scope(document_id, scope)
+            lifecycle = uow.lifecycle.get(document_id)
+            attempts = uow.idempotency.attempts(request.idempotency_key)
+            if (
+                lifecycle is None
+                or lifecycle.state is not FiscalDocumentState.AUTHORIZED
+                or len(attempts) != 1
+                or attempts[0].status is not IssuanceAttemptStatus.AUTHORIZED
+                or attempts[0].document_id != document_id
+                or attempts[0].request_fingerprint != request.request_fingerprint
+            ):
+                raise PersistenceStateError(
+                    "Extrema cancellation requires one original authorized fiscal document"
+                )
+            snapshots = [
+                entry for entry in uow.archive.list_for_document(scope, document_id)
+                if entry.kind is FiscalArchiveKind.AUTHORIZED_XML
+                and entry.media_type == "application/xml"
+            ]
+            if len(snapshots) != 1:
+                raise PersistenceStateError("Original municipal XML evidence is unavailable")
+            FiscalArchiveVerifier().verify_entry(snapshots[0])
+            original_xml = snapshots[0].content
+
+        envelope, original_number = gateway.prepare_cancellation(
+            request=request, authorized_xml=original_xml,
+            cancellation_code=cancellation_code,
+        )
+        with self._uow_factory() as uow:
+            uow.lifecycle.assert_scope(document_id, scope)
+            current = uow.lifecycle.get(document_id)
+            if current is None or current.state is not FiscalDocumentState.AUTHORIZED:
+                raise PersistenceConflictError("Extrema cancellation was already requested")
+            claim = self._state_machine.transition(
+                current, FiscalDocumentState.CANCEL_REQUESTED,
+                occurred_at=occurred_at, reason="official Extrema cancellation claim",
+                correlation_id=scope.correlation_id,
+            )
+            uow.lifecycle.save(claim, expected_version=current.version)
+            uow.commit()
+
+        # No automatic retry. Any network/parse error leaves CANCEL_REQUESTED.
+        result = gateway.submit_cancellation(
+            request=request, envelope=envelope, original_number=original_number,
+        )
+        archive_entry = FiscalArchiveEntry.build(
+            scope=scope, document_reference=document_id,
+            kind=FiscalArchiveKind.FISCAL_EVENT,
+            content=result.xml, media_type="application/xml",
+            archived_at=occurred_at, retention=retention,
+        )
+        with self._uow_factory() as uow:
+            uow.lifecycle.assert_scope(document_id, scope)
+            current = uow.lifecycle.get(document_id)
+            if current is None or current != claim:
+                raise PersistenceConflictError("Extrema cancellation changed during delivery")
+            target = (
+                FiscalDocumentState.CANCELLED if result.confirmed
+                else FiscalDocumentState.AUTHORIZED
+            )
+            final = self._state_machine.transition(
+                current, target, occurred_at=occurred_at,
+                reason=(
+                    "municipal cancellation confirmed" if result.confirmed
+                    else "municipal cancellation rejected"
+                ),
+                correlation_id=scope.correlation_id,
+            )
+            uow.lifecycle.save(final, expected_version=current.version)
+            archived = uow.archive.append(archive_entry)
+            uow.commit()
+        return DurableExtremaCancellationOutcome(
+            result=result, lifecycle=final, archive_reference=archived.entry_id,
+        )
 
     def reserve_number(
         self,
