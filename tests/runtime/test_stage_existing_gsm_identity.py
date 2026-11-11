@@ -9,6 +9,7 @@ import json
 import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -195,3 +196,54 @@ def test_private_gsm_credential_directories_require_mode_0700(
     folder.chmod(0o770)
     with pytest.raises(stager.Denied, match="NO_GO_PRIVATE_DIRECTORY_PERMISSIONS"):
         stager.ensure_private_root_directory(folder)
+
+
+
+def test_check_mode_rejects_existing_nonprivate_worker_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The dry-run must reject the same unsafe directory as the stage operation."""
+    existing_worker_dir = tmp_path / "worker"
+    existing_worker_dir.mkdir(mode=0o700)
+    existing_worker_dir.chmod(0o755)
+    monkeypatch.setattr(stager, "WORKER_DIR", existing_worker_dir)
+    monkeypatch.setattr(stager, "TARGET_IDENTITY", existing_worker_dir / "key.json")
+    monkeypatch.setattr(stager, "WORKER_ENV", tmp_path / ".env.worker")
+    monkeypatch.setattr(stager, "COMPOSE_ENV", tmp_path / ".worker-compose.env")
+    monkeypatch.setattr(stager, "PROD_DIR", tmp_path)
+    monkeypatch.setattr(stager, "check_host", lambda _sha: None)
+    monkeypatch.setattr(
+        stager, "read_existing_identity",
+        lambda _path: (b"synthetic-only", "b" * 40),
+    )
+    monkeypatch.setattr(
+        stager, "validate_created_at",
+        lambda _date: ("2026-11-02T20:32:00+00:00", "2027-01-31T20:32:00+00:00"),
+    )
+    monkeypatch.setattr(
+        stager.pwd, "getpwnam",
+        lambda _user: SimpleNamespace(pw_uid=1001, pw_gid=1001),
+    )
+    monkeypatch.setattr(
+        stager, "ensure_trusted_directory",
+        lambda _path, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "stage-existing-gsm-identity.py",
+            "--mode", "check",
+            "--expected-production-sha", "a" * 40,
+            "--existing-identity-file", "/etc/nfcore/incoming/existing-worker.json",
+            "--iam-key-created-at", "2026-11-02T20:32:00+00:00",
+        ],
+    )
+    assert stager.main() == 42
+    assert "NO_GO_PRIVATE_DIRECTORY_PERMISSIONS" in capsys.readouterr().err
+    assert list(existing_worker_dir.iterdir()) == []
+
+    existing_worker_dir.chmod(0o700)
+    assert stager.main() == 0
+    assert "EXISTING_GSM_IDENTITY_STAGE_PREFLIGHT_PASS" in capsys.readouterr().out
+    assert list(existing_worker_dir.iterdir()) == []
