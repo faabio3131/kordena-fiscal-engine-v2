@@ -197,7 +197,11 @@ def _require_fiscal_signature_coverage(
             raise WebissMgContractError("WebISS fiscal signature reference is not local")
         key = identity[1:]
         signed_target = expected.get(key)
-        if key in seen or signed_target is None or signature.getparent() is not signed_target.getparent():
+        if (
+            key in seen
+            or signed_target is None
+            or signature.getparent() is not signed_target.getparent()
+        ):
             raise WebissMgContractError(
                 "WebISS XMLDSig does not cover the required fiscal intention"
             )
