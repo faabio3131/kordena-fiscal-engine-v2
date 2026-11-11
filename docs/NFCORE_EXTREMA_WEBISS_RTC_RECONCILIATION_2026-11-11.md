@@ -41,3 +41,21 @@ Contratos estruturalmente confirmados nessa referência do provedor:
 **Decisão:** não copiar o XSD de Formiga para `PINNED_WEBISS_MG_2026_SCHEMA_DIGESTS["3125101"]` sem comprovar equivalência com o documento **publicado pelo próprio portal de Extrema**. `ABRASF 2.03`, testes com monkeypatch e arquivos públicos de outro município não substituem a autoridade do pacote fiscal municipal.
 
 **Proibição:** não fazer merge/deploy, criar credenciais reais ou transmitir uma NFS-e sem gate e autorização específicos.
+
+
+## Confirmação direta do próprio webservice municipal (nova evidência)
+
+O [NfseWSService de Extrema](https://extremamg.webiss.com.br/ws/nfse.asmx?op=SubstituirNfse) expõe páginas de descrição pública do SOAP 1.1, com **Host `extremamg.webiss.com.br` e POST `/ws/nfse.asmx`**, cabeçalho `Content-Type: text/xml; charset=utf-8`, `SOAPAction` com prefixo `http://nfse.abrasf.org.br/`, request `{Método}Request`, response `{Método}Response`, e dois filhos string `nfseCabecMsg` e `nfseDadosMsg` no pedido; resultado `outputXML`.
+
+Operações confirmadas no **serviço PUBLICADO do próprio município**, não apenas em fornecedor terceiro:
+
+| Função SOAP | Evidência municipal | Situação de contrato |
+|---|---|---|
+| `RecepcionarLoteRps` | https://extremamg.webiss.com.br/ws/nfse.asmx?op=RecepcionarLoteRps | Método / SOAPAction / wrapper público confirmados |
+| `ConsultarNfseServicoPrestado` | https://extremamg.webiss.com.br/ws/nfse.asmx?op=ConsultarNfseServicoPrestado | Método e consulta específica de notas confirmados |
+| `CancelarNfse` | https://extremamg.webiss.com.br/ws/nfse.asmx?op=CancelarNfse | Método e envelope confirmados; efeitos fiscais dependem de resposta |
+| `SubstituirNfse` | https://extremamg.webiss.com.br/ws/nfse.asmx?op=SubstituirNfse | Método confirmado; não equivale ao cancelamento comum |
+
+**Segregação CRÍTICA:** `https://extremamg.webiss.com.br/ws/nfse.asmx` é o endpoint publicado no host operacional municipal. Sua existência NÃO confirma ambiente *homologação*. A URL `https://homologacao.webiss.com.br/ws/nfse.asmx` não foi confirmada pelo município; por isso o transporte de homologação permanece sem destino padrão e bloqueia envio. Não realizar POST para o endpoint público para testar acesso. Sem documentos de homologação/credenciamento e autorização expressa, conservar `EXTREMA_INTERNAL_COMPLETE = false`.
+
+**Divergência funcional reconhecida:** o NFCore atual implementa `ConsultarLoteRps` (consultar lote), mas o município também suporta `ConsultarNfseServicoPrestado` (consultar nota emitida). Não afirmar que consulta por lote satisfaz todas as necessidades de consulta NFS-e; registrar implementação individual pendente antes de completar o ciclo operacional.
