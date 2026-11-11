@@ -12,8 +12,10 @@ from fastapi.testclient import TestClient
 
 from kordena_fiscal.application.service import FiscalApplicationService
 from kordena_fiscal.control_plane import FiscalOrganization, FiscalUnitRegistration
-from kordena_fiscal.control_plane.commercial import ConfiguredFiscalOperation
-from kordena_fiscal.control_plane.models import ProviderBinding
+from kordena_fiscal.control_plane.commercial import (
+    ConfiguredFiscalOperation,
+    ProviderBinding,
+)
 from kordena_fiscal.domain import (
     BrazilianJurisdiction,
     CnaeCode,
