@@ -57,6 +57,7 @@ _ACTIONS = {
     Abrasf203Operation.GENERATE: ConfiguredFiscalOperation.AUTHORIZE,
     Abrasf203Operation.SUBMIT_BATCH: ConfiguredFiscalOperation.AUTHORIZE,
     Abrasf203Operation.QUERY_BATCH: ConfiguredFiscalOperation.QUERY,
+    Abrasf203Operation.CANCEL: ConfiguredFiscalOperation.CANCEL,
 }
 
 
@@ -227,6 +228,38 @@ class WebissMgHomologationTransport:
                 "Competence/regime requires Emissor Nacional, not municipal WebISS"
             )
         _validate_request_envelope(envelope, operation)
+        if operation is Abrasf203Operation.CANCEL:
+            # A signed municipal cancellation must use the bound issuer/city;
+            # SOAPAction alone is never sufficient to authorize a fiscal event.
+            soap = etree.fromstring(
+                envelope.body,
+                parser=etree.XMLParser(resolve_entities=False, no_network=True),
+            )
+            raw_xml = soap[0][0].findtext("nfseDadosMsg")
+            try:
+                fiscal = etree.fromstring(
+                    str(raw_xml).encode("utf-8"),
+                    parser=etree.XMLParser(resolve_entities=False, no_network=True),
+                )
+            except etree.XMLSyntaxError:
+                raise WebissMgContractError("Invalid signed cancellation XML") from None
+            ns = {"a": "http://www.abrasf.org.br/nfse.xsd"}
+            identifier = fiscal.find(
+                "a:Pedido/a:InfPedidoCancelamento/a:IdentificacaoNfse", ns,
+            )
+            if (
+                identifier is None
+                or identifier.findtext("a:CodigoMunicipio", "", ns)
+                != self._municipality
+                or identifier.findtext("a:CpfCnpj/a:Cnpj", "", ns)
+                != issuer_cnpj.value
+                or fiscal.find(
+                    "a:Pedido/{http://www.w3.org/2000/09/xmldsig#}Signature", ns,
+                ) is None
+            ):
+                raise WebissMgContractError(
+                    "Municipal cancellation does not match bound issuer and city"
+                )
         provider = self._resolver.resolve_provider_id(
             scope=scope,
             document_kind=FiscalDocumentKind.NFSE,
