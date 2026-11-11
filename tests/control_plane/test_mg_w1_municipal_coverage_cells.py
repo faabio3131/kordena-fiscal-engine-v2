@@ -89,7 +89,10 @@ def test_mg_wave1_ledger_has_one_cell_per_selected_municipality_in_order() -> No
         "HASH_PLACEHOLDER_NOT_SEQUENTIAL"
     )
     for cell in cells:
-        assert cell["simples_national_required_from_competence"] == "2026-11-01"
+        expected_cutoff = doc["latest_regulatory_review"]["earlier_municipal_simples_cutovers"].get(
+            cell["ibge"], "2026-11-01"
+        )
+        assert cell["simples_national_required_from_competence"] == expected_cutoff
         assert cell["nfse_current_restricted_schema_tested"] is False
         assert cell["nfse_numbering_sequential_authority"] is False
         assert cell["nfse_integration_web_e2e_certified"] is False
