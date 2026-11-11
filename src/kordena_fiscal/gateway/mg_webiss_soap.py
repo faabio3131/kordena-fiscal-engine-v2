@@ -519,15 +519,13 @@ class WebissMgHomologationTransport:
         self._schema_validator = municipal_schema_validator
         self._resolver = provider_resolver
         self._certificate = resolve_certificate
-        # No municipality-specific verified Uberaba homologation endpoint yet.
-        # Never leak an Uberaba document to the Extrema default URL.
-        # Explicit exchange injection is needed for cities without a verified
-        # dedicated endpoint. Never silently route an Uberaba payload to Extrema.
-        self._exchange = (
-            exchange if exchange is not None
-            else _webiss_exchange if municipality_ibge == EXTREMA_IBGE
-            else None
-        )
+        # Neither WebISS city has a municipality-specific, documented and
+        # authenticated SOAP endpoint contract verified in this revision.
+        # Portal URLs and third-party integration links are NOT a WSDL proof.
+        # Refuse any implicit HTTP route, even when the municipal XSD becomes
+        # installed: only the governed composition root may supply a reviewed
+        # HTTPS exchange bound to the corresponding municipality/operation.
+        self._exchange = exchange
         self._timeout = timeout_seconds
 
     def exchange_prepared(
