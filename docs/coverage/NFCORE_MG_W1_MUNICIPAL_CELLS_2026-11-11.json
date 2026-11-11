@@ -730,7 +730,7 @@
   },
   "coverage_summary": {
     "total": 20,
-    "municipal_official_source_mapped": 16,
+    "municipal_official_source_mapped": 20,
     "municipal_contract_version_and_envelope_certified": 0,
     "external_homologated": 0,
     "source_verified_not_homologated": true,
@@ -770,6 +770,9 @@
       "operations": "MISSING",
       "qr_v3_signature_proof": "MISSING",
       "tenant_binding_runtime": "NOT_ENABLED"
-    }
+    },
+    "municipal_issuer_research": "20/20 channels researched; 0/20 full municipal schema+signature+API+Web proofs",
+    "national_current_schema_catalog": "NFSe-ESQUEMAS_XSD-v1.01-20260209 (official catalog updated 2026-11-04); builder v1.00 pending validation",
+    "municipal_issuer_research_sources": "docs/NFCORE_MG_NFSE_OFFICIAL_CHANNEL_EVIDENCE_2026-11-11.md"
   }
 }
