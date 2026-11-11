@@ -98,6 +98,8 @@ def _document(*, issuer: FiscalProfile | None = None, services=None) -> NfseCano
         service_jurisdiction=BrazilianJurisdiction("SP", "3550308"),
         services=services if services is not None else (_service(),),
         service_taker_reference="taker-ref-1",
+        # Standalone builder fixture models an already-UoW-reserved number.
+        dps_number=1,
     )
 
 
