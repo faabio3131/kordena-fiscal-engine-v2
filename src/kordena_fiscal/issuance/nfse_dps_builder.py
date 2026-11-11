@@ -27,7 +27,7 @@ from kordena_fiscal.vault import EphemeralCertificateMaterial
 from kordena_fiscal.xml.nfse_nacional_schema import national_dps_validator
 
 _NFSE_NS = "http://www.sped.fazenda.gov.br/nfse"
-_SCHEMA_VERSION = "1.00"
+_SCHEMA_VERSION = "1.01"
 _VER_APLIC = "nfcore-dps-v1"  # TSVerAplic: TSString, maxLength 20
 _FEDERAL_INSCRIPTION_TYPE_CNPJ = "1"
 _CENT = Decimal("0.01")
@@ -191,10 +191,11 @@ def build_signed_dps(
     _child(trib_mun, "tribISSQN", "1")  # Operacao tributavel; domain models no exemption flag yet
     taxable = service.taxable_amount.amount
     iss_amount = service.iss_amount.amount
+    # XSD 1.01 changed TCTribMunicipal field order: tpRetISSQN before pAliq.
+    _child(trib_mun, "tpRetISSQN", "2" if service.iss_withheld else "1")
     if taxable > 0 and iss_amount > 0:
         rate = (iss_amount / taxable * 100).quantize(_CENT, rounding=ROUND_HALF_UP)
         _child(trib_mun, "pAliq", _money(rate))
-    _child(trib_mun, "tpRetISSQN", "2" if service.iss_withheld else "1")
     tot_trib = etree.SubElement(trib, f"{{{_NFSE_NS}}}totTrib")
     _child(tot_trib, "indTotTrib", "0")  # Decreto 8.264/2014: no tax-total estimate declared
 
