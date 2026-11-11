@@ -23,12 +23,16 @@ from test_webiss_extrema_official_rtc_accepted_receipts import (
 from kordena_fiscal.application.service import FiscalApplicationService
 from kordena_fiscal.archive import RetentionPolicyMetadata
 from kordena_fiscal.domain import (
-    BrazilianJurisdiction, Cnpj, ExecutionScope, FiscalEnvironment, FiscalValidationError,
+    BrazilianJurisdiction,
+    Cnpj,
+    FiscalEnvironment,
+    FiscalValidationError,
     TaxRegimeCode,
 )
 from kordena_fiscal.gateway.authorization import AuthorizationStatus
 from kordena_fiscal.gateway.mg_webiss_soap import (
-    EXTREMA_WEBISS_PROVIDER_ID, WebissExtremaHomologationTransport,
+    EXTREMA_WEBISS_PROVIDER_ID,
+    WebissExtremaHomologationTransport,
 )
 from kordena_fiscal.gateway.nfse_abrasf203_envelope import Abrasf203Operation
 from kordena_fiscal.gateway.webiss_2026_schema import load_pinned_extrema_webiss_rtc_schema
@@ -37,13 +41,14 @@ from kordena_fiscal.gateway.webiss_extrema_canonical import (
 )
 from kordena_fiscal.issuance import NfseGatewayClient, NfseQueryClient
 from kordena_fiscal.issuance.webiss_extrema_builder import (
-    ExtremaRpsIntent, ExtremaServiceTaker, build_extrema_rps_xml,
-    decode_extrema_intent, encode_extrema_intent,
+    ExtremaRpsIntent,
+    ExtremaServiceTaker,
+    build_extrema_rps_xml,
+    decode_extrema_intent,
+    encode_extrema_intent,
 )
 from kordena_fiscal.lifecycle import FiscalDocumentState
 from kordena_fiscal.persistence.sqlite import SqliteFiscalDatabase
-from kordena_fiscal.xml.schema import XmlSchemaValidationError
-from kordena_fiscal.gateway.authorization import AuthorizationStatus
 
 NOW = datetime(2026, 11, 11, 12, tzinfo=UTC)
 RETENTION = RetentionPolicyMetadata(policy_id="nfcore-fiscal-archive", policy_version=1)
