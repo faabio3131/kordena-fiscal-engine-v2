@@ -196,9 +196,20 @@ class _GovernedMgQueryGateway:
         return self._mg.query(request)
 
     def cancel(self, request: CancellationRequest) -> CancellationResult:
-        return self._legacy.cancel(request)
+        if request.access_key.value[:2] != "31":
+            return self._legacy.cancel(request)
+        _require_mg_binding(
+            self._application,
+            scope=request.scope,
+            access_key=request.access_key,
+            operation=ConfiguredFiscalOperation.CANCEL,
+        )
+        return self._mg.cancel(request)
 
     def inutilize(self, request: InutilizationRequest) -> InutilizationResult:
+        # Inutilization has no issuer/state on the command. Do not infer MG
+        # from tenant or unit, or silently route all clients through MG.
+        # A trusted fiscal profile/state resolver is required before cutover.
         return self._legacy.inutilize(request)
 
 
