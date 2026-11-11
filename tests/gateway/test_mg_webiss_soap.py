@@ -22,7 +22,9 @@ from kordena_fiscal.domain import (
 from kordena_fiscal.gateway.mg_webiss_soap import (
     EXTREMA_WEBISS_HOMOLOGATION_URL,
     EXTREMA_WEBISS_PROVIDER_ID,
+    UBERABA_WEBISS_PROVIDER_ID,
     WebissExtremaHomologationTransport,
+    WebissUberabaHomologationTransport,
     WebissMgContractError,
     parse_webiss_soap_response,
 )
@@ -134,11 +136,11 @@ def test_wrong_state_or_environment_denied_before_vault() -> None:
         issuer_cnpj=Cnpj(CNPJ), issuer_tax_regime=TaxRegimeCode.NORMAL,
         competence_date=date(2026, 10, 31), jurisdiction=EXTREMA,
     )
-    with pytest.raises(WebissMgContractError, match="Extrema"):
+    with pytest.raises(WebissMgContractError, match="scoped MG municipality"):
         gateway.exchange_prepared(
             **{**args, "jurisdiction": BrazilianJurisdiction("MG", "3170107")}
         )
-    with pytest.raises(WebissMgContractError, match="Extrema"):
+    with pytest.raises(WebissMgContractError, match="scoped MG municipality"):
         gateway.exchange_prepared(**{
             **args,
             "scope": replace(args["scope"], environment=FiscalEnvironment.PRODUCTION),
@@ -186,3 +188,55 @@ def test_soap_fault_or_cross_operation_never_appears_fiscally_authorized() -> No
             _response(query, xml='<!DOCTYPE retorno [<!ENTITY x "untrusted">]><retorno/>'),
             query,
         )
+
+
+def test_uberaba_webiss_uses_the_same_transport_with_a_distinct_provider(material) -> None:
+    resolver = Mock()
+    resolver.resolve_provider_id.return_value = UBERABA_WEBISS_PROVIDER_ID
+    certificate = Mock(return_value=material)
+    exchange = Mock(return_value=_response(Abrasf203Operation.QUERY_BATCH))
+    gateway = WebissUberabaHomologationTransport(
+        provider_resolver=resolver,
+        resolve_certificate=certificate,
+        exchange=exchange,
+    )
+    args = dict(
+        envelope=_envelope(Abrasf203Operation.QUERY_BATCH),
+        operation=Abrasf203Operation.QUERY_BATCH,
+        scope=_request().scope, issuer_cnpj=Cnpj(CNPJ),
+        issuer_tax_regime=TaxRegimeCode.NORMAL,
+        competence_date=date(2026, 10, 31),
+    )
+    uberaba = BrazilianJurisdiction("MG", "3170107")
+    assert gateway.exchange_prepared(**args, jurisdiction=uberaba) == b"<retorno/>"
+    assert resolver.resolve_provider_id.call_args.kwargs["jurisdiction"] == uberaba
+    assert exchange.call_count == 1
+    with pytest.raises(WebissMgContractError, match="scoped MG municipality"):
+        gateway.exchange_prepared(**args, jurisdiction=EXTREMA)
+    assert exchange.call_count == 1
+    resolver.resolve_provider_id.return_value = EXTREMA_WEBISS_PROVIDER_ID
+    with pytest.raises(WebissMgContractError, match="binding"):
+        gateway.exchange_prepared(**args, jurisdiction=uberaba)
+    assert exchange.call_count == 1
+
+
+def test_uberaba_legacy_webiss_is_blocked_after_federal_simples_cutover() -> None:
+    resolver, certificate, exchange = Mock(), Mock(), Mock()
+    gateway = WebissUberabaHomologationTransport(
+        provider_resolver=resolver,
+        resolve_certificate=certificate,
+        exchange=exchange,
+    )
+    with pytest.raises(WebissMgContractError, match="Emissor Nacional"):
+        gateway.exchange_prepared(
+            envelope=_envelope(Abrasf203Operation.QUERY_BATCH),
+            operation=Abrasf203Operation.QUERY_BATCH,
+            scope=_request().scope,
+            issuer_cnpj=Cnpj(CNPJ),
+            issuer_tax_regime=TaxRegimeCode.SIMPLES_NACIONAL,
+            competence_date=date(2026, 11, 1),
+            jurisdiction=BrazilianJurisdiction("MG", "3170107"),
+        )
+    resolver.resolve_provider_id.assert_not_called()
+    certificate.assert_not_called()
+    exchange.assert_not_called()
