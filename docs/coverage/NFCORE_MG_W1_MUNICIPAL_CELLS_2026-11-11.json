@@ -33,11 +33,12 @@
       "production_approved": false,
       "national_issuer_regulatory_guard_tested_locally": false,
       "national_issuer_guard_ci_sha": null,
-      "simples_national_required_from_competence": "2026-11-01",
+      "simples_national_required_from_competence": "2025-11-01",
       "nfse_current_restricted_schema_tested": false,
       "nfse_numbering_sequential_authority": false,
       "nfse_integration_web_e2e_certified": false,
-      "nfce_qr_version_contract_certified": false
+      "nfce_qr_version_contract_certified": false,
+      "simples_earlier_municipal_source": "https://prefeitura.pbh.gov.br/fazenda/bhiss/avisos"
     },
     {
       "ibge": "3106705",
@@ -63,11 +64,12 @@
       "production_approved": false,
       "national_issuer_regulatory_guard_tested_locally": false,
       "national_issuer_guard_ci_sha": null,
-      "simples_national_required_from_competence": "2026-11-01",
+      "simples_national_required_from_competence": "2026-01-01",
       "nfse_current_restricted_schema_tested": false,
       "nfse_numbering_sequential_authority": false,
       "nfse_integration_web_e2e_certified": false,
-      "nfce_qr_version_contract_certified": false
+      "nfce_qr_version_contract_certified": false,
+      "simples_earlier_municipal_source": "https://www.betim.mg.gov.br/portal/noticias/0/3/14975/prefeitura-de-betim-chama-a-atencao-para-novo-padrao-de-emissao-de-notas-fiscais"
     },
     {
       "ibge": "3170206",
@@ -185,11 +187,12 @@
       "issuer_channel_scope_note": "Emissor Nacional exclusivo a partir de 2026-09-01; escrituração e DAM permanecem municipais",
       "national_issuer_regulatory_guard_tested_locally": false,
       "national_issuer_guard_ci_sha": null,
-      "simples_national_required_from_competence": "2026-11-01",
+      "simples_national_required_from_competence": "2026-09-01",
       "nfse_current_restricted_schema_tested": false,
       "nfse_numbering_sequential_authority": false,
       "nfse_integration_web_e2e_certified": false,
-      "nfce_qr_version_contract_certified": false
+      "nfce_qr_version_contract_certified": false,
+      "simples_earlier_municipal_source": "https://nfse.pjf.mg.gov.br/ComunicadoNfseNacional.html"
     },
     {
       "ibge": "3125101",
@@ -277,11 +280,12 @@
       "issuer_channel_scope_note": "Emissor Nacional obrigatório desde 2026-01-01 para demais contribuintes; guia ISS no município",
       "national_issuer_regulatory_guard_tested_locally": false,
       "national_issuer_guard_ci_sha": null,
-      "simples_national_required_from_competence": "2026-11-01",
+      "simples_national_required_from_competence": "2026-01-01",
       "nfse_current_restricted_schema_tested": false,
       "nfse_numbering_sequential_authority": false,
       "nfse_integration_web_e2e_certified": false,
-      "nfce_qr_version_contract_certified": false
+      "nfce_qr_version_contract_certified": false,
+      "simples_earlier_municipal_source": "https://ibs.setelagoas.mg.gov.br/nfse.html"
     },
     {
       "ibge": "3152501",
@@ -370,11 +374,12 @@
       "issuer_channel_scope_note": "Emissor Nacional exclusivo desde 2026-01-01; guias ISS permanecem no município",
       "national_issuer_regulatory_guard_tested_locally": false,
       "national_issuer_guard_ci_sha": null,
-      "simples_national_required_from_competence": "2026-11-01",
+      "simples_national_required_from_competence": "2026-01-01",
       "nfse_current_restricted_schema_tested": false,
       "nfse_numbering_sequential_authority": false,
       "nfse_integration_web_e2e_certified": false,
-      "nfce_qr_version_contract_certified": false
+      "nfce_qr_version_contract_certified": false,
+      "simples_earlier_municipal_source": "https://novalima.mg.gov.br/inicio/noticias/nova_lima_adere_ao_padrao_nacional_da_nota_fiscal_de_servicos_eletronica_nfs_e"
     },
     {
       "ibge": "3151800",
@@ -494,11 +499,12 @@
       "issuer_channel_scope_note": "Emissor Nacional exclusivo desde 2026-01-01",
       "national_issuer_regulatory_guard_tested_locally": false,
       "national_issuer_guard_ci_sha": null,
-      "simples_national_required_from_competence": "2026-11-01",
+      "simples_national_required_from_competence": "2026-01-01",
       "nfse_current_restricted_schema_tested": false,
       "nfse_numbering_sequential_authority": false,
       "nfse_integration_web_e2e_certified": false,
-      "nfce_qr_version_contract_certified": false
+      "nfce_qr_version_contract_certified": false,
+      "simples_earlier_municipal_source": "https://araxa.mg.gov.br/noticia/8610/prefeitura-de-araxa-orienta-prestadores-de-servico-sobre-nova-forma-de-emitir-nota-fiscal-em-2026"
     },
     {
       "ibge": "3127701",
@@ -555,11 +561,12 @@
       "issuer_channel_scope_note": "Emissor Nacional para todas PJ desde 2026-01-01; cronograma prévio por categorias",
       "national_issuer_regulatory_guard_tested_locally": false,
       "national_issuer_guard_ci_sha": null,
-      "simples_national_required_from_competence": "2026-11-01",
+      "simples_national_required_from_competence": "2026-01-01",
       "nfse_current_restricted_schema_tested": false,
       "nfse_numbering_sequential_authority": false,
       "nfse_integration_web_e2e_certified": false,
-      "nfce_qr_version_contract_certified": false
+      "nfce_qr_version_contract_certified": false,
+      "simples_earlier_municipal_source": "https://www.patosdeminas.mg.gov.br/portal/secretarias-paginas/76/nfs-e-nacional/"
     },
     {
       "ibge": "3118007",
@@ -586,11 +593,12 @@
       "issuer_channel_scope_note": "Emissor Nacional desde 2026-01-01, guias ISS seguem municipais",
       "national_issuer_regulatory_guard_tested_locally": false,
       "national_issuer_guard_ci_sha": null,
-      "simples_national_required_from_competence": "2026-11-01",
+      "simples_national_required_from_competence": "2026-01-01",
       "nfse_current_restricted_schema_tested": false,
       "nfse_numbering_sequential_authority": false,
       "nfse_integration_web_e2e_certified": false,
-      "nfce_qr_version_contract_certified": false
+      "nfce_qr_version_contract_certified": false,
+      "simples_earlier_municipal_source": "https://www.congonhas.mg.gov.br/index.php/congonhas-adota-novo-modelo-nacional-de-emissao-da-nota-fiscal-de-servicos-eletronica-nfs-e/"
     },
     {
       "ibge": "3131703",
@@ -656,6 +664,16 @@
     "important": "Emissor Nacional precisa obedecer versão de XSD/RTC vigente por ambiente e competencia; não usar o XSD nacional antigo como prova de 100%.",
     "dps_numbering": "HASH_PLACEHOLDER_NOT_SEQUENTIAL",
     "nfce_qr_rule": "QR v3/NT 2025.001 requer política por versão; CSC é requisito de versões antigas, não presumir CSC para QR v3",
-    "gate_state": "INTERNAL_NOT_COMPLETE"
+    "gate_state": "INTERNAL_NOT_COMPLETE",
+    "earlier_municipal_simples_cutovers": {
+      "3104007": "2026-01-01",
+      "3106200": "2025-11-01",
+      "3106705": "2026-01-01",
+      "3118007": "2026-01-01",
+      "3136702": "2026-09-01",
+      "3144805": "2026-01-01",
+      "3148004": "2026-01-01",
+      "3167202": "2026-01-01"
+    }
   }
 }
