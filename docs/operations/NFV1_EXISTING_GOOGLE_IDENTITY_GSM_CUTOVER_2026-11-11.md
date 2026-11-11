@@ -20,7 +20,7 @@ O script `deploy/contabo/stage-existing-gsm-identity.py` é um provisionador de 
 - `--existing-identity-file /etc/nfcore/incoming/existing-worker.json`
 - `--iam-key-created-at DATA_ISO8601_COM_FUSO` — data efetiva de criação da chave, conferida no Google IAM pelo operador; não usar data do arquivo.
 
-Valida: servidor `vmi3692211`, checkout e `.deployed` da MESMA release `production`, conta `nfcore-worker` do projeto `fm-nfcore-prod`, token_uri oficial, ID de chave, validade até 90 dias, origem NFCore, owner root/mode 0600 do arquivo fornecido, diretórios confiáveis, ausência de target anterior; rejeita chave de outro SaaS ou IAM/SA de API.
+Valida: servidor `vmi3692211`, checkout e `.deployed` da MESMA release `production`, conta `nfcore-worker` do projeto `fm-nfcore-prod`, token_uri oficial, ID de chave, validade até 90 dias, origem NFCore, owner root/mode 0600 do arquivo fornecido, diretórios raiz `incoming`/`worker` **0700**, ausência de target anterior; rejeita chave de outro SaaS ou IAM/SA de API. A gravação exclusiva restaura o estado anterior caso falhe inclusive após o hardlink e a sincronização do diretório.
 
 **Somente `--stage`** cria sem sobrescrever:
 - `/etc/nfcore/worker/worker-identity.json`: UID/GID 10001, 0600, namespace privado.
@@ -42,6 +42,13 @@ Os três arquivos são novos, gravados com criação exclusiva e tentativa de ro
 8. **Antes da ativação**: prova IAM real de acesso apenas a segredos autorizados, unicidade de consumidor/outbox e leases, backup+restore em banco isolado, integridade da imagem oriunda de `production`, plano de rollback e Go/No-Go. Sem estes gates, não executar `up`.
 9. Ativar **somente** `nfcore-worker` após autorização operacional específica e manter os serviços API/Portal/DB intactos. Exigir health fresco, UID10001, rede interna, mount RO, nenhuma entrega fora de tenant/unidade homologada, logs redigidos, restart e recuperação de lease/retry.
 10. Bling é fase independente: migrations 20/21 e OAuth/segredos do aplicativo próprios, API overlay na mesma API e worker opt-in. Não usar chave GSM para OAuth ou cofre fiscal.
+
+## Revisão de segurança obrigatória antes do uso no host
+
+- Conferir o diff completo da PR de stage, incluindo o bloqueio de sobrescrita, rollback pós-link, permissões 0600/0700 e inexistência de transporte de segredos por CI.
+- **CI verde e revisão assistida não substituem OK humano explícito** para integrar a PR, transferir o arquivo, provisionar ou iniciar o worker. Essas são decisões separadas.
+- `--mode check` valida metadados e origem; o sucesso **não atesta autenticidade criptográfica da chave nem IAM em produção**. Esses gates são externos e permanecem NO-GO até prova.
+- O código deve ser utilizado do SHA revisado e aprovado na `main`, mas a release implantada conferida por `--expected-production-sha` deve continuar sendo exatamente o HEAD de `production`. Nenhuma promoção indireta de `main` para `production`.
 
 ## Decisões e limites
 
