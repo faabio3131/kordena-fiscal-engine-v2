@@ -17,7 +17,7 @@
 
 ## Seleção objetiva: 20 maiores PIBs municipais mineiros
 
-Critério da onda inicial: ranking por PIB municipal de **2023** do IBGE (853 municípios em MG). Selecionados os 20 primeiros, abrangendo polos metropolitanos, logísticos, industriais, de comércio, serviços, mineração e cidades regionais. Referência estatística: [IBGE — PIB dos Municípios](https://www.ibge.gov.br/estatisticas/economicas/contas-nacionais/9088-produto-interno-bruto-dos-municipios.html); ordenação de 2023 [base derivada identificável e auditável](https://dadobruto.com/rankings/pib/mg). Cada código municipal abaixo aponta à ficha oficial do IBGE.
+Critério da onda inicial: ranking por PIB municipal de **2023** do IBGE (853 municípios em MG). Selecionados os 20 primeiros, abrangendo polos metropolitanos, logísticos, industriais, de comércio, serviços, mineração e cidades regionais. Referência estatística: [IBGE — PIB dos Municípios](https://www.ibge.gov.br/estatisticas/economicas/industria/9088-produto-interno-bruto-dos-municipios.html); ordenação de 2023 [base derivada identificável e auditável](https://dadobruto.com/rankings/pib/mg). Cada código municipal abaixo aponta à ficha oficial do IBGE.
 
 | Ranking PIB 2023 | Município | IBGE | Fonte código | Estado NFS-e por município |
 |---:|---|---|---|---|
