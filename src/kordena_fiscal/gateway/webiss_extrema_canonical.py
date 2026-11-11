@@ -310,10 +310,27 @@ class WebissExtremaCanonicalNfseGateway:
         reference = _invoice_reference(origin, request, intent)
         if reference is None:
             raise WebissMgContractError("No correlated authorized invoice for cancellation")
-        invoice = origin.find(f".//{_NS}CompNfse/{_NS}Nfse/{_NS}InfNfse")
-        if invoice is None:
-            raise WebissMgContractError("Missing original authorized NFS-e")
-        original_number = invoice.findtext(f"{_NS}Numero", "")
+        # Substitution returns BOTH the cancelled old invoice and the
+        # replacement invoice. The only cancellable invoice is the one
+        # correlated by _invoice_reference() to this durable RPS.
+        if origin.tag == f"{_NS}SubstituirNfseResposta":
+            invoices = origin.findall(
+                f"{_NS}RetSubstituicao/{_NS}NfseSubstituidora/"
+                f"{_NS}CompNfse/{_NS}Nfse/{_NS}InfNfse"
+            )
+        else:
+            invoices = origin.findall(
+                f".//{_NS}CompNfse/{_NS}Nfse/{_NS}InfNfse"
+            )
+        if len(invoices) != 1:
+            raise WebissMgContractError(
+                "Ambiguous original authorized NFS-e for cancellation"
+            )
+        original_number = invoices[0].findtext(f"{_NS}Numero", "")
+        if original_number != reference[2]:
+            raise WebissMgContractError(
+                "Cancellation note does not match the durable fiscal authorization"
+            )
         root = etree.Element(
             f"{_NS}CancelarNfseEnvio", nsmap=cast(dict[str, str], {None: _NS[1:-1]}),
         )
@@ -493,6 +510,13 @@ class WebissExtremaCanonicalNfseGateway:
         )
         if number != original_number:
             raise WebissMgContractError("Substitution references a different original invoice")
+        if (
+            old_reference[0] == new_reference[0]
+            or old_reference[2] == new_reference[2]
+        ):
+            raise WebissMgContractError(
+                "WebISS substitution has no distinct replacement invoice"
+            )
         return ExtremaSubstitutionOutcome(
             confirmed=True, xml=result, invoice_reference=new_reference[0],
             verification_code=new_reference[1], invoice_number=new_reference[2],
