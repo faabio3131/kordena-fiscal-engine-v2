@@ -203,12 +203,15 @@ def _verify_fiscal_issuer_identity(
             envelope.body,
             parser=etree.XMLParser(resolve_entities=False, no_network=True),
         )
-        part = soap.find(f"{{{_SOAP}}}Body")[0][0]
+        body_node = soap.find(f"{{{_SOAP}}}Body")
+        if body_node is None or len(body_node) != 1 or len(body_node[0]) != 2:
+            raise ValueError
+        part = body_node[0]
         xml = etree.fromstring(
             str(part.findtext("nfseDadosMsg")).encode("utf-8"),
             parser=etree.XMLParser(resolve_entities=False, no_network=True),
         )
-    except (AttributeError, IndexError, TypeError, etree.XMLSyntaxError):
+    except (AttributeError, IndexError, TypeError, ValueError, etree.XMLSyntaxError):
         raise WebissMgContractError("Municipal fiscal issuer data is malformed") from None
     ns = {"a": "http://www.abrasf.org.br/nfse.xsd"}
     if operation is Abrasf203Operation.QUERY_BATCH:
