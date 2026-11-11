@@ -12,6 +12,7 @@ before any certificate/XML work happens.
 from __future__ import annotations
 
 import json
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import Mock
@@ -42,6 +43,7 @@ from kordena_fiscal.gateway.authorization import AuthorizationStatus
 from kordena_fiscal.gateway.nfse_nacional_homologation import (
     NACIONAL_HOMOLOGATION_PROVIDER_ID,
     NfseNacionalHomologationGateway,
+    OfficialNfseTransportError,
 )
 from kordena_fiscal.issuance.nfe_nfse import (
     NfseAuthorizationRequest,
@@ -185,3 +187,38 @@ def test_real_preaudit_blocks_before_any_signing_on_missing_c_trib_nac() -> None
     request = _request(national_taxation_code=None)
     with pytest.raises(FiscalValidationError):
         gateway.authorize(request)
+
+
+def test_contagem_municipal_issuer_cannot_use_sefin_nacional_even_with_binding() -> None:
+    """Contagem's national-layout municipal API is not the SEFIN Nacional issuer.
+
+    Verify fail-closed BEFORE A1 Vault access, XMLDSig and HTTP dispatch.
+    A municipal endpoint must be built from the municipality's own contract.
+    """
+    base = _request()
+    municipal = BrazilianJurisdiction("MG", "3118601")
+    issuer = replace(
+        base.document.issuer,
+        state_registration=StateRegistration("MG", "123456789"),
+        address=replace(
+            base.document.issuer.address,
+            municipality_name="Contagem",
+            jurisdiction=municipal,
+        ),
+    )
+    request = NfseAuthorizationRequest.build(replace(
+        base.document, issuer=issuer, service_jurisdiction=municipal,
+    ))
+    resolve_certificate = Mock(side_effect=AssertionError("Vault accessed"))
+    prepare_dps = Mock(side_effect=AssertionError("DPS signed"))
+    exchange = Mock(side_effect=AssertionError("HTTP dispatched"))
+    gateway = NfseNacionalHomologationGateway(
+        resolve_certificate=resolve_certificate,
+        build_signed_dps=prepare_dps,
+        exchange=exchange,
+    )
+    with pytest.raises(OfficialNfseTransportError, match="Contagem"):
+        gateway.authorize(request)
+    resolve_certificate.assert_not_called()
+    prepare_dps.assert_not_called()
+    exchange.assert_not_called()
