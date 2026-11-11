@@ -175,3 +175,23 @@ def test_exclusive_stage_file_never_overwrites_existing_target(tmp_path: Path) -
         )
     assert target.read_bytes() == b"existing-private-file-must-be-preserved"
     assert list(tmp_path.iterdir()) == [target]
+
+
+
+def test_private_gsm_credential_directories_require_mode_0700(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    folder = tmp_path / "inbox"
+    folder.mkdir(mode=0o700)
+    # Ownership is checked by ensure_trusted_directory in production;
+    # isolate the restrictive directory-mode invariant for a test runner UID.
+    monkeypatch.setattr(
+        stager, "ensure_trusted_directory", lambda _folder: None,
+    )
+    stager.ensure_private_root_directory(folder)
+    folder.chmod(0o755)
+    with pytest.raises(stager.Denied, match="NO_GO_PRIVATE_DIRECTORY_PERMISSIONS"):
+        stager.ensure_private_root_directory(folder)
+    folder.chmod(0o770)
+    with pytest.raises(stager.Denied, match="NO_GO_PRIVATE_DIRECTORY_PERMISSIONS"):
+        stager.ensure_private_root_directory(folder)
