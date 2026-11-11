@@ -182,32 +182,32 @@ class WebissExtremaCanonicalNfseGateway:
             raise WebissMgContractError("Invalid Extrema normalized response") from None
         reference = _invoice_reference(parsed, request, intent)
         messages = _response_messages(parsed)
-        base = dict(
-            scope=request.document.scope,
-            document_id=request.document.document_id,
-            idempotency_key=request.idempotency_key,
-            request_fingerprint=request.request_fingerprint,
-            provider=_PROVIDER,
-        )
         if reference is not None:
             if messages is not None:
                 raise WebissMgContractError("WebISS returned contradictory result and rejection")
             return NfseAuthorizationResult(
                 status=AuthorizationStatus.AUTHORIZED,
-                invoice_reference=reference[0],
-                verification_code=reference[1],
-                **base,
+                invoice_reference=reference[0], verification_code=reference[1],
+                scope=request.document.scope, document_id=request.document.document_id,
+                idempotency_key=request.idempotency_key,
+                request_fingerprint=request.request_fingerprint, provider=_PROVIDER,
             )
         if messages is not None and not is_query:
             return NfseAuthorizationResult(
                 status=AuthorizationStatus.REJECTED,
-                rejection_code=messages[0],
-                rejection_message=messages[1],
-                **base,
+                rejection_code=messages[0], rejection_message=messages[1],
+                scope=request.document.scope, document_id=request.document.document_id,
+                idempotency_key=request.idempotency_key,
+                request_fingerprint=request.request_fingerprint, provider=_PROVIDER,
             )
         # A read-only query reporting "not found" cannot prove a failed POST,
         # and an uncorrelated response never authorizes an invoice.
-        return NfseAuthorizationResult(status=AuthorizationStatus.PENDING, **base)
+        return NfseAuthorizationResult(
+            status=AuthorizationStatus.PENDING,
+            scope=request.document.scope, document_id=request.document.document_id,
+            idempotency_key=request.idempotency_key,
+            request_fingerprint=request.request_fingerprint, provider=_PROVIDER,
+        )
 
     def authorize(self, request: NfseAuthorizationRequest) -> NfseAuthorizationResult:
         intent = self._trusted_intent(request)
@@ -238,7 +238,7 @@ class WebissExtremaCanonicalNfseGateway:
         intent = self._trusted_intent(request)
         # A query never allocates another number and never signs or sends
         # another RPS; it reuses the exact number stored with the issuance.
-        root = etree.Element(f"{_NS}ConsultarNfseRpsEnvio", nsmap={None: _NS[1:-1]})
+        root = etree.Element(f"{_NS}ConsultarNfseRpsEnvio", nsmap={"a": _NS[1:-1]})
         identity = etree.SubElement(root, f"{_NS}IdentificacaoRps")
         for name, value in (
             ("Numero", str(intent.reservation.number)),
