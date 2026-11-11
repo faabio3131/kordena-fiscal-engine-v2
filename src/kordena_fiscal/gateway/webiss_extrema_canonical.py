@@ -7,6 +7,7 @@ outcomes, never writes fiscal state and never automatically retries an HTTP POST
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import cast
 
 from lxml import etree
@@ -23,6 +24,8 @@ from kordena_fiscal.gateway.mg_webiss_soap import (
 )
 from kordena_fiscal.gateway.nfse_abrasf203_envelope import (
     Abrasf203Operation,
+    Abrasf203Envelope,
+    AbrasfCancellationFacts,
     AbrasfServiceFacts,
     prepare_abrasf203_soap,
 )
@@ -124,6 +127,23 @@ def _invoice_reference(
     return access_key, code, invoice_number
 
 
+@dataclass(frozen=True, slots=True)
+class ExtremaCancellationOutcome:
+    """Normalized provider event response; no local lifecycle authority."""
+
+    confirmed: bool
+    xml: bytes
+    rejection_code: str | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.xml, bytes) or not self.xml:
+            raise FiscalValidationError("Extrema cancellation requires schema-verified response")
+        if self.confirmed and self.rejection_code is not None:
+            raise FiscalValidationError("Confirmed cancellation cannot also be rejected")
+        if not self.confirmed and not self.rejection_code:
+            raise FiscalValidationError("Cancellation rejection must identify an official code")
+
+
 class WebissExtremaCanonicalNfseGateway:
     """NfseGateway + NfseQueryGateway through the existing durable state machine.
 
@@ -140,6 +160,7 @@ class WebissExtremaCanonicalNfseGateway:
         resolve_certificate: Callable[[ExecutionScope, str], EphemeralCertificateMaterial],
         canonical_preaudit: Callable[[NfseAuthorizationRequest], None],
         service_preaudit: Callable[[tuple[AbrasfServiceFacts, ...]], None],
+        cancellation_preaudit: Callable[[AbrasfCancellationFacts], None] | None = None,
         municipal_validator: XmlSchemaValidator,
     ) -> None:
         if (
@@ -156,6 +177,7 @@ class WebissExtremaCanonicalNfseGateway:
         self._certificate = resolve_certificate
         self._canonical_preaudit = canonical_preaudit
         self._service_preaudit = service_preaudit
+        self._cancellation_preaudit = cancellation_preaudit
         self._validator = municipal_validator
 
     def _trusted_intent(
@@ -235,6 +257,95 @@ class WebissExtremaCanonicalNfseGateway:
             jurisdiction=request.document.issuer.address.jurisdiction,
         )
         return self._outcome(request=request, intent=intent, response=result, is_query=False)
+
+    def prepare_cancellation(
+        self, *,
+        request: NfseAuthorizationRequest,
+        authorized_xml: bytes,
+        cancellation_code: str,
+    ) -> tuple[Abrasf203Envelope, str]:
+        """Sign one ORIGINAL NFS-e cancellation with A1; no HTTP side effect."""
+        intent = self._trusted_intent(request)
+        if not callable(self._cancellation_preaudit):
+            raise FiscalValidationError("Approved municipal cancellation policy required")
+        if cancellation_code not in {"1", "2", "3", "4", "5"}:
+            raise FiscalValidationError("Invalid municipal cancellation reason code")
+        self._validator.validate_document(authorized_xml)
+        origin = etree.fromstring(
+            authorized_xml, parser=etree.XMLParser(no_network=True, resolve_entities=False),
+        )
+        reference = _invoice_reference(origin, request, intent)
+        if reference is None:
+            raise WebissMgContractError("No correlated authorized invoice for cancellation")
+        invoice = origin.find(f".//{_NS}CompNfse/{_NS}Nfse/{_NS}InfNfse")
+        if invoice is None:
+            raise WebissMgContractError("Missing original authorized NFS-e")
+        original_number = invoice.findtext(f"{_NS}Numero", "")
+        root = etree.Element(
+            f"{_NS}CancelarNfseEnvio", nsmap=cast(dict[str, str], {None: _NS[1:-1]}),
+        )
+        pedido = etree.SubElement(root, f"{_NS}Pedido")
+        ident = etree.SubElement(
+            pedido, f"{_NS}InfPedidoCancelamento",
+            Id="CAN" + request.request_fingerprint[:30],
+        )
+        nfse = etree.SubElement(ident, f"{_NS}IdentificacaoNfse")
+        etree.SubElement(nfse, f"{_NS}Numero").text = original_number
+        tax = etree.SubElement(nfse, f"{_NS}CpfCnpj")
+        etree.SubElement(tax, f"{_NS}Cnpj").text = intent.issuer_cnpj.value
+        etree.SubElement(nfse, f"{_NS}CodigoMunicipio").text = EXTREMA_IBGE
+        etree.SubElement(ident, f"{_NS}CodigoCancelamento").text = cancellation_code
+        envelope = prepare_abrasf203_soap(
+            operation=Abrasf203Operation.CANCEL,
+            xml=etree.tostring(root, encoding="utf-8"),
+            scope=request.document.scope,
+            issuer_cnpj=intent.issuer_cnpj,
+            resolve_certificate=self._certificate,
+            preaudit=self._service_preaudit,
+            preaudit_cancel=self._cancellation_preaudit,
+            municipal_schema_version="2.02",
+            municipal_validator=self._validator,
+        )
+        return envelope, original_number
+
+    def submit_cancellation(
+        self, *, request: NfseAuthorizationRequest,
+        envelope: Abrasf203Envelope, original_number: str,
+    ) -> ExtremaCancellationOutcome:
+        """Single governed SOAP POST; successful receipt must echo old document."""
+        intent = self._trusted_intent(request)
+        result = self._transport.exchange_prepared(
+            envelope=envelope,
+            operation=Abrasf203Operation.CANCEL,
+            scope=request.document.scope,
+            issuer_cnpj=intent.issuer_cnpj,
+            issuer_tax_regime=request.document.issuer.tax_regime,
+            competence_date=request.document.competence_date,
+            jurisdiction=request.document.issuer.address.jurisdiction,
+        )
+        root = etree.fromstring(
+            result, parser=etree.XMLParser(no_network=True, resolve_entities=False),
+        )
+        messages = _response_messages(root)
+        if messages is not None:
+            return ExtremaCancellationOutcome(
+                confirmed=False, xml=result, rejection_code=messages[0],
+            )
+        confirmed = root.find(
+            f"{_NS}RetCancelamento/{_NS}NfseCancelamento/"
+            f"{_NS}Confirmacao/{_NS}Pedido/"
+            f"{_NS}InfPedidoCancelamento/{_NS}IdentificacaoNfse"
+        )
+        if confirmed is None or (
+            confirmed.findtext(f"{_NS}Numero", "") != original_number
+            or confirmed.findtext(f"{_NS}CpfCnpj/{_NS}Cnpj", "")
+            != intent.issuer_cnpj.value
+            or confirmed.findtext(f"{_NS}CodigoMunicipio", "") != EXTREMA_IBGE
+        ):
+            raise WebissMgContractError(
+                "Cancellation response does not prove original Extrema invoice cancellation"
+            )
+        return ExtremaCancellationOutcome(confirmed=True, xml=result)
 
     def query(self, request: NfseAuthorizationRequest) -> NfseAuthorizationResult:
         intent = self._trusted_intent(request)
