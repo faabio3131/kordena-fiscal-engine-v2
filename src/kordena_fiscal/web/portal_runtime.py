@@ -933,28 +933,36 @@ class DurableHumanPortalExecutor:
         tenant, signed data, provider authority, RPS number or fiscal status.
         """
         from datetime import date
-        from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+        from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
         from kordena_fiscal.application.service import FiscalApplicationService
         from kordena_fiscal.archive import RetentionPolicyMetadata
         from kordena_fiscal.control_plane.commercial import ConfiguredFiscalOperation
         from kordena_fiscal.domain import (
-            Cnpj, FiscalDocumentKind, Money, SourceReference,
+            Cnpj,
+            FiscalDocumentKind,
+            Money,
+            SourceReference,
         )
         from kordena_fiscal.gateway.mg_webiss_soap import (
-            EXTREMA_IBGE, EXTREMA_WEBISS_PROVIDER_ID,
-        )
-        from kordena_fiscal.issuance import (
-            NfseAuthorizationRequest, NfseCanonicalDocument, NfseServiceLine,
+            EXTREMA_IBGE,
+            EXTREMA_WEBISS_PROVIDER_ID,
         )
         from kordena_fiscal.gateway.webiss_2026_schema import (
             load_pinned_extrema_webiss_rtc_schema,
         )
-        from kordena_fiscal.issuance.webiss_extrema_builder import (
-            ExtremaRpsIntent, ExtremaServiceTaker, build_extrema_rps_xml,
+        from kordena_fiscal.issuance import (
+            NfseAuthorizationRequest,
+            NfseCanonicalDocument,
+            NfseServiceLine,
         )
-        from kordena_fiscal.security.human_identity import PortalRole
+        from kordena_fiscal.issuance.webiss_extrema_builder import (
+            ExtremaRpsIntent,
+            ExtremaServiceTaker,
+            build_extrema_rps_xml,
+        )
         from kordena_fiscal.numbering import FiscalNumberReservation
+        from kordena_fiscal.security.human_identity import PortalRole
 
         fields = {
             "unit_id", "environment", "source_id", "competence_date",
