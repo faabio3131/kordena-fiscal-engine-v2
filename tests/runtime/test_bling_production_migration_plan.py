@@ -64,6 +64,10 @@ class _Database:
 
 @pytest.fixture
 def setup(monkeypatch: pytest.MonkeyPatch):
+    # The tested subject is the read-only guard, not global migration metadata.
+    # Keep the policy validation itself covered by the canonical CI check.
+    # The database factory below is a fake and has no class-level version fields.
+    monkeypatch.setattr(guard, "validate_policy", lambda: tuple(range(1, 22)))
     monkeypatch.setenv("NFCORE_ENVIRONMENT", "production")
     monkeypatch.setenv("DATABASE_URL", "postgresql://synthetic.invalid/nfcore")
     monkeypatch.delenv("RAILWAY_SERVICE_ID", raising=False)
