@@ -19,14 +19,13 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import Mock
 
-from lxml import etree
-
 import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography.x509.oid import NameOID, ObjectIdentifier
+from lxml import etree
 
 from kordena_fiscal.compliance.nfse_preaudit import NfsePreauditRejection, nfse_preaudit
 from kordena_fiscal.domain import (
