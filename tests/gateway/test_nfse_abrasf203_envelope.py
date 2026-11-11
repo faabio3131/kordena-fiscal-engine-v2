@@ -49,7 +49,7 @@ def _payload(operation):
     elif operation is Abrasf203Operation.QUERY_ISSUED:
         body = (
             f'<Prestador><CpfCnpj><Cnpj>{CNPJ}</Cnpj></CpfCnpj></Prestador>'
-            '<NumeroNfse>123</NumeroNfse>'
+            '<NumeroNfse>123</NumeroNfse><Pagina>1</Pagina>'
         )
     return f'<{name} xmlns="{_A}">{body}</{name}>'.encode()
 
