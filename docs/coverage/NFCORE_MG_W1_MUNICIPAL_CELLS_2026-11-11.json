@@ -30,7 +30,14 @@
         "cancel": "NOT_CERTIFIED",
         "substitute": "NOT_CERTIFIED"
       },
-      "production_approved": false
+      "production_approved": false,
+      "national_issuer_regulatory_guard_tested_locally": false,
+      "national_issuer_guard_ci_sha": null,
+      "simples_national_required_from_competence": "2026-11-01",
+      "nfse_current_restricted_schema_tested": false,
+      "nfse_numbering_sequential_authority": false,
+      "nfse_integration_web_e2e_certified": false,
+      "nfce_qr_version_contract_certified": false
     },
     {
       "ibge": "3106705",
@@ -53,7 +60,14 @@
         "cancel": "NOT_CERTIFIED",
         "substitute": "NOT_CERTIFIED"
       },
-      "production_approved": false
+      "production_approved": false,
+      "national_issuer_regulatory_guard_tested_locally": false,
+      "national_issuer_guard_ci_sha": null,
+      "simples_national_required_from_competence": "2026-11-01",
+      "nfse_current_restricted_schema_tested": false,
+      "nfse_numbering_sequential_authority": false,
+      "nfse_integration_web_e2e_certified": false,
+      "nfce_qr_version_contract_certified": false
     },
     {
       "ibge": "3170206",
@@ -76,7 +90,14 @@
         "cancel": "NOT_CERTIFIED",
         "substitute": "NOT_CERTIFIED"
       },
-      "production_approved": false
+      "production_approved": false,
+      "national_issuer_regulatory_guard_tested_locally": false,
+      "national_issuer_guard_ci_sha": null,
+      "simples_national_required_from_competence": "2026-11-01",
+      "nfse_current_restricted_schema_tested": false,
+      "nfse_numbering_sequential_authority": false,
+      "nfse_integration_web_e2e_certified": false,
+      "nfce_qr_version_contract_certified": false
     },
     {
       "ibge": "3118601",
@@ -100,7 +121,14 @@
         "substitute": "NOT_CERTIFIED"
       },
       "production_approved": false,
-      "issuer_channel_scope_note": "Normal/competência histórica: ISS Digital municipal e contrato municipal a comprovar; ME/EPP Simples competência >= 2026-11-01: SEFIN Nacional obrigatório"
+      "issuer_channel_scope_note": "Normal/competência histórica: ISS Digital municipal e contrato municipal a comprovar; ME/EPP Simples competência >= 2026-11-01: SEFIN Nacional obrigatório",
+      "national_issuer_regulatory_guard_tested_locally": false,
+      "national_issuer_guard_ci_sha": null,
+      "simples_national_required_from_competence": "2026-11-01",
+      "nfse_current_restricted_schema_tested": false,
+      "nfse_numbering_sequential_authority": false,
+      "nfse_integration_web_e2e_certified": false,
+      "nfce_qr_version_contract_certified": false
     },
     {
       "ibge": "3170107",
@@ -123,7 +151,14 @@
         "cancel": "NOT_CERTIFIED",
         "substitute": "NOT_CERTIFIED"
       },
-      "production_approved": false
+      "production_approved": false,
+      "national_issuer_regulatory_guard_tested_locally": false,
+      "national_issuer_guard_ci_sha": null,
+      "simples_national_required_from_competence": "2026-11-01",
+      "nfse_current_restricted_schema_tested": false,
+      "nfse_numbering_sequential_authority": false,
+      "nfse_integration_web_e2e_certified": false,
+      "nfce_qr_version_contract_certified": false
     },
     {
       "ibge": "3136702",
@@ -147,7 +182,14 @@
         "substitute": "NOT_CERTIFIED"
       },
       "production_approved": false,
-      "issuer_channel_scope_note": "Emissor Nacional exclusivo a partir de 2026-09-01; escrituração e DAM permanecem municipais"
+      "issuer_channel_scope_note": "Emissor Nacional exclusivo a partir de 2026-09-01; escrituração e DAM permanecem municipais",
+      "national_issuer_regulatory_guard_tested_locally": false,
+      "national_issuer_guard_ci_sha": null,
+      "simples_national_required_from_competence": "2026-11-01",
+      "nfse_current_restricted_schema_tested": false,
+      "nfse_numbering_sequential_authority": false,
+      "nfse_integration_web_e2e_certified": false,
+      "nfce_qr_version_contract_certified": false
     },
     {
       "ibge": "3125101",
@@ -170,7 +212,14 @@
         "cancel": "NOT_CERTIFIED",
         "substitute": "NOT_CERTIFIED"
       },
-      "production_approved": false
+      "production_approved": false,
+      "national_issuer_regulatory_guard_tested_locally": false,
+      "national_issuer_guard_ci_sha": null,
+      "simples_national_required_from_competence": "2026-11-01",
+      "nfse_current_restricted_schema_tested": false,
+      "nfse_numbering_sequential_authority": false,
+      "nfse_integration_web_e2e_certified": false,
+      "nfce_qr_version_contract_certified": false
     },
     {
       "ibge": "3131307",
@@ -194,7 +243,14 @@
         "substitute": "NOT_CERTIFIED"
       },
       "production_approved": false,
-      "issuer_channel_scope_note": "Revisar regime/competência; não supor equivalência entre padrão nacional e host de emissão"
+      "issuer_channel_scope_note": "Revisar regime/competência; não supor equivalência entre padrão nacional e host de emissão",
+      "national_issuer_regulatory_guard_tested_locally": false,
+      "national_issuer_guard_ci_sha": null,
+      "simples_national_required_from_competence": "2026-11-01",
+      "nfse_current_restricted_schema_tested": false,
+      "nfse_numbering_sequential_authority": false,
+      "nfse_integration_web_e2e_certified": false,
+      "nfce_qr_version_contract_certified": false
     },
     {
       "ibge": "3167202",
@@ -218,7 +274,14 @@
         "substitute": "NOT_CERTIFIED"
       },
       "production_approved": false,
-      "issuer_channel_scope_note": "Emissor Nacional obrigatório desde 2026-01-01 para demais contribuintes; guia ISS no município"
+      "issuer_channel_scope_note": "Emissor Nacional obrigatório desde 2026-01-01 para demais contribuintes; guia ISS no município",
+      "national_issuer_regulatory_guard_tested_locally": false,
+      "national_issuer_guard_ci_sha": null,
+      "simples_national_required_from_competence": "2026-11-01",
+      "nfse_current_restricted_schema_tested": false,
+      "nfse_numbering_sequential_authority": false,
+      "nfse_integration_web_e2e_certified": false,
+      "nfce_qr_version_contract_certified": false
     },
     {
       "ibge": "3152501",
@@ -242,7 +305,14 @@
         "substitute": "NOT_CERTIFIED"
       },
       "production_approved": false,
-      "issuer_channel_scope_note": "Simples nacional de 2026-11-01; não Simples municipal até 2026-12-31; nacional a partir de 2027-01-01"
+      "issuer_channel_scope_note": "Simples nacional de 2026-11-01; não Simples municipal até 2026-12-31; nacional a partir de 2027-01-01",
+      "national_issuer_regulatory_guard_tested_locally": false,
+      "national_issuer_guard_ci_sha": null,
+      "simples_national_required_from_competence": "2026-11-01",
+      "nfse_current_restricted_schema_tested": false,
+      "nfse_numbering_sequential_authority": false,
+      "nfse_integration_web_e2e_certified": false,
+      "nfce_qr_version_contract_certified": false
     },
     {
       "ibge": "3143302",
@@ -266,7 +336,14 @@
         "substitute": "NOT_CERTIFIED"
       },
       "production_approved": false,
-      "issuer_channel_scope_note": "Emissor nacional; CMC/IM, códigos municipais e acesso do contribuinte são necessários; guia e DEISS municipais"
+      "issuer_channel_scope_note": "Emissor nacional; CMC/IM, códigos municipais e acesso do contribuinte são necessários; guia e DEISS municipais",
+      "national_issuer_regulatory_guard_tested_locally": false,
+      "national_issuer_guard_ci_sha": null,
+      "simples_national_required_from_competence": "2026-11-01",
+      "nfse_current_restricted_schema_tested": false,
+      "nfse_numbering_sequential_authority": false,
+      "nfse_integration_web_e2e_certified": false,
+      "nfce_qr_version_contract_certified": false
     },
     {
       "ibge": "3144805",
@@ -290,7 +367,14 @@
         "substitute": "NOT_CERTIFIED"
       },
       "production_approved": false,
-      "issuer_channel_scope_note": "Emissor Nacional exclusivo desde 2026-01-01; guias ISS permanecem no município"
+      "issuer_channel_scope_note": "Emissor Nacional exclusivo desde 2026-01-01; guias ISS permanecem no município",
+      "national_issuer_regulatory_guard_tested_locally": false,
+      "national_issuer_guard_ci_sha": null,
+      "simples_national_required_from_competence": "2026-11-01",
+      "nfse_current_restricted_schema_tested": false,
+      "nfse_numbering_sequential_authority": false,
+      "nfse_integration_web_e2e_certified": false,
+      "nfce_qr_version_contract_certified": false
     },
     {
       "ibge": "3151800",
@@ -314,7 +398,14 @@
         "substitute": "NOT_CERTIFIED"
       },
       "production_approved": false,
-      "issuer_channel_scope_note": "NFe-Cidades municipal ainda operacional para seus regimes; Simples competência >=2026-11-01 nacional pela regra federal"
+      "issuer_channel_scope_note": "NFe-Cidades municipal ainda operacional para seus regimes; Simples competência >=2026-11-01 nacional pela regra federal",
+      "national_issuer_regulatory_guard_tested_locally": false,
+      "national_issuer_guard_ci_sha": null,
+      "simples_national_required_from_competence": "2026-11-01",
+      "nfse_current_restricted_schema_tested": false,
+      "nfse_numbering_sequential_authority": false,
+      "nfse_integration_web_e2e_certified": false,
+      "nfce_qr_version_contract_certified": false
     },
     {
       "ibge": "3170701",
@@ -338,7 +429,14 @@
         "substitute": "NOT_CERTIFIED"
       },
       "production_approved": false,
-      "issuer_channel_scope_note": "Portal municipal possui serviços fiscais; canal autorizado por regime/competência ainda requer confirmação"
+      "issuer_channel_scope_note": "Portal municipal possui serviços fiscais; canal autorizado por regime/competência ainda requer confirmação",
+      "national_issuer_regulatory_guard_tested_locally": false,
+      "national_issuer_guard_ci_sha": null,
+      "simples_national_required_from_competence": "2026-11-01",
+      "nfse_current_restricted_schema_tested": false,
+      "nfse_numbering_sequential_authority": false,
+      "nfse_integration_web_e2e_certified": false,
+      "nfce_qr_version_contract_certified": false
     },
     {
       "ibge": "3122306",
@@ -362,7 +460,14 @@
         "substitute": "NOT_CERTIFIED"
       },
       "production_approved": false,
-      "issuer_channel_scope_note": "Canal nacional confirmado para pessoa física/autônomo desde 2026-01-01; não generalizar para todos os regimes PJ"
+      "issuer_channel_scope_note": "Canal nacional confirmado para pessoa física/autônomo desde 2026-01-01; não generalizar para todos os regimes PJ",
+      "national_issuer_regulatory_guard_tested_locally": false,
+      "national_issuer_guard_ci_sha": null,
+      "simples_national_required_from_competence": "2026-11-01",
+      "nfse_current_restricted_schema_tested": false,
+      "nfse_numbering_sequential_authority": false,
+      "nfse_integration_web_e2e_certified": false,
+      "nfce_qr_version_contract_certified": false
     },
     {
       "ibge": "3104007",
@@ -386,7 +491,14 @@
         "substitute": "NOT_CERTIFIED"
       },
       "production_approved": false,
-      "issuer_channel_scope_note": "Emissor Nacional exclusivo desde 2026-01-01"
+      "issuer_channel_scope_note": "Emissor Nacional exclusivo desde 2026-01-01",
+      "national_issuer_regulatory_guard_tested_locally": false,
+      "national_issuer_guard_ci_sha": null,
+      "simples_national_required_from_competence": "2026-11-01",
+      "nfse_current_restricted_schema_tested": false,
+      "nfse_numbering_sequential_authority": false,
+      "nfse_integration_web_e2e_certified": false,
+      "nfce_qr_version_contract_certified": false
     },
     {
       "ibge": "3127701",
@@ -409,7 +521,14 @@
         "cancel": "NOT_CERTIFIED",
         "substitute": "NOT_CERTIFIED"
       },
-      "production_approved": false
+      "production_approved": false,
+      "national_issuer_regulatory_guard_tested_locally": false,
+      "national_issuer_guard_ci_sha": null,
+      "simples_national_required_from_competence": "2026-11-01",
+      "nfse_current_restricted_schema_tested": false,
+      "nfse_numbering_sequential_authority": false,
+      "nfse_integration_web_e2e_certified": false,
+      "nfce_qr_version_contract_certified": false
     },
     {
       "ibge": "3148004",
@@ -433,7 +552,14 @@
         "substitute": "NOT_CERTIFIED"
       },
       "production_approved": false,
-      "issuer_channel_scope_note": "Emissor Nacional para todas PJ desde 2026-01-01; cronograma prévio por categorias"
+      "issuer_channel_scope_note": "Emissor Nacional para todas PJ desde 2026-01-01; cronograma prévio por categorias",
+      "national_issuer_regulatory_guard_tested_locally": false,
+      "national_issuer_guard_ci_sha": null,
+      "simples_national_required_from_competence": "2026-11-01",
+      "nfse_current_restricted_schema_tested": false,
+      "nfse_numbering_sequential_authority": false,
+      "nfse_integration_web_e2e_certified": false,
+      "nfce_qr_version_contract_certified": false
     },
     {
       "ibge": "3118007",
@@ -457,7 +583,14 @@
         "substitute": "NOT_CERTIFIED"
       },
       "production_approved": false,
-      "issuer_channel_scope_note": "Emissor Nacional desde 2026-01-01, guias ISS seguem municipais"
+      "issuer_channel_scope_note": "Emissor Nacional desde 2026-01-01, guias ISS seguem municipais",
+      "national_issuer_regulatory_guard_tested_locally": false,
+      "national_issuer_guard_ci_sha": null,
+      "simples_national_required_from_competence": "2026-11-01",
+      "nfse_current_restricted_schema_tested": false,
+      "nfse_numbering_sequential_authority": false,
+      "nfse_integration_web_e2e_certified": false,
+      "nfce_qr_version_contract_certified": false
     },
     {
       "ibge": "3131703",
@@ -480,7 +613,14 @@
         "cancel": "NOT_CERTIFIED",
         "substitute": "NOT_CERTIFIED"
       },
-      "production_approved": false
+      "production_approved": false,
+      "national_issuer_regulatory_guard_tested_locally": false,
+      "national_issuer_guard_ci_sha": null,
+      "simples_national_required_from_competence": "2026-11-01",
+      "nfse_current_restricted_schema_tested": false,
+      "nfse_numbering_sequential_authority": false,
+      "nfse_integration_web_e2e_certified": false,
+      "nfce_qr_version_contract_certified": false
     }
   ],
   "federal_national_simples_rule": {
@@ -497,6 +637,25 @@
     "municipal_official_source_mapped": 16,
     "municipal_contract_version_and_envelope_certified": 0,
     "external_homologated": 0,
-    "source_verified_not_homologated": true
+    "source_verified_not_homologated": true,
+    "internal_complete": 0,
+    "signed_national_dps_test_cities": [
+      "3106200",
+      "3106705",
+      "3170206"
+    ],
+    "national_issuer_guard_applies_to_all_wave1": true
+  },
+  "latest_regulatory_review": {
+    "date": "2026-11-11",
+    "federal_source": "https://www.gov.br/nfse/pt-br/noticias/nfs-e-informa-diretrizes-sobre-a-obrigatoriedade-da-emissao-da-nfs-e-nacional-para-optantes-do-simples-nacional",
+    "national_prod_schema_source": "https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/documentacao-atual",
+    "national_restricted_schema_source": "https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/producao-restrita",
+    "national_restricted_nt009_release1_active_from": "2026-10-20",
+    "national_restricted_nt009_production_target": "2026-12-01",
+    "important": "Emissor Nacional precisa obedecer versão de XSD/RTC vigente por ambiente e competencia; não usar o XSD nacional antigo como prova de 100%.",
+    "dps_numbering": "HASH_PLACEHOLDER_NOT_SEQUENTIAL",
+    "nfce_qr_rule": "QR v3/NT 2025.001 requer política por versão; CSC é requisito de versões antigas, não presumir CSC para QR v3",
+    "gate_state": "INTERNAL_NOT_COMPLETE"
   }
 }
