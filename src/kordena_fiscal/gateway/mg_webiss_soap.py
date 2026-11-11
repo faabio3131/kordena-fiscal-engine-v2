@@ -2,7 +2,8 @@
 
 The public Extrema WebISS WSDL advertises SOAP actions for GerarNfse,
 RecepcionarLoteRps and ConsultarLoteRps. This transport reuses the existing
-ABRASF preparer with the municipality-pinned 2.02 RTC XML/XSD/XMLDSig contract and the canonical DURABLE unit binding.
+ABRASF preparer with municipality-pinned 2.02 RTC XML/XSD/XMLDSig.
+The signed request also requires the canonical DURABLE unit binding.
 The provider's municipality-specific schema version is not certified here:
 do not register this adapter as production-ready until WSDL/XSD parity,
 credentials, municipal ISS rules and official responses are proved.
