@@ -7,11 +7,15 @@ from __future__ import annotations
 
 import ssl
 from collections.abc import Callable, Mapping
+from datetime import UTC, datetime
 from typing import Any
 
 from kordena_fiscal.application.service import FiscalApplicationService
 from kordena_fiscal.archive import RetentionPolicyMetadata
-from kordena_fiscal.compliance.nfse_preaudit import extrema_nfse_preaudit
+from kordena_fiscal.compliance.nfse_preaudit import (
+    extrema_cancellation_preaudit,
+    extrema_nfse_preaudit,
+)
 from kordena_fiscal.control_plane.commercial import ConfiguredFiscalOperation
 from kordena_fiscal.control_plane.service import ControlPlaneNotFoundError
 from kordena_fiscal.domain import (
@@ -70,7 +74,7 @@ from kordena_fiscal.vault import EphemeralCertificateMaterial
 from kordena_fiscal.vault.encrypted_a1 import EncryptedA1Vault
 from kordena_fiscal.xml import NfeAccessKey
 
-from .fiscal_runtime import FiscalOperationHandler
+from .fiscal_runtime import FiscalOperationHandler, PreflightFiscalOperationHandler
 from .provider_issuance_handler import PreparedXmlGatewaySelector
 from .provider_operation_wiring import build_provider_operation_handlers
 
@@ -472,6 +476,7 @@ def build_runtime_fiscal_handler_factory(
                 resolve_certificate=resolve_extrema_a1,
                 canonical_preaudit=extrema_nfse_preaudit,
                 service_preaudit=webiss_service_preaudit,
+                cancellation_preaudit=extrema_cancellation_preaudit,
                 municipal_validator=validator,
             )
         if national_adapter is not None or extrema_adapter is not None:
@@ -494,6 +499,70 @@ def build_runtime_fiscal_handler_factory(
             prepared_nfse_query_client=nfse_query_client,
             archive_retention=retention,
         )
+        if extrema_adapter is not None:
+            cancellation_gateway = extrema_adapter
+
+            def validate_extrema_cancel(
+                scope: ExecutionScope, payload: Mapping[str, Any], key: str | None,
+            ) -> None:
+                fields = {
+                    "unit_id", "environment", "document_id",
+                    "cancellation_code", "human_approval",
+                }
+                if (
+                    not key or not key.strip() or len(key) > 256
+                    or set(payload) != fields
+                    or payload.get("unit_id") != scope.unit_id
+                    or payload.get("environment") != scope.environment.value
+                    or payload.get("human_approval") is not True
+                    or scope.environment is not FiscalEnvironment.HOMOLOGATION
+                    or not isinstance(payload.get("document_id"), str)
+                    or not isinstance(payload.get("cancellation_code"), str)
+                    or payload["cancellation_code"] not in {"1", "2", "3", "4", "5"}
+                ):
+                    raise FiscalValidationError("Invalid approved Extrema cancellation intent")
+                original = application.load_prepared_nfse_authorization(
+                    scope, str(payload["document_id"]),
+                )
+                city = original.document.issuer.address.jurisdiction
+                provider = application.resolve_configured_provider_id(
+                    scope=scope, document_kind=FiscalDocumentKind.NFSE,
+                    jurisdiction=city,
+                    operation=ConfiguredFiscalOperation.CANCEL.value,
+                )
+                if (
+                    city.municipality_ibge_code != EXTREMA_IBGE
+                    or provider != EXTREMA_WEBISS_PROVIDER_ID
+                ):
+                    raise FiscalValidationError("Approved municipal cancellation binding missing")
+                application.preflight_extrema_nfse_cancellation(
+                    scope=scope, document_id=str(payload["document_id"]),
+                )
+
+            def execute_extrema_cancel(
+                scope: ExecutionScope, payload: Mapping[str, Any], key: str | None,
+            ) -> Mapping[str, Any]:
+                validate_extrema_cancel(scope, payload, key)
+                outcome = application.cancel_prepared_extrema_nfse(
+                    scope=scope,
+                    document_id=str(payload["document_id"]),
+                    cancellation_code=str(payload["cancellation_code"]),
+                    gateway=cancellation_gateway,
+                    occurred_at=datetime.now(UTC),
+                    retention=retention,
+                )
+                return {
+                    "entry_id": outcome.archive_reference,
+                    "document_id": str(payload["document_id"]),
+                    "status": outcome.lifecycle.state.value,
+                    "municipality_ibge": EXTREMA_IBGE,
+                    "official_fiscal_confirmation": outcome.result.confirmed,
+                    "rejection_code": outcome.result.rejection_code,
+                }
+
+            handlers["cancelExtremaNfse"] = PreflightFiscalOperationHandler(
+                execute_extrema_cancel, validate_extrema_cancel,
+            )
         required = {
             "issueFiscalDocument",
             "queryFiscalDocument",
