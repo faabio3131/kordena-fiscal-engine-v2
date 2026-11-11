@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import ssl
 from collections.abc import Callable
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 from urllib.error import HTTPError, URLError
 from urllib.request import HTTPSHandler, Request, build_opener
 
@@ -17,13 +17,13 @@ from kordena_fiscal.domain import (
     ExecutionScope,
     FiscalEnvironment,
     FiscalValidationError,
-    TaxRegimeCode,
 )
 from kordena_fiscal.gateway.authorization import (
     AuthorizationStatus,
     GatewayProviderMetadata,
 )
 from kordena_fiscal.gateway.fiscal_tls import RejectFiscalRedirects, build_fiscal_tls_context
+from kordena_fiscal.gateway.mg_nfse_channel_guard import require_mg_national_channel_eligibility
 from kordena_fiscal.gateway.nfse_national_homologation import (
     SEFIN_HOMOLOGATION_NFSE_URL,
     build_nfse_dps_request,
@@ -108,33 +108,11 @@ class NfseNacionalHomologationGateway:
         issuer_municipality = document.issuer.address.jurisdiction.municipality_ibge_code
         if issuer_municipality is None:
             raise OfficialNfseTransportError("DPS requires an issuer municipality")
-        # Contagem/MG (IBGE 3118601) has its own ISS Digital channel,
-        # BUT the federal NFS-e guidance of 29/10/2026 mandates national
-        # issuance for Simples Nacional ME/EPP from competence 01/11/2026,
-        # even in municipalities with their own emitter. Retroactive
-        # competences remain under their historical municipal contract.
-        # MEI uses the national emitter under its own prior federal rule.
-        # Sources:
-        # https://receita.contagem.mg.gov.br/nfe/
-        # https://www.gov.br/nfse/pt-br/noticias/nfs-e-informa-diretrizes-sobre-a-obrigatoriedade-da-emissao-da-nfs-e-nacional-para-optantes-do-simples-nacional
-        # This is a negative eligibility guard, never a provider binding.
-        if issuer_municipality == "3118601":
-            regime = document.issuer.tax_regime
-            national_allowed = (
-                regime is TaxRegimeCode.MEI
-                or (
-                    regime in {
-                        TaxRegimeCode.SIMPLES_NACIONAL,
-                        TaxRegimeCode.SIMPLES_NACIONAL_EXCESS_SUBLIMIT,
-                    }
-                    and document.competence_date >= date(2026, 11, 1)
-                )
-            )
-            if not national_allowed:
-                raise OfficialNfseTransportError(
-                    "Contagem/MG: para regime e competencia informados exige "
-                    "emissor municipal; SEFIN Nacional nao autorizada"
-                )
+        require_mg_national_channel_eligibility(
+            jurisdiction=document.issuer.address.jurisdiction,
+            tax_regime=document.issuer.tax_regime,
+            competence_date=document.competence_date,
+        )
         material = self._resolve_certificate(document.scope, issuer_cnpj)
         validate_a1_for_issuer(
             material.pkcs12_bytes, material.password, issuer_cnpj=Cnpj(issuer_cnpj),
