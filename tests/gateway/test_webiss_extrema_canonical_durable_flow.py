@@ -450,3 +450,93 @@ def test_timeout_on_cancel_stays_claimed_without_duplicate_post(tmp_path):
             occurred_at=NOW, retention=RETENTION,
         )
     assert len(operations) == 2
+
+def _synthetic_substitution_receipt(original, old_intent, replacement, new_intent):
+    """Compose positive municipal XML from two individual schema-checked fixtures."""
+    from copy import deepcopy
+
+    from lxml import etree
+
+    ns = "{http://www.abrasf.org.br/nfse.xsd}"
+    old_xml = etree.fromstring(
+        _success_response(Abrasf203Operation.GENERATE, old_intent),
+        parser=etree.XMLParser(no_network=True),
+    )
+    new_xml = etree.fromstring(
+        _success_response(Abrasf203Operation.GENERATE, new_intent),
+        parser=etree.XMLParser(no_network=True),
+    )
+    old_comp = old_xml.find(f"{ns}CompNfse")
+    new_comp = new_xml.find(f"{ns}CompNfse")
+    assert old_comp is not None and new_comp is not None
+    original_ref = old_comp.find(f"{ns}Nfse/{ns}InfNfse/{ns}Numero")
+    replacement_ref = new_comp.find(f"{ns}Nfse/{ns}InfNfse/{ns}Numero")
+    assert original_ref is not None and replacement_ref is not None
+    original_ref.text = "123"
+    replacement_ref.text = "124"
+    root = etree.Element(
+        f"{ns}SubstituirNfseResposta",
+        nsmap={"a": "http://www.abrasf.org.br/nfse.xsd"},
+    )
+    retorno = etree.SubElement(root, f"{ns}RetSubstituicao")
+    old = etree.SubElement(retorno, f"{ns}NfseSubstituida")
+    old.append(deepcopy(old_comp))
+    new = etree.SubElement(retorno, f"{ns}NfseSubstituidora")
+    new.append(deepcopy(new_comp))
+    data = etree.tostring(root, encoding="utf-8")
+    _, validator = load_pinned_extrema_webiss_rtc_schema()
+    validator.validate_document(data)
+    return _wrap_soap(Abrasf203Operation.SUBSTITUTE, data)
+
+
+def test_real_substitution_commits_both_lifecycles_atomically(tmp_path):
+    db = SqliteFiscalDatabase(tmp_path / "substitution.sqlite")
+    db.initialize()
+    app = FiscalApplicationService(db)
+    original = _request()
+    old_intent = _prepare(app, original)
+    from kordena_fiscal.domain import SourceReference
+    from kordena_fiscal.issuance import NfseAuthorizationRequest
+    replacement = NfseAuthorizationRequest.build(replace(
+        original.document, document_id="nfse-extrema-replacement-2",
+        source=SourceReference("service-order", "order-replacement-2"),
+    ))
+    new_intent = _prepare(app, replacement)
+    calls = []
+
+    def exchange(_body, action, _context, _timeout):
+        calls.append(action)
+        if "GerarNfse" in action:
+            return _success_response(Abrasf203Operation.GENERATE, old_intent)
+        if "SubstituirNfse" in action:
+            return _synthetic_substitution_receipt(
+                original, old_intent, replacement, new_intent,
+            )
+        raise AssertionError("Unexpected municipal SOAP action")
+
+    gateway, _, _, _, _ = _gateway(app, old_intent, exchange)
+    issued = app.authorize_prepared_document(
+        document_id=original.document.document_id, request=original,
+        gateway=NfseGatewayClient(gateway), occurred_at=NOW,
+    )
+    assert issued.lifecycle.state is FiscalDocumentState.AUTHORIZED
+    changed = app.substitute_prepared_extrema_nfse(
+        scope=original.document.scope,
+        original_id=original.document.document_id,
+        replacement_id=replacement.document.document_id,
+        cancellation_code="1", gateway=gateway,
+        occurred_at=NOW, retention=RETENTION,
+    )
+    assert changed.result.confirmed
+    assert changed.original_lifecycle.state is FiscalDocumentState.CANCELLED
+    assert changed.replacement_lifecycle.state is FiscalDocumentState.AUTHORIZED
+    assert len(calls) == 2
+    with pytest.raises(Exception):
+        app.substitute_prepared_extrema_nfse(
+            scope=original.document.scope,
+            original_id=original.document.document_id,
+            replacement_id=replacement.document.document_id,
+            cancellation_code="1", gateway=gateway,
+            occurred_at=NOW, retention=RETENTION,
+        )
+    assert len(calls) == 2
