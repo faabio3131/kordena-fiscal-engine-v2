@@ -53,7 +53,11 @@ from kordena_fiscal.domain import (
     FiscalValidationError,
 )
 from kordena_fiscal.lifecycle import FiscalDocumentState
-from kordena_fiscal.persistence.ports import FiscalUnitOfWorkFactory, PersistenceConflictError
+from kordena_fiscal.persistence.ports import (
+    FiscalUnitOfWorkFactory,
+    PersistenceConflictError,
+    PersistenceStateError,
+)
 from kordena_fiscal.security.human_administration import (
     HumanAdministrationConflictError,
     HumanAdministrationNotFoundError,
@@ -946,7 +950,7 @@ class DurableHumanPortalExecutor:
         from kordena_fiscal.issuance.webiss_extrema_builder import (
             ExtremaRpsIntent, ExtremaServiceTaker,
         )
-        from kordena_fiscal.security.human_identity import PortalRole
+        from kordena_fiscal.security.human_identity import PortalRole\n        from kordena_fiscal.numbering import FiscalNumberReservation
 
         fields = {
             "unit_id", "environment", "source_id", "competence_date",
