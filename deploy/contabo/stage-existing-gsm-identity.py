@@ -183,8 +183,11 @@ def read_existing_identity(source: Path) -> tuple[bytes, str]:
 
 
 def atomic_write_new(path: Path, data: bytes, *, uid: int, gid: int) -> None:
+    """Create exclusively; rollback even if durability checks fail after linking."""
     require(not path.exists() and not path.is_symlink(), "NO_GO_TARGET_EXISTS")
     fd, name = tempfile.mkstemp(prefix=".nfcore-stage-", dir=str(path.parent))
+    linked = False
+    inode: tuple[int, int] | None = None
     try:
         os.fchmod(fd, 0o600)
         os.fchown(fd, uid, gid)
@@ -192,14 +195,28 @@ def atomic_write_new(path: Path, data: bytes, *, uid: int, gid: int) -> None:
             stream.write(data)
             stream.flush()
             os.fsync(stream.fileno())
-        # Refuse to overwrite an existing key, configuration or symlink.
+        # No replace/rename: refuse existing files and symlinks atomically.
         os.link(name, path, follow_symlinks=False)
+        linked = True
+        linked_stat = os.lstat(path)
+        inode = (linked_stat.st_dev, linked_stat.st_ino)
         os.unlink(name)
         directory_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
         try:
             os.fsync(directory_fd)
         finally:
             os.close(directory_fd)
+    except BaseException:
+        if linked:
+            # Only roll back the inode this operation created. Never delete
+            # an unrelated file if the operator-owned directory changed.
+            try:
+                current = os.lstat(path)
+                if inode is not None and (current.st_dev, current.st_ino) == inode:
+                    os.unlink(path)
+            except OSError:
+                pass
+        raise
     finally:
         if os.path.exists(name):
             os.unlink(name)
