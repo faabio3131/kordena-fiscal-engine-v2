@@ -66,6 +66,8 @@ class Abrasf203Envelope:
     body: bytes
     soap_action: str
     content_type: str = "text/xml; charset=utf-8"
+    schema_version: str = "2.03"
+    schema_package_sha256: str | None = None
 
 
 @lru_cache(maxsize=1)
@@ -91,6 +93,8 @@ def prepare_abrasf203_soap(
     resolve_certificate: Callable[[ExecutionScope, str], EphemeralCertificateMaterial],
     preaudit: Callable[[tuple[AbrasfServiceFacts, ...]], None],
     preaudit_cancel: Callable[[AbrasfCancellationFacts], None] | None = None,
+    municipal_schema_version: str | None = None,
+    municipal_validator: XmlSchemaValidator | None = None,
 ) -> Abrasf203Envelope:
     """Validate, audit and sign RPS before lot, then serialize SOAP string parts."""
     if scope.environment is not FiscalEnvironment.HOMOLOGATION:
@@ -115,8 +119,19 @@ def prepare_abrasf203_soap(
         or root.find(f".//{{{_DS}}}Signature") is not None
     ):
         raise FiscalValidationError("Unexpected ABRASF payload root or existing signature")
-    validator = _validator()
-    validator.validate_document(xml)
+    if (municipal_schema_version is None) != (municipal_validator is None):
+        raise FiscalValidationError(
+            "Municipal layout version and pinned validator must be supplied together"
+        )
+    if municipal_schema_version is not None and municipal_schema_version != "2.02":
+        raise FiscalValidationError("Unsupported external municipal fiscal schema version")
+    schema_version = municipal_schema_version or "2.03"
+    validator = municipal_validator or _validator()
+    validation = validator.validate_document(xml)
+    if operation is Abrasf203Operation.SUBMIT_BATCH:
+        lot = root.find("a:LoteRps", ns)
+        if lot is None or lot.get("versao") != schema_version:
+            raise FiscalValidationError("ABRASF lot version does not match provider schema")
 
     if operation is Abrasf203Operation.QUERY_BATCH:
         if root.findtext("a:Prestador/a:CpfCnpj/a:Cnpj", namespaces=ns) != issuer_cnpj.value:
@@ -214,9 +229,9 @@ def prepare_abrasf203_soap(
     data = etree.tostring(root, encoding="utf-8")
     validator.validate_document(data)
     header = etree.Element(
-        f"{{{_ABRASF}}}cabecalho", nsmap={"a": _ABRASF}, versao="2.03",
+        f"{{{_ABRASF}}}cabecalho", nsmap={"a": _ABRASF}, versao=schema_version,
     )
-    etree.SubElement(header, f"{{{_ABRASF}}}versaoDados").text = "2.03"
+    etree.SubElement(header, f"{{{_ABRASF}}}versaoDados").text = schema_version
     header_xml = etree.tostring(header, encoding="utf-8")
     validator.validate_document(header_xml)
     envelope = etree.Element(f"{{{_SOAP11}}}Envelope", nsmap={"soap": _SOAP11})
@@ -227,4 +242,6 @@ def prepare_abrasf203_soap(
     return Abrasf203Envelope(
         etree.tostring(envelope, encoding="utf-8", xml_declaration=True),
         f'"{_WSDL}/{method}"',
+        schema_version=schema_version,
+        schema_package_sha256=validation.schema_package_sha256,
     )
