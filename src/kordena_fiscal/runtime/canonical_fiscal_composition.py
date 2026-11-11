@@ -21,9 +21,11 @@ from kordena_fiscal.domain import (
 )
 from kordena_fiscal.gateway import AuthorizationRequest, FiscalGatewayClient
 from kordena_fiscal.gateway.nfe_sp_homologation import (
+    MG_NFCE_HOMOLOGATION_PROVIDER_ID,
     MG_NFE_HOMOLOGATION_PROVIDER_ID,
     HomologationAuthorizationTarget,
     SefazSpHomologationGateway,
+    build_mg_nfce_homologation_gateway,
     build_mg_nfe_homologation_gateway,
 )
 from kordena_fiscal.gateway.nfe_sp_operations_homologation import (
@@ -116,23 +118,32 @@ def _require_mg_binding(
     application: FiscalApplicationService, scope: ExecutionScope,
     access_key: NfeAccessKey, operation: ConfiguredFiscalOperation,
 ) -> None:
-    label = (
-        "consulta MG" if operation is ConfiguredFiscalOperation.QUERY else "autorização MG"
-    )
+    label = {
+        ConfiguredFiscalOperation.QUERY: "consulta MG",
+        ConfiguredFiscalOperation.CANCEL: "cancelamento MG",
+    }.get(operation, "autorização MG")
     if scope.environment is not FiscalEnvironment.HOMOLOGATION:
         raise FiscalValidationError(f"Operação de {label} disponível apenas em homologação")
-    if access_key.model.value != 55:
-        raise FiscalValidationError(f"Operação de {label} disponível apenas para NF-e modelo 55")
+    if scope.host_namespace is None or access_key.value[:2] != "31":
+        raise FiscalValidationError(f"Operação de {label} exige escopo e chave UF MG")
+    if access_key.model.value == 55:
+        kind = FiscalDocumentKind.NFE
+        expected_provider = MG_NFE_HOMOLOGATION_PROVIDER_ID
+    elif access_key.model.value == 65:
+        kind = FiscalDocumentKind.NFCE
+        expected_provider = MG_NFCE_HOMOLOGATION_PROVIDER_ID
+    else:
+        raise FiscalValidationError(f"Operação de {label} com modelo não suportado")
     try:
         provider_id = application.resolve_configured_provider_id(
             scope=scope,
-            document_kind=FiscalDocumentKind.NFE,
+            document_kind=kind,
             jurisdiction=BrazilianJurisdiction("MG"),
             operation=operation.value,
         )
     except ControlPlaneNotFoundError as exc:
         raise FiscalValidationError(f"Vínculo fiscal de {label} indisponível") from exc
-    if provider_id != MG_NFE_HOMOLOGATION_PROVIDER_ID:
+    if provider_id != expected_provider:
         raise FiscalValidationError(f"Provedor do vínculo de {label} incompatível")
 
 
@@ -182,10 +193,19 @@ class _GovernedMgQueryGateway:
         legacy: FiscalOperationsGateway,
         mg: FiscalOperationsGateway,
         application: FiscalApplicationService,
+        mg_nfce: FiscalOperationsGateway | None = None,
     ) -> None:
         self._legacy = legacy
         self._mg = mg
+        self._mg_nfce = mg_nfce
         self._application = application
+
+    def _mg_for_model(self, access_key: NfeAccessKey) -> FiscalOperationsGateway:
+        if access_key.model.value == 55:
+            return self._mg
+        if access_key.model.value == 65 and self._mg_nfce is not None:
+            return self._mg_nfce
+        raise FiscalValidationError("Gateway MG para modelo fiscal indisponível")
 
     def query(self, request: FiscalQueryRequest) -> FiscalQueryResult:
         if request.access_key.value[:2] != "31":
@@ -193,12 +213,23 @@ class _GovernedMgQueryGateway:
         _require_mg_binding(
             self._application, request.scope, request.access_key, ConfiguredFiscalOperation.QUERY
         )
-        return self._mg.query(request)
+        return self._mg_for_model(request.access_key).query(request)
 
     def cancel(self, request: CancellationRequest) -> CancellationResult:
-        return self._legacy.cancel(request)
+        if request.access_key.value[:2] != "31":
+            return self._legacy.cancel(request)
+        _require_mg_binding(
+            self._application,
+            scope=request.scope,
+            access_key=request.access_key,
+            operation=ConfiguredFiscalOperation.CANCEL,
+        )
+        return self._mg_for_model(request.access_key).cancel(request)
 
     def inutilize(self, request: InutilizationRequest) -> InutilizationResult:
+        # Inutilization has no issuer/state on the command. Do not infer MG
+        # from tenant or unit, or silently route all clients through MG.
+        # A trusted fiscal profile/state resolver is required before cutover.
         return self._legacy.inutilize(request)
 
 
@@ -271,6 +302,10 @@ def build_runtime_fiscal_handler_factory(
                     resolve_certificate=resolve_mg_certificate,
                     target=HomologationAuthorizationTarget.MG_NFE,
                 ),
+                mg_nfce=SefazHomologationOperationsGateway(
+                    resolve_certificate=resolve_mg_certificate,
+                    target=HomologationAuthorizationTarget.MG_NFCE,
+                ),
                 application=application,
             )
         selector: PreparedXmlGatewaySelector | None = None
@@ -285,6 +320,9 @@ def build_runtime_fiscal_handler_factory(
             mg_authorization = FiscalGatewayClient(build_mg_nfe_homologation_gateway(
                 resolve_certificate=resolve_authorization_certificate,
             ))
+            mg_nfce_authorization = FiscalGatewayClient(build_mg_nfce_homologation_gateway(
+                resolve_certificate=resolve_authorization_certificate,
+            ))
 
             def select_xml_gateway(request: AuthorizationRequest) -> FiscalGatewayClient:
                 if request.access_key.value[:2] != "31":
@@ -293,6 +331,8 @@ def build_runtime_fiscal_handler_factory(
                     application, request.scope, request.access_key,
                     ConfiguredFiscalOperation.AUTHORIZE,
                 )
+                if request.access_key.model.value == 65:
+                    return mg_nfce_authorization
                 return mg_authorization
 
             selector = select_xml_gateway

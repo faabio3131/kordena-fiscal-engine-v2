@@ -37,6 +37,8 @@ class Abrasf203Operation(Enum):
     GENERATE = ("GerarNfseEnvio", "GerarNfse")
     SUBMIT_BATCH = ("EnviarLoteRpsEnvio", "RecepcionarLoteRps")
     QUERY_BATCH = ("ConsultarLoteRpsEnvio", "ConsultarLoteRps")
+    QUERY_ISSUED = ("ConsultarNfseServicoPrestadoEnvio", "ConsultarNfseServicoPrestado")
+    CANCEL = ("CancelarNfseEnvio", "CancelarNfse")
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,10 +53,22 @@ class AbrasfServiceFacts:
 
 
 @dataclass(frozen=True, slots=True)
+class AbrasfCancellationFacts:
+    """Inputs for the existing fiscal cancellation-policy authority."""
+
+    issuer_cnpj: str
+    municipality_ibge: str
+    invoice_number: str
+    cancellation_code: str
+
+
+@dataclass(frozen=True, slots=True)
 class Abrasf203Envelope:
     body: bytes
     soap_action: str
     content_type: str = "text/xml; charset=utf-8"
+    schema_version: str = "2.03"
+    schema_package_sha256: str | None = None
 
 
 @lru_cache(maxsize=1)
@@ -79,6 +93,9 @@ def prepare_abrasf203_soap(
     issuer_cnpj: Cnpj,
     resolve_certificate: Callable[[ExecutionScope, str], EphemeralCertificateMaterial],
     preaudit: Callable[[tuple[AbrasfServiceFacts, ...]], None],
+    preaudit_cancel: Callable[[AbrasfCancellationFacts], None] | None = None,
+    municipal_schema_version: str | None = None,
+    municipal_validator: XmlSchemaValidator | None = None,
 ) -> Abrasf203Envelope:
     """Validate, audit and sign RPS before lot, then serialize SOAP string parts."""
     if scope.environment is not FiscalEnvironment.HOMOLOGATION:
@@ -103,12 +120,63 @@ def prepare_abrasf203_soap(
         or root.find(f".//{{{_DS}}}Signature") is not None
     ):
         raise FiscalValidationError("Unexpected ABRASF payload root or existing signature")
-    validator = _validator()
-    validator.validate_document(xml)
+    if (municipal_schema_version is None) != (municipal_validator is None):
+        raise FiscalValidationError(
+            "Municipal layout version and pinned validator must be supplied together"
+        )
+    if municipal_schema_version is not None and municipal_schema_version != "2.02":
+        raise FiscalValidationError("Unsupported external municipal fiscal schema version")
+    schema_version = municipal_schema_version or "2.03"
+    validator = municipal_validator or _validator()
+    validation = validator.validate_document(xml)
+    if operation is Abrasf203Operation.SUBMIT_BATCH:
+        lot = root.find("a:LoteRps", ns)
+        if lot is None or lot.get("versao") != schema_version:
+            raise FiscalValidationError("ABRASF lot version does not match provider schema")
 
-    if operation is Abrasf203Operation.QUERY_BATCH:
+    if operation in (Abrasf203Operation.QUERY_BATCH, Abrasf203Operation.QUERY_ISSUED):
         if root.findtext("a:Prestador/a:CpfCnpj/a:Cnpj", namespaces=ns) != issuer_cnpj.value:
             raise FiscalValidationError("ABRASF query issuer mismatch")
+    elif operation is Abrasf203Operation.CANCEL:
+        pedido = root.find("a:Pedido", ns)
+        info = pedido.find("a:InfPedidoCancelamento", ns) if pedido is not None else None
+        identification = (
+            info.find("a:IdentificacaoNfse", ns) if info is not None else None
+        )
+        if identification is None or info is None or pedido is None:
+            raise FiscalValidationError("ABRASF cancellation request is incomplete")
+        cancellation_cnpj = identification.findtext("a:CpfCnpj/a:Cnpj", "", ns)
+        number = identification.findtext("a:Numero", "", ns)
+        municipality = identification.findtext("a:CodigoMunicipio", "", ns)
+        code = info.findtext("a:CodigoCancelamento", "", ns)
+        if (
+            cancellation_cnpj != issuer_cnpj.value
+            or not number or not number.isdecimal()
+            or not municipality or not municipality.isdecimal()
+            or code not in ("1", "2", "3", "4", "5")
+            or not info.get("Id")
+            or sum(node.get("Id") == info.get("Id") for node in root.iter()) != 1
+        ):
+            raise FiscalValidationError("ABRASF cancellation fiscal identity mismatch")
+        if not callable(preaudit_cancel):
+            raise FiscalValidationError("Explicit cancellation preaudit is required")
+        preaudit_cancel(AbrasfCancellationFacts(
+            issuer_cnpj=cancellation_cnpj,
+            municipality_ibge=municipality,
+            invoice_number=number,
+            cancellation_code=code,
+        ))
+        material = resolve_certificate(scope, issuer_cnpj.value)
+        validate_a1_for_issuer(
+            material.pkcs12_bytes, material.password,
+            issuer_cnpj=issuer_cnpj, at=datetime.now(UTC),
+        )
+        key, cert, _ = pkcs12.load_key_and_certificates(
+            material.pkcs12_bytes, material.password
+        )
+        if not isinstance(key, rsa.RSAPrivateKey) or cert is None:
+            raise FiscalValidationError("ABRASF cancel signature requires RSA A1")
+        append_nfse_signature(pedido, info, key, cert, legacy_abrasf=True)
     else:
         rps_path = "a:Rps"
         batch = root.find("a:LoteRps", ns)
@@ -162,9 +230,9 @@ def prepare_abrasf203_soap(
     data = etree.tostring(root, encoding="utf-8")
     validator.validate_document(data)
     header = etree.Element(
-        f"{{{_ABRASF}}}cabecalho", nsmap={"a": _ABRASF}, versao="2.03",
+        f"{{{_ABRASF}}}cabecalho", nsmap={"a": _ABRASF}, versao=schema_version,
     )
-    etree.SubElement(header, f"{{{_ABRASF}}}versaoDados").text = "2.03"
+    etree.SubElement(header, f"{{{_ABRASF}}}versaoDados").text = schema_version
     header_xml = etree.tostring(header, encoding="utf-8")
     validator.validate_document(header_xml)
     envelope = etree.Element(f"{{{_SOAP11}}}Envelope", nsmap={"soap": _SOAP11})
@@ -175,4 +243,6 @@ def prepare_abrasf203_soap(
     return Abrasf203Envelope(
         etree.tostring(envelope, encoding="utf-8", xml_declaration=True),
         f'"{_WSDL}/{method}"',
+        schema_version=schema_version,
+        schema_package_sha256=validation.schema_package_sha256,
     )
