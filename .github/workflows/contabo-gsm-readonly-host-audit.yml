@@ -82,9 +82,9 @@ jobs:
             echo 'No credentials, environment file contents or private key material are published.'
             echo 'This report cannot certify Google IAM, remote Railway consumers, backup restore, or worker cutover.'
             if [[ -f "$work/status.txt" ]]; then
-              echo '\`\`\`text'
+              echo '```text'
               cat "$work/status.txt"
-              echo '\`\`\`'
+              echo '```'
             else
               echo 'NO_GO: no authenticated GSM host status collected.'
             fi
