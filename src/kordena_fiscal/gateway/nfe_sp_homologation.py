@@ -200,12 +200,24 @@ def _validate_mg_authorization_scope(
         if not qr or not link:
             raise OfficialNfeTransportError("NFC-e MG65 requires QR Code and consultation URL")
         qr_parts, link_parts = urlsplit(qr), urlsplit(link)
-        qr_value = parse_qs(qr_parts.query).get("p", [""])[0]
+        qr_params = parse_qs(qr_parts.query)
+        values = qr_params.get("p", [])
+        qr_fields = values[0].split("|") if len(values) == 1 else []
+        emission_type = ide.findtext(f"{{{NFE_NAMESPACE}}}tpEmis")
+        if emission_type != "1":
+            # QR v3 offline tpEmis=9 needs A1 signature on 8 fields.
+            # Do not accept a fabricated 'assinatura' or fallback to CSC v2.
+            raise OfficialNfeTransportError(
+                "NFC-e MG65 contingencia exige QR v3 com assinatura certificada"
+            )
+        # NT 2025.001 v1.03: v3 online is exactly chave|3|tpAmb.
+        # v3 contingency and v2 have different cryptographic contracts.
         if (
             qr_parts.scheme != "https"
             or qr_parts.netloc != "portalsped.fazenda.mg.gov.br"
             or qr_parts.path != "/portalnfce/sistema/qrcode.xhtml"
-            or not qr_value.startswith(request.access_key.value + "|")
+            or set(qr_params) != {"p"}
+            or qr_fields != [request.access_key.value, "3", "2"]
             or link_parts.scheme != "https"
             or link_parts.netloc != "hportalsped.fazenda.mg.gov.br"
             or link_parts.path.rstrip("/") != "/portalnfce"
