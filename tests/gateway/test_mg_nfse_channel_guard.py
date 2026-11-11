@@ -66,13 +66,21 @@ def test_only_sourced_exclusive_national_channels_allow_normal_regime() -> None:
 
 @pytest.mark.parametrize(
     "municipality",
-    ["3118601", "3170107", "3125101", "3131703", "3106200", "3170206"],
+    ["3118601", "3170107", "3125101", "3131703", "3170206"],
 )
 def test_previous_competence_never_sneaks_through_federal_rule(
     municipality: str,
 ) -> None:
     with pytest.raises(FiscalValidationError, match="emissor municipal"):
         _check(municipality, TaxRegimeCode.SIMPLES_NACIONAL, date(2026, 10, 31))
+
+
+def test_bh_simples_uses_earlier_municipal_national_cutover() -> None:
+    """BHISS published compulsory national issuance since November 2025."""
+    _check("3106200", TaxRegimeCode.SIMPLES_NACIONAL, date(2026, 10, 31))
+    _check("3106200", TaxRegimeCode.SIMPLES_NACIONAL, date(2025, 11, 1))
+    with pytest.raises(FiscalValidationError):
+        _check("3106200", TaxRegimeCode.SIMPLES_NACIONAL, date(2025, 10, 31))
 
 
 def test_municipal_effective_competence_is_not_backdated() -> None:
