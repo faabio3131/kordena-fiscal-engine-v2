@@ -17,7 +17,7 @@
       "municipal_source": "https://prefeitura.pbh.gov.br/fazenda/bhiss/avisos",
       "state": "CHANNEL_RESEARCHED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
-      "nfce_mg65_state": "INTERNAL_IMPLEMENTATION_PENDING",
+      "nfce_mg65_state": "PREFLIGHT_IMPLEMENTED_NOT_CERTIFIED",
       "nfse_envelope_contract_version": null,
       "nfse_envelope_xsd_sha256": null,
       "nfse_envelope_xml_signature_ci_sha": null,
@@ -38,7 +38,11 @@
       "nfse_numbering_sequential_authority": false,
       "nfse_integration_web_e2e_certified": false,
       "nfce_qr_version_contract_certified": false,
-      "simples_earlier_municipal_source": "https://prefeitura.pbh.gov.br/fazenda/bhiss/avisos"
+      "simples_earlier_municipal_source": "https://prefeitura.pbh.gov.br/fazenda/bhiss/avisos",
+      "nfce_mg65_target_provenance": "https://portalsped.fazenda.mg.gov.br/spedmg/nfce/web-services/",
+      "nfce_qr_generation_and_signature_certified": false,
+      "nfce_operations_lifecycle_certified": false,
+      "nfce_runtime_binding_enabled": false
     },
     {
       "ibge": "3106705",
@@ -48,7 +52,7 @@
       "municipal_source": "https://www.betim.mg.gov.br/portal/noticias/0/3/14975/prefeitura-de-betim-chama-a-atencao-para-novo-padrao-de-emissao-de-notas-fiscais",
       "state": "CHANNEL_RESEARCHED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
-      "nfce_mg65_state": "INTERNAL_IMPLEMENTATION_PENDING",
+      "nfce_mg65_state": "PREFLIGHT_IMPLEMENTED_NOT_CERTIFIED",
       "nfse_envelope_contract_version": null,
       "nfse_envelope_xsd_sha256": null,
       "nfse_envelope_xml_signature_ci_sha": null,
@@ -69,7 +73,11 @@
       "nfse_numbering_sequential_authority": false,
       "nfse_integration_web_e2e_certified": false,
       "nfce_qr_version_contract_certified": false,
-      "simples_earlier_municipal_source": "https://www.betim.mg.gov.br/portal/noticias/0/3/14975/prefeitura-de-betim-chama-a-atencao-para-novo-padrao-de-emissao-de-notas-fiscais"
+      "simples_earlier_municipal_source": "https://www.betim.mg.gov.br/portal/noticias/0/3/14975/prefeitura-de-betim-chama-a-atencao-para-novo-padrao-de-emissao-de-notas-fiscais",
+      "nfce_mg65_target_provenance": "https://portalsped.fazenda.mg.gov.br/spedmg/nfce/web-services/",
+      "nfce_qr_generation_and_signature_certified": false,
+      "nfce_operations_lifecycle_certified": false,
+      "nfce_runtime_binding_enabled": false
     },
     {
       "ibge": "3170206",
@@ -79,7 +87,7 @@
       "municipal_source": "https://www.uberlandia.mg.gov.br/2025/11/21/prefeitura-adere-ao-emissor-nacional-da-nota-fiscal-de-servicos-eletronica-nfs-e/",
       "state": "CHANNEL_RESEARCHED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
-      "nfce_mg65_state": "INTERNAL_IMPLEMENTATION_PENDING",
+      "nfce_mg65_state": "PREFLIGHT_IMPLEMENTED_NOT_CERTIFIED",
       "nfse_envelope_contract_version": null,
       "nfse_envelope_xsd_sha256": null,
       "nfse_envelope_xml_signature_ci_sha": null,
@@ -99,7 +107,11 @@
       "nfse_current_restricted_schema_tested": false,
       "nfse_numbering_sequential_authority": false,
       "nfse_integration_web_e2e_certified": false,
-      "nfce_qr_version_contract_certified": false
+      "nfce_qr_version_contract_certified": false,
+      "nfce_mg65_target_provenance": "https://portalsped.fazenda.mg.gov.br/spedmg/nfce/web-services/",
+      "nfce_qr_generation_and_signature_certified": false,
+      "nfce_operations_lifecycle_certified": false,
+      "nfce_runtime_binding_enabled": false
     },
     {
       "ibge": "3118601",
@@ -109,7 +121,7 @@
       "municipal_source": "https://receita.contagem.mg.gov.br/nfe/",
       "state": "CHANNEL_RESEARCHED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
-      "nfce_mg65_state": "INTERNAL_IMPLEMENTATION_PENDING",
+      "nfce_mg65_state": "PREFLIGHT_IMPLEMENTED_NOT_CERTIFIED",
       "nfse_envelope_contract_version": null,
       "nfse_envelope_xsd_sha256": null,
       "nfse_envelope_xml_signature_ci_sha": null,
@@ -130,7 +142,11 @@
       "nfse_current_restricted_schema_tested": false,
       "nfse_numbering_sequential_authority": false,
       "nfse_integration_web_e2e_certified": false,
-      "nfce_qr_version_contract_certified": false
+      "nfce_qr_version_contract_certified": false,
+      "nfce_mg65_target_provenance": "https://portalsped.fazenda.mg.gov.br/spedmg/nfce/web-services/",
+      "nfce_qr_generation_and_signature_certified": false,
+      "nfce_operations_lifecycle_certified": false,
+      "nfce_runtime_binding_enabled": false
     },
     {
       "ibge": "3170107",
@@ -140,7 +156,7 @@
       "municipal_source": null,
       "state": "RESEARCH_REQUIRED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
-      "nfce_mg65_state": "INTERNAL_IMPLEMENTATION_PENDING",
+      "nfce_mg65_state": "PREFLIGHT_IMPLEMENTED_NOT_CERTIFIED",
       "nfse_envelope_contract_version": null,
       "nfse_envelope_xsd_sha256": null,
       "nfse_envelope_xml_signature_ci_sha": null,
@@ -160,7 +176,11 @@
       "nfse_current_restricted_schema_tested": false,
       "nfse_numbering_sequential_authority": false,
       "nfse_integration_web_e2e_certified": false,
-      "nfce_qr_version_contract_certified": false
+      "nfce_qr_version_contract_certified": false,
+      "nfce_mg65_target_provenance": "https://portalsped.fazenda.mg.gov.br/spedmg/nfce/web-services/",
+      "nfce_qr_generation_and_signature_certified": false,
+      "nfce_operations_lifecycle_certified": false,
+      "nfce_runtime_binding_enabled": false
     },
     {
       "ibge": "3136702",
@@ -170,7 +190,7 @@
       "municipal_source": "https://nfse.pjf.mg.gov.br/ComunicadoNfseNacional.html",
       "state": "CHANNEL_RESEARCHED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
-      "nfce_mg65_state": "INTERNAL_IMPLEMENTATION_PENDING",
+      "nfce_mg65_state": "PREFLIGHT_IMPLEMENTED_NOT_CERTIFIED",
       "nfse_envelope_contract_version": null,
       "nfse_envelope_xsd_sha256": null,
       "nfse_envelope_xml_signature_ci_sha": null,
@@ -192,7 +212,11 @@
       "nfse_numbering_sequential_authority": false,
       "nfse_integration_web_e2e_certified": false,
       "nfce_qr_version_contract_certified": false,
-      "simples_earlier_municipal_source": "https://nfse.pjf.mg.gov.br/ComunicadoNfseNacional.html"
+      "simples_earlier_municipal_source": "https://nfse.pjf.mg.gov.br/ComunicadoNfseNacional.html",
+      "nfce_mg65_target_provenance": "https://portalsped.fazenda.mg.gov.br/spedmg/nfce/web-services/",
+      "nfce_qr_generation_and_signature_certified": false,
+      "nfce_operations_lifecycle_certified": false,
+      "nfce_runtime_binding_enabled": false
     },
     {
       "ibge": "3125101",
@@ -202,7 +226,7 @@
       "municipal_source": null,
       "state": "RESEARCH_REQUIRED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
-      "nfce_mg65_state": "INTERNAL_IMPLEMENTATION_PENDING",
+      "nfce_mg65_state": "PREFLIGHT_IMPLEMENTED_NOT_CERTIFIED",
       "nfse_envelope_contract_version": null,
       "nfse_envelope_xsd_sha256": null,
       "nfse_envelope_xml_signature_ci_sha": null,
@@ -222,7 +246,11 @@
       "nfse_current_restricted_schema_tested": false,
       "nfse_numbering_sequential_authority": false,
       "nfse_integration_web_e2e_certified": false,
-      "nfce_qr_version_contract_certified": false
+      "nfce_qr_version_contract_certified": false,
+      "nfce_mg65_target_provenance": "https://portalsped.fazenda.mg.gov.br/spedmg/nfce/web-services/",
+      "nfce_qr_generation_and_signature_certified": false,
+      "nfce_operations_lifecycle_certified": false,
+      "nfce_runtime_binding_enabled": false
     },
     {
       "ibge": "3131307",
@@ -232,7 +260,7 @@
       "municipal_source": "https://cultura.ipatinga.mg.gov.br/detalhe-da-materia/info/ipatinga-adequa-sistema-de-emissao-de-notas-fiscais-ao-padrao-nacional-a-partir-de-2026/109702",
       "state": "CHANNEL_RESEARCHED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
-      "nfce_mg65_state": "INTERNAL_IMPLEMENTATION_PENDING",
+      "nfce_mg65_state": "PREFLIGHT_IMPLEMENTED_NOT_CERTIFIED",
       "nfse_envelope_contract_version": null,
       "nfse_envelope_xsd_sha256": null,
       "nfse_envelope_xml_signature_ci_sha": null,
@@ -253,7 +281,11 @@
       "nfse_current_restricted_schema_tested": false,
       "nfse_numbering_sequential_authority": false,
       "nfse_integration_web_e2e_certified": false,
-      "nfce_qr_version_contract_certified": false
+      "nfce_qr_version_contract_certified": false,
+      "nfce_mg65_target_provenance": "https://portalsped.fazenda.mg.gov.br/spedmg/nfce/web-services/",
+      "nfce_qr_generation_and_signature_certified": false,
+      "nfce_operations_lifecycle_certified": false,
+      "nfce_runtime_binding_enabled": false
     },
     {
       "ibge": "3167202",
@@ -263,7 +295,7 @@
       "municipal_source": "https://ibs.setelagoas.mg.gov.br/nfse.html",
       "state": "CHANNEL_RESEARCHED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
-      "nfce_mg65_state": "INTERNAL_IMPLEMENTATION_PENDING",
+      "nfce_mg65_state": "PREFLIGHT_IMPLEMENTED_NOT_CERTIFIED",
       "nfse_envelope_contract_version": null,
       "nfse_envelope_xsd_sha256": null,
       "nfse_envelope_xml_signature_ci_sha": null,
@@ -285,7 +317,11 @@
       "nfse_numbering_sequential_authority": false,
       "nfse_integration_web_e2e_certified": false,
       "nfce_qr_version_contract_certified": false,
-      "simples_earlier_municipal_source": "https://ibs.setelagoas.mg.gov.br/nfse.html"
+      "simples_earlier_municipal_source": "https://ibs.setelagoas.mg.gov.br/nfse.html",
+      "nfce_mg65_target_provenance": "https://portalsped.fazenda.mg.gov.br/spedmg/nfce/web-services/",
+      "nfce_qr_generation_and_signature_certified": false,
+      "nfce_operations_lifecycle_certified": false,
+      "nfce_runtime_binding_enabled": false
     },
     {
       "ibge": "3152501",
@@ -295,7 +331,7 @@
       "municipal_source": "https://pousoalegre.atende.net/autoatendimento/servicos/consulta-de-autenticidade-de-nota-fiscal-eletronica-nfse/detalhar/1",
       "state": "CHANNEL_RESEARCHED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
-      "nfce_mg65_state": "INTERNAL_IMPLEMENTATION_PENDING",
+      "nfce_mg65_state": "PREFLIGHT_IMPLEMENTED_NOT_CERTIFIED",
       "nfse_envelope_contract_version": null,
       "nfse_envelope_xsd_sha256": null,
       "nfse_envelope_xml_signature_ci_sha": null,
@@ -316,7 +352,11 @@
       "nfse_current_restricted_schema_tested": false,
       "nfse_numbering_sequential_authority": false,
       "nfse_integration_web_e2e_certified": false,
-      "nfce_qr_version_contract_certified": false
+      "nfce_qr_version_contract_certified": false,
+      "nfce_mg65_target_provenance": "https://portalsped.fazenda.mg.gov.br/spedmg/nfce/web-services/",
+      "nfce_qr_generation_and_signature_certified": false,
+      "nfce_operations_lifecycle_certified": false,
+      "nfce_runtime_binding_enabled": false
     },
     {
       "ibge": "3143302",
@@ -326,7 +366,7 @@
       "municipal_source": "https://financas.montesclaros.mg.gov.br/nota-fiscal-de-servicos-eletronica-nacional",
       "state": "CHANNEL_RESEARCHED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
-      "nfce_mg65_state": "INTERNAL_IMPLEMENTATION_PENDING",
+      "nfce_mg65_state": "PREFLIGHT_IMPLEMENTED_NOT_CERTIFIED",
       "nfse_envelope_contract_version": null,
       "nfse_envelope_xsd_sha256": null,
       "nfse_envelope_xml_signature_ci_sha": null,
@@ -347,7 +387,11 @@
       "nfse_current_restricted_schema_tested": false,
       "nfse_numbering_sequential_authority": false,
       "nfse_integration_web_e2e_certified": false,
-      "nfce_qr_version_contract_certified": false
+      "nfce_qr_version_contract_certified": false,
+      "nfce_mg65_target_provenance": "https://portalsped.fazenda.mg.gov.br/spedmg/nfce/web-services/",
+      "nfce_qr_generation_and_signature_certified": false,
+      "nfce_operations_lifecycle_certified": false,
+      "nfce_runtime_binding_enabled": false
     },
     {
       "ibge": "3144805",
@@ -357,7 +401,7 @@
       "municipal_source": "https://novalima.mg.gov.br/inicio/noticias/nova_lima_adere_ao_padrao_nacional_da_nota_fiscal_de_servicos_eletronica_nfs_e",
       "state": "CHANNEL_RESEARCHED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
-      "nfce_mg65_state": "INTERNAL_IMPLEMENTATION_PENDING",
+      "nfce_mg65_state": "PREFLIGHT_IMPLEMENTED_NOT_CERTIFIED",
       "nfse_envelope_contract_version": null,
       "nfse_envelope_xsd_sha256": null,
       "nfse_envelope_xml_signature_ci_sha": null,
@@ -379,7 +423,11 @@
       "nfse_numbering_sequential_authority": false,
       "nfse_integration_web_e2e_certified": false,
       "nfce_qr_version_contract_certified": false,
-      "simples_earlier_municipal_source": "https://novalima.mg.gov.br/inicio/noticias/nova_lima_adere_ao_padrao_nacional_da_nota_fiscal_de_servicos_eletronica_nfs_e"
+      "simples_earlier_municipal_source": "https://novalima.mg.gov.br/inicio/noticias/nova_lima_adere_ao_padrao_nacional_da_nota_fiscal_de_servicos_eletronica_nfs_e",
+      "nfce_mg65_target_provenance": "https://portalsped.fazenda.mg.gov.br/spedmg/nfce/web-services/",
+      "nfce_qr_generation_and_signature_certified": false,
+      "nfce_operations_lifecycle_certified": false,
+      "nfce_runtime_binding_enabled": false
     },
     {
       "ibge": "3151800",
@@ -389,7 +437,7 @@
       "municipal_source": "https://pocosdecaldas.mg.gov.br/noticias/prefeitura-orienta-contribuintes-sobre-emissao-da-nota-fiscal-de-servicos-no-padrao-nacional/",
       "state": "CHANNEL_RESEARCHED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
-      "nfce_mg65_state": "INTERNAL_IMPLEMENTATION_PENDING",
+      "nfce_mg65_state": "PREFLIGHT_IMPLEMENTED_NOT_CERTIFIED",
       "nfse_envelope_contract_version": null,
       "nfse_envelope_xsd_sha256": null,
       "nfse_envelope_xml_signature_ci_sha": null,
@@ -410,7 +458,11 @@
       "nfse_current_restricted_schema_tested": false,
       "nfse_numbering_sequential_authority": false,
       "nfse_integration_web_e2e_certified": false,
-      "nfce_qr_version_contract_certified": false
+      "nfce_qr_version_contract_certified": false,
+      "nfce_mg65_target_provenance": "https://portalsped.fazenda.mg.gov.br/spedmg/nfce/web-services/",
+      "nfce_qr_generation_and_signature_certified": false,
+      "nfce_operations_lifecycle_certified": false,
+      "nfce_runtime_binding_enabled": false
     },
     {
       "ibge": "3170701",
@@ -420,7 +472,7 @@
       "municipal_source": "https://www.varginha.mg.gov.br/portal/servicos/1038/servicos/",
       "state": "CHANNEL_RESEARCHED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
-      "nfce_mg65_state": "INTERNAL_IMPLEMENTATION_PENDING",
+      "nfce_mg65_state": "PREFLIGHT_IMPLEMENTED_NOT_CERTIFIED",
       "nfse_envelope_contract_version": null,
       "nfse_envelope_xsd_sha256": null,
       "nfse_envelope_xml_signature_ci_sha": null,
@@ -441,7 +493,11 @@
       "nfse_current_restricted_schema_tested": false,
       "nfse_numbering_sequential_authority": false,
       "nfse_integration_web_e2e_certified": false,
-      "nfce_qr_version_contract_certified": false
+      "nfce_qr_version_contract_certified": false,
+      "nfce_mg65_target_provenance": "https://portalsped.fazenda.mg.gov.br/spedmg/nfce/web-services/",
+      "nfce_qr_generation_and_signature_certified": false,
+      "nfce_operations_lifecycle_certified": false,
+      "nfce_runtime_binding_enabled": false
     },
     {
       "ibge": "3122306",
@@ -451,7 +507,7 @@
       "municipal_source": "https://www.divinopolis.mg.gov.br/portal/servicos/1102/roteiro-nota-fiscal---pessoa-fisica",
       "state": "CHANNEL_RESEARCHED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
-      "nfce_mg65_state": "INTERNAL_IMPLEMENTATION_PENDING",
+      "nfce_mg65_state": "PREFLIGHT_IMPLEMENTED_NOT_CERTIFIED",
       "nfse_envelope_contract_version": null,
       "nfse_envelope_xsd_sha256": null,
       "nfse_envelope_xml_signature_ci_sha": null,
@@ -472,7 +528,11 @@
       "nfse_current_restricted_schema_tested": false,
       "nfse_numbering_sequential_authority": false,
       "nfse_integration_web_e2e_certified": false,
-      "nfce_qr_version_contract_certified": false
+      "nfce_qr_version_contract_certified": false,
+      "nfce_mg65_target_provenance": "https://portalsped.fazenda.mg.gov.br/spedmg/nfce/web-services/",
+      "nfce_qr_generation_and_signature_certified": false,
+      "nfce_operations_lifecycle_certified": false,
+      "nfce_runtime_binding_enabled": false
     },
     {
       "ibge": "3104007",
@@ -482,7 +542,7 @@
       "municipal_source": "https://araxa.mg.gov.br/noticia/8610/prefeitura-de-araxa-orienta-prestadores-de-servico-sobre-nova-forma-de-emitir-nota-fiscal-em-2026",
       "state": "CHANNEL_RESEARCHED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
-      "nfce_mg65_state": "INTERNAL_IMPLEMENTATION_PENDING",
+      "nfce_mg65_state": "PREFLIGHT_IMPLEMENTED_NOT_CERTIFIED",
       "nfse_envelope_contract_version": null,
       "nfse_envelope_xsd_sha256": null,
       "nfse_envelope_xml_signature_ci_sha": null,
@@ -504,7 +564,11 @@
       "nfse_numbering_sequential_authority": false,
       "nfse_integration_web_e2e_certified": false,
       "nfce_qr_version_contract_certified": false,
-      "simples_earlier_municipal_source": "https://araxa.mg.gov.br/noticia/8610/prefeitura-de-araxa-orienta-prestadores-de-servico-sobre-nova-forma-de-emitir-nota-fiscal-em-2026"
+      "simples_earlier_municipal_source": "https://araxa.mg.gov.br/noticia/8610/prefeitura-de-araxa-orienta-prestadores-de-servico-sobre-nova-forma-de-emitir-nota-fiscal-em-2026",
+      "nfce_mg65_target_provenance": "https://portalsped.fazenda.mg.gov.br/spedmg/nfce/web-services/",
+      "nfce_qr_generation_and_signature_certified": false,
+      "nfce_operations_lifecycle_certified": false,
+      "nfce_runtime_binding_enabled": false
     },
     {
       "ibge": "3127701",
@@ -514,7 +578,7 @@
       "municipal_source": null,
       "state": "RESEARCH_REQUIRED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
-      "nfce_mg65_state": "INTERNAL_IMPLEMENTATION_PENDING",
+      "nfce_mg65_state": "PREFLIGHT_IMPLEMENTED_NOT_CERTIFIED",
       "nfse_envelope_contract_version": null,
       "nfse_envelope_xsd_sha256": null,
       "nfse_envelope_xml_signature_ci_sha": null,
@@ -534,7 +598,11 @@
       "nfse_current_restricted_schema_tested": false,
       "nfse_numbering_sequential_authority": false,
       "nfse_integration_web_e2e_certified": false,
-      "nfce_qr_version_contract_certified": false
+      "nfce_qr_version_contract_certified": false,
+      "nfce_mg65_target_provenance": "https://portalsped.fazenda.mg.gov.br/spedmg/nfce/web-services/",
+      "nfce_qr_generation_and_signature_certified": false,
+      "nfce_operations_lifecycle_certified": false,
+      "nfce_runtime_binding_enabled": false
     },
     {
       "ibge": "3148004",
@@ -544,7 +612,7 @@
       "municipal_source": "https://www.patosdeminas.mg.gov.br/portal/secretarias-paginas/76/nfs-e-nacional/",
       "state": "CHANNEL_RESEARCHED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
-      "nfce_mg65_state": "INTERNAL_IMPLEMENTATION_PENDING",
+      "nfce_mg65_state": "PREFLIGHT_IMPLEMENTED_NOT_CERTIFIED",
       "nfse_envelope_contract_version": null,
       "nfse_envelope_xsd_sha256": null,
       "nfse_envelope_xml_signature_ci_sha": null,
@@ -566,7 +634,11 @@
       "nfse_numbering_sequential_authority": false,
       "nfse_integration_web_e2e_certified": false,
       "nfce_qr_version_contract_certified": false,
-      "simples_earlier_municipal_source": "https://www.patosdeminas.mg.gov.br/portal/secretarias-paginas/76/nfs-e-nacional/"
+      "simples_earlier_municipal_source": "https://www.patosdeminas.mg.gov.br/portal/secretarias-paginas/76/nfs-e-nacional/",
+      "nfce_mg65_target_provenance": "https://portalsped.fazenda.mg.gov.br/spedmg/nfce/web-services/",
+      "nfce_qr_generation_and_signature_certified": false,
+      "nfce_operations_lifecycle_certified": false,
+      "nfce_runtime_binding_enabled": false
     },
     {
       "ibge": "3118007",
@@ -576,7 +648,7 @@
       "municipal_source": "https://www.congonhas.mg.gov.br/index.php/congonhas-adota-novo-modelo-nacional-de-emissao-da-nota-fiscal-de-servicos-eletronica-nfs-e/",
       "state": "CHANNEL_RESEARCHED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
-      "nfce_mg65_state": "INTERNAL_IMPLEMENTATION_PENDING",
+      "nfce_mg65_state": "PREFLIGHT_IMPLEMENTED_NOT_CERTIFIED",
       "nfse_envelope_contract_version": null,
       "nfse_envelope_xsd_sha256": null,
       "nfse_envelope_xml_signature_ci_sha": null,
@@ -598,7 +670,11 @@
       "nfse_numbering_sequential_authority": false,
       "nfse_integration_web_e2e_certified": false,
       "nfce_qr_version_contract_certified": false,
-      "simples_earlier_municipal_source": "https://www.congonhas.mg.gov.br/index.php/congonhas-adota-novo-modelo-nacional-de-emissao-da-nota-fiscal-de-servicos-eletronica-nfs-e/"
+      "simples_earlier_municipal_source": "https://www.congonhas.mg.gov.br/index.php/congonhas-adota-novo-modelo-nacional-de-emissao-da-nota-fiscal-de-servicos-eletronica-nfs-e/",
+      "nfce_mg65_target_provenance": "https://portalsped.fazenda.mg.gov.br/spedmg/nfce/web-services/",
+      "nfce_qr_generation_and_signature_certified": false,
+      "nfce_operations_lifecycle_certified": false,
+      "nfce_runtime_binding_enabled": false
     },
     {
       "ibge": "3131703",
@@ -608,7 +684,7 @@
       "municipal_source": null,
       "state": "RESEARCH_REQUIRED",
       "nfe_mg55_state": "REUSE_STATE_GATE_IN_PROGRESS",
-      "nfce_mg65_state": "INTERNAL_IMPLEMENTATION_PENDING",
+      "nfce_mg65_state": "PREFLIGHT_IMPLEMENTED_NOT_CERTIFIED",
       "nfse_envelope_contract_version": null,
       "nfse_envelope_xsd_sha256": null,
       "nfse_envelope_xml_signature_ci_sha": null,
@@ -628,7 +704,11 @@
       "nfse_current_restricted_schema_tested": false,
       "nfse_numbering_sequential_authority": false,
       "nfse_integration_web_e2e_certified": false,
-      "nfce_qr_version_contract_certified": false
+      "nfce_qr_version_contract_certified": false,
+      "nfce_mg65_target_provenance": "https://portalsped.fazenda.mg.gov.br/spedmg/nfce/web-services/",
+      "nfce_qr_generation_and_signature_certified": false,
+      "nfce_operations_lifecycle_certified": false,
+      "nfce_runtime_binding_enabled": false
     }
   ],
   "federal_national_simples_rule": {
@@ -674,6 +754,14 @@
       "3144805": "2026-01-01",
       "3148004": "2026-01-01",
       "3167202": "2026-01-01"
+    },
+    "mg65_increment": {
+      "scope": "Dedicated model65 homologation gateway target, pinned separate SEFAZ endpoint and strict QR URL preflight; runtime not composed.",
+      "source": "https://portalsped.fazenda.mg.gov.br/spedmg/nfce/web-services/",
+      "status": "PREFLIGHT_ONLY",
+      "operations": "MISSING",
+      "qr_v3_signature_proof": "MISSING",
+      "tenant_binding_runtime": "NOT_ENABLED"
     }
   }
 }
