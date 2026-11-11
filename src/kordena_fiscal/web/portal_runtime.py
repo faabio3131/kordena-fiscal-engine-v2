@@ -947,8 +947,11 @@ class DurableHumanPortalExecutor:
         from kordena_fiscal.issuance import (
             NfseAuthorizationRequest, NfseCanonicalDocument, NfseServiceLine,
         )
+        from kordena_fiscal.gateway.webiss_2026_schema import (
+            load_pinned_extrema_webiss_rtc_schema,
+        )
         from kordena_fiscal.issuance.webiss_extrema_builder import (
-            ExtremaRpsIntent, ExtremaServiceTaker,
+            ExtremaRpsIntent, ExtremaServiceTaker, build_extrema_rps_xml,
         )
         from kordena_fiscal.security.human_identity import PortalRole\n        from kordena_fiscal.numbering import FiscalNumberReservation
 
@@ -1081,13 +1084,14 @@ class DurableHumanPortalExecutor:
                 service_taker_reference="cnpj:" + issuer_cnpj.value,
             )
             request = NfseAuthorizationRequest.build(document)
+            _, validator = load_pinned_extrema_webiss_rtc_schema()
             taker = ExtremaServiceTaker(
                 reference=document.service_taker_reference or "",
                 cnpj=issuer_cnpj,
                 legal_name=str(payload["taker_name"]).strip(),
             )
             def reviewed_intent(reservation: FiscalNumberReservation) -> ExtremaRpsIntent:
-                return ExtremaRpsIntent(
+                municipal = ExtremaRpsIntent(
                     request_fingerprint=request.request_fingerprint,
                     issuer_cnpj=profile.cnpj, reservation=reservation,
                     rule_reference=rule_reference,
@@ -1101,6 +1105,11 @@ class DurableHumanPortalExecutor:
                     rtc_tax_class=str(payload["rtc_tax_class"]),
                     taker=taker,
                 )
+                # Official RTC XSD is a mandatory PRE-COMMIT gate.
+                # An invalid classification must not consume an immutable
+                # source reference or allocate a supposedly prepared RPS.
+                build_extrema_rps_xml(request, municipal, validator=validator)
+                return municipal
             result = app.prepare_nfse_authorization(
                 document, occurred_at=datetime.now(UTC),
                 retention=RetentionPolicyMetadata(
