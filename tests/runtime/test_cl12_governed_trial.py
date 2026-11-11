@@ -128,12 +128,12 @@ def test_trial_provisions_nfcore_identity_owner_temporary_subscription_and_repla
     assert replay.subscription.subscription_id == started.subscription.subscription_id
 
 
-def test_trial_duplicate_email_different_request_fails_closed(
+def test_trial_new_request_key_recovers_exact_pending_reservation_without_renewal(
     database: PostgresFiscalDatabase,
 ) -> None:
     _publish_trial_pricing(database)
     composition = build_postgres_runtime_composition(database)
-    composition.commercial_trial.begin(
+    first = composition.commercial_trial.begin(
         plan_id="growth",
         price_id="growth-monthly",
         buyer_email="duplicate@example.com",
@@ -141,16 +141,301 @@ def test_trial_duplicate_email_different_request_fails_closed(
         idempotency_key="cl12-trial-idempotency-0002",
         now=NOW,
     )
+    retry = composition.commercial_trial.begin(
+        plan_id="growth",
+        price_id="growth-monthly",
+        buyer_email="duplicate@example.com",
+        legal_name="Duplicate Customer LTDA",
+        idempotency_key="cl12-trial-idempotency-0003",
+        now=NOW + timedelta(minutes=1),
+    )
+    assert retry.replay is True
+    assert retry.purchase.purchase_id == first.purchase.purchase_id
+    assert retry.purchase.tenant_id == first.purchase.tenant_id
+    assert retry.subscription.subscription_id == first.subscription.subscription_id
+    assert retry.expires_at == first.expires_at == NOW + timedelta(days=14)
+    assert retry.activation_reset is not None
+    assert first.activation_reset is not None
+    assert retry.activation_reset.reset_token != first.activation_reset.reset_token
+    with database.connection() as conn:
+        purchases = conn.execute(
+            "SELECT count(*) FROM fm_commercial_purchases "
+            "WHERE provider_id = ? AND buyer_email = ?",
+            ("nfcore-trial", "duplicate@example.com"),
+        ).fetchone()
+    assert purchases is not None and purchases[0] == 1
 
-    with pytest.raises(CommercialFulfillmentError, match="existing account"):
+
+def test_trial_new_request_key_never_changes_existing_company_or_plan(
+    database: PostgresFiscalDatabase,
+) -> None:
+    _publish_trial_pricing(database)
+    composition = build_postgres_runtime_composition(database)
+    original = composition.commercial_trial.begin(
+        plan_id="growth",
+        price_id="growth-monthly",
+        buyer_email="conflict@example.com",
+        legal_name="Canonical Customer LTDA",
+        idempotency_key="cl12-trial-original-0001",
+        now=NOW,
+    )
+    for kwargs in (
+        {"legal_name": "Other Customer LTDA"},
+        {"plan_id": "foundation"},
+        {"price_id": "different-monthly"},
+    ):
+        candidate = dict(
+            plan_id="growth",
+            price_id="growth-monthly",
+            buyer_email="conflict@example.com",
+            legal_name="Canonical Customer LTDA",
+            idempotency_key="cl12-trial-different-0001",
+            now=NOW + timedelta(minutes=1),
+        )
+        candidate.update(kwargs)
+        with pytest.raises(CommercialFulfillmentError):
+            composition.commercial_trial.begin(**candidate)
+    with database.unit_of_work() as uow:
+        org = uow.control_plane.get_organization(original.purchase.tenant_id or "")
+    assert org is not None and org.legal_name == "Canonical Customer LTDA"
+
+
+
+def test_trial_recovery_denies_foreign_or_elevated_owner_even_with_matching_offer(
+    database: PostgresFiscalDatabase,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from dataclasses import replace
+    from types import SimpleNamespace
+
+    _publish_trial_pricing(database)
+    composition = build_postgres_runtime_composition(database)
+    first = composition.commercial_trial.begin(
+        plan_id="growth",
+        price_id="growth-monthly",
+        buyer_email="isolated@example.com",
+        legal_name="Isolated Customer LTDA",
+        idempotency_key="cl12-trial-isolated-0001",
+        now=NOW,
+    )
+    owner = database.human_accounts().by_email("isolated@example.com")
+    assert owner is not None
+    assert first.purchase.tenant_id == owner.tenant_id
+
+    for forged in (
+        replace(owner, tenant_id="another-tenant"),
+        replace(owner, platform_admin=True),
+        replace(owner, enabled=False),
+    ):
+        monkeypatch.setattr(
+            composition.commercial_trial,
+            "_accounts",
+            SimpleNamespace(by_email=lambda _email, forged=forged: forged),
+        )
+        with pytest.raises(CommercialFulfillmentError):
+            composition.commercial_trial.begin(
+                plan_id="growth",
+                price_id="growth-monthly",
+                buyer_email="isolated@example.com",
+                legal_name="Isolated Customer LTDA",
+                idempotency_key="cl12-trial-isolated-0002",
+                now=NOW + timedelta(minutes=1),
+            )
+
+
+
+def test_trial_recovers_committed_reservation_after_interrupted_provisioning(
+    database: PostgresFiscalDatabase,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _publish_trial_pricing(database)
+    composition = build_postgres_runtime_composition(database)
+    original_provision = composition.commercial_trial._activation.provision
+
+    def interrupted(*, purchase_id: str, now: datetime) -> None:
+        del purchase_id, now
+        raise RuntimeError("synthetic interrupted after reservation commit")
+
+    monkeypatch.setattr(composition.commercial_trial._activation, "provision", interrupted)
+    with pytest.raises(RuntimeError, match="synthetic interrupted"):
         composition.commercial_trial.begin(
             plan_id="growth",
             price_id="growth-monthly",
-            buyer_email="duplicate@example.com",
-            legal_name="Duplicate Customer LTDA",
-            idempotency_key="cl12-trial-idempotency-0003",
-            now=NOW + timedelta(minutes=1),
+            buyer_email="interrupted@example.com",
+            legal_name="Interrupted Customer LTDA",
+            idempotency_key="cl12-trial-interrupted-0001",
+            now=NOW,
         )
+    monkeypatch.setattr(
+        composition.commercial_trial._activation, "provision", original_provision,
+    )
+    retry = composition.commercial_trial.begin(
+        plan_id="growth",
+        price_id="growth-monthly",
+        buyer_email="interrupted@example.com",
+        legal_name="Interrupted Customer LTDA",
+        idempotency_key="cl12-trial-interrupted-0002",
+        now=NOW + timedelta(minutes=1),
+    )
+    assert retry.replay is True
+    assert retry.purchase.state.value == "activation_pending"
+    assert retry.expires_at == NOW + timedelta(days=14)
+    assert retry.activation_reset is not None
+    with database.connection() as conn:
+        purchases = conn.execute(
+            "SELECT count(*) FROM fm_commercial_purchases "
+            "WHERE provider_id = ? AND buyer_email = ?",
+            ("nfcore-trial", "interrupted@example.com"),
+        ).fetchone()
+    assert purchases is not None and purchases[0] == 1
+
+
+
+def test_trial_retries_after_activation_committed_but_http_response_lost(
+    database: PostgresFiscalDatabase,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _publish_trial_pricing(database)
+    composition = build_postgres_runtime_composition(database)
+    actual_provision = composition.commercial_trial._activation.provision
+    first_purchase_id: list[str] = []
+
+    def lost_response(*, purchase_id: str, now: datetime) -> None:
+        result = actual_provision(purchase_id=purchase_id, now=now)
+        first_purchase_id.append(result.purchase.purchase_id)
+        raise RuntimeError("synthetic response lost after durable activation")
+
+    monkeypatch.setattr(composition.commercial_trial._activation, "provision", lost_response)
+    with pytest.raises(RuntimeError, match="response lost"):
+        composition.commercial_trial.begin(
+            plan_id="growth", price_id="growth-monthly",
+            buyer_email="committed@example.com", legal_name="Committed Customer LTDA",
+            idempotency_key="cl12-trial-committed-0001", now=NOW,
+        )
+    monkeypatch.setattr(
+        composition.commercial_trial._activation, "provision", actual_provision,
+    )
+    recovered = composition.commercial_trial.begin(
+        plan_id="growth", price_id="growth-monthly",
+        buyer_email="committed@example.com", legal_name="Committed Customer LTDA",
+        idempotency_key="cl12-trial-committed-0002",
+        now=NOW + timedelta(minutes=1),
+    )
+    assert recovered.replay is True
+    assert recovered.purchase.purchase_id == first_purchase_id[0]
+    assert recovered.expires_at == NOW + timedelta(days=14)
+    assert recovered.activation_reset is not None
+    owner = database.human_accounts().by_email("committed@example.com")
+    assert owner is not None
+    assert owner.role is PortalRole.OWNER
+    assert owner.tenant_id == recovered.purchase.tenant_id
+    with database.connection() as conn:
+        purchases = conn.execute(
+            "SELECT count(*) FROM fm_commercial_purchases "
+            "WHERE provider_id = ? AND buyer_email = ?",
+            ("nfcore-trial", "committed@example.com"),
+        ).fetchone()
+    assert purchases is not None and purchases[0] == 1
+
+
+def test_trial_cannot_restart_after_activation_or_expiry(
+    database: PostgresFiscalDatabase,
+) -> None:
+    _publish_trial_pricing(database)
+    composition = build_postgres_runtime_composition(database)
+    started = composition.commercial_trial.begin(
+        plan_id="growth",
+        price_id="growth-monthly",
+        buyer_email="closed@example.com",
+        legal_name="Closed Customer LTDA",
+        idempotency_key="cl12-trial-closed-0001",
+        now=NOW,
+    )
+    assert started.purchase.account_id is not None
+    composition.commercial_activation.mark_active(
+        account_id=started.purchase.account_id,
+        now=NOW + timedelta(minutes=1),
+    )
+    with pytest.raises(CommercialFulfillmentError):
+        composition.commercial_trial.begin(
+            plan_id="growth",
+            price_id="growth-monthly",
+            buyer_email="closed@example.com",
+            legal_name="Closed Customer LTDA",
+            idempotency_key="cl12-trial-closed-0002",
+            now=NOW + timedelta(minutes=2),
+        )
+    expiring = composition.commercial_trial.begin(
+        plan_id="growth",
+        price_id="growth-monthly",
+        buyer_email="elapsed@example.com",
+        legal_name="Elapsed Customer LTDA",
+        idempotency_key="cl12-trial-expiring-0001",
+        now=NOW,
+    )
+    composition.commercial_trial.expire(
+        purchase_id=expiring.purchase.purchase_id, now=NOW + timedelta(days=14),
+    )
+    with pytest.raises(CommercialFulfillmentError):
+        composition.commercial_trial.begin(
+            plan_id="growth",
+            price_id="growth-monthly",
+            buyer_email="elapsed@example.com",
+            legal_name="Elapsed Customer LTDA",
+            idempotency_key="cl12-trial-expiring-0002",
+            now=NOW + timedelta(days=14, minutes=1),
+        )
+
+def test_unresolvable_published_plan_is_denied_before_email_reservation(
+    database: PostgresFiscalDatabase,
+) -> None:
+    comp = build_postgres_runtime_composition(database)
+    price = PriceDefinition(
+        price_id="unknown-edition-monthly",
+        currency="BRL",
+        cadence=BillingCadence.MONTHLY,
+        base_amount=Decimal("99.00"),
+    )
+    comp.pricing_administration.publish(
+        actor=AdminPrincipal(
+            actor_id="synthetic-pricing-admin",
+            permissions=frozenset({ControlPlanePermission.COMMERCIAL_CONFIG_WRITE}),
+            global_scope=True,
+        ),
+        configuration=CommercialPricingConfiguration(
+            configuration_id="cl12-invalid-edition",
+            version=1,
+            prices=(price,),
+            plans=(
+                PlanDefinition(
+                    plan_id="invalid-edition",
+                    display_name="Invalid Edition",
+                    edition_id="not-in-canonical-product-catalog",
+                    price_ids=(price.price_id,),
+                    trial_days=14,
+                ),
+            ),
+        ),
+        expected_version=None,
+        correlation_id="cl12-unresolvable-edition",
+        published_at=NOW,
+    )
+    with pytest.raises(CommercialFulfillmentError, match="not provisionable"):
+        comp.commercial_trial.begin(
+            plan_id="invalid-edition",
+            price_id=price.price_id,
+            buyer_email="no-reservation@example.test",
+            legal_name="Unresolvable Edition LTDA",
+            idempotency_key="cl12-invalid-edition-attempt",
+            now=NOW,
+        )
+    with database.connection() as conn:
+        rows = conn.execute(
+            "SELECT count(*) FROM fm_commercial_purchases WHERE buyer_email = ?",
+            ("no-reservation@example.test",),
+        ).fetchone()
+    assert rows is not None and rows[0] == 0
+    assert database.human_accounts().by_email("no-reservation@example.test") is None
 
 
 def test_trial_requires_explicit_trial_days_and_never_grants_fiscal_production(
