@@ -2,7 +2,7 @@
 
 The public Extrema WebISS WSDL advertises SOAP actions for GerarNfse,
 RecepcionarLoteRps and ConsultarLoteRps. This transport reuses the existing
-ABRASF 2.03 XML/XSD/XMLDSig preparer and the canonical DURABLE unit binding.
+ABRASF preparer with the municipality-pinned 2.02 RTC XML/XSD/XMLDSig contract and the canonical DURABLE unit binding.
 The provider's municipality-specific schema version is not certified here:
 do not register this adapter as production-ready until WSDL/XSD parity,
 credentials, municipal ISS rules and official responses are proved.
@@ -128,6 +128,82 @@ def _expected_webiss_signature_count(
     return _EXPECTED_SIGNATURE_COUNTS[operation]
 
 
+def _signed_fiscal_targets(
+    operation: Abrasf203Operation, root: etree._Element,
+) -> tuple[etree._Element, ...]:
+    """Identify precisely which fiscal nodes each XMLDSig must protect.
+
+    Mere signature count and a unique Id do not prove the invoice's RPS,
+    cancellation intention or batch were signed. Never accept an alternate
+    valid XML node in place of the expected fiscal target.
+    """
+    ns = {"a": "http://www.abrasf.org.br/nfse.xsd"}
+    if operation is Abrasf203Operation.GENERATE:
+        paths = ("a:Rps/a:InfDeclaracaoPrestacaoServico",)
+    elif operation in (
+        Abrasf203Operation.SUBMIT_BATCH, Abrasf203Operation.SUBMIT_BATCH_SYNC,
+    ):
+        rps_nodes = root.findall(
+            "a:LoteRps/a:ListaRps/a:Rps/a:InfDeclaracaoPrestacaoServico", ns,
+        )
+        batch = root.find("a:LoteRps", ns)
+        if not rps_nodes or batch is None:
+            raise WebissMgContractError("WebISS signed RPS batch is incomplete")
+        return (*rps_nodes, batch)
+    elif operation is Abrasf203Operation.CANCEL:
+        paths = ("a:Pedido/a:InfPedidoCancelamento",)
+    elif operation is Abrasf203Operation.SUBSTITUTE:
+        paths = (
+            "a:SubstituicaoNfse/a:Pedido/a:InfPedidoCancelamento",
+            "a:SubstituicaoNfse/a:Rps/a:InfDeclaracaoPrestacaoServico",
+            "a:SubstituicaoNfse",
+        )
+    else:
+        return ()
+    nodes = tuple(root.find(path, ns) for path in paths)
+    if any(node is None for node in nodes):
+        raise WebissMgContractError("WebISS required signed fiscal target is missing")
+    return tuple(node for node in nodes if node is not None)
+
+
+def _require_fiscal_signature_coverage(
+    operation: Abrasf203Operation, root: etree._Element,
+) -> None:
+    targets = _signed_fiscal_targets(operation, root)
+    signatures = root.findall(f".//{{{_DS}}}Signature")
+    if len(targets) != len(signatures):
+        raise WebissMgContractError("WebISS signed fiscal target coverage is incomplete")
+    expected: dict[str, etree._Element] = {}
+    for target in targets:
+        identifier = target.get("Id")
+        if (
+            not identifier
+            or identifier in expected
+            or sum(node.get("Id") == identifier for node in root.iter()) != 1
+        ):
+            raise WebissMgContractError("WebISS fiscal signature target Id is invalid")
+        expected[identifier] = target
+    seen: set[str] = set()
+    for signature in signatures:
+        references = signature.findall(
+            f"{{{_DS}}}SignedInfo/{{{_DS}}}Reference"
+        )
+        if len(references) != 1:
+            raise WebissMgContractError("WebISS fiscal signature requires one reference")
+        identity = references[0].get("URI", "")
+        if not identity.startswith("#"):
+            raise WebissMgContractError("WebISS fiscal signature reference is not local")
+        key = identity[1:]
+        target = expected.get(key)
+        if key in seen or target is None or signature.getparent() is not target.getparent():
+            raise WebissMgContractError(
+                "WebISS XMLDSig does not cover the required fiscal intention"
+            )
+        seen.add(key)
+    if seen != set(expected):
+        raise WebissMgContractError("WebISS fiscal signature coverage mismatch")
+
+
 def _validate_request_envelope(
     envelope: Abrasf203Envelope,
     operation: Abrasf203Operation,
@@ -212,6 +288,7 @@ def _validate_request_envelope(
                 raise WebissMgContractError(
                     "Unexpected WebISS signature count for fiscal operation"
                 )
+            _require_fiscal_signature_coverage(operation, inner)
             for signature in signatures:
                 ref = signature.find(
                     "{http://www.w3.org/2000/09/xmldsig#}SignedInfo/"
