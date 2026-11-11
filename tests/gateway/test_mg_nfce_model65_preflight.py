@@ -108,6 +108,16 @@ def test_nfce_rejects_wrong_qr_origin_and_mismatched_access_key(
         _validate_mg_authorization_scope(req, model=65)
 
 
+def test_nfce_refuses_asynchronous_one_invoice_batch() -> None:
+    req = _with_qr(_request(model=ElectronicInvoiceModel.NFCE))
+    asynchronous = replace(
+        req,
+        signed_xml=req.signed_xml.replace(b"<indSinc>1</indSinc>", b"<indSinc>0</indSinc>"),
+    )
+    with pytest.raises(OfficialNfeTransportError, match="synchronous"):
+        _validate_mg_authorization_scope(asynchronous, model=65)
+
+
 def test_nfce_preflight_recognizes_a_structurally_bound_official_qr() -> None:
     req = _with_qr(_request(model=ElectronicInvoiceModel.NFCE))
     _validate_mg_authorization_scope(req, model=65)
