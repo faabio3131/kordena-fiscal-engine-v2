@@ -584,3 +584,30 @@ def test_returned_nfse_must_belong_to_scoped_issuer_and_city(
             issuer_cnpj=Cnpj(CNPJ),
             municipality_ibge="3125101",
         )
+
+
+def test_extrema_has_no_implicit_municipal_http_route_before_wsdl_approval() -> None:
+    """A public portal address is not proof of an operational fiscal SOAP URL."""
+    provider, certificate = Mock(), Mock()
+    provider.resolve_provider_id.return_value = EXTREMA_WEBISS_PROVIDER_ID
+    gateway = WebissExtremaHomologationTransport(
+        provider_resolver=provider,
+        resolve_certificate=certificate,
+        municipal_schema_evidence=_synthetic_evidence("3125101"),
+        municipal_schema_validator=_validator(),
+        # No exchange: the municipal WSDL/endpoint has not been certified.
+    )
+    with pytest.raises(
+        WebissMgContractError, match="city-specific homologation URL"
+    ):
+        gateway.exchange_prepared(
+            envelope=_envelope(Abrasf203Operation.QUERY_BATCH),
+            operation=Abrasf203Operation.QUERY_BATCH,
+            scope=_request().scope,
+            issuer_cnpj=Cnpj(CNPJ),
+            issuer_tax_regime=TaxRegimeCode.NORMAL,
+            competence_date=date(2026, 10, 31),
+            jurisdiction=EXTREMA,
+        )
+    assert provider.resolve_provider_id.call_count == 1
+    certificate.assert_not_called()
