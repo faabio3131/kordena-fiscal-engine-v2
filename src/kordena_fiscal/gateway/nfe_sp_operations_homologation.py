@@ -24,8 +24,8 @@ from kordena_fiscal.domain import (
 from kordena_fiscal.gateway.authorization import GatewayProviderMetadata
 from kordena_fiscal.gateway.fiscal_tls import RejectFiscalRedirects
 from kordena_fiscal.gateway.nfe_sp_homologation import (
-    MG_NFE_HOMOLOGATION_PROVIDER_ID,
     MG_NFCE_HOMOLOGATION_PROVIDER_ID,
+    MG_NFE_HOMOLOGATION_PROVIDER_ID,
     NFE_NAMESPACE,
     SOAP12_NAMESPACE,
     HomologationAuthorizationTarget,
@@ -332,7 +332,8 @@ class SefazHomologationOperationsGateway:
             raise OfficialNfeOperationsError("Only homologation inutilization allowed")
         if request.model.value != int(self._model):
             raise OfficialNfeOperationsError(
-                f"Inutilization model {request.model.value} disagrees with gateway model {self._model}"
+                f"Inutilization model {request.model.value} disagrees with "
+                f"gateway model {self._model}"
             )
         if self._resolve_issuer is None:
             raise OfficialNfeOperationsError("Emitente da unidade não configurado")
