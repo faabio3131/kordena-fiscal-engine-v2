@@ -18,6 +18,7 @@ from kordena_fiscal.application.commercial_activation import (
     CommercialCustomerActivationService,
 )
 from kordena_fiscal.product.billing import CommercialSubscription, SubscriptionStatus
+from kordena_fiscal.product.catalog import DEFAULT_COMMERCIAL_CATALOG, ProductCatalogError
 from kordena_fiscal.product.commercial_fulfillment import (
     CanonicalCommercialUnitOfWorkFactory,
     CommercialFulfillmentError,
@@ -27,7 +28,7 @@ from kordena_fiscal.product.commercial_fulfillment import (
     commercial_purchase_id,
 )
 from kordena_fiscal.product.pricing import CommercialPricingConfiguration
-from kordena_fiscal.security.human_identity import HumanAccountRepository
+from kordena_fiscal.security.human_identity import HumanAccountRepository, PortalRole
 from kordena_fiscal.security.human_recovery import IssuedPasswordReset
 
 
@@ -134,6 +135,14 @@ class GovernedTrialService:
             raise CommercialFulfillmentError("selected trial price does not belong to plan")
         if not pricing.price(price_id).enabled:
             raise CommercialFulfillmentError("selected trial price is disabled")
+        # Admission must not reserve a tenant before proving that the published
+        # plan can resolve the same canonical product edition as activation.
+        try:
+            DEFAULT_COMMERCIAL_CATALOG.edition(plan.edition_id)
+        except ProductCatalogError as exc:
+            raise CommercialFulfillmentError(
+                "selected trial edition is not provisionable"
+            ) from exc
 
         existing_account = self._accounts.by_email(buyer_email)
         external_order_id = f"trial-{digest[:48]}"
@@ -159,31 +168,72 @@ class GovernedTrialService:
                 # paid period or a new expiry. The original trial dates remain fixed.
                 now = max(now, current.created_at)
             else:
-                if (
-                    existing_account is not None
-                    or uow.commercial.get_trial_for_email(buyer_email) is not None
-                ):
-                    raise CommercialFulfillmentError(
-                        "trial is not available for an existing account or trial reservation"
+                # Lost response, changed tab or lost browser session must not mint
+                # a second tenant or strand an activation-pending trial. Recover
+                # only the exact pending reservation for this email and offer.
+                # The activation token is issued exclusively to the mailbox.
+                prior = uow.commercial.get_trial_for_email(buyer_email)
+                if prior is not None:
+                    self._assert_replay(
+                        prior,
+                        plan_id=plan_id,
+                        price_id=price_id,
+                        buyer_email=buyer_email,
+                        legal_name=legal_name,
                     )
-                purchase = CommercialPurchaseRecord(
-                    purchase_id=purchase_id,
-                    provider_id=self._PROVIDER_ID,
-                    external_order_id=external_order_id,
-                    plan_id=plan_id,
-                    price_id=price_id,
-                    state=CommercialPurchaseState.READY_TO_PROVISION,
-                    created_at=now,
-                    updated_at=now,
-                    last_event_at=now,
-                    last_event_id=f"trial-start-{digest[:40]}",
-                    buyer_email=buyer_email,
-                    legal_name=legal_name,
-                    tenant_id=f"tenant-{secrets.token_hex(16)}",
-                    billing_status=SubscriptionStatus.TRIAL,
-                )
-                uow.commercial.put_purchase(purchase)
-                uow.commit()
+                    if prior.state not in {
+                        CommercialPurchaseState.READY_TO_PROVISION,
+                        CommercialPurchaseState.ACTIVATION_PENDING,
+                    }:
+                        raise CommercialFulfillmentError(
+                            "trial is not awaiting activation"
+                        )
+                    if existing_account is not None and (
+                        existing_account.tenant_id != prior.tenant_id
+                        or existing_account.role is not PortalRole.OWNER
+                        or existing_account.platform_admin
+                        or not existing_account.enabled
+                        or (
+                            prior.account_id is not None
+                            and existing_account.account_id != prior.account_id
+                        )
+                    ):
+                        raise CommercialFulfillmentError(
+                            "trial reservation conflicts with existing owner"
+                        )
+                    # Activation-pending must have exactly the canonical owner.
+                    if prior.state is CommercialPurchaseState.ACTIVATION_PENDING and (
+                        existing_account is None or prior.account_id is None
+                    ):
+                        raise CommercialFulfillmentError(
+                            "trial activation owner identity is missing"
+                        )
+                    replay = True
+                    purchase = prior
+                    now = max(now, prior.created_at)
+                else:
+                    if existing_account is not None:
+                        raise CommercialFulfillmentError(
+                            "trial is not available for an existing account"
+                        )
+                    purchase = CommercialPurchaseRecord(
+                        purchase_id=purchase_id,
+                        provider_id=self._PROVIDER_ID,
+                        external_order_id=external_order_id,
+                        plan_id=plan_id,
+                        price_id=price_id,
+                        state=CommercialPurchaseState.READY_TO_PROVISION,
+                        created_at=now,
+                        updated_at=now,
+                        last_event_at=now,
+                        last_event_id=f"trial-start-{digest[:40]}",
+                        buyer_email=buyer_email,
+                        legal_name=legal_name,
+                        tenant_id=f"tenant-{secrets.token_hex(16)}",
+                        billing_status=SubscriptionStatus.TRIAL,
+                    )
+                    uow.commercial.put_purchase(purchase)
+                    uow.commit()
 
         if purchase.state is CommercialPurchaseState.ACTIVE:
             with self._unit_of_work_factory() as uow:
