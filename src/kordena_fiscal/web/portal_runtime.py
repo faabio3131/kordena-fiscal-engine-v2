@@ -953,7 +953,8 @@ class DurableHumanPortalExecutor:
         from kordena_fiscal.issuance.webiss_extrema_builder import (
             ExtremaRpsIntent, ExtremaServiceTaker, build_extrema_rps_xml,
         )
-        from kordena_fiscal.security.human_identity import PortalRole\n        from kordena_fiscal.numbering import FiscalNumberReservation
+        from kordena_fiscal.security.human_identity import PortalRole
+        from kordena_fiscal.numbering import FiscalNumberReservation
 
         fields = {
             "unit_id", "environment", "source_id", "competence_date",
@@ -966,7 +967,9 @@ class DurableHumanPortalExecutor:
         }
         key = (idempotency_key or "").strip()
         if not key or len(key) > 256 or set(payload) != fields:
-            raise _portal_error(400, "INVALID_EXTREMA_PREPARATION", "Complete fiscal review required")
+            raise _portal_error(
+                400, "INVALID_EXTREMA_PREPARATION", "Complete fiscal review required",
+            )
         if (
             authority.account.role not in {PortalRole.OWNER, PortalRole.ADMIN}
             or PortalPermission.DOCUMENT_ISSUE not in authority.permissions
@@ -985,7 +988,9 @@ class DurableHumanPortalExecutor:
             or type(payload.get("iss_withheld")) is not bool
             or type(payload.get("incentive_fiscal")) is not bool
         ):
-            raise _portal_error(403, "EXTREMA_FISCAL_REVIEW_REQUIRED", "Authorized fiscal review required")
+            raise _portal_error(
+                403, "EXTREMA_FISCAL_REVIEW_REQUIRED", "Authorized fiscal review required",
+            )
         unit = str(payload["unit_id"]).strip()
         try:
             authority.assert_permission(PortalPermission.CONFIGURATION_WRITE, unit_id=unit)
@@ -1032,7 +1037,10 @@ class DurableHumanPortalExecutor:
             ).hexdigest()[:40]
             with self._unit_of_work_factory() as uow:
                 registration = uow.control_plane.get_unit(authority.tenant_id, unit)
-                if registration is None or scope.environment not in registration.enabled_environments:
+                if (
+                    registration is None
+                    or scope.environment not in registration.enabled_environments
+                ):
                     raise FiscalValidationError("Unit is not enabled for municipal homologation")
                 profile = uow.control_plane.resolve_profile(
                     host_namespace="fm-nfcore", tenant_id=authority.tenant_id,
@@ -1046,7 +1054,9 @@ class DurableHumanPortalExecutor:
                 or municipality.municipality_ibge_code != EXTREMA_IBGE
                 or str(payload["incidence_municipality"]) != EXTREMA_IBGE
             ):
-                raise FiscalValidationError("Municipal emitter or incidence does not belong to Extrema")
+                raise FiscalValidationError(
+                    "Municipal emitter or incidence does not belong to Extrema"
+                )
             app = FiscalApplicationService(self._unit_of_work_factory)
             provider = app.resolve_configured_provider_id(
                 scope=scope, document_kind=FiscalDocumentKind.NFSE,
@@ -1140,7 +1150,9 @@ class DurableHumanPortalExecutor:
                 409, "EXTREMA_PREPARATION_CONFLICT", "Original fiscal facts must be preserved",
             ) from exc
         except (FiscalValidationError, ValueError, InvalidOperation, OverflowError) as exc:
-            raise _portal_error(400, "INVALID_EXTREMA_PREPARATION", "Reviewed fiscal facts invalid") from exc
+            raise _portal_error(
+                400, "INVALID_EXTREMA_PREPARATION", "Reviewed fiscal facts invalid",
+            ) from exc
 
     def _register_fiscal_profile(
         self,
