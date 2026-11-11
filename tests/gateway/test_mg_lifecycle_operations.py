@@ -35,7 +35,10 @@ from kordena_fiscal.operations import (
     InutilizationRequest,
 )
 from kordena_fiscal.persistence.sqlite import SqliteFiscalDatabase
-from kordena_fiscal.runtime.canonical_fiscal_composition import build_runtime_fiscal_handler_factory
+from kordena_fiscal.runtime.canonical_fiscal_composition import (
+    _GovernedMgQueryGateway,
+    build_runtime_fiscal_handler_factory,
+)
 from kordena_fiscal.xml.official_operation_schema import ROOTS, OfficialOperationXmlValidator
 
 NS = "http://www.portalfiscal.inf.br/nfe"
@@ -167,6 +170,78 @@ def test_canonical_query_dispatches_mg_only_for_exact_enabled_binding(
         scope=scope, issuer_cnpj=original.access_key.issuer_identifier,
     )
     exchange.assert_called_once()
+
+
+def test_canonical_mg55_cancellation_dispatch_requires_exact_enabled_binding():
+    """Cancellation must not silently fall back to SP or another provider."""
+    request = _cancel()
+    application = Mock()
+    mg = Mock()
+    legacy = Mock()
+    dispatcher = _GovernedMgQueryGateway(
+        application=application, mg=mg, legacy=legacy,
+    )
+    application.resolve_configured_provider_id.return_value = "wrong-provider"
+    with pytest.raises(FiscalValidationError, match="cancelamento MG"):
+        dispatcher.cancel(request)
+    mg.cancel.assert_not_called()
+    legacy.cancel.assert_not_called()
+
+    expected = object()
+    mg.cancel.return_value = expected
+    application.resolve_configured_provider_id.return_value = MG_NFE_HOMOLOGATION_PROVIDER_ID
+    assert dispatcher.cancel(request) is expected
+    mg.cancel.assert_called_once_with(request)
+    legacy.cancel.assert_not_called()
+    kwargs = application.resolve_configured_provider_id.call_args.kwargs
+    assert kwargs["scope"] == request.scope
+    assert kwargs["document_kind"] is FiscalDocumentKind.NFE
+    assert kwargs["jurisdiction"] == BrazilianJurisdiction("MG")
+    assert kwargs["operation"] == ConfiguredFiscalOperation.CANCEL.value
+
+
+def test_mg_cancellation_never_routes_wrong_model_or_environment_through_vault():
+    application, mg, legacy = Mock(), Mock(), Mock()
+    dispatcher = _GovernedMgQueryGateway(
+        application=application, mg=mg, legacy=legacy,
+    )
+    original = _cancel()
+    invalid_requests = (
+        replace(original, scope=replace(
+            original.scope, environment=FiscalEnvironment.PRODUCTION,
+        )),
+        CancellationRequest.build(
+            scope=original.scope,
+            access_key=_request(model=ElectronicInvoiceModel.NFCE).access_key,
+            authorization_protocol=original.authorization_protocol,
+            justification=original.justification,
+        ),
+    )
+    for invalid in invalid_requests:
+        with pytest.raises(FiscalValidationError):
+            dispatcher.cancel(invalid)
+    mg.cancel.assert_not_called()
+    legacy.cancel.assert_not_called()
+    application.resolve_configured_provider_id.assert_not_called()
+
+
+def test_sp_cancellation_remains_in_legacy_adapter():
+    application, mg, legacy = Mock(), Mock(), Mock()
+    request = CancellationRequest.build(
+        scope=_cancel().scope,
+        access_key=_request(uf="35").access_key,
+        authorization_protocol="135260000000001",
+        justification="Cancelamento sintetico de SP preservado",
+    )
+    marker = object()
+    legacy.cancel.return_value = marker
+    dispatcher = _GovernedMgQueryGateway(
+        application=application, mg=mg, legacy=legacy,
+    )
+    assert dispatcher.cancel(request) is marker
+    legacy.cancel.assert_called_once_with(request)
+    mg.cancel.assert_not_called()
+    application.resolve_configured_provider_id.assert_not_called()
 
 
 def test_mg_cancellation_is_signed_xsd_valid_and_correlated(material):
