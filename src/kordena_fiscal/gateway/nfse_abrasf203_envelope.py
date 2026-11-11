@@ -192,6 +192,76 @@ def prepare_abrasf203_soap(
         if not isinstance(key, rsa.RSAPrivateKey) or cert is None:
             raise FiscalValidationError("ABRASF cancel signature requires RSA A1")
         append_nfse_signature(pedido, info, key, cert, legacy_abrasf=True)
+    elif operation is Abrasf203Operation.SUBSTITUTE:
+        substitution = root.find("a:SubstituicaoNfse", ns)
+        pedido = substitution.find("a:Pedido", ns) if substitution is not None else None
+        old_info = pedido.find("a:InfPedidoCancelamento", ns) if pedido is not None else None
+        old_note = old_info.find("a:IdentificacaoNfse", ns) if old_info is not None else None
+        replacement = substitution.find("a:Rps", ns) if substitution is not None else None
+        new_info = (
+            replacement.find("a:InfDeclaracaoPrestacaoServico", ns)
+            if replacement is not None else None
+        )
+        if (
+            old_info is None or old_note is None or pedido is None
+            or replacement is None or new_info is None or substitution is None
+        ):
+            raise FiscalValidationError("ABRASF substitution intent is incomplete")
+        cancellation_cnpj = old_note.findtext("a:CpfCnpj/a:Cnpj", "", ns)
+        cancelled_number = old_note.findtext("a:Numero", "", ns)
+        municipality = old_note.findtext("a:CodigoMunicipio", "", ns)
+        code = old_info.findtext("a:CodigoCancelamento", "", ns)
+        new_issuer = new_info.findtext("a:Prestador/a:CpfCnpj/a:Cnpj", "", ns)
+        identifiers = (
+            old_info.get("Id"), new_info.get("Id"), substitution.get("Id"),
+        )
+        if (
+            cancellation_cnpj != issuer_cnpj.value
+            or new_issuer != issuer_cnpj.value
+            or not cancelled_number.isdecimal()
+            or not municipality.isdecimal()
+            or code not in ("1", "2", "3", "4", "5")
+            or any(not identifier for identifier in identifiers)
+            or len(set(identifiers)) != 3
+            or any(sum(node.get("Id") == identifier for node in root.iter()) != 1
+                   for identifier in identifiers)
+        ):
+            raise FiscalValidationError("ABRASF substitution fiscal identity mismatch")
+        if not callable(preaudit_cancel):
+            raise FiscalValidationError("Substitution requires original-note cancellation preaudit")
+        service = new_info.find("a:Servico", ns)
+        if service is None:
+            raise FiscalValidationError("ABRASF replacement service is missing")
+        preaudit_cancel(AbrasfCancellationFacts(
+            issuer_cnpj=cancellation_cnpj,
+            municipality_ibge=municipality,
+            invoice_number=cancelled_number,
+            cancellation_code=code,
+        ))
+        preaudit((AbrasfServiceFacts(
+            competence=new_info.findtext("a:Competencia", "", ns),
+            service_code=service.findtext("a:ItemListaServico", "", ns),
+            municipal_tax_code=service.findtext("a:CodigoTributacaoMunicipio", None, ns),
+            service_municipality=service.findtext("a:CodigoMunicipio", "", ns),
+            incidence_municipality=service.findtext("a:MunicipioIncidencia", None, ns),
+            iss_rate=service.findtext("a:Valores/a:Aliquota", None, ns),
+            iss_withheld=service.findtext("a:IssRetido", "", ns),
+        ),))
+        material = resolve_certificate(scope, issuer_cnpj.value)
+        validate_a1_for_issuer(
+            material.pkcs12_bytes, material.password,
+            issuer_cnpj=issuer_cnpj, at=datetime.now(UTC),
+        )
+        key, cert, _ = pkcs12.load_key_and_certificates(
+            material.pkcs12_bytes, material.password,
+        )
+        if not isinstance(key, rsa.RSAPrivateKey) or cert is None:
+            raise FiscalValidationError("Substitution signature requires RSA A1")
+        # Sign the original cancellation and replacement RPS separately.
+        # The enclosing substitution is signed LAST, binding both operations.
+        append_nfse_signature(pedido, old_info, key, cert, legacy_abrasf=True)
+        append_nfse_signature(replacement, new_info, key, cert, legacy_abrasf=True)
+        append_nfse_signature(root, substitution, key, cert, legacy_abrasf=True)
     else:
         rps_path = "a:Rps"
         batch = root.find("a:LoteRps", ns)
