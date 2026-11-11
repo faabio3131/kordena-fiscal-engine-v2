@@ -191,6 +191,9 @@ def _validate_mg_authorization_scope(
     if issuer.findtext(f"{{{NFE_NAMESPACE}}}CNPJ") != request.access_key.issuer_identifier:
         raise OfficialNfeTransportError("MG XML issuer mismatch")
     if model == 65:
+        # NFC-e 65 must use synchronous batch authorization, one invoice.
+        if root.findtext(f"{{{NFE_NAMESPACE}}}indSinc") != "1":
+            raise OfficialNfeTransportError("NFC-e MG65 requires synchronous authorization")
         supplement = invoices[0].find(f"{{{NFE_NAMESPACE}}}infNFeSupl")
         qr = supplement.findtext(f"{{{NFE_NAMESPACE}}}qrCode") if supplement is not None else None
         link = (
