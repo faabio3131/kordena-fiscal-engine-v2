@@ -21,6 +21,7 @@ from kordena_fiscal.gateway.fiscal_tls import RejectFiscalRedirects, build_fisca
 from kordena_fiscal.gateway.nfse_national_homologation import (
     SEFIN_HOMOLOGATION_NFSE_URL,
     build_nfse_dps_request,
+    parse_nfse_homologation_response,
 )
 from kordena_fiscal.issuance.nfe_nfse import (
     NfseAuthorizationRequest,
@@ -132,6 +133,12 @@ class NfseNacionalHomologationGateway:
 
         key = result.get("chaveAcesso")
         if isinstance(key, str) and key:
+            # The access key alone is not proof of an authorized invoice.
+            # The SEFIN must provide the corresponding decompressible XML.
+            # The shared parser bounds gzip size and validates its XML.
+            parsed = parse_nfse_homologation_response(response)
+            if parsed.get("chaveAcesso") != key:
+                raise OfficialNfseTransportError("NFS-e autorizada com chave divergente")
             status = AuthorizationStatus.AUTHORIZED
             kwargs = {"invoice_reference": key[:512]}
         else:
