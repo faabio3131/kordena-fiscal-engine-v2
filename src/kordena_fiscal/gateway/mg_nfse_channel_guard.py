@@ -41,13 +41,38 @@ class MgNationalIssuerRule:
 # national emission for the relevant taxpayers. Other cities remain denied for
 # non-Simples until a regime/competence-specific contract is verified.
 _EXCLUSIVE_CHANNELS = (
-    ("3106705", date(2026, 1, 1), "https://www.betim.mg.gov.br/portal/noticias/0/3/14975/prefeitura-de-betim-chama-a-atencao-para-novo-padrao-de-emissao-de-notas-fiscais"),
-    ("3136702", date(2026, 9, 1), "https://nfse.pjf.mg.gov.br/ComunicadoNfseNacional.html"),
-    ("3167202", date(2026, 1, 1), "https://ibs.setelagoas.mg.gov.br/nfse.html"),
-    ("3144805", date(2026, 1, 1), "https://novalima.mg.gov.br/inicio/noticias/nova_lima_adere_ao_padrao_nacional_da_nota_fiscal_de_servicos_eletronica_nfs_e"),
-    ("3104007", date(2026, 1, 1), "https://araxa.mg.gov.br/noticia/8610/prefeitura-de-araxa-orienta-prestadores-de-servico-sobre-nova-forma-de-emitir-nota-fiscal-em-2026"),
-    ("3148004", date(2026, 1, 1), "https://www.patosdeminas.mg.gov.br/portal/secretarias-paginas/76/nfs-e-nacional/"),
-    ("3118007", date(2026, 1, 1), "https://www.congonhas.mg.gov.br/index.php/congonhas-adota-novo-modelo-nacional-de-emissao-da-nota-fiscal-de-servicos-eletronica-nfs-e/"),
+    (
+        "3106705", date(2026, 1, 1),
+        "https://www.betim.mg.gov.br/portal/noticias/0/3/14975/"
+        "prefeitura-de-betim-chama-a-atencao-para-novo-padrao-de-emissao-de-notas-fiscais",
+    ),
+    (
+        "3136702", date(2026, 9, 1),
+        "https://nfse.pjf.mg.gov.br/ComunicadoNfseNacional.html",
+    ),
+    (
+        "3167202", date(2026, 1, 1),
+        "https://ibs.setelagoas.mg.gov.br/nfse.html",
+    ),
+    (
+        "3144805", date(2026, 1, 1),
+        "https://novalima.mg.gov.br/inicio/noticias/nova_lima_adere_ao_padrao_naciona"
+        "l_da_nota_fiscal_de_servicos_eletronica_nfs_e",
+    ),
+    (
+        "3104007", date(2026, 1, 1),
+        "https://araxa.mg.gov.br/noticia/8610/prefeitura-de-araxa-orienta-prestadores"
+        "-de-servico-sobre-nova-forma-de-emitir-nota-fiscal-em-2026",
+    ),
+    (
+        "3148004", date(2026, 1, 1),
+        "https://www.patosdeminas.mg.gov.br/portal/secretarias-paginas/76/nfs-e-nacional/",
+    ),
+    (
+        "3118007", date(2026, 1, 1),
+        "https://www.congonhas.mg.gov.br/index.php/congonhas-adota-novo-modelo-nacion"
+        "al-de-emissao-da-nota-fiscal-de-servicos-eletronica-nfs-e/",
+    ),
 )
 
 MG_NATIONAL_CHANNEL_RULES = MappingProxyType({
