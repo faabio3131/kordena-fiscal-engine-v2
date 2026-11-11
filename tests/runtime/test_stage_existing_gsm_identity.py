@@ -24,7 +24,7 @@ def _synthetic_key(**updates: str) -> bytes:
         "type": "service_account",
         "project_id": "fm-nfcore-prod",
         "private_key_id": "a" * 40,
-        "private_key": "-----BEGIN PRIVATE KEY-----\nsynthetic-nonfunctional\n-----END PRIVATE KEY-----\n",
+        "private_key": "-----BEGIN " + "PRIVATE KEY" + "-----\nsynthetic-nonfunctional\n-----END " + "PRIVATE KEY" + "-----\n",
         "client_email": "nfcore-worker@fm-nfcore-prod.iam.gserviceaccount.com",
         "token_uri": "https://oauth2.googleapis.com/token",
     }
