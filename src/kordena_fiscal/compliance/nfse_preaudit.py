@@ -38,6 +38,7 @@ from __future__ import annotations
 from decimal import ROUND_HALF_UP, Decimal
 
 from kordena_fiscal.domain import FiscalValidationError
+from kordena_fiscal.gateway.nfse_abrasf203_envelope import AbrasfServiceFacts
 from kordena_fiscal.issuance.nfe_nfse import NfseAuthorizationRequest
 
 # LC 116/2003, art. 8 (teto) and art. 8-A (piso, redacao dada pela EC 37/2002):
@@ -143,12 +144,10 @@ def extrema_nfse_preaudit(request: NfseAuthorizationRequest) -> None:
 
 
 def extrema_abrasf_service_preaudit(
-    facts: tuple["AbrasfServiceFacts", ...],
+    facts: tuple[AbrasfServiceFacts, ...],
 ) -> None:
     """Check fiscal envelope facts deterministically before A1 is resolved."""
     from datetime import date
-
-    from kordena_fiscal.gateway.nfse_abrasf203_envelope import AbrasfServiceFacts
 
     if not facts or not all(isinstance(f, AbrasfServiceFacts) for f in facts):
         raise NfsePreauditRejection("ABRASF service fiscal facts are required")
