@@ -431,6 +431,85 @@ function appendExtremaCancellation(article) {
   });
 }
 
+function appendExtremaSubstitution(article) {
+  const operations = bootstrapState?.projection.configured_fiscal_operations;
+  if (!bootstrapState?.permissions.includes("document.cancel")
+    || !bootstrapState?.permissions.includes("document.issue")
+    || !Array.isArray(operations) || !operations.includes("substituteExtremaNfse")) return;
+  const form = document.createElement("form");
+  form.id = "extrema-substitution-form"; form.className = "panel-form";
+  const heading = document.createElement("h3");
+  heading.textContent = "Substituir NFS-e de Extrema";
+  const help = document.createElement("p");
+  help.textContent = "A nota antiga deve estar AUTORIZADA, e o novo RPS já PREPARADO e revisado na mesma unidade. A transação WebISS substitui as duas notas em uma operação SOAP; em caso de resposta incerta, não reenvie.";
+  const oldLabel = document.createElement("label");
+  oldLabel.textContent = "Documento original autorizado";
+  const oldRef = document.createElement("input");
+  oldRef.required = true; oldRef.maxLength = 128; oldLabel.append(oldRef);
+  const newLabel = document.createElement("label");
+  newLabel.textContent = "Documento substituto preparado";
+  const newRef = document.createElement("input");
+  newRef.required = true; newRef.maxLength = 128; newLabel.append(newRef);
+  const reasonLabel = document.createElement("label");
+  reasonLabel.textContent = "Código fiscal do cancelamento substitutivo";
+  const code = document.createElement("select"); code.required = true;
+  for (const [v, label] of [["", "Motivo validado"], ["1", "1"], ["2", "2"], ["3", "3"], ["4", "4"], ["5", "5"]]) {
+    const choice = document.createElement("option");
+    choice.value = v; choice.textContent = label; code.append(choice);
+  }
+  reasonLabel.append(code);
+  const attestationLabel = document.createElement("label");
+  const attestation = document.createElement("input");
+  attestation.type = "checkbox"; attestation.required = true;
+  attestationLabel.append(attestation, document.createTextNode(
+    " Aprovo o cancelamento da nota original e a nova emissão no mesmo ato, após conferir as duas referências, o tomador e a regra tributária.",
+  ));
+  const button = document.createElement("button");
+  button.type = "submit"; button.className = "primary";
+  button.textContent = "Solicitar substituição validada";
+  const status = document.createElement("p");
+  status.setAttribute("aria-live", "polite"); status.setAttribute("role", "status");
+  form.append(heading, help, oldLabel, newLabel, reasonLabel, attestationLabel, button, status);
+  article.append(form);
+  /** @type {{fingerprint:string,key:string}|null} */
+  let attempt = null;
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    if (!selectedFiscalUnit || selectedFiscalEnvironment !== "homologation") {
+      status.textContent = "Selecione unidade e homologação antes de substituir."; return;
+    }
+    const payload = {
+      unit_id: selectedFiscalUnit, environment: selectedFiscalEnvironment,
+      original_id: oldRef.value.trim(), replacement_id: newRef.value.trim(),
+      cancellation_code: code.value, human_approval: attestation.checked,
+    };
+    const fingerprint = JSON.stringify(payload);
+    if (attempt && attempt.fingerprint !== fingerprint) {
+      status.textContent = "Há uma solicitação anterior com outros dados. Concilie antes de alterar.";
+      return;
+    }
+    attempt ||= {fingerprint, key: crypto.randomUUID()};
+    button.disabled = true;
+    status.textContent = "Validando o documento antigo, a nova nota e as permissões fiscais...";
+    try {
+      const output = await api("/v1/portal/operations/substituteExtremaNfse", {
+        method: "POST",
+        headers: {"X-CSRF-Token": csrfToken(), "Idempotency-Key": attempt.key},
+        body: JSON.stringify(payload),
+      });
+      status.textContent = output.official_fiscal_confirmation
+        ? "Substituição confirmada no WebISS: original " + String(output.original_status)
+          + " e substituta " + String(output.replacement_status) + "."
+        : "Substituição não confirmada. Concilie a resposta oficial antes de alterar notas.";
+      attempt = null;
+    } catch (error) {
+      status.textContent = (error instanceof Error ? error.message : "Substituição pendente")
+        + " Não reenvie uma substituição incerta; consulte o WebISS.";
+    } finally { button.disabled = false; }
+  });
+}
+
 function appendFiscalActions(article) {
   const recoveryNotice = document.createElement("p");
   recoveryNotice.textContent = "Se a resposta for interrompida, mantenha esta página aberta e preserve o pedido original. Após recarregar, consulte o estado fiscal antes de iniciar outra solicitação.";
@@ -2112,6 +2191,7 @@ async function renderSurface(viewId) {
     if (["inutilizations", "documents", "issuances", "reconciliation"].includes(viewId)) await appendFiscalRecovery(article);
     if (viewId === "issuances") appendExtremaNfsePreparation(article);
     if (viewId === "issuances") appendExtremaCancellation(article);
+    if (viewId === "issuances") appendExtremaSubstitution(article);
     if (viewId === "inutilizations") appendInutilizationForm(article);
     if (["documents", "issuances", "reconciliation"].includes(viewId)) appendFiscalActions(article);
     if (scopedViews.has(viewId) && viewId !== "capabilities") {
