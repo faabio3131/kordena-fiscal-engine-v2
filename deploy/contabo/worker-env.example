@@ -14,6 +14,10 @@ NFCORE_GSM_PROJECT_NUMBER=646230745113
 NFCORE_GSM_API_SERVICE_ACCOUNT=nfcore-api@fm-nfcore-prod.iam.gserviceaccount.com
 NFCORE_GSM_WORKER_SERVICE_ACCOUNT=nfcore-worker@fm-nfcore-prod.iam.gserviceaccount.com
 NFCORE_WORKER_GSM_HOST_NAMESPACE=nfcore
+# RuntimeSettings da mesma aplicacao exige hostname HTTPS mesmo sem porta publica.
+NFCORE_PUBLIC_HOSTNAME=api.nfcore.com.br
+NFCORE_ALLOWED_ORIGINS=https://app.nfcore.com.br
+NFCORE_REQUIRE_HTTPS=true
 # Dados PUBLICOS de identificacao da chave, confirmados no Google IAM.
 # NUNCA copiar a chave privada para este arquivo ou variaveis de ambiente.
 NFCORE_WORKER_GSM_KEY_ID=
