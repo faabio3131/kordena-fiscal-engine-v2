@@ -104,6 +104,7 @@ class ExtremaRpsIntent:
             not isinstance(self.iss_rate_fraction, Decimal)
             or not self.iss_rate_fraction.is_finite()
             or not Decimal("0") <= self.iss_rate_fraction <= Decimal("1")
+            or not isinstance(self.iss_rate_fraction.as_tuple().exponent, int)
             or self.iss_rate_fraction.as_tuple().exponent < -4
         ):
             raise FiscalValidationError("ISS rate must be a 0..1 fraction with <=4 places")
@@ -182,7 +183,7 @@ def build_extrema_rps_xml(
     document = request.document
     issuer = document.issuer
     line = document.services[0]
-    root = etree.Element(f"{{{_NS}}}GerarNfseEnvio", nsmap={None: _NS})
+    root = etree.Element(f"{{{_NS}}}GerarNfseEnvio", nsmap={"a": _NS})
     rps = etree.SubElement(root, f"{{{_NS}}}Rps")
     information = etree.SubElement(
         rps, f"{{{_NS}}}InfDeclaracaoPrestacaoServico",
