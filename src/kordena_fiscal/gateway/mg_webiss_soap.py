@@ -135,7 +135,7 @@ def _validate_request_envelope(
                 if ref is None or not ref.get("URI", "").startswith("#"):
                     raise WebissMgContractError("WebISS XMLDSig reference is missing")
                 referenced_id = ref.get("URI", "")[1:]
-                if len(inner.xpath("//*[@Id=$ident]", ident=referenced_id)) != 1:
+                if sum(1 for node in inner.iter() if node.get("Id") == referenced_id) != 1:
                     raise WebissMgContractError("WebISS XMLDSig reference is ambiguous")
 
 
