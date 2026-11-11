@@ -506,6 +506,53 @@ def _synthetic_substitution_receipt(original, old_intent, replacement, new_inten
     return _wrap_soap(Abrasf203Operation.SUBSTITUTE, data)
 
 
+def test_cancel_substituted_invoice_uses_new_note_never_cancelled_original(
+    tmp_path,
+):
+    """A substitution receipt contains old and new notes: select the new one."""
+    from lxml import etree
+
+    db = SqliteFiscalDatabase(tmp_path / "substitution-chain.sqlite")
+    db.initialize()
+    app = FiscalApplicationService(db)
+    original = _request()
+    old_intent = _prepare(app, original)
+    replacement = NfseAuthorizationRequest.build(replace(
+        original.document,
+        document_id="nfse-extrema-followup",
+        source=SourceReference("service-order", "order-followup"),
+    ))
+    new_intent = _prepare(app, replacement)
+    response = etree.fromstring(
+        _synthetic_substitution_receipt(
+            original, old_intent, replacement, new_intent,
+        ),
+        parser=etree.XMLParser(no_network=True, resolve_entities=False),
+    )
+    content = response.find(".//outputXML")
+    assert content is not None and content.text
+    exchange = Mock()
+    gateway, _, _, _, _ = _gateway(app, new_intent, exchange)
+    signed, note_number = gateway.prepare_cancellation(
+        request=replacement, authorized_xml=content.text.encode(),
+        cancellation_code="1",
+    )
+    assert note_number == "124"
+    envelope = etree.fromstring(signed.body)
+    transport_data = envelope.find(".//nfseDadosMsg")
+    assert transport_data is not None and transport_data.text
+    municipal = etree.fromstring(
+        transport_data.text.encode(),
+        parser=etree.XMLParser(no_network=True, resolve_entities=False),
+    )
+    actual = municipal.findtext(
+        ".//{http://www.abrasf.org.br/nfse.xsd}IdentificacaoNfse/"
+        "{http://www.abrasf.org.br/nfse.xsd}Numero",
+    )
+    assert actual == "124"
+    exchange.assert_not_called()
+
+
 def test_real_substitution_commits_both_lifecycles_atomically(tmp_path):
     db = SqliteFiscalDatabase(tmp_path / "substitution.sqlite")
     db.initialize()
