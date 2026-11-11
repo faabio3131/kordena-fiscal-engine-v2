@@ -373,6 +373,29 @@ def parse_webiss_soap_response(
         validate_webiss_official_xml(
             evidence=evidence, validator=municipal_validator, xml=xml,
         )
+    if operation is Abrasf203Operation.CANCEL:
+        confirmed = extracted.find(
+            "{http://www.abrasf.org.br/nfse.xsd}RetCancelamento/"
+            "{http://www.abrasf.org.br/nfse.xsd}NfseCancelamento/"
+            "{http://www.abrasf.org.br/nfse.xsd}Confirmacao/"
+            "{http://www.abrasf.org.br/nfse.xsd}Pedido/"
+            "{http://www.abrasf.org.br/nfse.xsd}InfPedidoCancelamento/"
+            "{http://www.abrasf.org.br/nfse.xsd}IdentificacaoNfse"
+        )
+        if confirmed is not None:
+            if not isinstance(issuer_cnpj, Cnpj) or not municipality_ibge:
+                raise WebissMgContractError("Cancellation result has no trusted fiscal scope")
+            original_issuer = confirmed.findtext(
+                "{http://www.abrasf.org.br/nfse.xsd}CpfCnpj/"
+                "{http://www.abrasf.org.br/nfse.xsd}Cnpj", "",
+            )
+            original_city = confirmed.findtext(
+                "{http://www.abrasf.org.br/nfse.xsd}CodigoMunicipio", "",
+            )
+            if original_issuer != issuer_cnpj.value or original_city != municipality_ibge:
+                raise WebissMgContractError(
+                    "WebISS cancellation confirmation belongs to another fiscal issuer"
+                )
     invoices = extracted.findall(
         ".//{http://www.abrasf.org.br/nfse.xsd}CompNfse/"
         "{http://www.abrasf.org.br/nfse.xsd}Nfse/"
@@ -622,6 +645,16 @@ class WebissMgHomologationTransport:
             or jurisdiction != BrazilianJurisdiction("MG", self._municipality)
         ):
             raise WebissMgContractError("WebISS is restricted to the scoped MG municipality")
+        if self._municipality != EXTREMA_IBGE and operation in (
+            Abrasf203Operation.SUBMIT_BATCH_SYNC,
+            Abrasf203Operation.QUERY_RPS,
+            Abrasf203Operation.QUERY_RECEIVED,
+            Abrasf203Operation.QUERY_RANGE,
+            Abrasf203Operation.SUBSTITUTE,
+        ):
+            raise WebissMgContractError(
+                "Extended WebISS operations are not certified for this municipality"
+            )
         if not isinstance(issuer_cnpj, Cnpj):
             raise WebissMgContractError("Issuer CNPJ is required")
         if not isinstance(issuer_tax_regime, TaxRegimeCode) or not isinstance(
