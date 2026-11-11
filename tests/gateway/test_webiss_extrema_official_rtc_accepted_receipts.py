@@ -5,7 +5,6 @@ homologation and this parser never promotes an application AuthorizationStatus.
 """
 from __future__ import annotations
 
-
 import pytest
 from lxml import etree
 from test_mg_homologation_authorization import CNPJ
