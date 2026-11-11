@@ -89,6 +89,9 @@ def test_multi_tenant_env_contains_no_private_material_or_fake_scopes() -> None:
     assert "NFCORE_WORKER_GSM_MODE=multi-tenant-production-sa-v1" in env
     assert "NFCORE_GSM_PROJECT_NUMBER=646230745113" in env
     assert "NFCORE_WORKER_GSM_HOST_NAMESPACE=nfcore" in env
+    assert "NFCORE_PUBLIC_HOSTNAME=api.nfcore.com.br" in env
+    assert "NFCORE_ALLOWED_ORIGINS=https://app.nfcore.com.br" in env
+    assert "NFCORE_REQUIRE_HTTPS=true" in env
     assert "NFCORE_WORKER_GSM_TENANT_ID" not in env
     assert "NFCORE_WORKER_GSM_UNIT_ID" not in env
     assert "GOOGLE_APPLICATION_CREDENTIALS" not in env
