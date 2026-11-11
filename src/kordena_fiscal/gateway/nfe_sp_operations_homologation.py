@@ -331,7 +331,9 @@ class SefazHomologationOperationsGateway:
         if request.scope.environment is not FiscalEnvironment.HOMOLOGATION:
             raise OfficialNfeOperationsError("Only homologation inutilization allowed")
         if request.model.value != int(self._model):
-            raise OfficialNfeOperationsError("Inutilization requires exact fiscal model")
+            raise OfficialNfeOperationsError(
+                f"Inutilization model {request.model.value} disagrees with gateway model {self._model}"
+            )
         if self._resolve_issuer is None:
             raise OfficialNfeOperationsError("Emitente da unidade não configurado")
         issuer = self._resolve_issuer(request.scope)
