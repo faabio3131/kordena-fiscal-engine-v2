@@ -117,7 +117,10 @@ def test_all_ten_published_operations_have_strict_soap11_wire_format(synthetic_s
     ({"signed_or_query_xml": b'<x/>'}, "root"),
     ({"signed_or_query_xml": _xml(ExtremaWebissOperation.GENERATE, issuer="0" * 14)}, "CNPJ"),
     ({"signed_or_query_xml": _xml(ExtremaWebissOperation.GENERATE, signed=False)}, "signed"),
-    ({"scope": replace(_request().scope, environment=FiscalEnvironment.PRODUCTION)}, "homologation"),
+    (
+        {"scope": replace(_request().scope, environment=FiscalEnvironment.PRODUCTION)},
+        "homologation",
+    ),
 ])
 def test_mutation_fail_closed_before_soap_creation(synthetic_schema, overrides, reason):
     with pytest.raises(FiscalValidationError, match=reason):
