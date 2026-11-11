@@ -353,6 +353,84 @@ function appendExtremaNfsePreparation(article) {
   });
 }
 
+function appendExtremaCancellation(article) {
+  const operations = bootstrapState?.projection.configured_fiscal_operations;
+  if (!bootstrapState?.permissions.includes("document.cancel")
+    || !Array.isArray(operations) || !operations.includes("cancelExtremaNfse")) return;
+  const form = document.createElement("form");
+  form.id = "extrema-cancel-form";
+  form.className = "panel-form";
+  const heading = document.createElement("h3");
+  heading.textContent = "Cancelar NFS-e de Extrema (homologação)";
+  const explain = document.createElement("p");
+  explain.textContent = "Utilize somente a referência de uma nota autorizada pelo WebISS. O NFCore conferirá o XML original e o CNPJ da unidade. Resposta incerta exige consulta; nunca repita o cancelamento automaticamente.";
+  const refLabel = document.createElement("label");
+  refLabel.textContent = "Referência original da NFS-e autorizada";
+  const ref = document.createElement("input");
+  ref.required = true; ref.maxLength = 128; ref.autocomplete = "off";
+  refLabel.append(ref);
+  const reasonLabel = document.createElement("label");
+  reasonLabel.textContent = "Código oficial do motivo do cancelamento";
+  const reason = document.createElement("select"); reason.required = true;
+  for (const [code, title] of [
+    ["", "Selecione após análise fiscal"], ["1", "1"], ["2", "2"],
+    ["3", "3"], ["4", "4"], ["5", "5"],
+  ]) {
+    const opt = document.createElement("option"); opt.value = code;
+    opt.textContent = title; reason.append(opt);
+  }
+  reasonLabel.append(reason);
+  const approval = document.createElement("input");
+  approval.type = "checkbox"; approval.required = true;
+  const approvalLabel = document.createElement("label");
+  approvalLabel.append(approval, document.createTextNode(
+    " Conferi a nota original, o motivo oficial, a identidade e a autorização humana para o evento irreversível.",
+  ));
+  const send = document.createElement("button");
+  send.type = "submit"; send.className = "primary";
+  send.textContent = "Solicitar cancelamento governado";
+  const status = document.createElement("p");
+  status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite");
+  form.append(heading, explain, refLabel, reasonLabel, approvalLabel, send, status);
+  article.append(form);
+  /** @type {{fingerprint:string,key:string}|null} */
+  let attempt = null;
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    if (!selectedFiscalUnit || selectedFiscalEnvironment !== "homologation") {
+      status.textContent = "Escolha a unidade habilitada em homologação.";
+      return;
+    }
+    const payload = {
+      unit_id: selectedFiscalUnit, environment: selectedFiscalEnvironment,
+      document_id: ref.value.trim(), cancellation_code: reason.value,
+      human_approval: approval.checked,
+    };
+    const fingerprint = JSON.stringify(payload);
+    if (attempt && attempt.fingerprint !== fingerprint) {
+      status.textContent = "Há um cancelamento pendente com conteúdo diferente. Consulte o estado original antes de alterar.";
+      return;
+    }
+    attempt ||= {fingerprint, key: crypto.randomUUID()};
+    send.disabled = true; status.textContent = "Revisando a nota, o certificado e o evento fiscal...";
+    try {
+      const response = await api("/v1/portal/operations/cancelExtremaNfse", {
+        method: "POST",
+        headers: {"X-CSRF-Token": csrfToken(), "Idempotency-Key": attempt.key},
+        body: JSON.stringify(payload),
+      });
+      status.textContent = response.official_fiscal_confirmation
+        ? "Cancelamento municipal confirmado. Consulte o XML arquivado."
+        : "O WebISS rejeitou ou não confirmou o cancelamento. Consulte o estado antes de outra tentativa.";
+      attempt = null;
+    } catch (error) {
+      status.textContent = (error instanceof Error ? error.message : "Cancelamento não confirmado")
+        + " Resultado incerto: não envie outra solicitação sem conciliar com o WebISS.";
+    } finally { send.disabled = false; }
+  });
+}
+
 function appendFiscalActions(article) {
   const recoveryNotice = document.createElement("p");
   recoveryNotice.textContent = "Se a resposta for interrompida, mantenha esta página aberta e preserve o pedido original. Após recarregar, consulte o estado fiscal antes de iniciar outra solicitação.";
@@ -2033,6 +2111,7 @@ async function renderSurface(viewId) {
     if (viewId === "errors" || viewId === "reconciliation") appendCognitiveAdvisor(article, viewId);
     if (["inutilizations", "documents", "issuances", "reconciliation"].includes(viewId)) await appendFiscalRecovery(article);
     if (viewId === "issuances") appendExtremaNfsePreparation(article);
+    if (viewId === "issuances") appendExtremaCancellation(article);
     if (viewId === "inutilizations") appendInutilizationForm(article);
     if (["documents", "issuances", "reconciliation"].includes(viewId)) appendFiscalActions(article);
     if (scopedViews.has(viewId) && viewId !== "capabilities") {
