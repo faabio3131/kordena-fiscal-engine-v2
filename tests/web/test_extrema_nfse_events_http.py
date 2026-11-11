@@ -151,16 +151,16 @@ def test_extrema_event_routes_have_no_fake_fiscal_success_without_executor(
     web = _client(_database(tmp_path / (operation + ".sqlite")), role=PortalRole.OWNER)
     result = _post(web, operation, payload)
     assert result.status_code == 503, result.text
-    assert result.json()["detail"]["code"] == "PORTAL_RUNTIME_NOT_READY"
+    assert result.json()["detail"]["code"] == "FISCAL_RUNTIME_NOT_READY"
 
 
-def test_extrema_substitution_requires_issue_and_cancel_authority(
+def test_extrema_substitution_rejects_auditor_without_issue_or_cancel_authority(
     tmp_path: Path,
 ) -> None:
     executor = _InertCanonicalExecutor()
     web = _client(
-        _database(tmp_path / "operator.sqlite"),
-        role=PortalRole.OPERATOR, operation_executor=executor,
+        _database(tmp_path / "auditor.sqlite"),
+        role=PortalRole.AUDITOR, operation_executor=executor,
     )
     assert _post(web, "substituteExtremaNfse", _SUBSTITUTE).status_code == 403
     assert not executor.calls
