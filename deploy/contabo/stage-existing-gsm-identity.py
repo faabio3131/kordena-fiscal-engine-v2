@@ -84,7 +84,7 @@ def parse_existing_identity(raw: bytes) -> str:
         require(bool(SHA_RE.fullmatch(key["private_key_id"])), "NO_GO_INVALID_KEY_ID")
         private = key["private_key"]
         pem_type = "PRIVATE " + "KEY"
-        require(private.startswith(f"-----BEGIN {pem_type}-----\\n".replace("\\\\n", "\\n"))
+        require(private.startswith(f"-----BEGIN {pem_type}-----\n")
                 and private.rstrip().endswith(f"-----END {pem_type}-----"),
                 "NO_GO_PRIVATE_KEY_FORMAT")
         return key["private_key_id"]
