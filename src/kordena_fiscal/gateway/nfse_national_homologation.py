@@ -110,9 +110,14 @@ def parse_nfse_homologation_response(raw: bytes) -> dict[str, str]:
                 document = stream.read(_MAX_RESPONSE_BYTES + 1)
             if len(document) > _MAX_RESPONSE_BYTES:
                 raise ValueError
-            etree.fromstring(
+            root = etree.fromstring(
                 document, parser=etree.XMLParser(resolve_entities=False, no_network=True)
             )
+            if (
+                root.tag != "{http://www.sped.fazenda.gov.br/nfse}NFSe"
+                or root.getroottree().docinfo.doctype
+            ):
+                raise ValueError("Non-NFSe official document root")
         except (ValueError, OSError, etree.XMLSyntaxError):
             raise OfficialNfseTransportError(
                 "XML retornado pela NFS-e Nacional é inválido"
