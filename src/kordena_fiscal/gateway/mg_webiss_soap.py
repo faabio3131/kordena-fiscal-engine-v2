@@ -139,6 +139,7 @@ def _signed_fiscal_targets(
     valid XML node in place of the expected fiscal target.
     """
     ns = {"a": "http://www.abrasf.org.br/nfse.xsd"}
+    paths: tuple[str, ...]
     if operation is Abrasf203Operation.GENERATE:
         paths = ("a:Rps/a:InfDeclaracaoPrestacaoServico",)
     elif operation in (
@@ -195,8 +196,8 @@ def _require_fiscal_signature_coverage(
         if not identity.startswith("#"):
             raise WebissMgContractError("WebISS fiscal signature reference is not local")
         key = identity[1:]
-        target = expected.get(key)
-        if key in seen or target is None or signature.getparent() is not target.getparent():
+        signed_target = expected.get(key)
+        if key in seen or signed_target is None or signature.getparent() is not signed_target.getparent():
             raise WebissMgContractError(
                 "WebISS XMLDSig does not cover the required fiscal intention"
             )
