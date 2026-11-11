@@ -493,6 +493,13 @@ class WebissExtremaCanonicalNfseGateway:
         )
         if number != original_number:
             raise WebissMgContractError("Substitution references a different original invoice")
+        if (
+            old_reference[0] == new_reference[0]
+            or old_reference[2] == new_reference[2]
+        ):
+            raise WebissMgContractError(
+                "WebISS substitution has no distinct replacement invoice"
+            )
         return ExtremaSubstitutionOutcome(
             confirmed=True, xml=result, invoice_reference=new_reference[0],
             verification_code=new_reference[1], invoice_number=new_reference[2],
