@@ -42,6 +42,7 @@ def test_rejects_production_destination_without_certificate_access():
 
 
 @pytest.mark.parametrize("url", [
+    "https://EXTREMAMG.WEBISS.COM.BR/ws/nfse.asmx",
     "http://extrema-homologacao.webiss.com.br/ws/nfse.asmx",
     "https://extrema-homologacao.webiss.com.br/other",
     "https://127.0.0.1/ws/nfse.asmx",
