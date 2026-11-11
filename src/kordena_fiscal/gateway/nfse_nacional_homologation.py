@@ -176,5 +176,7 @@ class NfseNacionalHomologationGateway:
             provider=_PROVIDER,
             provider_request_id=str(result["idDps"])[:512]
             if isinstance(result.get("idDps"), str) else None,
-            **kwargs,
+            invoice_reference=kwargs.get("invoice_reference"),
+            rejection_code=kwargs.get("rejection_code"),
+            rejection_message=kwargs.get("rejection_message"),
         )
