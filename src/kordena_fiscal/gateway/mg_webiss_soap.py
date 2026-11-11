@@ -567,7 +567,6 @@ class WebissMgHomologationTransport:
         _validate_request_envelope(
             envelope, operation, evidence=self._schema_evidence,
             municipal_validator=self._schema_validator,
-            issuer_cnpj=issuer_cnpj, municipality_ibge=self._municipality,
         )
         _verify_fiscal_issuer_identity(
             envelope=envelope,
@@ -602,6 +601,7 @@ class WebissMgHomologationTransport:
         return parse_webiss_soap_response(
             raw, operation, evidence=self._schema_evidence,
             municipal_validator=self._schema_validator,
+            issuer_cnpj=issuer_cnpj, municipality_ibge=self._municipality,
         )
 
 
