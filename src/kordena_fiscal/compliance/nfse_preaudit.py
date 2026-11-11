@@ -38,7 +38,10 @@ from __future__ import annotations
 from decimal import ROUND_HALF_UP, Decimal
 
 from kordena_fiscal.domain import FiscalValidationError
-from kordena_fiscal.gateway.nfse_abrasf203_envelope import AbrasfServiceFacts
+from kordena_fiscal.gateway.nfse_abrasf203_envelope import (
+    AbrasfCancellationFacts,
+    AbrasfServiceFacts,
+)
 from kordena_fiscal.issuance.nfe_nfse import NfseAuthorizationRequest
 
 # LC 116/2003, art. 8 (teto) and art. 8-A (piso, redacao dada pela EC 37/2002):
@@ -174,3 +177,18 @@ def extrema_abrasf_service_preaudit(
             raise NfsePreauditRejection(
                 "Invalid Extrema municipal service, competence or ISS"
             ) from exc
+
+
+def extrema_cancellation_preaudit(facts: AbrasfCancellationFacts) -> None:
+    """Apply official municipal identity/reason invariants before signing."""
+    if (
+        not isinstance(facts, AbrasfCancellationFacts)
+        or facts.municipality_ibge != "3125101"
+        or not facts.issuer_cnpj.isdecimal()
+        or len(facts.issuer_cnpj) != 14
+        or not facts.invoice_number.isdecimal()
+        or facts.cancellation_code not in {"1", "2", "3", "4", "5"}
+    ):
+        raise NfsePreauditRejection(
+            "Extrema cancellation requires original municipal invoice and reviewed reason"
+        )
