@@ -72,23 +72,38 @@ _DS = "http://www.w3.org/2000/09/xmldsig#"
 _RESPONSE_ROOTS = {
     Abrasf203Operation.GENERATE: "GerarNfseResposta",
     Abrasf203Operation.SUBMIT_BATCH: "EnviarLoteRpsResposta",
+    Abrasf203Operation.SUBMIT_BATCH_SYNC: "EnviarLoteRpsSincronoResposta",
     Abrasf203Operation.QUERY_BATCH: "ConsultarLoteRpsResposta",
+    Abrasf203Operation.QUERY_RPS: "ConsultarNfseRpsResposta",
+    Abrasf203Operation.QUERY_RECEIVED: "ConsultarNfseServicoTomadoResposta",
+    Abrasf203Operation.QUERY_RANGE: "ConsultarNfseFaixaResposta",
     Abrasf203Operation.QUERY_ISSUED: "ConsultarNfseServicoPrestadoResposta",
     Abrasf203Operation.CANCEL: "CancelarNfseResposta",
+    Abrasf203Operation.SUBSTITUTE: "SubstituirNfseResposta",
 }
 _EXPECTED_SIGNATURE_COUNTS = {
     Abrasf203Operation.GENERATE: 1,
     Abrasf203Operation.SUBMIT_BATCH: 2,
+    Abrasf203Operation.SUBMIT_BATCH_SYNC: 2,
     Abrasf203Operation.QUERY_BATCH: 0,
+    Abrasf203Operation.QUERY_RPS: 0,
+    Abrasf203Operation.QUERY_RECEIVED: 0,
+    Abrasf203Operation.QUERY_RANGE: 0,
     Abrasf203Operation.QUERY_ISSUED: 0,
     Abrasf203Operation.CANCEL: 1,
+    Abrasf203Operation.SUBSTITUTE: 3,
 }
 _ACTIONS = {
     Abrasf203Operation.GENERATE: ConfiguredFiscalOperation.AUTHORIZE,
     Abrasf203Operation.SUBMIT_BATCH: ConfiguredFiscalOperation.AUTHORIZE,
+    Abrasf203Operation.SUBMIT_BATCH_SYNC: ConfiguredFiscalOperation.AUTHORIZE,
     Abrasf203Operation.QUERY_BATCH: ConfiguredFiscalOperation.QUERY,
+    Abrasf203Operation.QUERY_RPS: ConfiguredFiscalOperation.QUERY,
+    Abrasf203Operation.QUERY_RECEIVED: ConfiguredFiscalOperation.QUERY,
+    Abrasf203Operation.QUERY_RANGE: ConfiguredFiscalOperation.QUERY,
     Abrasf203Operation.QUERY_ISSUED: ConfiguredFiscalOperation.QUERY,
     Abrasf203Operation.CANCEL: ConfiguredFiscalOperation.CANCEL,
+    Abrasf203Operation.SUBSTITUTE: ConfiguredFiscalOperation.CANCEL,
 }
 
 
