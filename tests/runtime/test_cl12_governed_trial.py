@@ -246,6 +246,54 @@ def test_trial_recovers_committed_reservation_after_interrupted_provisioning(
     assert purchases is not None and purchases[0] == 1
 
 
+
+def test_trial_retries_after_activation_committed_but_http_response_lost(
+    database: PostgresFiscalDatabase,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _publish_trial_pricing(database)
+    composition = build_postgres_runtime_composition(database)
+    actual_provision = composition.commercial_trial._activation.provision
+    first_purchase_id: list[str] = []
+
+    def lost_response(*, purchase_id: str, now: datetime) -> None:
+        result = actual_provision(purchase_id=purchase_id, now=now)
+        first_purchase_id.append(result.purchase.purchase_id)
+        raise RuntimeError("synthetic response lost after durable activation")
+
+    monkeypatch.setattr(composition.commercial_trial._activation, "provision", lost_response)
+    with pytest.raises(RuntimeError, match="response lost"):
+        composition.commercial_trial.begin(
+            plan_id="growth", price_id="growth-monthly",
+            buyer_email="committed@example.com", legal_name="Committed Customer LTDA",
+            idempotency_key="cl12-trial-committed-0001", now=NOW,
+        )
+    monkeypatch.setattr(
+        composition.commercial_trial._activation, "provision", actual_provision,
+    )
+    recovered = composition.commercial_trial.begin(
+        plan_id="growth", price_id="growth-monthly",
+        buyer_email="committed@example.com", legal_name="Committed Customer LTDA",
+        idempotency_key="cl12-trial-committed-0002",
+        now=NOW + timedelta(minutes=1),
+    )
+    assert recovered.replay is True
+    assert recovered.purchase.purchase_id == first_purchase_id[0]
+    assert recovered.expires_at == NOW + timedelta(days=14)
+    assert recovered.activation_reset is not None
+    owner = database.human_accounts().by_email("committed@example.com")
+    assert owner is not None
+    assert owner.role is PortalRole.OWNER
+    assert owner.tenant_id == recovered.purchase.tenant_id
+    with database.connection() as conn:
+        purchases = conn.execute(
+            "SELECT count(*) FROM fm_commercial_purchases "
+            "WHERE provider_id = ? AND buyer_email = ?",
+            ("nfcore-trial", "committed@example.com"),
+        ).fetchone()
+    assert purchases is not None and purchases[0] == 1
+
+
 def test_trial_cannot_restart_after_activation_or_expiry(
     database: PostgresFiscalDatabase,
 ) -> None:
