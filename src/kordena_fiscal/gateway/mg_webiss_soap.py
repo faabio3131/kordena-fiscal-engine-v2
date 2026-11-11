@@ -265,7 +265,10 @@ def _verify_webiss_signature_with_scoped_a1(
             envelope.body,
             parser=etree.XMLParser(resolve_entities=False, no_network=True),
         )
-        wrapper = root.find(f"{{{_SOAP}}}Body")[0]
+        body_node = root.find(f"{{{_SOAP}}}Body")
+        if body_node is None or len(body_node) != 1:
+            raise ValueError
+        wrapper = body_node[0]
         raw_xml = wrapper.findtext("nfseDadosMsg")
         fiscal = etree.fromstring(
             str(raw_xml).encode("utf-8"),
