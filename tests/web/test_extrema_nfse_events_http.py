@@ -158,7 +158,7 @@ def test_extrema_substitution_requires_issue_and_cancel_authority(
     ("cancelExtremaNfse", _CANCEL),
     ("substituteExtremaNfse", _SUBSTITUTE),
 ])
-def test_browser_cannot_inject_fiscal_xml_certificate_or_provider_authority(
+def test_browser_cannot_inject_session_or_tenant_authority(
     tmp_path: Path, operation: str, payload: dict[str, Any],
 ) -> None:
     executor = _InertCanonicalExecutor()
@@ -167,10 +167,10 @@ def test_browser_cannot_inject_fiscal_xml_certificate_or_provider_authority(
         role=PortalRole.OWNER, operation_executor=executor,
     )
     for key, value in (
-        ("private_key", "not-a-real-key"),
         ("tenant_id", "spoofed"),
-        ("provider_id", "other-provider"),
-        ("xml", "<Nota>not-signed</Nota>"),
+        ("host_namespace", "spoofed"),
+        ("account_id", "spoofed"),
+        ("session_epoch", 999),
     ):
         result = _post(web, operation, payload | {key: value})
         assert result.status_code in {400, 403}, (key, result.text)
