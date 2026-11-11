@@ -42,6 +42,7 @@ from kordena_fiscal.gateway.mg_webiss_soap import (
     EXTREMA_WEBISS_PROVIDER_ID,
     WebissExtremaHomologationTransport,
     WebissMgContractError,
+    WebissMgContractError,
 )
 from kordena_fiscal.gateway.nfse_abrasf203_envelope import Abrasf203Operation
 from kordena_fiscal.gateway.webiss_2026_schema import load_pinned_extrema_webiss_rtc_schema
@@ -363,3 +364,89 @@ def test_tampered_immutable_archive_and_rtc_rejected_before_a1(tmp_path):
             NfseAuthorizationRequest.build(wrong_muni),
             intent, validator=load_pinned_extrema_webiss_rtc_schema()[1],
         )
+
+def test_original_webiss_cancel_is_archived_and_never_resent(tmp_path):
+    database = SqliteFiscalDatabase(tmp_path / "extrema-cancellation.sqlite")
+    database.initialize()
+    app = FiscalApplicationService(database)
+    request = _request()
+    intent = _prepare(app, request)
+    operations = []
+
+    def exchange(_body, action, _context, _timeout):
+        operations.append(action)
+        if "GerarNfse" in action:
+            return _success_response(Abrasf203Operation.GENERATE, intent)
+        if "CancelarNfse" in action:
+            return _wrap_soap(
+                Abrasf203Operation.CANCEL,
+                _accepted_xml(Abrasf203Operation.CANCEL),
+            )
+        raise AssertionError("Unexpected fiscal operation")
+
+    gateway, _, _, _, _ = _gateway(app, intent, exchange)
+    sent = app.authorize_prepared_document(
+        document_id=request.document.document_id, request=request,
+        gateway=NfseGatewayClient(gateway), occurred_at=NOW,
+    )
+    assert sent.lifecycle.state is FiscalDocumentState.AUTHORIZED
+    assert len(operations) == 1
+    first = app.cancel_prepared_extrema_nfse(
+        scope=request.document.scope,
+        document_id=request.document.document_id,
+        cancellation_code="1", gateway=gateway,
+        occurred_at=NOW, retention=RETENTION,
+    )
+    assert first.result.confirmed
+    assert first.lifecycle.state is FiscalDocumentState.CANCELLED
+    assert len(operations) == 2
+    from kordena_fiscal.persistence.ports import PersistenceStateError
+    with pytest.raises(PersistenceStateError):
+        app.cancel_prepared_extrema_nfse(
+            scope=request.document.scope,
+            document_id=request.document.document_id,
+            cancellation_code="1", gateway=gateway,
+            occurred_at=NOW, retention=RETENTION,
+        )
+    assert len(operations) == 2
+
+
+def test_timeout_on_cancel_stays_claimed_without_duplicate_post(tmp_path):
+    database = SqliteFiscalDatabase(tmp_path / "extrema-cancellation-timeout.sqlite")
+    database.initialize()
+    app = FiscalApplicationService(database)
+    request = _request()
+    intent = _prepare(app, request)
+    operations = []
+
+    def exchange(_body, action, _context, _timeout):
+        operations.append(action)
+        if "GerarNfse" in action:
+            return _success_response(Abrasf203Operation.GENERATE, intent)
+        raise WebissMgContractError("Synthetic unknown delivery state")
+
+    gateway, _, _, _, _ = _gateway(app, intent, exchange)
+    app.authorize_prepared_document(
+        document_id=request.document.document_id, request=request,
+        gateway=NfseGatewayClient(gateway), occurred_at=NOW,
+    )
+    with pytest.raises(WebissMgContractError, match="unknown delivery"):
+        app.cancel_prepared_extrema_nfse(
+            scope=request.document.scope,
+            document_id=request.document.document_id,
+            cancellation_code="1", gateway=gateway,
+            occurred_at=NOW, retention=RETENTION,
+        )
+    with database() as uow:
+        current = uow.lifecycle.get(request.document.document_id)
+    assert current is not None
+    assert current.state is FiscalDocumentState.CANCEL_REQUESTED
+    from kordena_fiscal.persistence.ports import PersistenceStateError
+    with pytest.raises(PersistenceStateError):
+        app.cancel_prepared_extrema_nfse(
+            scope=request.document.scope,
+            document_id=request.document.document_id,
+            cancellation_code="1", gateway=gateway,
+            occurred_at=NOW, retention=RETENTION,
+        )
+    assert len(operations) == 2
