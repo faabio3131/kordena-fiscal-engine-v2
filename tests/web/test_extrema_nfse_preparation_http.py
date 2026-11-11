@@ -12,8 +12,8 @@ from fastapi.testclient import TestClient
 
 from kordena_fiscal.application.service import FiscalApplicationService
 from kordena_fiscal.control_plane import FiscalOrganization, FiscalUnitRegistration
-from kordena_fiscal.control_plane.models import ProviderBinding
 from kordena_fiscal.control_plane.commercial import ConfiguredFiscalOperation
+from kordena_fiscal.control_plane.models import ProviderBinding
 from kordena_fiscal.domain import (
     BrazilianJurisdiction,
     CnaeCode,
@@ -30,8 +30,12 @@ from kordena_fiscal.gateway.mg_webiss_soap import EXTREMA_WEBISS_PROVIDER_ID
 from kordena_fiscal.lifecycle import FiscalDocumentState
 from kordena_fiscal.persistence import SqliteFiscalDatabase
 from kordena_fiscal.security.human_identity import (
-    HumanAccount, HumanIdentityService, InMemoryHumanAccountRepository,
-    InMemoryWebSessionRepository, PortalRole, ScryptPasswordHasher,
+    HumanAccount,
+    HumanIdentityService,
+    InMemoryHumanAccountRepository,
+    InMemoryWebSessionRepository,
+    PortalRole,
+    ScryptPasswordHasher,
 )
 from kordena_fiscal.web import create_app
 from kordena_fiscal.web.human_auth import CSRF_COOKIE, CSRF_HEADER
@@ -161,15 +165,14 @@ def test_owner_prepares_rps_once_and_retry_reuses_original_number(tmp_path: Path
     assert second.json()["replay"] is True
     assert second.json()["rps_number"] == 1
     assert second.json()["document_id"] == status["document_id"]
-    with db() as uow:
-        scope = ExecutionScope(
-            "tenant-extrema", "unit-extrema",
-            FiscalEnvironment.HOMOLOGATION, "audit", "fm-nfcore",
-        )
-        document = FiscalApplicationService(db).load_prepared_nfse_authorization(
-            scope, status["document_id"],
-        )
-        assert document.document.issuer.cnpj.value == "11222333000181"
+    scope = ExecutionScope(
+        "tenant-extrema", "unit-extrema",
+        FiscalEnvironment.HOMOLOGATION, "audit", "fm-nfcore",
+    )
+    document = FiscalApplicationService(db).load_prepared_nfse_authorization(
+        scope, status["document_id"],
+    )
+    assert document.document.issuer.cnpj.value == "11222333000181"
 
 
 def test_mutated_review_is_blocked_and_original_stays_immutable(tmp_path: Path) -> None:
