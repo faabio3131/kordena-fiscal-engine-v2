@@ -97,6 +97,10 @@ def test_mg_wave1_ledger_has_one_cell_per_selected_municipality_in_order() -> No
         assert cell["nfse_numbering_sequential_authority"] is False
         assert cell["nfse_integration_web_e2e_certified"] is False
         assert cell["nfce_qr_version_contract_certified"] is False
+        assert cell["nfce_mg65_state"] == "PREFLIGHT_IMPLEMENTED_NOT_CERTIFIED"
+        assert cell["nfce_qr_generation_and_signature_certified"] is False
+        assert cell["nfce_operations_lifecycle_certified"] is False
+        assert cell["nfce_runtime_binding_enabled"] is False
         assert cell["national_issuer_guard_ci_sha"] is None
 
 
