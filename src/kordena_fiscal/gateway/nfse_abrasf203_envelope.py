@@ -36,9 +36,14 @@ _SCHEMA_HASHES = {
 class Abrasf203Operation(Enum):
     GENERATE = ("GerarNfseEnvio", "GerarNfse")
     SUBMIT_BATCH = ("EnviarLoteRpsEnvio", "RecepcionarLoteRps")
+    SUBMIT_BATCH_SYNC = ("EnviarLoteRpsSincronoEnvio", "RecepcionarLoteRpsSincrono")
     QUERY_BATCH = ("ConsultarLoteRpsEnvio", "ConsultarLoteRps")
+    QUERY_RPS = ("ConsultarNfseRpsEnvio", "ConsultarNfsePorRps")
     QUERY_ISSUED = ("ConsultarNfseServicoPrestadoEnvio", "ConsultarNfseServicoPrestado")
+    QUERY_RECEIVED = ("ConsultarNfseServicoTomadoEnvio", "ConsultarNfseServicoTomado")
+    QUERY_RANGE = ("ConsultarNfseFaixaEnvio", "ConsultarNfsePorFaixa")
     CANCEL = ("CancelarNfseEnvio", "CancelarNfse")
+    SUBSTITUTE = ("SubstituirNfseEnvio", "SubstituirNfse")
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,13 +134,23 @@ def prepare_abrasf203_soap(
     schema_version = municipal_schema_version or "2.03"
     validator = municipal_validator or _validator()
     validation = validator.validate_document(xml)
-    if operation is Abrasf203Operation.SUBMIT_BATCH:
+    if operation in (Abrasf203Operation.SUBMIT_BATCH, Abrasf203Operation.SUBMIT_BATCH_SYNC):
         lot = root.find("a:LoteRps", ns)
         if lot is None or lot.get("versao") != schema_version:
             raise FiscalValidationError("ABRASF lot version does not match provider schema")
 
-    if operation in (Abrasf203Operation.QUERY_BATCH, Abrasf203Operation.QUERY_ISSUED):
-        if root.findtext("a:Prestador/a:CpfCnpj/a:Cnpj", namespaces=ns) != issuer_cnpj.value:
+    if operation in (
+        Abrasf203Operation.QUERY_BATCH,
+        Abrasf203Operation.QUERY_RPS,
+        Abrasf203Operation.QUERY_ISSUED,
+        Abrasf203Operation.QUERY_RECEIVED,
+        Abrasf203Operation.QUERY_RANGE,
+    ):
+        requester = (
+            "a:Consulente"
+            if operation is Abrasf203Operation.QUERY_RECEIVED else "a:Prestador"
+        )
+        if root.findtext(requester + "/a:CpfCnpj/a:Cnpj", namespaces=ns) != issuer_cnpj.value:
             raise FiscalValidationError("ABRASF query issuer mismatch")
     elif operation is Abrasf203Operation.CANCEL:
         pedido = root.find("a:Pedido", ns)
@@ -180,7 +195,7 @@ def prepare_abrasf203_soap(
     else:
         rps_path = "a:Rps"
         batch = root.find("a:LoteRps", ns)
-        if operation is Abrasf203Operation.SUBMIT_BATCH:
+        if operation in (Abrasf203Operation.SUBMIT_BATCH, Abrasf203Operation.SUBMIT_BATCH_SYNC):
             if (
                 batch is None
                 or batch.findtext("a:CpfCnpj/a:Cnpj", namespaces=ns) != issuer_cnpj.value
