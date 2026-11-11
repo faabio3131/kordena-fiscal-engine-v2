@@ -30,7 +30,9 @@ from kordena_fiscal.contingency import FiscalOutboxEnqueueResult, FiscalOutboxEn
 from kordena_fiscal.control_plane.models import ControlPlaneAuditAction, ControlPlaneAuditEvent
 from kordena_fiscal.domain import FiscalValidationError
 from kordena_fiscal.events import FiscalInboxEntry, FiscalInboxReceiveResult
+from kordena_fiscal.issuance.nfe_nfse import NfseCanonicalDocument
 from kordena_fiscal.lifecycle import IdempotencyKey, IdempotencyReservation
+from kordena_fiscal.numbering.dps import DpsNumberReservation
 from kordena_fiscal.numbering import (
     FiscalNumberReservation,
     FiscalSequenceKey,
@@ -79,6 +81,11 @@ from .customer_configuration_schema import (
     CUSTOMER_CONFIGURATION_VERSION,
 )
 from .fiscal_scope_schema import FISCAL_SCOPE_NAME, FISCAL_SCOPE_SCHEMA, FISCAL_SCOPE_VERSION
+from .nfse_dps_numbering_schema import (
+    NFSE_DPS_NUMBERING_NAME,
+    NFSE_DPS_NUMBERING_SCHEMA,
+    NFSE_DPS_NUMBERING_VERSION,
+)
 from .ports import PersistenceStateError
 from .pricing_catalog import PostgresPricingCatalogRepository
 from .public_trial_rate_schema import (
@@ -100,6 +107,7 @@ from .sqlite_core import (
     SqliteLifecycleRepository,
 )
 from .sqlite_delivery import SqliteFiscalDeliveryAuditStore, SqliteFiscalOutboxOrderingStore
+from .sqlite_dps import SqliteDpsNumberingStore
 from .sqlite_idempotency import SqliteIdempotencyStore
 from .sqlite_inbox import SqliteFiscalInboxStore
 from .sqlite_outbox_archive import SqliteFiscalArchiveStore, SqliteFiscalOutboxStore
@@ -192,6 +200,32 @@ class PostgresFiscalSequenceStore(SqliteFiscalSequenceStore):
         return super().reserve_next(key, policy)
 
 
+class PostgresDpsNumberingStore(SqliteDpsNumberingStore):
+    """Serialize legal-issuer counters and document replay across workers."""
+
+    def reserve(
+        self, document: NfseCanonicalDocument, *, input_fingerprint: str,
+    ) -> DpsNumberReservation:
+        if isinstance(document, NfseCanonicalDocument):
+            scope = document.scope
+            issuer = document.issuer
+            # Lock document first and issuer second, a stable order for all workers.
+            _advisory_lock(
+                self._connection,
+                "dps-document:"
+                f"{scope.host_namespace}|{scope.tenant_id}|{scope.unit_id}|"
+                f"{scope.environment.value}|{document.document_id}",
+            )
+            _advisory_lock(
+                self._connection,
+                "dps-issuer:"
+                f"{scope.host_namespace}|{issuer.cnpj.value}|"
+                f"{issuer.address.jurisdiction.municipality_ibge_code}|"
+                f"{scope.environment.value}|{document.dps_series}",
+            )
+        return super().reserve(document, input_fingerprint=input_fingerprint)
+
+
 class PostgresFiscalInboxStore(SqliteFiscalInboxStore):
     """Inbox store that turns concurrent duplicate receives into deterministic replay."""
 
@@ -220,6 +254,7 @@ class PostgresFiscalUnitOfWork:
         self._committed = False
         self._idempotency: PostgresIdempotencyStore | None = None
         self._sequences: PostgresFiscalSequenceStore | None = None
+        self._dps_sequences: PostgresDpsNumberingStore | None = None
         self._inbox: PostgresFiscalInboxStore | None = None
         self._outbox: PostgresFiscalOutboxStore | None = None
         self._outbox_ordering: SqliteFiscalOutboxOrderingStore | None = None
@@ -244,6 +279,7 @@ class PostgresFiscalUnitOfWork:
         self._committed = False
         self._idempotency = PostgresIdempotencyStore(sqlite_compat)
         self._sequences = PostgresFiscalSequenceStore(sqlite_compat)
+        self._dps_sequences = PostgresDpsNumberingStore(sqlite_compat)
         self._inbox = PostgresFiscalInboxStore(sqlite_compat)
         self._outbox = PostgresFiscalOutboxStore(sqlite_compat)
         self._outbox_ordering = SqliteFiscalOutboxOrderingStore(sqlite_compat)
@@ -288,6 +324,10 @@ class PostgresFiscalUnitOfWork:
     @property
     def sequences(self) -> PostgresFiscalSequenceStore:
         return self._require(self._sequences, "sequences")
+
+    @property
+    def dps_sequences(self) -> PostgresDpsNumberingStore:
+        return self._require(self._dps_sequences, "dps_sequences")
 
     @property
     def inbox(self) -> PostgresFiscalInboxStore:
@@ -889,6 +929,19 @@ class PostgresFiscalDatabase:
                         ),
                     )
                     new_versions.append(BLING_WORKER_POLICY_VERSION)
+                if NFSE_DPS_NUMBERING_VERSION not in applied:
+                    for statement in NFSE_DPS_NUMBERING_SCHEMA:
+                        raw.execute(statement)
+                    raw.execute(
+                        "INSERT INTO fm_schema_migrations (version, name, applied_at) "
+                        "VALUES (%s, %s, %s)",
+                        (
+                            NFSE_DPS_NUMBERING_VERSION,
+                            NFSE_DPS_NUMBERING_NAME,
+                            datetime.now().astimezone().isoformat(),
+                        ),
+                    )
+                    new_versions.append(NFSE_DPS_NUMBERING_VERSION)
                 raw.commit()
                 return tuple(new_versions)
             except Exception:
