@@ -25,6 +25,7 @@ from kordena_fiscal.gateway.authorization import GatewayProviderMetadata
 from kordena_fiscal.gateway.fiscal_tls import RejectFiscalRedirects
 from kordena_fiscal.gateway.nfe_sp_homologation import (
     MG_NFE_HOMOLOGATION_PROVIDER_ID,
+    MG_NFCE_HOMOLOGATION_PROVIDER_ID,
     NFE_NAMESPACE,
     SOAP12_NAMESPACE,
     HomologationAuthorizationTarget,
@@ -139,16 +140,20 @@ class SefazHomologationOperationsGateway:
             raise ValueError("Fiscal operations require approved A1 resolver")
         if not isinstance(target, HomologationAuthorizationTarget):
             raise ValueError("Unknown fiscal operations target")
-        if target is HomologationAuthorizationTarget.MG_NFCE:
-            # NFC-e 65 event/query contracts are not yet composed in this adapter.
-            # Never silently send a model-65 request to SP or MG model-55 services.
-            raise ValueError("MG NFC-e operations require a dedicated certified model 65 gate")
         self._target = target
-        self._state = "31" if target is HomologationAuthorizationTarget.MG_NFE else "35"
-        self._provider = (
-            GatewayProviderMetadata(MG_NFE_HOMOLOGATION_PROVIDER_ID, "1.0")
-            if self._state == "31" else _PROVIDER
+        self._state = (
+            "31" if target in {
+                HomologationAuthorizationTarget.MG_NFE,
+                HomologationAuthorizationTarget.MG_NFCE,
+            } else "35"
         )
+        self._model = "65" if target is HomologationAuthorizationTarget.MG_NFCE else "55"
+        if target is HomologationAuthorizationTarget.MG_NFCE:
+            self._provider = GatewayProviderMetadata(MG_NFCE_HOMOLOGATION_PROVIDER_ID, "1.0")
+        elif target is HomologationAuthorizationTarget.MG_NFE:
+            self._provider = GatewayProviderMetadata(MG_NFE_HOMOLOGATION_PROVIDER_ID, "1.0")
+        else:
+            self._provider = _PROVIDER
         self._profile = (
             NfeSignatureProfile.NFE4_OFFICIAL_RSA_SHA1
             if self._state == "31" else NfeSignatureProfile.RSA_SHA256
@@ -168,7 +173,10 @@ class SefazHomologationOperationsGateway:
                 ("NFeInutilizacao4", ConfiguredFiscalOperation.INUTILIZE),
             ):
                 self._mg_endpoints[service] = mg_homologation_endpoint(
-                    document_kind=FiscalDocumentKind.NFE,
+                    document_kind=(
+                        FiscalDocumentKind.NFCE
+                        if self._model == "65" else FiscalDocumentKind.NFE
+                    ),
                     environment=FiscalEnvironment.HOMOLOGATION, operation=operation,
                 ).url
         self._resolve_certificate = resolve_certificate
@@ -186,7 +194,7 @@ class SefazHomologationOperationsGateway:
         return _post_xml(service, self._mg_endpoints[service], payload, context, timeout)
 
     def _validate_key(self, value: str) -> None:
-        if value[:2] != self._state or (self._state == "31" and value[20:22] != "55"):
+        if value[:2] != self._state or (self._state == "31" and value[20:22] != self._model):
             raise OfficialNfeOperationsError("Fiscal operation state/model mismatch")
 
     def _certificate(
@@ -322,17 +330,15 @@ class SefazHomologationOperationsGateway:
     def inutilize(self, request: InutilizationRequest) -> InutilizationResult:
         if request.scope.environment is not FiscalEnvironment.HOMOLOGATION:
             raise OfficialNfeOperationsError("Only homologation inutilization allowed")
-        if request.model.value != 55:
-            raise OfficialNfeOperationsError("NFC-e requires model 65 gateway")
+        if request.model.value != int(self._model):
+            raise OfficialNfeOperationsError("Inutilization requires exact fiscal model")
         if self._resolve_issuer is None:
             raise OfficialNfeOperationsError("Emitente da unidade não configurado")
         issuer = self._resolve_issuer(request.scope)
         material = self._certificate(request.scope, issuer)
-        if request.model.value != 55:
-            raise OfficialNfeOperationsError("NFC-e requer gateway de modelo 65")
         year = datetime.now(UTC).strftime("%y")
         identifier = (
-            "ID" + self._state + year + issuer + "55" + f"{request.series:03}"
+            "ID" + self._state + year + issuer + self._model + f"{request.series:03}"
             + f"{request.first_number:09}" + f"{request.last_number:09}"
         )
         root = etree.Element(
@@ -343,7 +349,7 @@ class SefazHomologationOperationsGateway:
         info = etree.SubElement(root, f"{{{NFE_NAMESPACE}}}infInut", Id=identifier)
         for name, value in (
             ("tpAmb", "2"), ("xServ", "INUTILIZAR"), ("cUF", self._state),
-            ("ano", year), ("CNPJ", issuer), ("mod", "55"),
+            ("ano", year), ("CNPJ", issuer), ("mod", self._model),
             ("serie", str(request.series)), ("nNFIni", str(request.first_number)),
             ("nNFFin", str(request.last_number)), ("xJust", request.justification),
         ):
@@ -359,7 +365,7 @@ class SefazHomologationOperationsGateway:
             raise OfficialNfeOperationsError("Resposta de inutilização inconsistente")
         if self._state == "31" and any(
             _value(result, name) != expected for name, expected in (
-                ("cUF", "31"), ("ano", year), ("CNPJ", issuer), ("mod", "55"),
+                ("cUF", "31"), ("ano", year), ("CNPJ", issuer), ("mod", self._model),
                 ("serie", str(request.series)), ("nNFIni", str(request.first_number)),
                 ("nNFFin", str(request.last_number)),
             )
