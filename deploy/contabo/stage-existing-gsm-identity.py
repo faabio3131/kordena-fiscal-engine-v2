@@ -195,11 +195,13 @@ def atomic_write_new(path: Path, data: bytes, *, uid: int, gid: int) -> None:
             stream.write(data)
             stream.flush()
             os.fsync(stream.fileno())
+        # Capture the inode BEFORE linking, so even a metadata failure after
+        # the exclusive link cannot leave a partially provisioned credential.
+        staged_stat = os.lstat(name)
+        inode = (staged_stat.st_dev, staged_stat.st_ino)
         # No replace/rename: refuse existing files and symlinks atomically.
         os.link(name, path, follow_symlinks=False)
         linked = True
-        linked_stat = os.lstat(path)
-        inode = (linked_stat.st_dev, linked_stat.st_ino)
         os.unlink(name)
         directory_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
         try:
