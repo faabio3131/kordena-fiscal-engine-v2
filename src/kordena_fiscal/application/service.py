@@ -1194,6 +1194,32 @@ class FiscalApplicationService:
             uow.commit()
         return DurableCancellationOutcome(result, outcome.lifecycle, archived.entry_id)
 
+    def preflight_extrema_nfse_cancellation(
+        self, *, scope: ExecutionScope, document_id: str,
+    ) -> None:
+        """Read-only check, before committing the portal fiscal intent."""
+        request = self.load_prepared_nfse_authorization(scope, document_id)
+        self.load_extrema_rps_intent(scope, document_id)
+        if (
+            request.document.issuer.address.jurisdiction.municipality_ibge_code
+            != "3125101"
+            or scope.environment is not FiscalEnvironment.HOMOLOGATION
+        ):
+            raise FiscalValidationError("Extrema cancellation is not configured for this scope")
+        with self._uow_factory() as uow:
+            uow.lifecycle.assert_scope(document_id, scope)
+            current = uow.lifecycle.get(document_id)
+            if current is None or current.state is not FiscalDocumentState.AUTHORIZED:
+                raise PersistenceStateError("Original NFS-e must have confirmed authorization")
+            items = [
+                x for x in uow.archive.list_for_document(scope, document_id)
+                if x.kind is FiscalArchiveKind.AUTHORIZED_XML
+                and x.media_type == "application/xml"
+            ]
+            if len(items) != 1:
+                raise PersistenceStateError("Original authorized municipal XML is missing")
+            FiscalArchiveVerifier().verify_entry(items[0])
+
     def cancel_prepared_extrema_nfse(
         self, *, scope: ExecutionScope, document_id: str, cancellation_code: str,
         gateway: WebissExtremaCanonicalNfseGateway,
