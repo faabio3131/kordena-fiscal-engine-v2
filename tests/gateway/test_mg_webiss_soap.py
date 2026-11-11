@@ -499,3 +499,58 @@ def test_signed_cancel_tamper_does_not_reach_webiss_http(material) -> None:
         )
     assert cert.call_count == 1
     exchange.assert_not_called()
+
+
+def test_webiss_query_rejects_cross_taxpayer_payload_before_binding_and_a1() -> None:
+    resolver = Mock()
+    resolver.resolve_provider_id.return_value = EXTREMA_WEBISS_PROVIDER_ID
+    certificate, exchange = Mock(), Mock()
+    adapter = WebissExtremaHomologationTransport(
+        provider_resolver=resolver,
+        resolve_certificate=certificate,
+        exchange=exchange,
+        municipal_schema_evidence=_synthetic_evidence("3125101"),
+        municipal_schema_validator=_validator(),
+    )
+    envelope = _envelope(Abrasf203Operation.QUERY_BATCH)
+    tampered = replace(
+        envelope, body=envelope.body.replace(CNPJ.encode(), b"12345678000195", 1),
+    )
+    assert tampered.body != envelope.body
+    with pytest.raises(WebissMgContractError, match="issuer CNPJ"):
+        adapter.exchange_prepared(
+            envelope=tampered,
+            operation=Abrasf203Operation.QUERY_BATCH,
+            scope=_request().scope,
+            issuer_cnpj=Cnpj(CNPJ),
+            issuer_tax_regime=TaxRegimeCode.NORMAL,
+            competence_date=date(2026, 10, 31),
+            jurisdiction=EXTREMA,
+        )
+    resolver.resolve_provider_id.assert_not_called()
+    certificate.assert_not_called()
+    exchange.assert_not_called()
+
+
+def test_webiss_unknown_uberaba_endpoint_never_resolves_a1() -> None:
+    resolver = Mock()
+    resolver.resolve_provider_id.return_value = UBERABA_WEBISS_PROVIDER_ID
+    certificate = Mock()
+    adapter = WebissUberabaHomologationTransport(
+        provider_resolver=resolver,
+        resolve_certificate=certificate,
+        municipal_schema_evidence=_synthetic_evidence("3170107"),
+        municipal_schema_validator=_validator(),
+    )
+    with pytest.raises(WebissMgContractError, match="homologation URL"):
+        adapter.exchange_prepared(
+            envelope=_envelope(Abrasf203Operation.QUERY_BATCH),
+            operation=Abrasf203Operation.QUERY_BATCH,
+            scope=_request().scope,
+            issuer_cnpj=Cnpj(CNPJ),
+            issuer_tax_regime=TaxRegimeCode.NORMAL,
+            competence_date=date(2026, 10, 31),
+            jurisdiction=BrazilianJurisdiction("MG", "3170107"),
+        )
+    resolver.resolve_provider_id.assert_called_once()
+    certificate.assert_not_called()
