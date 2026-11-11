@@ -272,7 +272,7 @@ def test_uberaba_webiss_uses_the_same_transport_with_a_distinct_provider(materia
         competence_date=date(2026, 10, 31),
     )
     uberaba = BrazilianJurisdiction("MG", "3170107")
-    assert gateway.exchange_prepared(**args, jurisdiction=uberaba) == _rejection_xml(operation).encode("utf-8")
+    assert gateway.exchange_prepared(**args, jurisdiction=uberaba) == _rejection_xml(Abrasf203Operation.QUERY_BATCH).encode("utf-8")
     assert resolver.resolve_provider_id.call_args.kwargs["jurisdiction"] == uberaba
     assert exchange.call_count == 1
     with pytest.raises(WebissMgContractError, match="scoped MG municipality"):
@@ -351,7 +351,7 @@ def test_municipal_cancellation_is_signed_and_scope_bound_before_send(
         issuer_tax_regime=TaxRegimeCode.NORMAL,
         competence_date=date(2026, 10, 31),
         jurisdiction=jurisdiction,
-    ) == _rejection_xml(operation).encode("utf-8")
+    ) == _rejection_xml(Abrasf203Operation.CANCEL).encode("utf-8")
     assert resolver.resolve_provider_id.call_args.kwargs["operation"] == (
         ConfiguredFiscalOperation.CANCEL.value
     )
