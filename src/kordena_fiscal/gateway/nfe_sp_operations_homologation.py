@@ -139,6 +139,10 @@ class SefazHomologationOperationsGateway:
             raise ValueError("Fiscal operations require approved A1 resolver")
         if not isinstance(target, HomologationAuthorizationTarget):
             raise ValueError("Unknown fiscal operations target")
+        if target is HomologationAuthorizationTarget.MG_NFCE:
+            # NFC-e 65 event/query contracts are not yet composed in this adapter.
+            # Never silently send a model-65 request to SP or MG model-55 services.
+            raise ValueError("MG NFC-e operations require a dedicated certified model 65 gate")
         self._target = target
         self._state = "31" if target is HomologationAuthorizationTarget.MG_NFE else "35"
         self._provider = (
