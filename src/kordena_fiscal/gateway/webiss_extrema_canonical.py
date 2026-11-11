@@ -7,12 +7,10 @@ outcomes, never writes fiscal state and never automatically retries an HTTP POST
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import date
 
 from lxml import etree
 
 from kordena_fiscal.domain import (
-    Cnpj,
     ExecutionScope,
     FiscalValidationError,
 )
@@ -24,7 +22,6 @@ from kordena_fiscal.gateway.mg_webiss_soap import (
 )
 from kordena_fiscal.gateway.nfse_abrasf203_envelope import (
     Abrasf203Operation,
-    AbrasfCancellationFacts,
     AbrasfServiceFacts,
     prepare_abrasf203_soap,
 )
