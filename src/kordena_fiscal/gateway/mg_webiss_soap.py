@@ -87,7 +87,7 @@ def _validate_request_envelope(
         )
     except etree.XMLSyntaxError:
         raise WebissMgContractError("Invalid prepared WebISS XML") from None
-    if root.tag != f"{{{_SOAP}}}Envelope" or root.getroottree().docinfo.doctype:
+    if root.tag != f"{{{_SOAP}}}Envelope" or getattr(root.getroottree().docinfo, "doctype", None):
         raise WebissMgContractError("Unexpected WebISS SOAP envelope")
     children = list(root)
     if len(children) != 1 or children[0].tag != f"{{{_SOAP}}}Body":
@@ -114,7 +114,7 @@ def parse_webiss_soap_response(raw: bytes, operation: Abrasf203Operation) -> byt
         )
     except etree.XMLSyntaxError:
         raise WebissMgContractError("Invalid WebISS SOAP response") from None
-    if root.tag != f"{{{_SOAP}}}Envelope" or root.getroottree().docinfo.doctype:
+    if root.tag != f"{{{_SOAP}}}Envelope" or getattr(root.getroottree().docinfo, "doctype", None):
         raise WebissMgContractError("Invalid WebISS SOAP response root")
     body = root.find(f"{{{_SOAP}}}Body")
     if body is None or len(list(body)) != 1:
@@ -128,7 +128,7 @@ def parse_webiss_soap_response(raw: bytes, operation: Abrasf203Operation) -> byt
     values = list(response)
     if len(values) != 1 or values[0].tag != "outputXML" or not values[0].text:
         raise WebissMgContractError("WebISS outputXML is missing")
-    xml = values[0].text.encode("utf-8")
+    xml: bytes = str(values[0].text).encode("utf-8")
     if len(xml) > _RESPONSE_LIMIT:
         raise WebissMgContractError("WebISS outputXML exceeds permitted size")
     try:
@@ -137,7 +137,7 @@ def parse_webiss_soap_response(raw: bytes, operation: Abrasf203Operation) -> byt
         )
     except etree.XMLSyntaxError:
         raise WebissMgContractError("Invalid WebISS outputXML") from None
-    if extracted.getroottree().docinfo.doctype:
+    if getattr(extracted.getroottree().docinfo, "doctype", None):
         raise WebissMgContractError("DTD is prohibited in WebISS outputXML")
     # This is NOT an authorized fiscal document until protocol, issuer,
     # XMLDSig and municipal response codes are verified by the domain layer.
