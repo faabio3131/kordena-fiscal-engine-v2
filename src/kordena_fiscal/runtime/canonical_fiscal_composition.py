@@ -10,6 +10,7 @@ from collections.abc import Callable, Mapping
 from typing import Any
 
 from kordena_fiscal.application.service import FiscalApplicationService
+from kordena_fiscal.compliance.nfse_preaudit import extrema_nfse_preaudit
 from kordena_fiscal.archive import RetentionPolicyMetadata
 from kordena_fiscal.control_plane.commercial import ConfiguredFiscalOperation
 from kordena_fiscal.control_plane.service import ControlPlaneNotFoundError
@@ -469,7 +470,7 @@ def build_runtime_fiscal_handler_factory(
                 transport=transport,
                 load_intent=application.load_extrema_rps_intent,
                 resolve_certificate=resolve_extrema_a1,
-                canonical_preaudit=nfse_preaudit,
+                canonical_preaudit=extrema_nfse_preaudit,
                 service_preaudit=webiss_service_preaudit,
                 municipal_validator=validator,
             )
