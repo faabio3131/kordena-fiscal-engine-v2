@@ -382,6 +382,18 @@ def apply() -> None:
     try:
         before = database.applied_migrations()
         enable_bling = os.getenv("NFCORE_BLING_INSTALLATIONS_ENABLED") == "true"
+        if environment == "production" and enable_bling:
+            # Production Bling is a *controlled 19->21 migration only*.
+            # Never allow a gap, a partial 20, Cakto drift or an unknown DB
+            # to be silently repaired by the generalized initialize() path.
+            baseline = tuple(range(1, COGNITIVE_QUOTA_VERSION + 1))
+            full = tuple(range(1, BLING_WORKER_POLICY_VERSION + 1))
+            if before not in (baseline, full):
+                raise RuntimeError(
+                    "Bling production migration blocked: partial or drifted schema"
+                )
+            database.require_current_schema(require_bling=before == full)
+            _assert_cakto_current(database)
         applied = database.initialize(enable_bling=enable_bling)
         after = database.require_current_schema(require_bling=enable_bling)
         cakto = postgres_cakto_commercial_database(database)
