@@ -18,6 +18,7 @@ from kordena_fiscal.application.commercial_activation import (
     CommercialCustomerActivationService,
 )
 from kordena_fiscal.product.billing import CommercialSubscription, SubscriptionStatus
+from kordena_fiscal.product.catalog import DEFAULT_COMMERCIAL_CATALOG, ProductCatalogError
 from kordena_fiscal.product.commercial_fulfillment import (
     CanonicalCommercialUnitOfWorkFactory,
     CommercialFulfillmentError,
@@ -134,6 +135,14 @@ class GovernedTrialService:
             raise CommercialFulfillmentError("selected trial price does not belong to plan")
         if not pricing.price(price_id).enabled:
             raise CommercialFulfillmentError("selected trial price is disabled")
+        # Admission must not reserve a tenant before proving that the published
+        # plan can resolve the same canonical product edition as activation.
+        try:
+            DEFAULT_COMMERCIAL_CATALOG.edition(plan.edition_id)
+        except ProductCatalogError as exc:
+            raise CommercialFulfillmentError(
+                "selected trial edition is not provisionable"
+            ) from exc
 
         existing_account = self._accounts.by_email(buyer_email)
         external_order_id = f"trial-{digest[:48]}"
