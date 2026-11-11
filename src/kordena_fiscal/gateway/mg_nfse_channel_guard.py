@@ -13,12 +13,12 @@ from dataclasses import dataclass
 from datetime import date
 from types import MappingProxyType
 
+from kordena_fiscal.control_plane.mg_economic_priority_inventory import MG_ECONOMIC_WAVE_1
 from kordena_fiscal.domain import (
     BrazilianJurisdiction,
     FiscalValidationError,
     TaxRegimeCode,
 )
-from kordena_fiscal.control_plane.mg_economic_priority_inventory import MG_ECONOMIC_WAVE_1
 
 _SIMPLES_NATIONAL_MANDATORY_FROM = date(2026, 11, 1)
 _FEDERAL_SOURCE = (
