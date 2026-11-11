@@ -12,8 +12,8 @@ https://documentacao.senior.com.br/documentoseletronicos/notasdaversao/5-8-16/
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Mapping
 
 from kordena_fiscal.domain import FiscalValidationError
 from kordena_fiscal.xml.schema import (

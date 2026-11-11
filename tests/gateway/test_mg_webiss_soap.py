@@ -19,6 +19,7 @@ from kordena_fiscal.domain import (
     FiscalEnvironment,
     TaxRegimeCode,
 )
+from kordena_fiscal.gateway import webiss_2026_schema
 from kordena_fiscal.gateway.mg_webiss_soap import (
     EXTREMA_WEBISS_HOMOLOGATION_URL,
     EXTREMA_WEBISS_PROVIDER_ID,
@@ -33,7 +34,6 @@ from kordena_fiscal.gateway.nfse_abrasf203_envelope import (
     _validator,
     prepare_abrasf203_soap,
 )
-from kordena_fiscal.gateway import webiss_2026_schema
 from kordena_fiscal.gateway.webiss_2026_schema import (
     Webiss2026SchemaEvidence,
     WebissMunicipalSchemaUnverified,
@@ -272,7 +272,9 @@ def test_uberaba_webiss_uses_the_same_transport_with_a_distinct_provider(materia
         competence_date=date(2026, 10, 31),
     )
     uberaba = BrazilianJurisdiction("MG", "3170107")
-    assert gateway.exchange_prepared(**args, jurisdiction=uberaba) == _rejection_xml(Abrasf203Operation.QUERY_BATCH).encode("utf-8")
+    assert gateway.exchange_prepared(**args, jurisdiction=uberaba) == (
+        _rejection_xml(Abrasf203Operation.QUERY_BATCH).encode("utf-8")
+    )
     assert resolver.resolve_provider_id.call_args.kwargs["jurisdiction"] == uberaba
     assert exchange.call_count == 1
     with pytest.raises(WebissMgContractError, match="scoped MG municipality"):

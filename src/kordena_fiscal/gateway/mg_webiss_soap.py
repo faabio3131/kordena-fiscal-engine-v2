@@ -42,16 +42,16 @@ from kordena_fiscal.gateway.nfse_abrasf203_envelope import (
     Abrasf203Envelope,
     Abrasf203Operation,
 )
+from kordena_fiscal.gateway.provider import ProviderSelectionResolver
 from kordena_fiscal.gateway.webiss_2026_schema import (
     WEBISS_RTC_LAYOUT_VERSION,
     Webiss2026SchemaEvidence,
     WebissMunicipalSchemaUnverified,
     validate_webiss_official_xml,
 )
-from kordena_fiscal.xml.schema import XmlSchemaValidator
-from kordena_fiscal.gateway.provider import ProviderSelectionResolver
 from kordena_fiscal.vault import EphemeralCertificateMaterial
 from kordena_fiscal.vault.a1_preflight import validate_a1_for_issuer
+from kordena_fiscal.xml.schema import XmlSchemaValidator
 
 EXTREMA_IBGE = "3125101"
 UBERABA_IBGE = "3170107"
@@ -288,8 +288,12 @@ def _verify_webiss_signature_with_scoped_a1(
                 raise ValueError
             signed_method = signed_info.find(f"{{{_DS}}}SignatureMethod")
             reference = signed_info.find(f"{{{_DS}}}Reference")
-            digest_value = reference.find(f"{{{_DS}}}DigestValue") if reference is not None else None
-            digest_method = reference.find(f"{{{_DS}}}DigestMethod") if reference is not None else None
+            digest_value = (
+                reference.find(f"{{{_DS}}}DigestValue") if reference is not None else None
+            )
+            digest_method = (
+                reference.find(f"{{{_DS}}}DigestMethod") if reference is not None else None
+            )
             transforms = (
                 reference.findall(f"{{{_DS}}}Transforms/{{{_DS}}}Transform")
                 if reference is not None else []
@@ -343,7 +347,10 @@ def _verify_webiss_signature_with_scoped_a1(
                 ),
                 padding.PKCS1v15(), hashes.SHA1(),
             )
-    except (AttributeError, IndexError, TypeError, ValueError, InvalidSignature, etree.XMLSyntaxError):
+    except (
+        AttributeError, IndexError, TypeError, ValueError, InvalidSignature,
+        etree.XMLSyntaxError,
+    ):
         raise WebissMgContractError(
             "WebISS XMLDSig does not match the scoped A1 or signed fiscal content"
         ) from None
