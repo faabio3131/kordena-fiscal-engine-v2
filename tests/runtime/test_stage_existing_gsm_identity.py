@@ -113,3 +113,26 @@ def test_no_fallback_to_railway_credential_env_or_other_saas() -> None:
     assert "/etc/nfcore/incoming" in body
     assert "docker compose up" not in body
     assert "railway" not in body.lower()
+
+
+def test_staged_multi_tenant_environment_passes_canonical_production_profile() -> None:
+    from kordena_fiscal.runtime.config import RuntimeSettings
+
+    env_bytes = stager.render_env(
+        key_id="c" * 40,
+        created="2026-11-10T12:00:00+00:00",
+        expiry="2027-02-08T12:00:00+00:00",
+    )
+    fields = dict(line.split("=", 1) for line in env_bytes.decode().strip().splitlines())
+    fields.update(
+        {
+            "NFCORE_ENVIRONMENT": "production",
+            "NFCORE_PERSISTENCE_BACKEND": "postgres",
+            "NFCORE_SECRET_BACKEND": "external",
+            "DATABASE_URL": "postgresql://ci-nfcore@localhost/ci_db",
+        }
+    )
+    settings = RuntimeSettings.from_mapping(fields)
+    assert settings.require_https is True
+    assert settings.public_hostname == "api.nfcore.com.br"
+    assert settings.environment.value == "production"
