@@ -38,54 +38,12 @@ check_trusted_audit_chain() {
 # -n 106 caps untrusted first-line data; a trailing extra line is forbidden.
 parse_root_audit_request() {
   local payload='' trailing=''
-  # Bling legacy pair = 105 chars; GSM tagged pair = 109 chars.
+  # Bling legacy pair = 105 characters; GSM tagged pair = 109.
   IFS= read -r -n 110 -t 3 payload || return 1
   if IFS= read -r -n 1 -t 1 trailing || [[ -n "$trailing" ]]; then
     return 1
   fi
-  local request_pattern='^(gsm )?([0-9a-f]{40}) ([0-9a-f]{64})
-  return 1
-}
-
-main() {
-  [[ "$(id -u)" == 0 ]] || { echo 'NO_GO_ROOT_AUDIT_PRIVILEGE' >&2; exit 42; }
-  if ! parse_root_audit_request; then
-    echo 'NO_GO_ROOT_AUDIT_REQUEST' >&2
-    exit 42
-  fi
-  # The only available audit programs are fixed, root-owned allowlist entries.
-  # Never execute caller-controlled paths or any code from the deployment tree.
-  if [[ "$ROOT_AUDIT_KIND" == "gsm" ]]; then
-    ROOT_AUDIT_SCRIPT=$GSM_AUDIT_SCRIPT
-  else
-    ROOT_AUDIT_SCRIPT=$BLING_AUDIT_SCRIPT
-  fi
-  check_trusted_audit_chain || exit 42
-  local calculated_digest
-  calculated_digest=$(sha256sum "$ROOT_AUDIT_SCRIPT")
-  calculated_digest="${calculated_digest%% *}"
-  [[ "$calculated_digest" == "$ROOT_AUDIT_DIGEST" ]] || {
-    echo 'NO_GO_AUDIT_SCRIPT_DIGEST' >&2
-    exit 42
-  }
-
-  # Never eval a caller's command or run code from /opt/fm/nfcore/src.
-  # Docker inspection is permitted only inside this fixed, root-owned script.
-  if [[ "$ROOT_AUDIT_KIND" == "gsm" ]]; then
-    # Isolated Python: import only stdlib from the trusted host installation.
-    exec /usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C HOME=/nonexistent \
-      /usr/bin/python3 -I "$ROOT_AUDIT_SCRIPT" \
-        --expected-production-sha "$ROOT_AUDIT_SHA" </dev/null
-  fi
-  exec /usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C HOME=/nonexistent \
-    /bin/bash "$ROOT_AUDIT_SCRIPT" "$ROOT_AUDIT_SHA" </dev/null
-}
-
-# Sourcing is strictly for local parser and permission unit tests.
-if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
-  main "$@"
-fi
-
+  local request_pattern='^(gsm )?([0-9a-f]{40}) ([0-9a-f]{64})$'
   if [[ "$payload" =~ $request_pattern ]]; then
     ROOT_AUDIT_KIND="bling"
     [[ -n "${BASH_REMATCH[1]}" ]] && ROOT_AUDIT_KIND="gsm"
@@ -102,8 +60,7 @@ main() {
     echo 'NO_GO_ROOT_AUDIT_REQUEST' >&2
     exit 42
   fi
-  # The only available audit programs are fixed, root-owned allowlist entries.
-  # Never execute caller-controlled paths or any code from the deployment tree.
+  # Select only a fixed root-owned audit program, never a caller path.
   if [[ "$ROOT_AUDIT_KIND" == "gsm" ]]; then
     ROOT_AUDIT_SCRIPT=$GSM_AUDIT_SCRIPT
   else
@@ -121,7 +78,6 @@ main() {
   # Never eval a caller's command or run code from /opt/fm/nfcore/src.
   # Docker inspection is permitted only inside this fixed, root-owned script.
   if [[ "$ROOT_AUDIT_KIND" == "gsm" ]]; then
-    # Isolated Python: import only stdlib from the trusted host installation.
     exec /usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C HOME=/nonexistent \
       /usr/bin/python3 -I "$ROOT_AUDIT_SCRIPT" \
         --expected-production-sha "$ROOT_AUDIT_SHA" </dev/null
