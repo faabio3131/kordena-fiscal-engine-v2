@@ -143,6 +143,31 @@ def test_missing_workers_never_count_as_ready(host) -> None:
     assert result["RESULT"] == "NO_GO_GENERAL_WORKER"
 
 
+def test_remote_outbox_and_gcp_authorization_never_inferred_from_host(host) -> None:
+    host({name: _worker_info() for name in ("nfcore-db", "nfcore-api", "nfcore-portal")})
+    result = audit.collect(SHA)
+    assert result["LOCAL_OTHER_NFCORE_WORKERS"] == "ABSENT"
+    assert result["REMOTE_OUTBOX_CONSUMERS"] == "UNVERIFIED_EXTERNAL"
+    assert result["GSM_IDENTITY_PROVIDER"] == "UNVERIFIED_EXTERNAL"
+
+
+def test_local_rehearsal_worker_requires_concurrency_review(
+    host, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
+) -> None:
+    f = tmp_path / ".env.worker"
+    f.write_text("synthetic-secret-not-for-output", encoding="utf-8")
+    f.chmod(0o600)
+    host({name: _worker_info() for name in (
+        "nfcore-db", "nfcore-api", "nfcore-portal",
+        "nfcore-worker", "nfcore-ensaio-worker-1",
+    )})
+    monkeypatch.setattr(audit, "only_expected_mount", lambda *_a: "RESTRICTED")
+    result = audit.collect(SHA)
+    assert result["LOCAL_OTHER_NFCORE_WORKERS"] == "PRESENT"
+    assert result["RESULT"] == "NO_GO_POSSIBLE_LOCAL_CONSUMER"
+    assert "synthetic-secret-not-for-output" not in str(result)
+
+
 def test_wrong_release_pin_fails_even_if_api_healthy(host) -> None:
     host({name: _worker_info() for name in ("nfcore-db", "nfcore-api", "nfcore-portal")})
     result = audit.collect("b" * 40)
