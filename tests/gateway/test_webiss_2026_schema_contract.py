@@ -52,7 +52,7 @@ def _digest() -> str:
 
 
 def test_unpinned_schema_cannot_be_loaded_into_fiscal_transport() -> None:
-    with pytest.raises(WebissMunicipalSchemaUnverified, match="not yet verified"):
+    with pytest.raises(WebissMunicipalSchemaUnverified, match="differs from reviewed SHA"):
         build_pinned_webiss_municipal_schema(
             municipality_ibge="3125101",
             root_schema="sample.xsd", resources=_resources(),
