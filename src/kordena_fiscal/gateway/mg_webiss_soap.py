@@ -488,21 +488,14 @@ class WebissMgHomologationTransport:
         self._certificate = resolve_certificate
         # No municipality-specific verified Uberaba homologation endpoint yet.
         # Never leak an Uberaba document to the Extrema default URL.
+        # Explicit exchange injection is needed for cities without a verified
+        # dedicated endpoint. Never silently route an Uberaba payload to Extrema.
         self._exchange = (
             exchange if exchange is not None
             else _webiss_exchange if municipality_ibge == EXTREMA_IBGE
-            else self._unsupported_municipal_transport
+            else None
         )
         self._timeout = timeout_seconds
-
-    @staticmethod
-    def _unsupported_municipal_transport(
-        body: bytes, soap_action: str, context: ssl.SSLContext, timeout: float,
-    ) -> bytes:
-        del body, soap_action, context, timeout
-        raise WebissMgContractError(
-            "WebISS city-specific homologation URL is not officially certified"
-        )
 
     def exchange_prepared(
         self,
@@ -560,6 +553,10 @@ class WebissMgHomologationTransport:
         )
         if provider != _MG_WEBISS_PROVIDERS[self._municipality]:
             raise WebissMgContractError("No approved exact WebISS municipal binding")
+        if self._exchange is None:
+            raise WebissMgContractError(
+                "WebISS city-specific homologation URL is not officially certified"
+            )
         material = self._certificate(scope, issuer_cnpj.value)
         validate_a1_for_issuer(
             material.pkcs12_bytes, material.password,
