@@ -317,14 +317,14 @@ def build_nfse_issuance_key(document: NfseCanonicalDocument) -> IdempotencyKey:
 def build_nfse_request_fingerprint(document: NfseCanonicalDocument) -> str:
     if not isinstance(document, NfseCanonicalDocument):
         raise FiscalValidationError("document must be NfseCanonicalDocument")
-    scope_payload = {
+    scope_payload: dict[str, str] = {
         "tenant_id": document.scope.tenant_id,
         "unit_id": document.scope.unit_id,
         "environment": document.scope.environment.value,
     }
     if document.scope.host_namespace is not None:
         scope_payload["host_namespace"] = document.scope.host_namespace
-    payload = {
+    payload: dict[str, object] = {
         "scope": scope_payload,
         "source": document.source.canonical_tuple,
         "issued_at": document.issued_at.isoformat(),
