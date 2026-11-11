@@ -7,6 +7,7 @@ outcomes, never writes fiscal state and never automatically retries an HTTP POST
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import cast
 
 from lxml import etree
 
@@ -238,7 +239,10 @@ class WebissExtremaCanonicalNfseGateway:
         intent = self._trusted_intent(request)
         # A query never allocates another number and never signs or sends
         # another RPS; it reuses the exact number stored with the issuance.
-        root = etree.Element(f"{_NS}ConsultarNfseRpsEnvio", nsmap={"a": _NS[1:-1]})
+        root = etree.Element(
+            f"{_NS}ConsultarNfseRpsEnvio",
+            nsmap=cast(dict[str, str], {None: _NS[1:-1]}),
+        )
         identity = etree.SubElement(root, f"{_NS}IdentificacaoRps")
         for name, value in (
             ("Numero", str(intent.reservation.number)),
