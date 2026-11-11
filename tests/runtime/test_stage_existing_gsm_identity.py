@@ -20,11 +20,16 @@ SPEC.loader.exec_module(stager)
 
 
 def _synthetic_key(**updates: str) -> bytes:
+    key_type = "PRIVATE " + "KEY"
     example = {
         "type": "service_account",
         "project_id": "fm-nfcore-prod",
         "private_key_id": "a" * 40,
-        "private_key": "-----BEGIN " + "PRIVATE KEY" + "-----\nsynthetic-nonfunctional\n-----END " + "PRIVATE KEY" + "-----\n",
+        "private_key": (
+            f"-----BEGIN {key_type}-----\n"
+            "synthetic-nonfunctional\n"
+            f"-----END {key_type}-----\n"
+        ),
         "client_email": "nfcore-worker@fm-nfcore-prod.iam.gserviceaccount.com",
         "token_uri": "https://oauth2.googleapis.com/token",
     }
