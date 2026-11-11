@@ -336,3 +336,27 @@ Fontes conferidas:
 - Testes cobrem composi??o sem auditor, v?nculo ausente, provedor divergente, veto da auditoria e ordem de execu??o do caminho aprovado. A porta de pr?-auditoria ainda depende da composi??o com o Sentinela real no entrypoint.
 - Pend?ncias internas: gerar DPS a partir dos dados fiscais confi?veis e da numera??o persistente; ligar o Sentinela real ? porta de pr?-auditoria; conectar o teste paulistano ? jornada Web de homologa??o sem reaproveitar o handler de emiss?o.
 - Pend?ncias externas: confirma??o do contrato SOAP municipal, valida??o com A1 da contabilidade e homologa??o. Este bloco n?o ativa provider, n?o modifica a Contabo e n?o transmite documentos.
+
+---
+
+## Checkpoint incremental MG-W1 — 11/11/2026 — PR #423 (não mergeada)
+
+**CURRENT remoto consultado:** `faabio3131/nf-core-v001`, `main@545b7606208eedf77b3fd6b852ccb82b4716f6b8`, `production@61015a837be8b2e5e3b0f1cdb5fb14c5c875fb91`. **Branch:** `feat/nfcore-mg-polos-economicos-wave1-20261111`. **Outro agente:** Bling/release/Contabo; nenhum artefato seu foi sobrescrito. **PR documental concorrente:** #413 aberta, preservar a reconciliação dos três arquivos.
+
+**DECISÃO aprovada:** MG 20 polos econômicos → Centro-Oeste DF → GO → MT → MS → MG municípios de menor prioridade em onda posterior. As demais UFs ficam no backlog. O gate para avançar no trabalho interno é `MG_W1_INTERNAL_COMPLETE`, não homologação externa imaginada.
+
+**Achados de arquitetura reais, aproveitamento:**
+- Catálogo MG 55/65 e NF-e 55 autorizacao/consulta/cancelamento/inutilização com gateway, A1 e XMLDSig existentes; não reescrever.
+- `nfse_dps_builder.py` + `nfse_nacional_homologation.py` + `nfse_national_homologation.py` formam pipeline DPS → XSD → XMLDSig → JSON `dpsXmlGZipB64` → mTLS/SEFIN. **Não equivale** a contrato municipal aprovado.
+- Defeito do catálogo MG-W1: IBGE de outra UF era aceito. CI do commit `b669804a5bf4034eef5651432100e564b08dd740` terminou **FAILURE**: 1 teste novo falhou, 3798 passaram, 3 skip. A correção verifica explicitamente IBGE de MG antes do construtor.
+- **Proteção implementada:** Contagem (3118601), cuja prefeitura anuncia ISS Digital próprio compatível com layout nacional, é recusada no `NfseNacionalHomologationGateway` antes do Vault A1/assinatura/transporte, mesmo com provider binding incorreto. A configuração do seu transporte municipal exige contrato Swagger verificável e autenticação própria, ainda não presumidos.
+- **Proteção implementada:** retorno SEFIN contendo apenas `chaveAcesso` não produz autorização; requer NFSe XML zipado válido e `tipoAmbiente` numérico 2 explícito. Novos testes exercitam negativos e casos sintéticos.
+- **Envelope implementado/testado em laboratório:** XML DPS assinada e XSD v1.00, JSON gzip/base64 para BH 3106200, Betim 3106705 e Uberlândia 3170206; **prova sintética, não transmissão oficial**. A vigência de v1.01 e o leiaute RTC devem ser revalidados antes de certificação final.
+- **Pendência interna crítica já identificada no código:** `_derive_dps_numbering` usa hash como número provisório. Fonte federal exige numeração sequencial crescente (https://www.gov.br/nfse/pt-br/saiba-mais/como-a-nfs-e-e-gerada/o-que-e-dps). Deve convergir com reserva durável/fiscal oficial e retry idempotente, sem `MAX+1`, antes de liberar qualquer emissão operacional.
+- **Matriz por município:** `docs/coverage/NFCORE_MG_W1_MUNICIPAL_CELLS_2026-11-11.json` mantém 20 linhas com `nfse_envelope_contract_version`, `nfse_envelope_xsd_sha256`, SHAs de assinatura/transporte/Web, operações e homologação por contribuinte. Nenhuma cidade está `INTERNAL_COMPLETE`, `EXTERNAL_HOMOLOGATED` ou `PRODUCTION_LIVE`. Teste de gate falha quando há declaração de conclusão sem evidência.
+
+**Fontes públicas específicas**: BHISS Prefeitura BH; comunicados Prefeitura Betim; aviso Prefeitura Uberlândia; Receita Contagem `https://receita.contagem.mg.gov.br/nfe/`; NFS-e Nacional documentação atual em 04/11/2026 `https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/documentacao-atual` e pacote de produção restrita atualizado em 20/10/2026 `https://www.gov.br/nfse/pt-br/biblioteca/documentacao-tecnica/producao-restrita`. Fonte de ranking PIB: IBGE/SIDRA 2023, link no plano MG-W1.
+
+**Gates:** Governança PR #423 aprovada em commits anteriores. CI final é **PENDENTE DE CONFIRMAÇÃO NO HEAD FINAL**; Ruff/Mypy/Pytest/E2E e demais checks **não devem ser herdados** de commits anteriores ou das 265 PASS locais de 05/11. EGM original sete skills **não executado** nesta PR; não inventar revisão Goldfish. Nenhum merge, deploy, migration produtiva, A1 real ou emissão fiscal realizado.
+
+**Próxima sequência mandatória:** corrigir qualquer falha da CI neste HEAD → certificar e registrar SHA/CI → completar numeração DPS durável, MG NF-e/NFC-e e NFS-e BH com contrato XSD vigente → seguir Betim, Uberlândia e Contagem conforme os envelopes e transportes oficiais, depois os outros 16, sempre com matriz por célula e sem falsa homologação.
