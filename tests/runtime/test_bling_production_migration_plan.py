@@ -172,3 +172,53 @@ def test_plan_refuses_unexpected_migration_policy(
     monkeypatch.setattr(guard, "PostgresFiscalDatabase", lambda _: pytest.fail("db opened"))
     with pytest.raises(RuntimeError, match="policy changed unexpectedly"):
         guard.plan_production_bling()
+
+
+@pytest.mark.parametrize(
+    "installed",
+    [(), tuple(range(1, 19)), tuple(range(1, 21)), (1, *range(3, 22))],
+)
+def test_approved_production_apply_never_repairs_partial_or_drifted_schema(
+    setup, monkeypatch: pytest.MonkeyPatch, installed: tuple[int, ...],
+) -> None:
+    db = setup(installed)
+    monkeypatch.setenv("NFCORE_SCHEMA_MIGRATION_APPROVED", "true")
+    monkeypatch.setenv("NFCORE_PRODUCTION_APPROVAL", "PRODUCTION_APPROVED")
+    monkeypatch.setenv("NFCORE_BLING_INSTALLATIONS_ENABLED", "true")
+    monkeypatch.setattr(
+        db, "initialize", lambda **_kwargs: pytest.fail("executed unexpected DDL"),
+        raising=False,
+    )
+    with pytest.raises(RuntimeError, match="partial or drifted schema"):
+        guard.apply()
+    assert db.closed
+    assert db.queries == []
+    assert db.schema_checks == []
+
+
+def test_production_apply_requires_cakto_consistency_before_any_ddl(
+    setup, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db = setup(tuple(range(1, 20)), None)
+    monkeypatch.setenv("NFCORE_SCHEMA_MIGRATION_APPROVED", "true")
+    monkeypatch.setenv("NFCORE_PRODUCTION_APPROVAL", "PRODUCTION_APPROVED")
+    monkeypatch.setenv("NFCORE_BLING_INSTALLATIONS_ENABLED", "true")
+    monkeypatch.setattr(
+        db, "initialize", lambda **_kwargs: pytest.fail("executed unexpected DDL"),
+        raising=False,
+    )
+    with pytest.raises(RuntimeError, match="Cakto"):
+        guard.apply()
+    assert db.closed
+    assert db.schema_checks == [False]
+    assert all(query.startswith("SELECT ") for query in db.queries)
+
+
+def test_production_apply_without_approval_never_opens_database(
+    setup, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    setup(tuple(range(1, 20)))
+    monkeypatch.setenv("NFCORE_BLING_INSTALLATIONS_ENABLED", "true")
+    monkeypatch.setattr(guard, "PostgresFiscalDatabase", lambda _: pytest.fail("db opened"))
+    with pytest.raises(RuntimeError, match="migration blocked"):
+        guard.apply()
