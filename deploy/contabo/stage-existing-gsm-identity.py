@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import pwd
 import re
 import stat
 import subprocess
@@ -216,9 +217,13 @@ def main() -> int:
         check_host(args.expected_production_sha)
         raw, key_id = read_existing_identity(args.existing_identity_file)
         created, expiry = validate_created_at(args.iam_key_created_at)
-        # fmadmin (1001) owns the host application directory on some installations.
-        # The private key itself is staged ONLY under root-owned /etc/nfcore/worker.
-        ensure_trusted_directory(PROD_DIR, allowed_owners=(0, 1001))
+        # Resolve the actual operator UID/GID; never assume 1001 on a real host.
+        try:
+            operator = pwd.getpwnam("fmadmin")
+        except KeyError:
+            raise Denied("NO_GO_OPERATOR_ACCOUNT_MISSING") from None
+        require(operator.pw_uid not in (0, 10001), "NO_GO_OPERATOR_UID_COLLISION")
+        ensure_trusted_directory(PROD_DIR, allowed_owners=(0, operator.pw_uid))
         ensure_trusted_directory(WORKER_DIR, required=False)
         for target in (TARGET_IDENTITY, WORKER_ENV, COMPOSE_ENV):
             require(not target.exists() and not target.is_symlink(),
@@ -239,8 +244,8 @@ def main() -> int:
             ensure_trusted_directory(WORKER_DIR)
             for target, payload, owner, group in (
                 (TARGET_IDENTITY, raw, 10001, 10001),
-                (WORKER_ENV, env_data, 1001, 1001),
-                (COMPOSE_ENV, compose_data, 1001, 1001),
+                (WORKER_ENV, env_data, operator.pw_uid, operator.pw_gid),
+                (COMPOSE_ENV, compose_data, operator.pw_uid, operator.pw_gid),
             ):
                 atomic_write_new(target, payload, uid=owner, gid=group)
                 created_files.append(target)
