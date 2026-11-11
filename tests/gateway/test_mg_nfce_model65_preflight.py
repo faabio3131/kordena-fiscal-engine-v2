@@ -77,10 +77,22 @@ def test_nfce_model65_must_include_official_qr_before_vault_or_transport() -> No
 @pytest.mark.parametrize(
     ("qr", "consultation"),
     [
-        ("https://attacker.example/qrcode.xhtml?p=123", "https://hportalsped.fazenda.mg.gov.br/portalnfce"),
-        ("http://portalsped.fazenda.mg.gov.br/portalnfce/sistema/qrcode.xhtml?p=123", "https://hportalsped.fazenda.mg.gov.br/portalnfce"),
-        ("https://portalsped.fazenda.mg.gov.br/portalnfce/sistema/qrcode.xhtml?p=123", "https://hportalsped.fazenda.mg.gov.br/portalnfce"),
-        ("https://portalsped.fazenda.mg.gov.br/portalnfce/sistema/qrcode.xhtml?p=123", "https://attacker.example/portalnfce"),
+        (
+            "https://attacker.example/qrcode.xhtml?p=123",
+            "https://hportalsped.fazenda.mg.gov.br/portalnfce",
+        ),
+        (
+            "http://portalsped.fazenda.mg.gov.br/portalnfce/sistema/qrcode.xhtml?p=123",
+            "https://hportalsped.fazenda.mg.gov.br/portalnfce",
+        ),
+        (
+            "https://portalsped.fazenda.mg.gov.br/portalnfce/sistema/qrcode.xhtml?p=123",
+            "https://hportalsped.fazenda.mg.gov.br/portalnfce",
+        ),
+        (
+            "https://portalsped.fazenda.mg.gov.br/portalnfce/sistema/qrcode.xhtml?p=123",
+            "https://attacker.example/portalnfce",
+        ),
     ],
 )
 def test_nfce_rejects_wrong_qr_origin_and_mismatched_access_key(
