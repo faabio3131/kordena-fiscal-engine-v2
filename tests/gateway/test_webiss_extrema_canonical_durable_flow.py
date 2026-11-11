@@ -42,7 +42,6 @@ from kordena_fiscal.gateway.mg_webiss_soap import (
     EXTREMA_WEBISS_PROVIDER_ID,
     WebissExtremaHomologationTransport,
     WebissMgContractError,
-    WebissMgContractError,
 )
 from kordena_fiscal.gateway.nfse_abrasf203_envelope import Abrasf203Operation
 from kordena_fiscal.gateway.webiss_2026_schema import load_pinned_extrema_webiss_rtc_schema
@@ -531,7 +530,7 @@ def test_real_substitution_commits_both_lifecycles_atomically(tmp_path):
     assert changed.original_lifecycle.state is FiscalDocumentState.CANCELLED
     assert changed.replacement_lifecycle.state is FiscalDocumentState.AUTHORIZED
     assert len(calls) == 2
-    with pytest.raises(Exception):
+    with pytest.raises(PersistenceStateError):
         app.substitute_prepared_extrema_nfse(
             scope=original.document.scope,
             original_id=original.document.document_id,
