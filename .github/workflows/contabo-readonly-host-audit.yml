@@ -70,12 +70,24 @@ jobs:
           # Publish only a constrained status vocabulary. No raw SSH output/logs.
           grep -E '^(EXPECTED_SHA=[a-f0-9]{12}|[A-Za-z0-9_-]+=(PASS|PENDING|BLOCKED|CLEAR|UNVERIFIED_EXTERNAL|NO_GO_HOST_GATES|NO_GO_MISSING_HOST_EVIDENCE|CODE_READY_BUT_BLING_NOT_ACTIVE|HOST_GATES_PASS_EXTERNAL_STILL_UNVERIFIED))$' "$work/raw-output" > "$work/status.txt" || true
           cat "$work/status.txt"
-          if [[ "$rc" -ne 0 ]]; then
-            echo 'NO_GO_HOST_AUDIT_FAILED_OR_INCOMPLETE'
+          # The classifier must prove host identity, exact SHA and each baseline
+          # field before claiming a valid authenticated channel.
+          bash deploy/contabo/classify-readonly-host-audit.sh "$work/status.txt" "$rc" "$REQUESTED_SHA"
+      - name: Bling operational readiness (independent gate)
+        shell: bash
+        run: |
+          set -euo pipefail
+          result="$RUNNER_TEMP/nfcore-host-audit/status.txt"
+          if grep -Fxq 'RESULT=HOST_GATES_PASS_EXTERNAL_STILL_UNVERIFIED' "$result"; then
+            echo 'BLING_HOST_GATES_PASS_EXTERNAL_HOMOLOGATION_UNVERIFIED'
+            exit 0
+          fi
+          if grep -Fxq 'RESULT=CODE_READY_BUT_BLING_NOT_ACTIVE' "$result"; then
+            echo 'BLING_OPERATIONAL_NO_GO_PENDING_MIGRATIONS_OAUTH_POLICY_WORKER'
             exit 1
           fi
-          grep -Fxq 'RESULT=HOST_GATES_PASS_EXTERNAL_STILL_UNVERIFIED' "$work/status.txt" || { echo 'NO_GO_HOST_AUDIT_NOT_COMPLETE'; exit 1; }
-          echo 'HOST_PREFLIGHT_PASS_EXTERNAL_STILL_UNVERIFIED'
+          echo 'NO_GO_UNCLASSIFIED_BLING_AUDIT'
+          exit 1
       - name: Summarize audited result
         if: always()
         shell: bash
