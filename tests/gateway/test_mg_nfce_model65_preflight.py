@@ -39,13 +39,15 @@ def _with_qr(
 ):
     qr_url = qr_url or (
         "https://portalsped.fazenda.mg.gov.br/portalnfce/sistema/qrcode.xhtml"
-        f"?p={request.access_key.value}|3|2|synthetic"
+        f"?p={request.access_key.value}|3|2"
     )
     child = (
         f"<infNFeSupl><qrCode>{qr_url}</qrCode>"
         f"<urlChave>{consultation_url}</urlChave></infNFeSupl>"
     ).encode()
-    return replace(request, signed_xml=request.signed_xml.replace(b"</NFe>", child + b"</NFe>"))
+    xml = request.signed_xml.replace(b"</ide>", b"<tpEmis>1</tpEmis></ide>")
+    xml = xml.replace(b"</NFe>", child + b"</NFe>")
+    return replace(request, signed_xml=xml)
 
 
 def test_nfce_target_uses_pinned_mg65_endpoint_and_distinct_provider() -> None:
@@ -109,6 +111,29 @@ def test_nfce_rejects_wrong_qr_origin_and_mismatched_access_key(
 def test_nfce_preflight_recognizes_a_structurally_bound_official_qr() -> None:
     req = _with_qr(_request(model=ElectronicInvoiceModel.NFCE))
     _validate_mg_authorization_scope(req, model=65)
+
+
+def test_nfce_qrv3_online_rejects_unexpected_trailing_fields_or_legacy_v2() -> None:
+    original = _request(model=ElectronicInvoiceModel.NFCE)
+    for suffix in ("|3|2|untrusted", "|2|2|12345|untrusted", "|3|1"):
+        url = (
+            "https://portalsped.fazenda.mg.gov.br/portalnfce/sistema/qrcode.xhtml"
+            f"?p={original.access_key.value}{suffix}"
+        )
+        with pytest.raises(OfficialNfeTransportError, match="QR/consulta"):
+            _validate_mg_authorization_scope(
+                _with_qr(original, qr_url=url), model=65,
+            )
+
+
+def test_nfce_offline_contingency_is_blocked_until_qr_signature_port_exists() -> None:
+    original = _with_qr(_request(model=ElectronicInvoiceModel.NFCE))
+    offline = replace(
+        original,
+        signed_xml=original.signed_xml.replace(b"<tpEmis>1</tpEmis>", b"<tpEmis>9</tpEmis>"),
+    )
+    with pytest.raises(OfficialNfeTransportError, match="contingencia"):
+        _validate_mg_authorization_scope(offline, model=65)
 
 
 def test_nfce_operations_refuse_wrong_legacy_adapter_until_model65_certification() -> None:
