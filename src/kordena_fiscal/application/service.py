@@ -833,8 +833,7 @@ class FiscalApplicationService:
                         policy_id="nfcore-fiscal-archive", policy_version=1
                     ),
                 )
-                if isinstance(result, AuthorizationResult)
-                and result.authorized_xml is not None else None
+                if result.authorized_xml is not None else None
             )
             self.finalize_authorized(
                 archive_entry=xml_evidence,
@@ -1061,6 +1060,13 @@ class FiscalApplicationService:
                 raise PersistenceConflictError("NFS-e transmission changed during provider query")
             if result.status is AuthorizationStatus.AUTHORIZED:
                 assert result.invoice_reference is not None
+                if result.authorized_xml is not None:
+                    uow.archive.append(FiscalArchiveEntry.build(
+                        scope=scope, document_reference=document_id,
+                        kind=FiscalArchiveKind.AUTHORIZED_XML,
+                        content=result.authorized_xml, media_type="application/xml",
+                        archived_at=occurred_at, retention=retention,
+                    ))
                 updated = self._state_machine.transition(
                     current,
                     FiscalDocumentState.AUTHORIZED,
