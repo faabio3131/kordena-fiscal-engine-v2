@@ -209,7 +209,7 @@ def build_extrema_rps_xml(
     if line.deduction_amount.amount > 0:
         _child(values, "ValorDeducoes", f"{line.deduction_amount.amount:.2f}")
     _child(values, "ValorIss", f"{line.iss_amount.amount:.2f}")
-    _child(values, "Aliquota", f"{intent.iss_rate_fraction:.4f}")
+    _child(values, "Aliquota", f"{intent.iss_rate_fraction * 100:.4f}")
     _child(service, "IssRetido", "1" if line.iss_withheld else "2")
     _child(service, "ItemListaServico", line.municipal_service_code)
     if issuer.primary_cnae is not None:
