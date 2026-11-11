@@ -221,6 +221,295 @@ function appendFiscalFilters(article, viewId) {
 }
 
 /** @param {HTMLElement} article */
+function appendExtremaNfsePreparation(article) {
+  if (!bootstrapState?.permissions.includes("configuration.write")
+    || !bootstrapState.permissions.includes("document.issue")
+    || !["owner", "admin"].includes(bootstrapState.role)) return;
+  const info = document.createElement("p");
+  info.className = "empty-state";
+  info.textContent = "Extrema/MG · NFS-e WebISS 2.02/RTC. Preparação fiscal somente em homologação, com revisão humana explícita. Preparar um RPS não é emitir uma NFS-e. Sem certificado A1 e vínculo municipal aprovados, a transmissão permanece bloqueada.";
+  article.append(info);
+  const form = document.createElement("form");
+  form.id = "extrema-nfse-preparation";
+  form.className = "panel-form";
+  const heading = document.createElement("h3");
+  heading.textContent = "Preparar serviço fiscal revisado — Extrema";
+  form.append(heading);
+  const inputs = {};
+  const fields = [
+    ["source_id", "Referência única do serviço aprovado", "text", "", true],
+    ["competence_date", "Competência do serviço", "date", "", true],
+    ["taker_cnpj", "CNPJ do tomador", "text", "[0-9]{14}", true],
+    ["taker_name", "Razão social do tomador", "text", "", true],
+    ["service_code", "Código municipal da lista de serviços", "text", "", true],
+    ["description", "Descrição detalhada do serviço", "text", "", true],
+    ["gross_amount", "Valor bruto (R$, duas casas decimais)", "text", "[0-9]+\\.[0-9]{2}", true],
+    ["deduction_amount", "Deduções (R$, duas casas decimais)", "text", "[0-9]+\\.[0-9]{2}", true],
+    ["iss_rate_fraction", "Alíquota de ISS em fração (ex.: 0.0300 = 3%)", "text", "0(\\.[0-9]{1,4})?|1(\\.0{1,4})?", true],
+    ["exigibilidade_iss", "Exigibilidade ISS (código 1–7)", "text", "[1-7]", true],
+    ["incidence_municipality", "Município de incidência (IBGE)", "text", "3125101", true],
+    ["nbs_code", "Código NBS validado", "text", "[0-9]{9}", true],
+    ["rtc_operation_indicator", "Código da operação IBS/CBS", "text", "[0-9]{6}", true],
+    ["rtc_cst", "CST IBS/CBS validado", "text", "[0-9]{3}", true],
+    ["rtc_tax_class", "cClassTrib IBS/CBS validada", "text", "[0-9]{6}", true],
+    ["rule_reference", "Identificador da regra fiscal aprovada e fonte normativa", "text", "", true],
+    ["rule_version", "Versão publicada da regra", "number", "", true],
+    ["rps_series", "Série do RPS", "number", "", true],
+  ];
+  for (const [name, title, type, pattern, required] of fields) {
+    const label = document.createElement("label");
+    label.textContent = title;
+    const field = document.createElement("input");
+    field.name = name;
+    field.id = "extrema-" + name.replaceAll("_", "-");
+    field.type = type;
+    field.required = required;
+    if (pattern && type === "text") field.pattern = pattern;
+    if (name === "rps_series") { field.min = "0"; field.max = "99999"; field.step = "1"; }
+    if (name === "rule_version") { field.min = "1"; field.max = "99999"; field.step = "1"; }
+    if (name === "incidence_municipality") field.value = "3125101";
+    field.autocomplete = "off";
+    if (["source_id", "description", "rule_reference"].includes(name)) field.maxLength = name === "description" ? 1000 : 256;
+    inputs[name] = field;
+    label.append(field); form.append(label);
+  }
+  const decisions = {};
+  for (const [name, title] of [
+    ["iss_withheld", "ISS retido pelo tomador (conforme parecer)"],
+    ["incentive_fiscal", "Incentivo fiscal aplicável e aprovado"],
+  ]) {
+    const label = document.createElement("label");
+    const select = document.createElement("select");
+    select.name = name; select.required = true;
+    for (const [value, text] of [["", "Selecione após revisão"], ["false", "Não"], ["true", "Sim"]]) {
+      const option = document.createElement("option"); option.value = value;
+      option.textContent = text; select.append(option);
+    }
+    label.append(title, select); decisions[name] = select; form.append(label);
+  }
+  const attestationLabel = document.createElement("label");
+  const attestation = document.createElement("input");
+  attestation.type = "checkbox"; attestation.required = true;
+  attestationLabel.append(
+    attestation,
+    document.createTextNode(" Confirmo que revisei a competência, tomador, serviço, imposto e códigos RTC com a regra fiscal indicada. A aplicação não decide tributos por mim."),
+  );
+  const result = document.createElement("p");
+  result.id = "extrema-preparation-result";
+  result.setAttribute("role", "status");
+  result.setAttribute("aria-live", "polite");
+  const submit = document.createElement("button");
+  submit.type = "submit"; submit.className = "primary";
+  submit.textContent = "Preparar RPS em homologação";
+  form.append(attestationLabel, submit, result);
+  article.append(form);
+  let attempt = null;
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    if (!selectedFiscalUnit || selectedFiscalEnvironment !== "homologation") {
+      result.textContent = "Selecione uma unidade habilitada no ambiente de homologação.";
+      return;
+    }
+    const payload = {
+      unit_id: selectedFiscalUnit,
+      environment: "homologation",
+      ...Object.fromEntries(Object.entries(inputs).map(([key, value]) => [key, value.value.trim()])),
+      iss_withheld: decisions.iss_withheld.value === "true",
+      incentive_fiscal: decisions.incentive_fiscal.value === "true",
+      rule_version: Number(inputs.rule_version.value),
+      rps_series: Number(inputs.rps_series.value),
+      fiscal_review_approved: attestation.checked,
+    };
+    if (![payload.rule_version, payload.rps_series].every(Number.isSafeInteger)) {
+      result.textContent = "Informe série e versão fiscal válidas."; return;
+    }
+    const fingerprint = JSON.stringify(payload);
+    if (attempt && attempt.fingerprint !== fingerprint) {
+      result.textContent = "O conteúdo mudou. Consulte o documento anterior antes de criar outra tentativa.";
+      return;
+    }
+    attempt ||= {fingerprint, key: crypto.randomUUID()};
+    submit.disabled = true;
+    result.textContent = "Preparando e reservando RPS no armazenamento fiscal canônico...";
+    try {
+      const output = await api("/v1/portal/operations/prepareExtremaNfse", {
+        method: "POST",
+        headers: {"X-CSRF-Token": csrfToken(), "Idempotency-Key": attempt.key},
+        body: JSON.stringify(payload),
+      });
+      result.textContent = "RPS preparado: " + String(output.document_id)
+        + ". Série " + String(output.rps_series) + ", número " + String(output.rps_number)
+        + ". Estado: " + String(output.status)
+        + ". NÃO é autorização municipal. Use a emissão governada com a referência e depois a conciliação.";
+      attempt = null;
+      form.reset();
+    } catch (error) {
+      result.textContent = (error instanceof Error ? error.message : "Falha de preparação")
+        + " Preserve a referência e não gere outro pedido sem verificar o estado.";
+    } finally {
+      submit.disabled = false;
+    }
+  });
+}
+
+function appendExtremaCancellation(article) {
+  const operations = bootstrapState?.projection.configured_fiscal_operations;
+  if (!bootstrapState?.permissions.includes("document.cancel")
+    || !Array.isArray(operations) || !operations.includes("cancelExtremaNfse")) return;
+  const form = document.createElement("form");
+  form.id = "extrema-cancel-form";
+  form.className = "panel-form";
+  const heading = document.createElement("h3");
+  heading.textContent = "Cancelar NFS-e de Extrema (homologação)";
+  const explain = document.createElement("p");
+  explain.textContent = "Utilize somente a referência de uma nota autorizada pelo WebISS. O NFCore conferirá o XML original e o CNPJ da unidade. Resposta incerta exige consulta; nunca repita o cancelamento automaticamente.";
+  const refLabel = document.createElement("label");
+  refLabel.textContent = "Referência original da NFS-e autorizada";
+  const ref = document.createElement("input");
+  ref.required = true; ref.maxLength = 128; ref.autocomplete = "off";
+  refLabel.append(ref);
+  const reasonLabel = document.createElement("label");
+  reasonLabel.textContent = "Código oficial do motivo do cancelamento";
+  const reason = document.createElement("select"); reason.required = true;
+  for (const [code, title] of [
+    ["", "Selecione após análise fiscal"], ["1", "1"], ["2", "2"],
+    ["3", "3"], ["4", "4"], ["5", "5"],
+  ]) {
+    const opt = document.createElement("option"); opt.value = code;
+    opt.textContent = title; reason.append(opt);
+  }
+  reasonLabel.append(reason);
+  const approval = document.createElement("input");
+  approval.type = "checkbox"; approval.required = true;
+  const approvalLabel = document.createElement("label");
+  approvalLabel.append(approval, document.createTextNode(
+    " Conferi a nota original, o motivo oficial, a identidade e a autorização humana para o evento irreversível.",
+  ));
+  const send = document.createElement("button");
+  send.type = "submit"; send.className = "primary";
+  send.textContent = "Solicitar cancelamento governado";
+  const status = document.createElement("p");
+  status.setAttribute("role", "status"); status.setAttribute("aria-live", "polite");
+  form.append(heading, explain, refLabel, reasonLabel, approvalLabel, send, status);
+  article.append(form);
+  /** @type {{fingerprint:string,key:string}|null} */
+  let attempt = null;
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    if (!selectedFiscalUnit || selectedFiscalEnvironment !== "homologation") {
+      status.textContent = "Escolha a unidade habilitada em homologação.";
+      return;
+    }
+    const payload = {
+      unit_id: selectedFiscalUnit, environment: selectedFiscalEnvironment,
+      document_id: ref.value.trim(), cancellation_code: reason.value,
+      human_approval: approval.checked,
+    };
+    const fingerprint = JSON.stringify(payload);
+    if (attempt && attempt.fingerprint !== fingerprint) {
+      status.textContent = "Há um cancelamento pendente com conteúdo diferente. Consulte o estado original antes de alterar.";
+      return;
+    }
+    attempt ||= {fingerprint, key: crypto.randomUUID()};
+    send.disabled = true; status.textContent = "Revisando a nota, o certificado e o evento fiscal...";
+    try {
+      const response = await api("/v1/portal/operations/cancelExtremaNfse", {
+        method: "POST",
+        headers: {"X-CSRF-Token": csrfToken(), "Idempotency-Key": attempt.key},
+        body: JSON.stringify(payload),
+      });
+      status.textContent = response.official_fiscal_confirmation
+        ? "Cancelamento municipal confirmado. Consulte o XML arquivado."
+        : "O WebISS rejeitou ou não confirmou o cancelamento. Consulte o estado antes de outra tentativa.";
+      attempt = null;
+    } catch (error) {
+      status.textContent = (error instanceof Error ? error.message : "Cancelamento não confirmado")
+        + " Resultado incerto: não envie outra solicitação sem conciliar com o WebISS.";
+    } finally { send.disabled = false; }
+  });
+}
+
+function appendExtremaSubstitution(article) {
+  const operations = bootstrapState?.projection.configured_fiscal_operations;
+  if (!bootstrapState?.permissions.includes("document.cancel")
+    || !bootstrapState?.permissions.includes("document.issue")
+    || !Array.isArray(operations) || !operations.includes("substituteExtremaNfse")) return;
+  const form = document.createElement("form");
+  form.id = "extrema-substitution-form"; form.className = "panel-form";
+  const heading = document.createElement("h3");
+  heading.textContent = "Substituir NFS-e de Extrema";
+  const help = document.createElement("p");
+  help.textContent = "A nota antiga deve estar AUTORIZADA, e o novo RPS já PREPARADO e revisado na mesma unidade. A transação WebISS substitui as duas notas em uma operação SOAP; em caso de resposta incerta, não reenvie.";
+  const oldLabel = document.createElement("label");
+  oldLabel.textContent = "Documento original autorizado";
+  const oldRef = document.createElement("input");
+  oldRef.required = true; oldRef.maxLength = 128; oldLabel.append(oldRef);
+  const newLabel = document.createElement("label");
+  newLabel.textContent = "Documento substituto preparado";
+  const newRef = document.createElement("input");
+  newRef.required = true; newRef.maxLength = 128; newLabel.append(newRef);
+  const reasonLabel = document.createElement("label");
+  reasonLabel.textContent = "Código fiscal do cancelamento substitutivo";
+  const code = document.createElement("select"); code.required = true;
+  for (const [v, label] of [["", "Motivo validado"], ["1", "1"], ["2", "2"], ["3", "3"], ["4", "4"], ["5", "5"]]) {
+    const choice = document.createElement("option");
+    choice.value = v; choice.textContent = label; code.append(choice);
+  }
+  reasonLabel.append(code);
+  const attestationLabel = document.createElement("label");
+  const attestation = document.createElement("input");
+  attestation.type = "checkbox"; attestation.required = true;
+  attestationLabel.append(attestation, document.createTextNode(
+    " Aprovo o cancelamento da nota original e a nova emissão no mesmo ato, após conferir as duas referências, o tomador e a regra tributária.",
+  ));
+  const button = document.createElement("button");
+  button.type = "submit"; button.className = "primary";
+  button.textContent = "Solicitar substituição validada";
+  const status = document.createElement("p");
+  status.setAttribute("aria-live", "polite"); status.setAttribute("role", "status");
+  form.append(heading, help, oldLabel, newLabel, reasonLabel, attestationLabel, button, status);
+  article.append(form);
+  /** @type {{fingerprint:string,key:string}|null} */
+  let attempt = null;
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    if (!selectedFiscalUnit || selectedFiscalEnvironment !== "homologation") {
+      status.textContent = "Selecione unidade e homologação antes de substituir."; return;
+    }
+    const payload = {
+      unit_id: selectedFiscalUnit, environment: selectedFiscalEnvironment,
+      original_id: oldRef.value.trim(), replacement_id: newRef.value.trim(),
+      cancellation_code: code.value, human_approval: attestation.checked,
+    };
+    const fingerprint = JSON.stringify(payload);
+    if (attempt && attempt.fingerprint !== fingerprint) {
+      status.textContent = "Há uma solicitação anterior com outros dados. Concilie antes de alterar.";
+      return;
+    }
+    attempt ||= {fingerprint, key: crypto.randomUUID()};
+    button.disabled = true;
+    status.textContent = "Validando o documento antigo, a nova nota e as permissões fiscais...";
+    try {
+      const output = await api("/v1/portal/operations/substituteExtremaNfse", {
+        method: "POST",
+        headers: {"X-CSRF-Token": csrfToken(), "Idempotency-Key": attempt.key},
+        body: JSON.stringify(payload),
+      });
+      status.textContent = output.official_fiscal_confirmation
+        ? "Substituição confirmada no WebISS: original " + String(output.original_status)
+          + " e substituta " + String(output.replacement_status) + "."
+        : "Substituição não confirmada. Concilie a resposta oficial antes de alterar notas.";
+      attempt = null;
+    } catch (error) {
+      status.textContent = (error instanceof Error ? error.message : "Substituição pendente")
+        + " Não reenvie uma substituição incerta; consulte o WebISS.";
+    } finally { button.disabled = false; }
+  });
+}
+
 function appendFiscalActions(article) {
   const recoveryNotice = document.createElement("p");
   recoveryNotice.textContent = "Se a resposta for interrompida, mantenha esta página aberta e preserve o pedido original. Após recarregar, consulte o estado fiscal antes de iniciar outra solicitação.";
@@ -385,6 +674,9 @@ async function api(path, options = {}) {
       BROWSER_AUTHORITY_REJECTED: "Organização e permissões são definidas pela sessão. Remova campos de autoridade do pedido.",
       INVALID_PREPARED_DOCUMENT: "Referência inválida ou documento ainda não preparado neste escopo. Confira e corrija o campo.",
       MISSING_IDEMPOTENCY_KEY: "O pedido precisa de um identificador de tentativa para ser processado com segurança.",
+      INVALID_EXTREMA_PREPARATION: "Dados fiscais de Extrema inconsistentes. Verifique o cadastro, valores, competência e classificação RTC.",
+      EXTREMA_FISCAL_REVIEW_REQUIRED: "Preparação reservada ao responsável autorizado pela revisão fiscal. Solicite aprovação administrativa.",
+      EXTREMA_PREPARATION_CONFLICT: "Esta referência já possui um RPS com dados diferentes. Preserve o pedido original.",
     };
     const code = detail && typeof detail === "object" && typeof detail.code === "string" ? detail.code : "";
     const translated = messages[/** @type {keyof typeof messages} */ (code)];
@@ -1897,6 +2189,9 @@ async function renderSurface(viewId) {
     if (viewId === "users") appendUserAdministration(article, rows);
     if (viewId === "errors" || viewId === "reconciliation") appendCognitiveAdvisor(article, viewId);
     if (["inutilizations", "documents", "issuances", "reconciliation"].includes(viewId)) await appendFiscalRecovery(article);
+    if (viewId === "issuances") appendExtremaNfsePreparation(article);
+    if (viewId === "issuances") appendExtremaCancellation(article);
+    if (viewId === "issuances") appendExtremaSubstitution(article);
     if (viewId === "inutilizations") appendInutilizationForm(article);
     if (["documents", "issuances", "reconciliation"].includes(viewId)) appendFiscalActions(article);
     if (scopedViews.has(viewId) && viewId !== "capabilities") {
