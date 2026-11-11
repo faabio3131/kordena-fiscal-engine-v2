@@ -83,3 +83,14 @@ A instalação é **NO-GO** se faltar arquivo SA privado correspondente à key I
 
 Auditoria consolidada [issue #424](https://github.com/faabio3131/nf-core-v001/issues/424), incidente [#417](https://github.com/faabio3131/nf-core-v001/issues/417), PR de Bling [#422](https://github.com/faabio3131/nf-core-v001/pull/422).
 Esta trilha **não atualiza** `AGENTS.md` nem arquivos fiscais/municipais: outro agente é autoridade da expansão. Quando houver output real do novo preflight, publicar somente status/sha/metadados no checkpoint e resolver G0–G1 antes da migração.
+
+
+## Reconciliação de implementação e EGM — 11/11/2026
+
+- **G0, marcador real da release:** `deploy/contabo/deploy.sh` grava `.deployed` como `SHA=<40 caracteres>`. O inventário foi alinhado ao formato canônico; SHA cru, duplicado, host incorreto ou checkout divergente causam `NO_GO`.
+- **Fail closed:** o executável agora retorna exit code não zero para `RESULT=NO_GO_*`. A ausência do worker não pode ser interpretada como preflight aprovado apenas porque Docker respondeu.
+- **Fronteira entre SaaS:** os mounts privados de identidade devem pertencer a um namespace aprovado do NFCore: `/opt/fm/nfcore`, `/etc/nfcore` ou `/run/nfcore`. Caminhos externos, `..` e escapes por symlink são rejeitados **sem abrir arquivos de outro SaaS**. Se a instalação legítima usa caminho diferente, exigir revisão humana e ajuste explícito do contrato, nunca bypass no host.
+- **Testes de regressão adicionados:** formato do marcador, rejeição de marcador ambíguo, status de saída NO-GO, caminho cross-SaaS e symlink de diretório. Este checkpoint não converte testes sintéticos em prova de host real.
+- **Documentos de governança:** `AGENTS.md` pertence à trilha de expansão geográfica e não será alterado aqui. `agentes.md` exige evidências e certificação antes de produção. O EGM (Elephant-Goldfish Model) requer revisão independente nativa, relatório de drift e prova de isolamento de revisores. **Nenhuma execução Goldfish nativa é alegada nesta PR**; o gate EGM independente segue pendente até haver artefatos verificáveis.
+- **Canal operacional:** a tentativa de inspecionar a VPS via Desktop Commander em 11/11 retornou limite mensal de uso, sem executar comandos no host. Não inferir que o host atual corresponde ao inventário histórico. Usar apenas canal SSH autorizado, com host key previamente conferida e comandos read-only, ou o Plano B previamente aprovado. Não instalar/rotacionar credenciais, ativar workers, editar IAM, realizar DDL ou reboot como contorno.
+- **Certificação:** a PR #425 só pode avançar após CI completa no HEAD exato, inspeção/retorno read-only sanitizado, revisão EGM independente exigida e conciliação dos gates G0–G5. Mesmo com CI verde, identidade privada, `.env.worker`, bindings e execução E2E seguem não comprovados até validação no host. Sem merge/deploy automático.
