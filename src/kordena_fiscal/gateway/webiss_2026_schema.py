@@ -15,6 +15,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from lxml import etree
+
 from kordena_fiscal.domain import FiscalValidationError
 from kordena_fiscal.xml.schema import (
     SchemaResource,
@@ -23,6 +25,9 @@ from kordena_fiscal.xml.schema import (
     XmlSchemaValidator,
 )
 
+_EXTREMA_RTC_DESTINATION_ORDER_SOURCE = (
+    "https://documentacao.senior.com.br/documentoseletronicos/notasdaversao/5-8-16/"
+)
 WEBISS_RTC_LAYOUT_VERSION = "2.02"
 WEBISS_MG_IBGE = frozenset({"3125101", "3170107"})
 
@@ -122,3 +127,54 @@ def build_pinned_webiss_municipal_schema(
         Webiss2026SchemaEvidence(municipality_ibge, expected_digest),
         validator,
     )
+
+
+def require_extrema_rtc_destination_order(xml: bytes) -> None:
+    """Reject the 2026 Extrema E160 <dest> ordering regression before dispatch.
+
+    The municipality's actual pinned XSD is still the schema authority; this
+    targeted safeguard only enforces the independently documented rule:
+    the recipient's identifier is the FIRST element in the IBS/CBS
+    destination group, rather than email/address/name preceding it.
+    No elements are repaired/reordered after signing, which would invalidate
+    XMLDSig and could change the recipient's legal identity.
+
+    Source: Senior eDocs 5.8.16.59, Extrema WebISS 2.02 + RTC E160 notice.
+    """
+    if not isinstance(xml, bytes) or not 0 < len(xml) <= 2_097_152:
+        raise WebissMunicipalSchemaUnverified(
+            "Invalid municipal XML before RTC destination preflight"
+        )
+    if b"<!DOCTYPE" in xml.upper():
+        raise WebissMunicipalSchemaUnverified("DTD is forbidden in WebISS RTC XML")
+    try:
+        root = etree.fromstring(
+            xml, parser=etree.XMLParser(resolve_entities=False, no_network=True),
+        )
+    except etree.XMLSyntaxError:
+        raise WebissMunicipalSchemaUnverified("Invalid municipal RTC XML") from None
+    namespace = "http://www.abrasf.org.br/nfse.xsd"
+    for destination in root.iter(f"{{{namespace}}}dest"):
+        if not any(
+            ancestor.tag == f"{{{namespace}}}IBSCBS"
+            for ancestor in destination.iterancestors()
+        ):
+            continue
+        children = list(destination)
+        if not children:
+            raise WebissMunicipalSchemaUnverified(
+                "Extrema IBS/CBS destination requires an identifier"
+            )
+        first = children[0]
+        if first.tag not in (
+            f"{{{namespace}}}CNPJ",
+            f"{{{namespace}}}CPF",
+            f"{{{namespace}}}NIF",
+            f"{{{namespace}}}cNaoNIF",
+        ):
+            raise WebissMunicipalSchemaUnverified(
+                "Extrema WebISS RTC E160: recipient identification must precede"
+                " the other destination fields"
+            )
+        # The official XSD remains responsible for enforcing type, required
+        # fields, alternate identities and the order of subsequent elements.
