@@ -563,6 +563,79 @@ def build_runtime_fiscal_handler_factory(
             handlers["cancelExtremaNfse"] = PreflightFiscalOperationHandler(
                 execute_extrema_cancel, validate_extrema_cancel,
             )
+        if extrema_adapter is not None:
+            replacement_gateway = extrema_adapter
+
+            def validate_extrema_substitution(
+                scope: ExecutionScope, payload: Mapping[str, Any], key: str | None,
+            ) -> None:
+                required_fields = {
+                    "unit_id", "environment", "original_id", "replacement_id",
+                    "cancellation_code", "human_approval",
+                }
+                if (
+                    not key or not key.strip() or len(key) > 256
+                    or set(payload) != required_fields
+                    or payload.get("unit_id") != scope.unit_id
+                    or payload.get("environment") != scope.environment.value
+                    or payload.get("human_approval") is not True
+                    or scope.environment is not FiscalEnvironment.HOMOLOGATION
+                    or not isinstance(payload.get("original_id"), str)
+                    or not isinstance(payload.get("replacement_id"), str)
+                    or not isinstance(payload.get("cancellation_code"), str)
+                    or payload["cancellation_code"] not in {"1", "2", "3", "4", "5"}
+                ):
+                    raise FiscalValidationError("Invalid human-reviewed municipal substitution")
+                original = application.load_prepared_nfse_authorization(
+                    scope, str(payload["original_id"]),
+                )
+                city = original.document.issuer.address.jurisdiction
+                for operation in (
+                    ConfiguredFiscalOperation.CANCEL,
+                    ConfiguredFiscalOperation.AUTHORIZE,
+                ):
+                    provider = application.resolve_configured_provider_id(
+                        scope=scope, document_kind=FiscalDocumentKind.NFSE,
+                        jurisdiction=city, operation=operation.value,
+                    )
+                    if (
+                        city.municipality_ibge_code != EXTREMA_IBGE
+                        or provider != EXTREMA_WEBISS_PROVIDER_ID
+                    ):
+                        raise FiscalValidationError(
+                            "Substitution requires both municipal provider bindings"
+                        )
+                application.preflight_extrema_nfse_substitution(
+                    scope=scope, original_id=str(payload["original_id"]),
+                    replacement_id=str(payload["replacement_id"]),
+                )
+
+            def execute_extrema_substitution(
+                scope: ExecutionScope, payload: Mapping[str, Any], key: str | None,
+            ) -> Mapping[str, Any]:
+                validate_extrema_substitution(scope, payload, key)
+                result = application.substitute_prepared_extrema_nfse(
+                    scope=scope, original_id=str(payload["original_id"]),
+                    replacement_id=str(payload["replacement_id"]),
+                    cancellation_code=str(payload["cancellation_code"]),
+                    gateway=replacement_gateway,
+                    occurred_at=datetime.now(UTC),
+                    retention=retention,
+                )
+                return {
+                    "entry_id": result.archive_reference,
+                    "original_id": str(payload["original_id"]),
+                    "replacement_id": str(payload["replacement_id"]),
+                    "original_status": result.original_lifecycle.state.value,
+                    "replacement_status": result.replacement_lifecycle.state.value,
+                    "official_fiscal_confirmation": result.result.confirmed,
+                    "rejection_code": result.result.rejection_code,
+                    "municipality_ibge": EXTREMA_IBGE,
+                }
+
+            handlers["substituteExtremaNfse"] = PreflightFiscalOperationHandler(
+                execute_extrema_substitution, validate_extrema_substitution,
+            )
         required = {
             "issueFiscalDocument",
             "queryFiscalDocument",
