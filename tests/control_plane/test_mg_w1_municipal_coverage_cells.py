@@ -84,6 +84,17 @@ def test_mg_wave1_ledger_has_one_cell_per_selected_municipality_in_order() -> No
     assert [x["municipality"] for x in cells] == [x.municipality for x in MG_ECONOMIC_WAVE_1]
     assert [x["economic_priority"] for x in cells] == list(range(1, 21))
     assert len({x["ibge"] for x in cells}) == 20
+    assert doc["latest_regulatory_review"]["gate_state"] == "INTERNAL_NOT_COMPLETE"
+    assert doc["latest_regulatory_review"]["dps_numbering"] == (
+        "HASH_PLACEHOLDER_NOT_SEQUENTIAL"
+    )
+    for cell in cells:
+        assert cell["simples_national_required_from_competence"] == "2026-11-01"
+        assert cell["nfse_current_restricted_schema_tested"] is False
+        assert cell["nfse_numbering_sequential_authority"] is False
+        assert cell["nfse_integration_web_e2e_certified"] is False
+        assert cell["nfce_qr_version_contract_certified"] is False
+        assert cell["national_issuer_guard_ci_sha"] is None
 
 
 def test_municipal_envelopes_must_be_verified_individually() -> None:
