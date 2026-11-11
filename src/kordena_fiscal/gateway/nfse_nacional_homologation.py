@@ -108,11 +108,22 @@ class NfseNacionalHomologationGateway:
         issuer_municipality = document.issuer.address.jurisdiction.municipality_ibge_code
         if issuer_municipality is None:
             raise OfficialNfseTransportError("DPS requires an issuer municipality")
-        require_mg_national_channel_eligibility(
-            jurisdiction=document.issuer.address.jurisdiction,
-            tax_regime=document.issuer.tax_regime,
-            competence_date=document.competence_date,
-        )
+        try:
+            require_mg_national_channel_eligibility(
+                jurisdiction=document.issuer.address.jurisdiction,
+                tax_regime=document.issuer.tax_regime,
+                competence_date=document.competence_date,
+            )
+        except FiscalValidationError:
+            # Never open the A1 vault or contact SEFIN for a wrong issuer.
+            municipality_label = (
+                "Contagem/MG" if issuer_municipality == "3118601"
+                else f"IBGE {issuer_municipality}/MG"
+            )
+            raise OfficialNfseTransportError(
+                f"{municipality_label}: contrato do Emissor Nacional nao autorizado "
+                "para regime e competencia informados"
+            ) from None
         material = self._resolve_certificate(document.scope, issuer_cnpj)
         validate_a1_for_issuer(
             material.pkcs12_bytes, material.password, issuer_cnpj=Cnpj(issuer_cnpj),
