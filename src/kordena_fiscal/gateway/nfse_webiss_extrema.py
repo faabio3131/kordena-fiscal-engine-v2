@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from enum import Enum
+from typing import cast
 
 from lxml import etree
 
@@ -172,10 +173,10 @@ def prepare_extrema_webiss_soap(
         raise FiscalValidationError("Incorrect Extrema WebISS XML root")
     # Identify the authorized party from XML, never from the HTTP request.
     party = "Tomador" if operation is ExtremaWebissOperation.QUERY_RECEIVED else "Prestador"
-    cnpjs = root.xpath(
+    cnpjs = cast(list[str], root.xpath(
         ".//*[local-name()=$party]/*[local-name()='CpfCnpj']/*[local-name()='Cnpj']/text()",
         party=party,
-    )
+    ))
     if not cnpjs or any(value != issuer_cnpj.value for value in cnpjs):
         raise FiscalValidationError("Extrema XML issuer CNPJ mismatch")
     signatures = root.findall(f".//{{{_XMLDSIG}}}Signature")
@@ -185,7 +186,9 @@ def prepare_extrema_webiss_soap(
         raise FiscalValidationError("Extrema query XML must use unsigned query contract")
     xml_hash = _validate_xsd(signed_or_query_xml, schema)
     header = etree.Element(
-        f"{{{_ABRASF}}}cabecalho", nsmap={None: _ABRASF}, versao="2.02",
+        f"{{{_ABRASF}}}cabecalho",
+        nsmap=cast(dict[str, str], {None: _ABRASF}),
+        versao="2.02",
     )
     etree.SubElement(header, f"{{{_ABRASF}}}versaoDados").text = "2.02"
     header_xml = etree.tostring(header, encoding="unicode")
