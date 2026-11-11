@@ -969,11 +969,14 @@ class PostgresFiscalDatabase:
         applied = self.applied_migrations()
         baseline = tuple(range(1, COGNITIVE_QUOTA_VERSION + 1))
         bling_ready = tuple(range(1, BLING_WORKER_POLICY_VERSION + 1))
-        # A code-only release accepts either original production baseline or
-        # the fully installed optional Bling schema. Partial v20 is NOT ready.
-        if (require_bling and applied != bling_ready) or (
-            not require_bling and applied not in (baseline, bling_ready)
-        ):
+        nfse_baseline = (*baseline, NFSE_DPS_NUMBERING_VERSION)
+        nfse_bling = (*bling_ready, NFSE_DPS_NUMBERING_VERSION)
+        # Optional Bling 20/21 and additive DPS 22 can be independently
+        # installed. Partial Bling installation remains forbidden.
+        ready_schemas = (bling_ready, nfse_bling) if require_bling else (
+            baseline, bling_ready, nfse_baseline, nfse_bling,
+        )
+        if applied not in ready_schemas:
             raise PersistenceStateError(
                 "PostgreSQL schema is not at the certified migration version"
             )
@@ -996,6 +999,19 @@ class PostgresFiscalDatabase:
             raise PersistenceStateError(
                 "PostgreSQL schema is not at the certified migration version"
             ) from exc
+        if NFSE_DPS_NUMBERING_VERSION in applied:
+            try:
+                with self.connection() as connection:
+                    numbered = connection.execute(
+                        "SELECT to_regclass('public.fm_nfse_dps_counters'), "
+                        "to_regclass('public.fm_nfse_dps_reservations')"
+                    ).fetchone()
+                if numbered is None or len(numbered) != 2 or not all(numbered):
+                    raise PersistenceStateError("DPS serial tables are missing")
+            except PersistenceStateError:
+                raise
+            except Exception as exc:
+                raise PersistenceStateError("DPS serial schema is not ready") from exc
         if not require_bling:
             return applied
         try:
