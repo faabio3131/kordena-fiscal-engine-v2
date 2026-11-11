@@ -1,0 +1,276 @@
+"""Canonical durable NFS-e authorization and read-only recovery for Extrema.
+
+The single source of truth is FiscalApplicationService. This adapter consumes
+its immutable archived RPS intent, never untrusted raw XML; returns normalized
+outcomes, never writes fiscal state and never automatically retries an HTTP POST.
+"""
+from __future__ import annotations
+
+from collections.abc import Callable
+from datetime import date
+
+from lxml import etree
+
+from kordena_fiscal.domain import (
+    Cnpj,
+    ExecutionScope,
+    FiscalValidationError,
+)
+from kordena_fiscal.gateway.authorization import AuthorizationStatus, GatewayProviderMetadata
+from kordena_fiscal.gateway.mg_webiss_soap import (
+    EXTREMA_IBGE,
+    WebissExtremaHomologationTransport,
+    WebissMgContractError,
+)
+from kordena_fiscal.gateway.nfse_abrasf203_envelope import (
+    Abrasf203Operation,
+    AbrasfCancellationFacts,
+    AbrasfServiceFacts,
+    prepare_abrasf203_soap,
+)
+from kordena_fiscal.issuance.nfe_nfse import (
+    NfseAuthorizationRequest,
+    NfseAuthorizationResult,
+)
+from kordena_fiscal.issuance.webiss_extrema_builder import (
+    ExtremaRpsIntent,
+    build_extrema_rps_xml,
+    validate_extrema_intent,
+)
+from kordena_fiscal.vault import EphemeralCertificateMaterial
+from kordena_fiscal.xml.schema import XmlSchemaValidator
+
+_NS = "{http://www.abrasf.org.br/nfse.xsd}"
+_PROVIDER = GatewayProviderMetadata(
+    provider_name="webiss-extrema-mg-homologation",
+    adapter_version="extrema-rtc-2.02-v1",
+)
+
+
+def _response_messages(xml: etree._Element) -> tuple[str, str] | None:
+    messages = xml.findall(f".//{_NS}ListaMensagemRetorno/{_NS}MensagemRetorno")
+    if not messages:
+        return None
+    first = messages[0]
+    code = first.findtext(f"{_NS}Codigo", "")
+    message = first.findtext(f"{_NS}Mensagem", "")
+    if not code or not message or len(code) > 64:
+        raise WebissMgContractError("Extrema returned incomplete official rejection")
+    return code[:64], message[:512]
+
+
+def _invoice_reference(
+    xml: etree._Element, request: NfseAuthorizationRequest,
+    intent: ExtremaRpsIntent,
+) -> tuple[str, str] | None:
+    invoices = xml.findall(
+        f".//{_NS}CompNfse/{_NS}Nfse/{_NS}InfNfse"
+    )
+    if not invoices:
+        return None
+    if len(invoices) != 1:
+        raise WebissMgContractError("Ambiguous municipal NFS-e response")
+    invoice = invoices[0]
+    invoice_number = invoice.findtext(f"{_NS}Numero", "")
+    code = invoice.findtext(f"{_NS}CodigoVerificacao", "")
+    access_key = invoice.findtext(f"{_NS}ChaveAcesso", "")
+    legal_issuer = invoice.findtext(
+        f"{_NS}PrestadorServico/{_NS}IdentificacaoPrestador/"
+        f"{_NS}CpfCnpj/{_NS}Cnpj", "",
+    )
+    issuing_city = invoice.findtext(f"{_NS}OrgaoGerador/{_NS}CodigoMunicipio", "")
+    source = invoice.find(
+        f"{_NS}DeclaracaoPrestacaoServico/"
+        f"{_NS}InfDeclaracaoPrestacaoServico"
+    )
+    if source is None:
+        raise WebissMgContractError("Municipal invoice has no original RPS declaration")
+    ident = source.find(f"{_NS}Rps/{_NS}IdentificacaoRps")
+    if ident is None:
+        raise WebissMgContractError("Municipal invoice has no RPS correlation")
+    facts = (
+        ident.findtext(f"{_NS}Numero", ""),
+        ident.findtext(f"{_NS}Serie", ""),
+        ident.findtext(f"{_NS}Tipo", ""),
+    )
+    service = source.find(f"{_NS}Servico")
+    if service is None:
+        raise WebissMgContractError("Municipal invoice has no trusted service")
+    billed_amount = service.findtext(f"{_NS}Valores/{_NS}ValorServicos", "")
+    issuer_cnpj = source.findtext(f"{_NS}Prestador/{_NS}CpfCnpj/{_NS}Cnpj", "")
+    competence = source.findtext(f"{_NS}Competencia", "")
+    taker = source.findtext(
+        f"{_NS}Tomador/{_NS}IdentificacaoTomador/"
+        f"{_NS}CpfCnpj/{_NS}Cnpj", "",
+    )
+    line = request.document.services[0]
+    if (
+        not invoice_number.isdecimal()
+        or not code
+        or not access_key
+        or legal_issuer != intent.issuer_cnpj.value
+        or issuer_cnpj != intent.issuer_cnpj.value
+        or issuing_city != EXTREMA_IBGE
+        or facts != (
+            str(intent.reservation.number), str(intent.reservation.key.series), "1",
+        )
+        or competence != request.document.competence_date.isoformat()
+        or billed_amount != f"{line.gross_amount.amount:.2f}"
+        or taker != intent.taker.cnpj.value
+    ):
+        raise WebissMgContractError(
+            "NFS-e received from WebISS differs from original durable fiscal intention"
+        )
+    # An official invoice must carry both verification code and access key.
+    # Those are external identifiers, not locally invented IDs.
+    return access_key, code
+
+
+class WebissExtremaCanonicalNfseGateway:
+    """NfseGateway + NfseQueryGateway through the existing durable state machine.
+
+    A 2.02 RTC document is only authorized when the provider returns one
+    source-correlated, schema-valid CompNfse in a certified SOAP exchange.
+    An uncertain POST is left TRANSMITTING by the application, and query()
+    uses ConsultarNfsePorRps without making a second emission request.
+    """
+
+    def __init__(
+        self, *,
+        transport: WebissExtremaHomologationTransport,
+        load_intent: Callable[[ExecutionScope, str], ExtremaRpsIntent],
+        resolve_certificate: Callable[[ExecutionScope, str], EphemeralCertificateMaterial],
+        canonical_preaudit: Callable[[NfseAuthorizationRequest], None],
+        service_preaudit: Callable[[tuple[AbrasfServiceFacts, ...]], None],
+        municipal_validator: XmlSchemaValidator,
+    ) -> None:
+        if (
+            not isinstance(transport, WebissExtremaHomologationTransport)
+            or not callable(load_intent)
+            or not callable(resolve_certificate)
+            or not callable(canonical_preaudit)
+            or not callable(service_preaudit)
+            or not isinstance(municipal_validator, XmlSchemaValidator)
+        ):
+            raise FiscalValidationError("Incomplete governed WebISS Extrema composition")
+        self._transport = transport
+        self._load_intent = load_intent
+        self._certificate = resolve_certificate
+        self._canonical_preaudit = canonical_preaudit
+        self._service_preaudit = service_preaudit
+        self._validator = municipal_validator
+
+    def _trusted_intent(
+        self, request: NfseAuthorizationRequest,
+    ) -> ExtremaRpsIntent:
+        if not isinstance(request, NfseAuthorizationRequest):
+            raise FiscalValidationError("NFS-e request is required")
+        intent = self._load_intent(
+            request.document.scope, request.document.document_id,
+        )
+        validate_extrema_intent(request, intent)
+        return intent
+
+    def _outcome(
+        self, *, request: NfseAuthorizationRequest,
+        intent: ExtremaRpsIntent, response: bytes, is_query: bool,
+    ) -> NfseAuthorizationResult:
+        try:
+            parsed = etree.fromstring(
+                response, parser=etree.XMLParser(
+                    no_network=True, resolve_entities=False, load_dtd=False,
+                ),
+            )
+        except etree.XMLSyntaxError:
+            raise WebissMgContractError("Invalid Extrema normalized response") from None
+        reference = _invoice_reference(parsed, request, intent)
+        messages = _response_messages(parsed)
+        base = dict(
+            scope=request.document.scope,
+            document_id=request.document.document_id,
+            idempotency_key=request.idempotency_key,
+            request_fingerprint=request.request_fingerprint,
+            provider=_PROVIDER,
+        )
+        if reference is not None:
+            if messages is not None:
+                raise WebissMgContractError("WebISS returned contradictory result and rejection")
+            return NfseAuthorizationResult(
+                status=AuthorizationStatus.AUTHORIZED,
+                invoice_reference=reference[0],
+                verification_code=reference[1],
+                **base,
+            )
+        if messages is not None and not is_query:
+            return NfseAuthorizationResult(
+                status=AuthorizationStatus.REJECTED,
+                rejection_code=messages[0],
+                rejection_message=messages[1],
+                **base,
+            )
+        # A read-only query reporting "not found" cannot prove a failed POST,
+        # and an uncorrelated response never authorizes an invoice.
+        return NfseAuthorizationResult(status=AuthorizationStatus.PENDING, **base)
+
+    def authorize(self, request: NfseAuthorizationRequest) -> NfseAuthorizationResult:
+        intent = self._trusted_intent(request)
+        self._canonical_preaudit(request)
+        xml = build_extrema_rps_xml(request, intent, validator=self._validator)
+        signed = prepare_abrasf203_soap(
+            operation=Abrasf203Operation.GENERATE,
+            xml=xml,
+            scope=request.document.scope,
+            issuer_cnpj=intent.issuer_cnpj,
+            resolve_certificate=self._certificate,
+            preaudit=self._service_preaudit,
+            municipal_schema_version="2.02",
+            municipal_validator=self._validator,
+        )
+        result = self._transport.exchange_prepared(
+            envelope=signed,
+            operation=Abrasf203Operation.GENERATE,
+            scope=request.document.scope,
+            issuer_cnpj=intent.issuer_cnpj,
+            issuer_tax_regime=request.document.issuer.tax_regime,
+            competence_date=request.document.competence_date,
+            jurisdiction=request.document.issuer.address.jurisdiction,
+        )
+        return self._outcome(request=request, intent=intent, response=result, is_query=False)
+
+    def query(self, request: NfseAuthorizationRequest) -> NfseAuthorizationResult:
+        intent = self._trusted_intent(request)
+        # A query never allocates another number and never signs or sends
+        # another RPS; it reuses the exact number stored with the issuance.
+        root = etree.Element(f"{_NS}ConsultarNfseRpsEnvio", nsmap={None: _NS[1:-1]})
+        identity = etree.SubElement(root, f"{_NS}IdentificacaoRps")
+        for name, value in (
+            ("Numero", str(intent.reservation.number)),
+            ("Serie", str(intent.reservation.key.series)),
+            ("Tipo", "1"),
+        ):
+            etree.SubElement(identity, f"{_NS}{name}").text = value
+        prestador = etree.SubElement(root, f"{_NS}Prestador")
+        cpf_cnpj = etree.SubElement(prestador, f"{_NS}CpfCnpj")
+        etree.SubElement(cpf_cnpj, f"{_NS}Cnpj").text = intent.issuer_cnpj.value
+        xml = etree.tostring(root, encoding="utf-8")
+        self._validator.validate_document(xml)
+        prepared = prepare_abrasf203_soap(
+            operation=Abrasf203Operation.QUERY_RPS,
+            xml=xml,
+            scope=request.document.scope,
+            issuer_cnpj=intent.issuer_cnpj,
+            resolve_certificate=self._certificate,
+            preaudit=self._service_preaudit,
+            municipal_schema_version="2.02",
+            municipal_validator=self._validator,
+        )
+        result = self._transport.exchange_prepared(
+            envelope=prepared,
+            operation=Abrasf203Operation.QUERY_RPS,
+            scope=request.document.scope,
+            issuer_cnpj=intent.issuer_cnpj,
+            issuer_tax_regime=request.document.issuer.tax_regime,
+            competence_date=request.document.competence_date,
+            jurisdiction=request.document.issuer.address.jurisdiction,
+        )
+        return self._outcome(request=request, intent=intent, response=result, is_query=True)
