@@ -12,8 +12,12 @@ https://documentacao.senior.com.br/documentoseletronicos/notasdaversao/5-8-16/
 """
 from __future__ import annotations
 
+import gzip
+import hashlib
 from collections.abc import Mapping
 from dataclasses import dataclass
+from functools import lru_cache
+from importlib.resources import files
 
 from lxml import etree
 
@@ -31,11 +35,12 @@ _EXTREMA_RTC_DESTINATION_ORDER_SOURCE = (
 WEBISS_RTC_LAYOUT_VERSION = "2.02"
 WEBISS_MG_IBGE = frozenset({"3125101", "3170107"})
 
-# No municipal XSD has yet been obtained from the official WebISS 2026 portal.
-# Do not fill this map with the ABRASF 2.03 package, copied XSDs, a guessed
-# IBSCBS extension or a third-party integration template. A non-empty pin
-# requires the municipality-specific original, reviewed code and golden tests.
-PINNED_WEBISS_MG_2026_SCHEMA_DIGESTS: Mapping[str, str] = {}
+# Extrema: supplier-published RTC XSD linked by the municipal WebISS portal,
+# together with its XMLDSig import from the public WebService support archive.
+# Uberaba deliberately remains unpinned; never reuse this city-specific pin.
+PINNED_WEBISS_MG_2026_SCHEMA_DIGESTS: Mapping[str, str] = {
+    "3125101": "8e0f2a9174cbfafa5a601a7003c5f3d4408ceadd01de1e87b9be12c09cc762ee",
+}
 
 
 class WebissMunicipalSchemaUnverified(FiscalValidationError):
@@ -191,3 +196,56 @@ def require_extrema_rtc_destination_order(xml: bytes) -> None:
             )
         # The official XSD remains responsible for enforcing type, required
         # fields, alternate identities and the order of subsequent elements.
+
+
+_EXTREMA_RTC_ROOT = "nfse_v2_02-IBSCBS.xsd"
+_EXTREMA_RTC_ROOT_SHA256 = "4caeadd9b4993b7741d7a83aa80601ac5743524d5af7bdd14f862fed053c7003"
+_EXTREMA_RTC_XMLDSIG = "xmldsig-core-schema20020212.xsd"
+_EXTREMA_RTC_XMLDSIG_SHA256 = "13f29857c337bef574e59ea1023caaa9b407bcae0dea013c5c295385688708d4"
+_EXTREMA_RTC_COMPRESSED_SIGNATURE_SHA256 = (
+    "64ea007670853de7f77136fcdd81fbae91ec377f383e435550c3c8e5e6647088"
+)
+_EXTREMA_RTC_SOURCE = "https://extremamg.webiss.com.br/"
+
+
+@lru_cache(maxsize=1)
+def load_pinned_extrema_webiss_rtc_schema() -> tuple[Webiss2026SchemaEvidence, XmlSchemaValidator]:
+    """Load the exact reviewed municipality-linked RTC schema set, entirely offline.
+
+    The original XMLDSig import is stored as deterministic gzip bytes to avoid
+    introducing an unreviewed, substitute signature grammar. Both decompressed
+    resources and the compressed artifact are independently hash-checked.
+    A missing wheel resource or changed byte fails before provider dispatch.
+    """
+    directory = files("kordena_fiscal.xml").joinpath(
+        "official", "WEBISS_EXTREMA_RTC_2026",
+    )
+    try:
+        rtc_bytes = directory.joinpath(_EXTREMA_RTC_ROOT).read_bytes()
+        compressed = directory.joinpath(_EXTREMA_RTC_XMLDSIG + ".gz").read_bytes()
+    except (FileNotFoundError, OSError):
+        raise WebissMunicipalSchemaUnverified(
+            "Pinned Extrema RTC schema missing from the installed distribution"
+        ) from None
+    if hashlib.sha256(compressed).hexdigest() != _EXTREMA_RTC_COMPRESSED_SIGNATURE_SHA256:
+        raise WebissMunicipalSchemaUnverified("Extrema XMLDSig source archive integrity mismatch")
+    try:
+        xmlsig_bytes = gzip.decompress(compressed)
+    except (EOFError, OSError):
+        raise WebissMunicipalSchemaUnverified("Invalid Extrema XMLDSig compressed resource") from None
+    if len(rtc_bytes) != 105916 or len(xmlsig_bytes) != 10467:
+        raise WebissMunicipalSchemaUnverified("Unexpected Extrema schema resource size")
+    if hashlib.sha256(rtc_bytes).hexdigest() != _EXTREMA_RTC_ROOT_SHA256:
+        raise WebissMunicipalSchemaUnverified("Extrema RTC schema content hash mismatch")
+    if hashlib.sha256(xmlsig_bytes).hexdigest() != _EXTREMA_RTC_XMLDSIG_SHA256:
+        raise WebissMunicipalSchemaUnverified("Extrema XMLDSig schema content hash mismatch")
+    resources = (
+        SchemaResource.from_bytes(_EXTREMA_RTC_ROOT, rtc_bytes),
+        SchemaResource.from_bytes(_EXTREMA_RTC_XMLDSIG, xmlsig_bytes),
+    )
+    return build_pinned_webiss_municipal_schema(
+        municipality_ibge="3125101",
+        root_schema=_EXTREMA_RTC_ROOT,
+        resources=resources,
+        source_uri=_EXTREMA_RTC_SOURCE,
+    )
