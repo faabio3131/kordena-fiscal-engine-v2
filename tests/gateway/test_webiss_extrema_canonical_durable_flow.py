@@ -457,16 +457,26 @@ def _synthetic_substitution_receipt(original, old_intent, replacement, new_inten
     from lxml import etree
 
     ns = "{http://www.abrasf.org.br/nfse.xsd}"
-    old_xml = etree.fromstring(
-        _success_response(Abrasf203Operation.GENERATE, old_intent),
-        parser=etree.XMLParser(no_network=True),
-    )
-    new_xml = etree.fromstring(
-        _success_response(Abrasf203Operation.GENERATE, new_intent),
-        parser=etree.XMLParser(no_network=True),
-    )
-    old_comp = old_xml.find(f"{ns}CompNfse")
-    new_comp = new_xml.find(f"{ns}CompNfse")
+    def _source_receipt(intent):
+        soap = etree.fromstring(
+            _success_response(Abrasf203Operation.GENERATE, intent),
+            parser=etree.XMLParser(
+                no_network=True, resolve_entities=False, load_dtd=False,
+            ),
+        )
+        output = soap.find(".//outputXML")
+        assert output is not None and output.text
+        return etree.fromstring(
+            output.text.encode(),
+            parser=etree.XMLParser(
+                no_network=True, resolve_entities=False, load_dtd=False,
+            ),
+        )
+
+    old_xml = _source_receipt(old_intent)
+    new_xml = _source_receipt(new_intent)
+    old_comp = old_xml.find(f"{ns}ListaNfse/{ns}CompNfse")
+    new_comp = new_xml.find(f"{ns}ListaNfse/{ns}CompNfse")
     assert old_comp is not None and new_comp is not None
     original_ref = old_comp.find(f"{ns}Nfse/{ns}InfNfse/{ns}Numero")
     replacement_ref = new_comp.find(f"{ns}Nfse/{ns}InfNfse/{ns}Numero")
