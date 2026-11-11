@@ -139,7 +139,7 @@ def prepare_abrasf203_soap(
             or not municipality or not municipality.isdecimal()
             or code not in ("1", "2", "3", "4", "5")
             or not info.get("Id")
-            or len(root.xpath("//*[@Id=$id]", id=info.get("Id"))) != 1
+            or sum(node.get("Id") == info.get("Id") for node in root.iter()) != 1
         ):
             raise FiscalValidationError("ABRASF cancellation fiscal identity mismatch")
         if not callable(preaudit_cancel):
