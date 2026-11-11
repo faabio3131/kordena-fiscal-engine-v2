@@ -163,8 +163,19 @@ def worker_policy(info: dict[str, Any], *, bling: bool) -> dict[str, str]:
 
 def command_sha() -> str | None:
     try:
+        # The restricted SSH gate executes this root-owned script with
+        # HOME=/nonexistent. The checkout belongs to the unprivileged
+        # deployment operator, so Git's dubious-ownership safeguard refuses
+        # an ordinary rev-parse. Explicitly trust only THIS canonical NFCore
+        # checkout for this read-only command (never a wildcard or global
+        # Git config change). An unreadable/invalid HEAD remains NO_GO.
         r = subprocess.run(
-            ["git", "-C", str(ROOT / "src"), "rev-parse", "HEAD"],
+            [
+                "/usr/bin/git",
+                "-c", f"safe.directory={ROOT / 'src'}",
+                "-C", str(ROOT / "src"),
+                "rev-parse", "HEAD",
+            ],
             capture_output=True, text=True, timeout=8, check=False,
         )
         value = r.stdout.strip()
