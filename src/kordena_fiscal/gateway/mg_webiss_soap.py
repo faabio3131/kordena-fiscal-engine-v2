@@ -9,12 +9,19 @@ credentials, municipal ISS rules and official responses are proved.
 """
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
 import ssl
 from collections.abc import Callable
 from datetime import UTC, date, datetime
 from urllib.error import HTTPError, URLError
 from urllib.request import HTTPSHandler, Request, build_opener
 
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding, rsa
+from cryptography.hazmat.primitives.serialization import pkcs12
 from lxml import etree
 
 from kordena_fiscal.control_plane.commercial import ConfiguredFiscalOperation
@@ -60,6 +67,19 @@ _MG_WEBISS_PROVIDERS = {
 _SOAP = "http://schemas.xmlsoap.org/soap/envelope/"
 _WSDL = "http://nfse.abrasf.org.br"
 _RESPONSE_LIMIT = 2_097_152
+_DS = "http://www.w3.org/2000/09/xmldsig#"
+_RESPONSE_ROOTS = {
+    Abrasf203Operation.GENERATE: "GerarNfseResposta",
+    Abrasf203Operation.SUBMIT_BATCH: "EnviarLoteRpsResposta",
+    Abrasf203Operation.QUERY_BATCH: "ConsultarLoteRpsResposta",
+    Abrasf203Operation.CANCEL: "CancelarNfseResposta",
+}
+_EXPECTED_SIGNATURE_COUNTS = {
+    Abrasf203Operation.GENERATE: 1,
+    Abrasf203Operation.SUBMIT_BATCH: 2,
+    Abrasf203Operation.QUERY_BATCH: 0,
+    Abrasf203Operation.CANCEL: 1,
+}
 _ACTIONS = {
     Abrasf203Operation.GENERATE: ConfiguredFiscalOperation.AUTHORIZE,
     Abrasf203Operation.SUBMIT_BATCH: ConfiguredFiscalOperation.AUTHORIZE,
@@ -148,14 +168,11 @@ def _validate_request_envelope(
                     "WebISS SOAP header must use certified RTC layout version 2.02"
                 )
         if part.tag == "nfseDadosMsg":
-            signatures = inner.findall(
-                ".//{http://www.w3.org/2000/09/xmldsig#}Signature"
-            )
-            if operation is Abrasf203Operation.QUERY_BATCH:
-                if signatures:
-                    raise WebissMgContractError("Unexpected signature in read-only query")
-            elif not signatures:
-                raise WebissMgContractError("Signed municipal fiscal operation required")
+            signatures = inner.findall(f".//{{{_DS}}}Signature")
+            if len(signatures) != _EXPECTED_SIGNATURE_COUNTS[operation]:
+                raise WebissMgContractError(
+                    "Unexpected WebISS signature count for fiscal operation"
+                )
             for signature in signatures:
                 ref = signature.find(
                     "{http://www.w3.org/2000/09/xmldsig#}SignedInfo/"
@@ -168,7 +185,13 @@ def _validate_request_envelope(
                     raise WebissMgContractError("WebISS XMLDSig reference is ambiguous")
 
 
-def parse_webiss_soap_response(raw: bytes, operation: Abrasf203Operation) -> bytes:
+def parse_webiss_soap_response(
+    raw: bytes,
+    operation: Abrasf203Operation,
+    *,
+    evidence: Webiss2026SchemaEvidence | None = None,
+    municipal_validator: XmlSchemaValidator | None = None,
+) -> bytes:
     """Return only the XML response payload; never infer fiscal authorization."""
     if not isinstance(raw, bytes) or not 0 < len(raw) <= _RESPONSE_LIMIT:
         raise WebissMgContractError("WebISS response exceeds the permitted size")
@@ -203,9 +226,127 @@ def parse_webiss_soap_response(raw: bytes, operation: Abrasf203Operation) -> byt
         raise WebissMgContractError("Invalid WebISS outputXML") from None
     if getattr(extracted.getroottree().docinfo, "doctype", None):
         raise WebissMgContractError("DTD is prohibited in WebISS outputXML")
-    # This is NOT an authorized fiscal document until protocol, issuer,
-    # XMLDSig and municipal response codes are verified by the domain layer.
+    expected = _RESPONSE_ROOTS.get(operation)
+    if expected is None or extracted.tag != (
+        "{http://www.abrasf.org.br/nfse.xsd}" + expected
+    ):
+        raise WebissMgContractError(
+            "Municipal response XML root does not match the fiscal operation"
+        )
+    if (evidence is None) != (municipal_validator is None):
+        raise WebissMunicipalSchemaUnverified(
+            "Municipal response requires both XSD and pinned evidence"
+        )
+    if evidence is not None and municipal_validator is not None:
+        validate_webiss_official_xml(
+            evidence=evidence, validator=municipal_validator, xml=xml,
+        )
+    # An ABRASF receipt can contain rejection messages, PENDING status or
+    # invoice data. Parsing does NOT promote it to AUTHORIZED; only the
+    # canonical fiscal application may finalize an official result.
     return xml
+
+
+def _verify_webiss_signature_with_scoped_a1(
+    *, envelope: Abrasf203Envelope,
+    operation: Abrasf203Operation,
+    material: EphemeralCertificateMaterial,
+) -> None:
+    """Verify digest, issuer A1 cert and RSA/SHA-1 before municipal HTTP.
+
+    The ABRASF/WebISS 2.02 legacy XMLDSig signature is not interchangeable
+    with the SHA-256 signature of the National DPS 1.01. A tampered, wrapped
+    or differently signed request is rejected even if its XML is XSD-valid.
+    """
+    if operation is Abrasf203Operation.QUERY_BATCH:
+        return
+    try:
+        root = etree.fromstring(
+            envelope.body,
+            parser=etree.XMLParser(resolve_entities=False, no_network=True),
+        )
+        wrapper = root.find(f"{{{_SOAP}}}Body")[0]
+        raw_xml = wrapper.findtext("nfseDadosMsg")
+        fiscal = etree.fromstring(
+            str(raw_xml).encode("utf-8"),
+            parser=etree.XMLParser(resolve_entities=False, no_network=True),
+        )
+        signatures = fiscal.findall(f".//{{{_DS}}}Signature")
+        key, cert, _ = pkcs12.load_key_and_certificates(
+            material.pkcs12_bytes, material.password,
+        )
+        if key is None or cert is None or len(signatures) != (
+            _EXPECTED_SIGNATURE_COUNTS[operation]
+        ):
+            raise ValueError
+        public_key = cert.public_key()
+        if not isinstance(public_key, rsa.RSAPublicKey):
+            raise ValueError
+        for signature in signatures:
+            signed_info = signature.find(f"{{{_DS}}}SignedInfo")
+            if signed_info is None:
+                raise ValueError
+            signed_method = signed_info.find(f"{{{_DS}}}SignatureMethod")
+            reference = signed_info.find(f"{{{_DS}}}Reference")
+            digest_value = reference.find(f"{{{_DS}}}DigestValue") if reference is not None else None
+            digest_method = reference.find(f"{{{_DS}}}DigestMethod") if reference is not None else None
+            transforms = (
+                reference.findall(f"{{{_DS}}}Transforms/{{{_DS}}}Transform")
+                if reference is not None else []
+            )
+            if (
+                signed_method is None
+                or signed_method.get("Algorithm") != _DS + "rsa-sha1"
+                or reference is None
+                or digest_method is None
+                or digest_method.get("Algorithm") != _DS + "sha1"
+                or digest_value is None
+                or len(transforms) != 2
+                or [t.get("Algorithm") for t in transforms] != [
+                    _DS + "enveloped-signature",
+                    "http://www.w3.org/TR/2001/REC-xml-c14n-20010315",
+                ]
+                or not reference.get("URI", "").startswith("#")
+            ):
+                raise ValueError
+            identity = reference.get("URI", "")[1:]
+            targets = [
+                node for node in fiscal.iter() if node.get("Id") == identity
+            ]
+            if len(targets) != 1:
+                raise ValueError
+            canonical_target = etree.tostring(
+                targets[0], method="c14n", exclusive=False, with_comments=False,
+            )
+            expected_digest = hashlib.sha1(canonical_target).digest()
+            if not hmac.compare_digest(
+                base64.b64decode(str(digest_value.text), validate=True),
+                expected_digest,
+            ):
+                raise ValueError
+            x509_blob = signature.find(
+                f"{{{_DS}}}KeyInfo/{{{_DS}}}X509Data/{{{_DS}}}X509Certificate"
+            )
+            if x509_blob is None or not hmac.compare_digest(
+                base64.b64decode(str(x509_blob.text), validate=True),
+                cert.public_bytes(serialization.Encoding.DER),
+            ):
+                raise ValueError
+            value = signature.find(f"{{{_DS}}}SignatureValue")
+            if value is None:
+                raise ValueError
+            public_key.verify(
+                base64.b64decode(str(value.text), validate=True),
+                etree.tostring(
+                    signed_info, method="c14n",
+                    exclusive=False, with_comments=False,
+                ),
+                padding.PKCS1v15(), hashes.SHA1(),
+            )
+    except (AttributeError, IndexError, TypeError, ValueError, InvalidSignature, etree.XMLSyntaxError):
+        raise WebissMgContractError(
+            "WebISS XMLDSig does not match the scoped A1 or signed fiscal content"
+        ) from None
 
 
 def _webiss_exchange(
@@ -356,11 +497,17 @@ class WebissMgHomologationTransport:
             material.pkcs12_bytes, material.password,
             issuer_cnpj=issuer_cnpj, at=datetime.now(UTC),
         )
+        _verify_webiss_signature_with_scoped_a1(
+            envelope=envelope, operation=operation, material=material,
+        )
         raw = self._exchange(
             envelope.body, envelope.soap_action,
             build_fiscal_tls_context(material), self._timeout,
         )
-        return parse_webiss_soap_response(raw, operation)
+        return parse_webiss_soap_response(
+            raw, operation, evidence=self._schema_evidence,
+            municipal_validator=self._schema_validator,
+        )
 
 
 class WebissExtremaHomologationTransport(WebissMgHomologationTransport):
