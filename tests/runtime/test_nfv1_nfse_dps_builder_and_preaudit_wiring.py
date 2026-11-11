@@ -11,11 +11,15 @@ before any certificate/XML work happens.
 """
 from __future__ import annotations
 
+import base64
+import gzip
 import json
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import Mock
+
+from lxml import etree
 
 import pytest
 from cryptography import x509
@@ -44,6 +48,7 @@ from kordena_fiscal.gateway.nfse_nacional_homologation import (
     NACIONAL_HOMOLOGATION_PROVIDER_ID,
     NfseNacionalHomologationGateway,
     OfficialNfseTransportError,
+    encode_signed_dps,
 )
 from kordena_fiscal.issuance.nfe_nfse import (
     NfseAuthorizationRequest,
@@ -53,6 +58,7 @@ from kordena_fiscal.issuance.nfe_nfse import (
 from kordena_fiscal.issuance.nfse_dps_builder import build_signed_dps
 from kordena_fiscal.runtime.canonical_fiscal_composition import _GovernedNationalNfseGateway
 from kordena_fiscal.vault import EphemeralCertificateMaterial
+from kordena_fiscal.xml.nfse_nacional_schema import national_dps_validator
 
 _NOW = datetime(2026, 11, 6, 12, 0, tzinfo=UTC)
 _ISSUER_CNPJ = Cnpj("11222333000181")
@@ -189,26 +195,61 @@ def test_real_preaudit_blocks_before_any_signing_on_missing_c_trib_nac() -> None
         gateway.authorize(request)
 
 
+def _mg_request(municipality_ibge: str, name: str) -> NfseAuthorizationRequest:
+    """Only synthetic contract cases; not municipal emitter certification."""
+    base = _request()
+    municipality = BrazilianJurisdiction("MG", municipality_ibge)
+    issuer = replace(
+        base.document.issuer,
+        state_registration=StateRegistration("MG", "123456789"),
+        address=replace(
+            base.document.issuer.address,
+            municipality_name=name,
+            jurisdiction=municipality,
+        ),
+    )
+    document = replace(
+        base.document, issuer=issuer, service_jurisdiction=municipality,
+    )
+    return NfseAuthorizationRequest.build(document)
+
+
+@pytest.mark.parametrize(
+    ("ibge", "municipality"),
+    [
+        ("3106200", "Belo Horizonte"),
+        ("3106705", "Betim"),
+        ("3170206", "Uberlandia"),
+    ],
+)
+def test_mg_national_channel_generates_signed_schema_valid_dps_envelope(
+    ibge: str, municipality: str,
+) -> None:
+    """Offline synthetic DPS envelope tests: no official transmission claimed."""
+    request = _mg_request(ibge, municipality)
+    signed = build_signed_dps(request, _certificate())
+    national_dps_validator("1.00").validate_document(signed)
+    payload = encode_signed_dps(
+        signed,
+        issuer_cnpj=request.document.issuer.cnpj.value,
+        issuer_municipality_ibge=ibge,
+    )
+    restored = gzip.decompress(base64.b64decode(json.loads(payload)["dpsXmlGZipB64"]))
+    assert restored == signed
+    info = etree.fromstring(restored).find("{http://www.sped.fazenda.gov.br/nfse}infDPS")
+    assert info is not None
+    assert info.findtext("{http://www.sped.fazenda.gov.br/nfse}cLocEmi") == ibge
+    assert info.findtext("{http://www.sped.fazenda.gov.br/nfse}tpAmb") == "2"
+    assert info.get("Id", "").startswith("DPS" + ibge)
+
+
 def test_contagem_municipal_issuer_cannot_use_sefin_nacional_even_with_binding() -> None:
     """Contagem's national-layout municipal API is not the SEFIN Nacional issuer.
 
     Verify fail-closed BEFORE A1 Vault access, XMLDSig and HTTP dispatch.
     A municipal endpoint must be built from the municipality's own contract.
     """
-    base = _request()
-    municipal = BrazilianJurisdiction("MG", "3118601")
-    issuer = replace(
-        base.document.issuer,
-        state_registration=StateRegistration("MG", "123456789"),
-        address=replace(
-            base.document.issuer.address,
-            municipality_name="Contagem",
-            jurisdiction=municipal,
-        ),
-    )
-    request = NfseAuthorizationRequest.build(replace(
-        base.document, issuer=issuer, service_jurisdiction=municipal,
-    ))
+    request = _mg_request("3118601", "Contagem")
     resolve_certificate = Mock(side_effect=AssertionError("Vault accessed"))
     prepare_dps = Mock(side_effect=AssertionError("DPS signed"))
     exchange = Mock(side_effect=AssertionError("HTTP dispatched"))
