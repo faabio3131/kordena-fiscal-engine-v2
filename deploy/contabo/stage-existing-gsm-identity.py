@@ -251,7 +251,10 @@ def main() -> int:
             raise Denied("NO_GO_OPERATOR_ACCOUNT_MISSING") from None
         require(operator.pw_uid not in (0, 10001), "NO_GO_OPERATOR_UID_COLLISION")
         ensure_trusted_directory(PROD_DIR, allowed_owners=(0, operator.pw_uid))
-        ensure_trusted_directory(WORKER_DIR, required=False)
+        if WORKER_DIR.exists() or WORKER_DIR.is_symlink():
+            # Keep --check and --stage aligned: an existing namespace must
+            # already be private, even before a file is staged.
+            ensure_private_root_directory(WORKER_DIR)
         for target in (TARGET_IDENTITY, WORKER_ENV, COMPOSE_ENV):
             require(not target.exists() and not target.is_symlink(),
                     "NO_GO_TARGET_ALREADY_CONFIGURED")
