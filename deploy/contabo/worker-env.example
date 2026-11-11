@@ -1,22 +1,21 @@
-# Estrutura esperada do /opt/fm/nfcore/.env.worker (chmod 600; NUNCA versionar valores).
-# A credencial de serviço NÃO fica neste arquivo: montar identidade host
-# explicitamente no overlay e conservar UID 10001, modo 0600 no host.
-# A variável NFCORE_WORKER_GSM_CREDENTIAL_FILE é fixada no compose.
-NFCORE_WORKER_GSM_MODE=
-NFCORE_GSM_PROJECT_ID=
-NFCORE_GSM_ALLOWED_PROJECTS=
-NFCORE_GSM_PROJECT_NUMBER=
-NFCORE_GSM_API_SERVICE_ACCOUNT=
-NFCORE_GSM_WORKER_SERVICE_ACCOUNT=
-NFCORE_WORKER_GSM_TENANT_ID=
-NFCORE_WORKER_GSM_UNIT_ID=
-NFCORE_WORKER_GSM_SIGNING_REFERENCE=
-NFCORE_WORKER_GSM_SIGNING_VERSION=
-NFCORE_WORKER_GSM_PROVIDER_ID=
-NFCORE_WORKER_GSM_RESOURCE=
-NFCORE_WORKER_GSM_CLOUD_VERSION=
-NFCORE_WORKER_GSM_HOST_NAMESPACE=
-NFCORE_WORKER_GSM_DESTINATION_ID=
+# NFCore V1 — modelo exclusivo para worker GSM MULTIEMPRESA na Contabo.
+# Arquivo de host: /opt/fm/nfcore/.env.worker (chmod 0600; NUNCA no Git).
+# A identidade Google existente fica em /etc/nfcore/worker/worker-identity.json,
+# UID 10001, chmod 0600 e bind READ-ONLY no compose.worker.opt-in.yml.
+# A variavel NFCORE_WORKER_GSM_CREDENTIAL_FILE e fixada no overlay Compose.
+# NFCORE_WORKER_IDENTITY_HOST_PATH = /etc/nfcore/worker/worker-identity.json
+# deve estar em .worker-compose.env, passado via --env-file; nao na .env base.
+# Nao adicionar TENANT_ID/UNIT_ID, destino ou binding fixo: o modo multiempresa
+# obtem escopos exatos no PostgreSQL canonico com aprovacao de egress.
+NFCORE_WORKER_GSM_MODE=multi-tenant-production-sa-v1
+NFCORE_GSM_PROJECT_ID=fm-nfcore-prod
+NFCORE_GSM_ALLOWED_PROJECTS=fm-nfcore-prod
+NFCORE_GSM_PROJECT_NUMBER=646230745113
+NFCORE_GSM_API_SERVICE_ACCOUNT=nfcore-api@fm-nfcore-prod.iam.gserviceaccount.com
+NFCORE_GSM_WORKER_SERVICE_ACCOUNT=nfcore-worker@fm-nfcore-prod.iam.gserviceaccount.com
+NFCORE_WORKER_GSM_HOST_NAMESPACE=nfcore
+# Dados PUBLICOS de identificacao da chave, confirmados no Google IAM.
+# NUNCA copiar a chave privada para este arquivo ou variaveis de ambiente.
 NFCORE_WORKER_GSM_KEY_ID=
 NFCORE_WORKER_GSM_KEY_CREATED_AT=
 NFCORE_WORKER_GSM_KEY_NOT_AFTER=
