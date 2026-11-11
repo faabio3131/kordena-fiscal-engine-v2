@@ -29,8 +29,8 @@ from kordena_fiscal.domain import (
 from kordena_fiscal.gateway.authorization import AuthorizationStatus, GatewayProviderMetadata
 from kordena_fiscal.gateway.fiscal_tls import RejectFiscalRedirects, build_fiscal_tls_context
 from kordena_fiscal.gateway.nfse_national_homologation import (
-    OfficialNfseTransportError,
     SEFIN_HOMOLOGATION_NFSE_URL,
+    OfficialNfseTransportError,
 )
 from kordena_fiscal.gateway.provider import ProviderSelectionResolver
 from kordena_fiscal.issuance.nfe_nfse import (
