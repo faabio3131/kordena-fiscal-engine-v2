@@ -40,8 +40,8 @@ from kordena_fiscal.issuance.nfe_nfse import (
     NfseAuthorizationResult,
     NfseCanonicalDocument,
     NfseGatewayClient,
-    build_nfse_request_fingerprint,
     NfseQueryClient,
+    build_nfse_request_fingerprint,
 )
 from kordena_fiscal.issuance.nfse_archive import (
     NFSE_PREPARED_MEDIA_TYPE,
