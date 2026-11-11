@@ -7,6 +7,7 @@ adapter is exercised separately by the gateway/application E2E suites.
 """
 from __future__ import annotations
 
+import importlib.util
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -14,13 +15,25 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from test_extrema_nfse_preparation_http import _client, _database
 
 from kordena_fiscal.security.human_identity import (
     AuthenticatedHuman,
     PortalRole,
 )
 from kordena_fiscal.web.human_auth import CSRF_COOKIE, CSRF_HEADER
+
+
+# Pytest executes these files from repository root, and tests/web is not a
+# package on sys.path. Reuse the existing authenticated HTTP fixture explicitly.
+_fixture_path = Path(__file__).with_name("test_extrema_nfse_preparation_http.py")
+_fixture_spec = importlib.util.spec_from_file_location(
+    "_nfcore_extrema_web_http_fixture", _fixture_path,
+)
+assert _fixture_spec is not None and _fixture_spec.loader is not None
+_fixture = importlib.util.module_from_spec(_fixture_spec)
+_fixture_spec.loader.exec_module(_fixture)
+_client = _fixture._client
+_database = _fixture._database
 
 
 @dataclass
