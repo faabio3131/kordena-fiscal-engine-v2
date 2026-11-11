@@ -211,6 +211,17 @@ def collect(expected_sha: str) -> dict[str, str]:
         return output
     output["DOCKER_ACCESS"] = "PASS"
     names = set(names_raw.splitlines())
+    # An inventory of Docker container names is not a complete outbox lock audit.
+    # Never inspect unrelated SaaS containers or report remote leases as clear.
+    output["LOCAL_OTHER_NFCORE_WORKERS"] = (
+        "PRESENT" if any(
+            name.startswith("nfcore-") and "worker" in name
+            and name not in ("nfcore-worker", "nfcore-bling-worker")
+            for name in names
+        ) else "ABSENT"
+    )
+    output["REMOTE_OUTBOX_CONSUMERS"] = "UNVERIFIED_EXTERNAL"
+    output["GSM_IDENTITY_PROVIDER"] = "UNVERIFIED_EXTERNAL"
     for name in CONTAINERS:
         prefix = name.upper().replace("-", "_")
         if name not in names:
@@ -251,6 +262,10 @@ def collect(expected_sha: str) -> dict[str, str]:
             return output
     if output.get("NFCORE_WORKER") != "HEALTHY":
         output["RESULT"] = "NO_GO_GENERAL_WORKER"
+    elif output["LOCAL_OTHER_NFCORE_WORKERS"] == "PRESENT":
+        # Treat the possible rehearsal consumer as a blocker until scoped
+        # outbox ownership is proven; a container name alone proves no lock.
+        output["RESULT"] = "NO_GO_POSSIBLE_LOCAL_CONSUMER"
     elif output.get("NFCORE_WORKER_POLICY_RESTART") != "PRESENT":
         output["RESULT"] = "GENERAL_WORKER_RUNNING_RECOVERY_NOT_CERTIFIED"
     elif output.get("NFCORE_BLING_WORKER") != "HEALTHY":
