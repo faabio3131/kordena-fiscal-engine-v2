@@ -191,6 +191,8 @@ def test_no_go_inventory_must_exit_nonzero(monkeypatch, capsys) -> None:
     monkeypatch.setattr(audit, "collect", lambda _sha: {
         "HOST": "PASS", "DOCKER_ACCESS": "PASS", "RESULT": "NO_GO_GENERAL_WORKER",
     })
-    monkeypatch.setattr("sys.argv", ["worker-readonly-preflight.py", "--expected-production-sha", SHA])
+    monkeypatch.setattr(
+        "sys.argv", ["worker-readonly-preflight.py", "--expected-production-sha", SHA],
+    )
     assert audit.main() == 2
     assert "RESULT=NO_GO_GENERAL_WORKER" in capsys.readouterr().out
