@@ -235,7 +235,9 @@ function appendExtremaNfsePreparation(article) {
   const heading = document.createElement("h3");
   heading.textContent = "Preparar serviço fiscal revisado — Extrema";
   form.append(heading);
+  /** @type {Record<string, HTMLInputElement>} */
   const inputs = {};
+  /** @type {Array<[string, string, string, string, boolean]>} */
   const fields = [
     ["source_id", "Referência única do serviço aprovado", "text", "", true],
     ["competence_date", "Competência do serviço", "date", "", true],
@@ -273,6 +275,7 @@ function appendExtremaNfsePreparation(article) {
     inputs[name] = field;
     label.append(field); form.append(label);
   }
+  /** @type {Record<string, HTMLSelectElement>} */
   const decisions = {};
   for (const [name, title] of [
     ["iss_withheld", "ISS retido pelo tomador (conforme parecer)"],
@@ -303,6 +306,7 @@ function appendExtremaNfsePreparation(article) {
   submit.textContent = "Preparar RPS em homologação";
   form.append(attestationLabel, submit, result);
   article.append(form);
+  /** @type {{fingerprint:string,key:string}|null} */
   let attempt = null;
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -353,6 +357,7 @@ function appendExtremaNfsePreparation(article) {
   });
 }
 
+/** @param {HTMLElement} article */
 function appendExtremaCancellation(article) {
   const operations = bootstrapState?.projection.configured_fiscal_operations;
   if (!bootstrapState?.permissions.includes("document.cancel")
@@ -431,6 +436,7 @@ function appendExtremaCancellation(article) {
   });
 }
 
+/** @param {HTMLElement} article */
 function appendExtremaSubstitution(article) {
   const operations = bootstrapState?.projection.configured_fiscal_operations;
   if (!bootstrapState?.permissions.includes("document.cancel")
@@ -510,6 +516,7 @@ function appendExtremaSubstitution(article) {
   });
 }
 
+/** @param {HTMLElement} article */
 function appendFiscalActions(article) {
   const recoveryNotice = document.createElement("p");
   recoveryNotice.textContent = "Se a resposta for interrompida, mantenha esta página aberta e preserve o pedido original. Após recarregar, consulte o estado fiscal antes de iniciar outra solicitação.";
