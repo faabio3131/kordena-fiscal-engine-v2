@@ -271,6 +271,58 @@ def plan_staging() -> None:
 
 
 
+def _assert_cakto_current(database: PostgresFiscalDatabase) -> None:
+    """Check Cakto migration tracking without applying DDL or DML."""
+    with database.connection() as connection:
+        row = connection.execute(
+            "SELECT to_regclass('public.fm_cakto_schema_migrations')"
+        ).fetchone()
+        if row is None or row[0] is None:
+            raise RuntimeError("production schema has missing Cakto tracking table")
+        rows = connection.execute(
+            "SELECT version FROM fm_cakto_schema_migrations ORDER BY version"
+        ).fetchall()
+    cakto = tuple(int(item[0]) for item in rows)
+    if cakto != tuple(range(1, CAKTO_SCHEMA_VERSION + 1)):
+        raise RuntimeError("production schema has pending/drifted Cakto migrations")
+
+
+def plan_production_bling() -> None:
+    """Report a safe 19 -> 21 plan; NEVER apply Bling migrations or enable it.
+
+    The production baseline may have 19 or 21 full migrations. A partial
+    migration 20, gaps, unknown versions, missing tables, or Cakto drift
+    fail closed before a human considers a separately authorized apply.
+    """
+    expected = validate_policy()
+    if os.getenv("NFCORE_ENVIRONMENT") != "production":
+        raise RuntimeError("Bling production plan requires production environment")
+    if os.getenv("RAILWAY_SERVICE_ID", "").strip():
+        raise RuntimeError("Bling production plan must execute outside service startup")
+    dsn = os.getenv("DATABASE_URL", "").strip()
+    if not dsn:
+        raise RuntimeError("Bling production plan requires DATABASE_URL")
+    baseline = tuple(range(1, COGNITIVE_QUOTA_VERSION + 1))
+    if expected != tuple(range(1, BLING_WORKER_POLICY_VERSION + 1)):
+        raise RuntimeError("Bling production migration policy changed unexpectedly")
+    database = PostgresFiscalDatabase(dsn)
+    try:
+        installed = database.applied_migrations()
+        if installed not in (baseline, expected):
+            raise RuntimeError("Bling production migration plan blocked: drift or partial schema")
+        database.require_current_schema(require_bling=installed == expected)
+        _assert_cakto_current(database)
+    finally:
+        database.close()
+    pending = expected[len(installed):]
+    print(
+        "Bling production migration plan: PASS READ_ONLY "
+        f"installed={','.join(map(str, installed))} "
+        f"pending={','.join(map(str, pending)) or 'NONE'} "
+        "approval_required=true; no DDL executed"
+    )
+
+
 def assert_current_production() -> None:
     """Read-only gate: permit a code-only deploy only with exact current schema.
 
@@ -304,18 +356,7 @@ def assert_current_production() -> None:
         # legacy DB probes. Stronger catalog checks apply when opt-in enabled.
         if enable_bling:
             database.require_current_schema(require_bling=True)
-        with database.connection() as connection:
-            row = connection.execute(
-                "SELECT to_regclass('public.fm_cakto_schema_migrations')"
-            ).fetchone()
-            if row is None or row[0] is None:
-                raise RuntimeError("production schema has missing Cakto tracking table")
-            rows = connection.execute(
-                "SELECT version FROM fm_cakto_schema_migrations ORDER BY version"
-            ).fetchall()
-            cakto = tuple(int(item[0]) for item in rows)
-        if cakto != tuple(range(1, CAKTO_SCHEMA_VERSION + 1)):
-            raise RuntimeError("production schema has pending/drifted Cakto migrations")
+        _assert_cakto_current(database)
     finally:
         database.close()
     print("production schema: PASS READ_ONLY CURRENT; no migration needed")
@@ -360,6 +401,7 @@ def main() -> int:
     action = parser.add_mutually_exclusive_group(required=True)
     action.add_argument("--check-policy", action="store_true")
     action.add_argument("--plan-staging", action="store_true")
+    action.add_argument("--plan-production-bling", action="store_true")
     action.add_argument("--assert-current-production", action="store_true")
     action.add_argument("--apply", action="store_true")
     args = parser.parse_args()
@@ -370,6 +412,8 @@ def main() -> int:
         plan_staging()
     elif args.assert_current_production:
         assert_current_production()
+    elif args.plan_production_bling:
+        plan_production_bling()
     else:
         apply()
     return 0
