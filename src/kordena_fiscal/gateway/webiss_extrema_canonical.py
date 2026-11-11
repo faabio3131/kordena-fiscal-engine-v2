@@ -64,9 +64,17 @@ def _invoice_reference(
     xml: etree._Element, request: NfseAuthorizationRequest,
     intent: ExtremaRpsIntent,
 ) -> tuple[str, str, str] | None:
-    invoices = xml.findall(
-        f".//{_NS}CompNfse/{_NS}Nfse/{_NS}InfNfse"
-    )
+    if xml.tag == f"{_NS}SubstituirNfseResposta":
+        # The official substitution receipt contains BOTH old and new notes.
+        # Only the replacement invoice may be the new fiscal authority.
+        invoices = xml.findall(
+            f"{_NS}RetSubstituicao/{_NS}NfseSubstituidora/"
+            f"{_NS}CompNfse/{_NS}Nfse/{_NS}InfNfse"
+        )
+    else:
+        invoices = xml.findall(
+            f".//{_NS}CompNfse/{_NS}Nfse/{_NS}InfNfse"
+        )
     if not invoices:
         return None
     if len(invoices) != 1:
@@ -142,6 +150,31 @@ class ExtremaCancellationOutcome:
             raise FiscalValidationError("Confirmed cancellation cannot also be rejected")
         if not self.confirmed and not self.rejection_code:
             raise FiscalValidationError("Cancellation rejection must identify an official code")
+
+
+@dataclass(frozen=True, slots=True)
+class ExtremaSubstitutionOutcome:
+    """Official atomic replacement result, not a simulated fiscal event."""
+
+    confirmed: bool
+    xml: bytes
+    invoice_reference: str | None = None
+    verification_code: str | None = None
+    invoice_number: str | None = None
+    rejection_code: str | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.xml, bytes) or not self.xml:
+            raise FiscalValidationError("Extrema substitution response is required")
+        if self.confirmed:
+            if not self.invoice_reference or not self.verification_code or not self.invoice_number:
+                raise FiscalValidationError("Confirmed replacement requires original fiscal proofs")
+            if self.rejection_code is not None:
+                raise FiscalValidationError("Replacement cannot be accepted and rejected")
+        elif not self.rejection_code or any((
+            self.invoice_reference, self.verification_code, self.invoice_number,
+        )):
+            raise FiscalValidationError("Rejected replacement cannot carry invoice authority")
 
 
 class WebissExtremaCanonicalNfseGateway:
@@ -346,6 +379,124 @@ class WebissExtremaCanonicalNfseGateway:
                 "Cancellation response does not prove original Extrema invoice cancellation"
             )
         return ExtremaCancellationOutcome(confirmed=True, xml=result)
+
+    def prepare_substitution(
+        self, *, original: NfseAuthorizationRequest,
+        replacement: NfseAuthorizationRequest, original_xml: bytes,
+        cancellation_code: str,
+    ) -> tuple[Abrasf203Envelope, str]:
+        """Build an unsigned cancellation+new RPS and sign all 3 official targets.
+
+        The old and replacement documents must already exist as distinct,
+        durable, independently preaudited fiscal intentions under one unit.
+        This function does not dispatch a request.
+        """
+        original_intent = self._trusted_intent(original)
+        new_intent = self._trusted_intent(replacement)
+        if (
+            not callable(self._cancellation_preaudit)
+            or original.document.scope != replacement.document.scope
+            or original.document.document_id == replacement.document.document_id
+            or original_intent.issuer_cnpj != new_intent.issuer_cnpj
+            or cancellation_code not in {"1", "2", "3", "4", "5"}
+        ):
+            raise FiscalValidationError("Substitution lacks shared issuer and cancellation policy")
+        self._validator.validate_document(original_xml)
+        initial = etree.fromstring(
+            original_xml,
+            parser=etree.XMLParser(no_network=True, resolve_entities=False),
+        )
+        old_reference = _invoice_reference(initial, original, original_intent)
+        if old_reference is None:
+            raise WebissMgContractError("Original authorized invoice is not correlated")
+        invoices = initial.findall(
+            f".//{_NS}CompNfse/{_NS}Nfse/{_NS}InfNfse"
+        )
+        if initial.tag == f"{_NS}SubstituirNfseResposta":
+            invoices = initial.findall(
+                f"{_NS}RetSubstituicao/{_NS}NfseSubstituidora/"
+                f"{_NS}CompNfse/{_NS}Nfse/{_NS}InfNfse"
+            )
+        if len(invoices) != 1:
+            raise WebissMgContractError("Original fiscal invoice is ambiguous")
+        old_number = invoices[0].findtext(f"{_NS}Numero", "")
+        new_xml = build_extrema_rps_xml(
+            replacement, new_intent, validator=self._validator,
+        )
+        rps = etree.fromstring(new_xml)[0]
+        root = etree.Element(
+            f"{_NS}SubstituirNfseEnvio",
+            nsmap=cast(dict[str, str], {None: _NS[1:-1]}),
+        )
+        group = etree.SubElement(
+            root, f"{_NS}SubstituicaoNfse",
+            Id="SUBST" + replacement.request_fingerprint[:30],
+        )
+        pedido = etree.SubElement(group, f"{_NS}Pedido")
+        old_info = etree.SubElement(
+            pedido, f"{_NS}InfPedidoCancelamento",
+            Id="CAN" + original.request_fingerprint[:30],
+        )
+        ident = etree.SubElement(old_info, f"{_NS}IdentificacaoNfse")
+        etree.SubElement(ident, f"{_NS}Numero").text = old_number
+        tax = etree.SubElement(ident, f"{_NS}CpfCnpj")
+        etree.SubElement(tax, f"{_NS}Cnpj").text = original_intent.issuer_cnpj.value
+        etree.SubElement(ident, f"{_NS}CodigoMunicipio").text = EXTREMA_IBGE
+        etree.SubElement(old_info, f"{_NS}CodigoCancelamento").text = cancellation_code
+        group.append(rps)
+        signed = prepare_abrasf203_soap(
+            operation=Abrasf203Operation.SUBSTITUTE,
+            xml=etree.tostring(root, encoding="utf-8"),
+            scope=original.document.scope,
+            issuer_cnpj=original_intent.issuer_cnpj,
+            resolve_certificate=self._certificate,
+            preaudit=self._service_preaudit,
+            preaudit_cancel=self._cancellation_preaudit,
+            municipal_schema_version="2.02",
+            municipal_validator=self._validator,
+        )
+        return signed, old_number
+
+    def submit_substitution(
+        self, *, original: NfseAuthorizationRequest,
+        replacement: NfseAuthorizationRequest, envelope: Abrasf203Envelope,
+        original_number: str,
+    ) -> ExtremaSubstitutionOutcome:
+        """Dispatch once, verify the official linked old/new invoices, no retry."""
+        intent = self._trusted_intent(original)
+        replacement_intent = self._trusted_intent(replacement)
+        result = self._transport.exchange_prepared(
+            envelope=envelope, operation=Abrasf203Operation.SUBSTITUTE,
+            scope=original.document.scope, issuer_cnpj=intent.issuer_cnpj,
+            issuer_tax_regime=original.document.issuer.tax_regime,
+            competence_date=original.document.competence_date,
+            jurisdiction=original.document.issuer.address.jurisdiction,
+        )
+        xml = etree.fromstring(
+            result, parser=etree.XMLParser(no_network=True, resolve_entities=False),
+        )
+        messages = _response_messages(xml)
+        if messages is not None:
+            return ExtremaSubstitutionOutcome(
+                confirmed=False, xml=result, rejection_code=messages[0],
+            )
+        old = xml.find(f"{_NS}RetSubstituicao/{_NS}NfseSubstituida")
+        new = xml.find(f"{_NS}RetSubstituicao/{_NS}NfseSubstituidora")
+        if old is None or new is None:
+            raise WebissMgContractError("Unconfirmed municipal replacement receipt")
+        old_reference = _invoice_reference(old, original, intent)
+        new_reference = _invoice_reference(new, replacement, replacement_intent)
+        if old_reference is None or new_reference is None:
+            raise WebissMgContractError("Substitution did not confirm both fiscal invoices")
+        number = old.findtext(
+            f"{_NS}CompNfse/{_NS}Nfse/{_NS}InfNfse/{_NS}Numero", "",
+        )
+        if number != original_number:
+            raise WebissMgContractError("Substitution references a different original invoice")
+        return ExtremaSubstitutionOutcome(
+            confirmed=True, xml=result, invoice_reference=new_reference[0],
+            verification_code=new_reference[1], invoice_number=new_reference[2],
+        )
 
     def query(self, request: NfseAuthorizationRequest) -> NfseAuthorizationResult:
         intent = self._trusted_intent(request)
