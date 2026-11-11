@@ -1016,12 +1016,15 @@ class DurableHumanPortalExecutor:
             rate = Decimal(str(payload["iss_rate_fraction"]))
             if any(not n.is_finite() for n in (amount, deductions, rate)):
                 raise FiscalValidationError("Invalid finite monetary input")
+            cents = (amount.as_tuple().exponent, deductions.as_tuple().exponent)
+            rate_exp = rate.as_tuple().exponent
             if (
                 not Decimal("0") < amount <= Decimal("999999999")
                 or not Decimal("0") <= deductions < amount
                 or not Decimal("0") <= rate <= Decimal("1")
-                or any(n.as_tuple().exponent < -2 for n in (amount, deductions))
-                or rate.as_tuple().exponent < -4
+                or any(not isinstance(exp, int) or exp < -2 for exp in cents)
+                or not isinstance(rate_exp, int)
+                or rate_exp < -4
                 or not 1 <= payload["rule_version"] <= 99999
                 or not 0 <= payload["rps_series"] <= 99999
             ):
