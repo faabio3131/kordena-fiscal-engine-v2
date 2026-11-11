@@ -30,12 +30,41 @@ from kordena_fiscal.gateway.mg_webiss_soap import (
 )
 from kordena_fiscal.gateway.nfse_abrasf203_envelope import (
     Abrasf203Operation,
+    _validator,
     prepare_abrasf203_soap,
+)
+from kordena_fiscal.gateway import webiss_2026_schema
+from kordena_fiscal.gateway.webiss_2026_schema import (
+    Webiss2026SchemaEvidence,
+    WebissMunicipalSchemaUnverified,
 )
 
 SOAP = "http://schemas.xmlsoap.org/soap/envelope/"
 WSDL = "http://nfse.abrasf.org.br"
 EXTREMA = BrazilianJurisdiction("MG", "3125101")
+
+
+@pytest.fixture(autouse=True)
+def _synthetic_schema_unit_test_only(monkeypatch):
+    """Test transport mechanics with generic XSD as a synthetic stand-in.
+
+    Does NOT certify or provision the real municipal WebISS RTC 2026 schema.
+    The production pin registry remains empty and blocks all actual dispatch.
+    """
+    digest = _validator().validate_document(
+        _payload(Abrasf203Operation.QUERY_BATCH)
+    ).schema_package_sha256
+    monkeypatch.setattr(
+        webiss_2026_schema, "PINNED_WEBISS_MG_2026_SCHEMA_DIGESTS",
+        {"3125101": digest, "3170107": digest},
+    )
+
+
+def _synthetic_evidence(city: str) -> Webiss2026SchemaEvidence:
+    digest = _validator().validate_document(
+        _payload(Abrasf203Operation.QUERY_BATCH)
+    ).schema_package_sha256
+    return Webiss2026SchemaEvidence(city, digest)
 
 
 def _envelope(operation: Abrasf203Operation):
@@ -46,6 +75,8 @@ def _envelope(operation: Abrasf203Operation):
         issuer_cnpj=Cnpj(CNPJ),
         resolve_certificate=Mock(),
         preaudit=Mock(),
+        municipal_schema_version="2.02",
+        municipal_validator=_validator(),
     ) if operation is Abrasf203Operation.QUERY_BATCH else None
 
 
@@ -72,6 +103,8 @@ def test_exact_municipal_binding_precedes_vault_and_transport(
     resolver.resolve_provider_id.return_value = "wrong-provider"
     gateway = WebissExtremaHomologationTransport(
         provider_resolver=resolver, resolve_certificate=cert, exchange=exchange,
+        municipal_schema_evidence=_synthetic_evidence("3125101"),
+        municipal_schema_validator=_validator(),
     )
     envelope = _envelope(operation)
     scope = _request().scope
@@ -110,6 +143,8 @@ def test_national_issuer_must_not_dispatch_into_webiss(
     resolver, cert, exchange = Mock(), Mock(), Mock()
     gateway = WebissExtremaHomologationTransport(
         provider_resolver=resolver, resolve_certificate=cert, exchange=exchange,
+        municipal_schema_evidence=_synthetic_evidence("3125101"),
+        municipal_schema_validator=_validator(),
     )
     with pytest.raises(WebissMgContractError, match="Emissor Nacional"):
         gateway.exchange_prepared(
@@ -128,6 +163,8 @@ def test_wrong_state_or_environment_denied_before_vault() -> None:
     resolver, cert, exchange = Mock(), Mock(), Mock()
     gateway = WebissExtremaHomologationTransport(
         provider_resolver=resolver, resolve_certificate=cert, exchange=exchange,
+        municipal_schema_evidence=_synthetic_evidence("3125101"),
+        municipal_schema_validator=_validator(),
     )
     args = dict(
         envelope=_envelope(Abrasf203Operation.QUERY_BATCH),
@@ -154,6 +191,8 @@ def test_wrong_soap_action_and_wrapper_denied_before_binding() -> None:
     resolver, cert, exchange = Mock(), Mock(), Mock()
     gateway = WebissExtremaHomologationTransport(
         provider_resolver=resolver, resolve_certificate=cert, exchange=exchange,
+        municipal_schema_evidence=_synthetic_evidence("3125101"),
+        municipal_schema_validator=_validator(),
     )
     env = _envelope(Abrasf203Operation.QUERY_BATCH)
     with pytest.raises(WebissMgContractError, match="SOAPAction"):
@@ -199,6 +238,8 @@ def test_uberaba_webiss_uses_the_same_transport_with_a_distinct_provider(materia
         provider_resolver=resolver,
         resolve_certificate=certificate,
         exchange=exchange,
+        municipal_schema_evidence=_synthetic_evidence("3170107"),
+        municipal_schema_validator=_validator(),
     )
     args = dict(
         envelope=_envelope(Abrasf203Operation.QUERY_BATCH),
@@ -226,6 +267,8 @@ def test_uberaba_legacy_webiss_is_blocked_after_federal_simples_cutover() -> Non
         provider_resolver=resolver,
         resolve_certificate=certificate,
         exchange=exchange,
+        municipal_schema_evidence=_synthetic_evidence("3170107"),
+        municipal_schema_validator=_validator(),
     )
     with pytest.raises(WebissMgContractError, match="Emissor Nacional"):
         gateway.exchange_prepared(
@@ -263,6 +306,8 @@ def test_municipal_cancellation_is_signed_and_scope_bound_before_send(
         resolve_certificate=resolved,
         preaudit=Mock(),
         preaudit_cancel=Mock(),
+        municipal_schema_version="2.02",
+        municipal_validator=_validator(),
     )
     resolver = Mock()
     resolver.resolve_provider_id.return_value = provider_id
@@ -271,6 +316,8 @@ def test_municipal_cancellation_is_signed_and_scope_bound_before_send(
         provider_resolver=resolver,
         resolve_certificate=Mock(return_value=material),
         exchange=exchange,
+        municipal_schema_evidence=_synthetic_evidence(city_ibge),
+        municipal_schema_validator=_validator(),
     )
     jurisdiction = BrazilianJurisdiction("MG", city_ibge)
     assert adapter.exchange_prepared(
@@ -308,12 +355,16 @@ def test_municipal_cancellation_cross_city_payload_is_not_accepted(material) -> 
         issuer_cnpj=Cnpj(CNPJ),
         resolve_certificate=Mock(return_value=material),
         preaudit=Mock(), preaudit_cancel=Mock(),
+        municipal_schema_version="2.02",
+        municipal_validator=_validator(),
     )
     resolver, exchange, certificate = Mock(), Mock(), Mock()
     adapter = WebissUberabaHomologationTransport(
         provider_resolver=resolver,
         resolve_certificate=certificate,
         exchange=exchange,
+        municipal_schema_evidence=_synthetic_evidence("3170107"),
+        municipal_schema_validator=_validator(),
     )
     with pytest.raises(WebissMgContractError, match="bound issuer and city"):
         adapter.exchange_prepared(
@@ -322,6 +373,66 @@ def test_municipal_cancellation_cross_city_payload_is_not_accepted(material) -> 
             issuer_tax_regime=TaxRegimeCode.NORMAL,
             competence_date=date(2026, 10, 31),
             jurisdiction=BrazilianJurisdiction("MG", "3170107"),
+        )
+    resolver.resolve_provider_id.assert_not_called()
+    certificate.assert_not_called()
+    exchange.assert_not_called()
+
+
+def test_no_official_municipal_xsd_is_fail_closed_before_binding_or_vault(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        webiss_2026_schema, "PINNED_WEBISS_MG_2026_SCHEMA_DIGESTS", {},
+    )
+    digest = _validator().validate_document(
+        _payload(Abrasf203Operation.QUERY_BATCH)
+    ).schema_package_sha256
+    with pytest.raises(WebissMunicipalSchemaUnverified, match="not pinned"):
+        Webiss2026SchemaEvidence("3125101", digest)
+    resolver, certificate, exchange = Mock(), Mock(), Mock()
+    adapter = WebissExtremaHomologationTransport(
+        provider_resolver=resolver, resolve_certificate=certificate, exchange=exchange,
+    )
+    with pytest.raises(WebissMunicipalSchemaUnverified, match="not installed"):
+        adapter.exchange_prepared(
+            envelope=_envelope(Abrasf203Operation.QUERY_BATCH),
+            operation=Abrasf203Operation.QUERY_BATCH,
+            scope=_request().scope,
+            issuer_cnpj=Cnpj(CNPJ),
+            issuer_tax_regime=TaxRegimeCode.NORMAL,
+            competence_date=date(2026, 10, 31),
+            jurisdiction=EXTREMA,
+        )
+    resolver.resolve_provider_id.assert_not_called()
+    certificate.assert_not_called()
+    exchange.assert_not_called()
+
+
+def test_generic_203_cannot_be_dispatched_as_webiss_2026_even_with_binding() -> None:
+    resolver, certificate, exchange = Mock(), Mock(), Mock()
+    adapter = WebissExtremaHomologationTransport(
+        provider_resolver=resolver, resolve_certificate=certificate,
+        municipal_schema_evidence=_synthetic_evidence("3125101"),
+        municipal_schema_validator=_validator(),
+        exchange=exchange,
+    )
+    legacy = prepare_abrasf203_soap(
+        operation=Abrasf203Operation.QUERY_BATCH,
+        xml=_payload(Abrasf203Operation.QUERY_BATCH),
+        scope=_request().scope, issuer_cnpj=Cnpj(CNPJ),
+        resolve_certificate=Mock(), preaudit=Mock(),
+    )
+    assert legacy.schema_version == "2.03"
+    with pytest.raises(WebissMunicipalSchemaUnverified, match="2.02 RTC envelope"):
+        adapter.exchange_prepared(
+            envelope=legacy,
+            operation=Abrasf203Operation.QUERY_BATCH,
+            scope=_request().scope,
+            issuer_cnpj=Cnpj(CNPJ),
+            issuer_tax_regime=TaxRegimeCode.NORMAL,
+            competence_date=date(2026, 10, 31),
+            jurisdiction=EXTREMA,
         )
     resolver.resolve_provider_id.assert_not_called()
     certificate.assert_not_called()
