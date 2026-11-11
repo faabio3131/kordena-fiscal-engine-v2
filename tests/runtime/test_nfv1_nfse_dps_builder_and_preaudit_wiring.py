@@ -149,8 +149,10 @@ def _request(**service_overrides) -> NfseAuthorizationRequest:
 
 def _fake_exchange(payload: bytes, *_args) -> bytes:
     json.loads(payload)  # confirms the gateway sent well-formed JSON
+    xml = b'<NFSe xmlns="http://www.sped.fazenda.gov.br/nfse"/>'
     return json.dumps({
         "tipoAmbiente": 2, "chaveAcesso": "35" + "0" * 42, "idDps": "dps-wiring-ok",
+        "nfseXmlGZipB64": base64.b64encode(gzip.compress(xml, mtime=0)).decode("ascii"),
     }).encode()
 
 
@@ -263,3 +265,16 @@ def test_contagem_municipal_issuer_cannot_use_sefin_nacional_even_with_binding()
     resolve_certificate.assert_not_called()
     prepare_dps.assert_not_called()
     exchange.assert_not_called()
+
+
+def test_nfse_national_access_key_without_official_xml_is_not_authorization() -> None:
+    """Never treat a single response field as a fiscal authorization receipt."""
+    gateway = NfseNacionalHomologationGateway(
+        resolve_certificate=lambda _scope, _cnpj: _certificate(),
+        build_signed_dps=build_signed_dps,
+        exchange=lambda *_args: json.dumps({
+            "tipoAmbiente": 2, "chaveAcesso": "35" + "0" * 42,
+        }).encode(),
+    )
+    with pytest.raises(FiscalValidationError, match="NFS-e Nacional"):
+        gateway.authorize(_request())
