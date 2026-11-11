@@ -483,6 +483,14 @@ def _synthetic_substitution_receipt(original, old_intent, replacement, new_inten
     assert original_ref is not None and replacement_ref is not None
     original_ref.text = "123"
     replacement_ref.text = "124"
+    new_key = new_comp.find(f"{ns}Nfse/{ns}InfNfse/{ns}ChaveAcesso")
+    old_key = old_comp.find(f"{ns}Nfse/{ns}InfNfse/{ns}ChaveAcesso")
+    assert new_key is not None and old_key is not None
+    assert new_key.text and old_key.text and len(new_key.text) == 50
+    # Test-only distinct replacement key; never synthesize a provider key in
+    # production code or assert that an actual municipal event happened.
+    new_key.text = new_key.text[:-1] + "1"
+    assert new_key.text != old_key.text
     root = etree.Element(
         f"{ns}SubstituirNfseResposta",
         nsmap={"a": "http://www.abrasf.org.br/nfse.xsd"},
