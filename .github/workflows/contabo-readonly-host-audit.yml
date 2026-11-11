@@ -70,12 +70,66 @@ jobs:
           # Publish only a constrained status vocabulary. No raw SSH output/logs.
           grep -E '^(EXPECTED_SHA=[a-f0-9]{12}|[A-Za-z0-9_-]+=(PASS|PENDING|BLOCKED|CLEAR|UNVERIFIED_EXTERNAL|NO_GO_HOST_GATES|NO_GO_MISSING_HOST_EVIDENCE|CODE_READY_BUT_BLING_NOT_ACTIVE|HOST_GATES_PASS_EXTERNAL_STILL_UNVERIFIED))$' "$work/raw-output" > "$work/status.txt" || true
           cat "$work/status.txt"
-          if [[ "$rc" -ne 0 ]]; then
+          # Distinguish an authenticated SSH/host-baseline result from the
+          # separate Bling operational gate. Never turn PENDING into PASS.
+          required=(
+            "EXPECTED_SHA=${REQUESTED_SHA:0:12}"
+            'DEPLOY_SHA_EXACT=PASS'
+            'DEPLOY_FAILED_SHA=CLEAR'
+            'DEPLOY_LOG_SUCCESS=PASS'
+            'RECENT_BACKUP_INTEGRITY=PASS'
+            'CONTAINER_nfcore-db=PASS'
+            'CONTAINER_nfcore-api=PASS'
+            'CONTAINER_nfcore-portal=PASS'
+            'API_READY=PASS'
+            'PORTAL_READY=PASS'
+            'SCHEMA_PRODUCTION_GUARD=PASS'
+          )
+          for proof in "${required[@]}"; do
+            grep -Fxq "$proof" "$work/status.txt" || { echo 'NO_GO_HOST_BASELINE_INCOMPLETE'; exit 1; }
+          done
+          if grep -Fxq 'RESULT=HOST_GATES_PASS_EXTERNAL_STILL_UNVERIFIED' "$work/status.txt"; then
+            [[ "$rc" -eq 0 ]] || { echo 'NO_GO_HOST_AUDIT_EXIT_MISMATCH'; exit 1; }
+          elif grep -Fxq 'RESULT=CODE_READY_BUT_BLING_NOT_ACTIVE' "$work/status.txt"; then
+            [[ "$rc" -eq 1 ]] || { echo 'NO_GO_BLING_EXIT_MISMATCH'; exit 1; }
+            ! grep -Eq '=BLOCKED
+        if: always()
+        shell: bash
+        run: |
+          work="$RUNNER_TEMP/nfcore-host-audit"
+          if [[ -f "$work/status.txt" ]]; then
+            {
+              echo '### NFCore Contabo host audit — read only'
+              echo 'The log is sanitized and proves only local host prerequisites.'
+              echo 'OAuth, A1 and SEFAZ homologation require separate evidence.'
+              echo '```text'
+              cat "$work/status.txt"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'NO_GO: no authenticated host status was collected.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+ "$work/status.txt" || { echo 'NO_GO_BLING_BLOCKED'; exit 1; }
+          else
             echo 'NO_GO_HOST_AUDIT_FAILED_OR_INCOMPLETE'
             exit 1
           fi
-          grep -Fxq 'RESULT=HOST_GATES_PASS_EXTERNAL_STILL_UNVERIFIED' "$work/status.txt" || { echo 'NO_GO_HOST_AUDIT_NOT_COMPLETE'; exit 1; }
-          echo 'HOST_PREFLIGHT_PASS_EXTERNAL_STILL_UNVERIFIED'
+          echo 'SSH_CHANNEL_AND_NFCORE_HOST_BASELINE_PASS'
+      - name: Bling operational readiness (independent gate)
+        shell: bash
+        run: |
+          set -euo pipefail
+          result="$RUNNER_TEMP/nfcore-host-audit/status.txt"
+          if grep -Fxq 'RESULT=HOST_GATES_PASS_EXTERNAL_STILL_UNVERIFIED' "$result"; then
+            echo 'BLING_HOST_GATES_PASS_EXTERNAL_HOMOLOGATION_UNVERIFIED'
+            exit 0
+          fi
+          if grep -Fxq 'RESULT=CODE_READY_BUT_BLING_NOT_ACTIVE' "$result"; then
+            echo 'BLING_OPERATIONAL_NO_GO_PENDING_MIGRATIONS_OAUTH_POLICY_WORKER'
+            exit 1
+          fi
+          echo 'NO_GO_UNCLASSIFIED_BLING_AUDIT'
+          exit 1
       - name: Summarize audited result
         if: always()
         shell: bash
