@@ -2,10 +2,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from kordena_fiscal.domain import FiscalValidationError
-from kordena_fiscal.issuance.nfe_nfse import NfseCanonicalDocument
+
+if TYPE_CHECKING:
+    from kordena_fiscal.issuance.nfe_nfse import NfseCanonicalDocument
 
 MAX_DPS_NUMBER = 999_999_999_999_999
 
