@@ -22,7 +22,15 @@ def test_default_catalog_has_configurable_editions_without_pricing() -> None:
         "foundation",
         "growth",
         "enterprise",
+        "nfcore-total-feature-parity",
     }
+    # Approved Starter/Pro/Business/Enterprise share this product edition;
+    # billing quotas, production fiscal approval and prices stay separate.
+    parity = catalog.edition("nfcore-total-feature-parity")
+    assert set(parity.modules) == set(CommercialModule)
+    assert {item.entitlement_id for item in catalog.entitlements} == set(
+        parity.entitlement_ids
+    )
     assert not hasattr(catalog, "price")
     assert all(not hasattr(edition, "price") for edition in catalog.editions)
     assert CommercialModule.CONTROL_PLANE in catalog.edition("enterprise").modules

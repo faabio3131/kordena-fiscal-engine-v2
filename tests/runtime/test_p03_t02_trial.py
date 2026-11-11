@@ -249,7 +249,12 @@ def test_postgres_trial_rate_limit_and_canonical_duplicate_conflict(settings):
         assert post(client, key=KEY + "-different").status_code == 429
     restarted = runtime_api.create_runtime_app(settings, **options())
     with TestClient(restarted, base_url="https://testserver") as client:
-        assert post(client, key=KEY + "-different").status_code == 409
+        # A new request key for the exact same reservation is a recovery,
+        # not a second commercial trial or another tenant.
+        resumed = post(client, key=KEY + "-different")
+        assert resumed.status_code == 200
+        assert resumed.json()["replay"] is True
+        # Reusing the original key with a different email still fails closed.
         assert post(client, body={**BODY, "buyer_email": "other@example.com"}).status_code == 409
         assert counts(restarted) == (1, 1, 1, 1)
 
@@ -317,9 +322,14 @@ def test_postgres_trial_failure_before_owner_reserves_email_and_recovers(setting
     with TestClient(app, base_url="https://testserver") as client:
         assert post(client).status_code == 503
         assert counts(app) == (1, 0, 0, 0)
-        assert post(client, key=KEY + "-another").status_code == 409
+        # The exact pending reservation is recoverable under a new request
+        # key, but a real storage outage must still surface as 503.
+        assert post(client, key=KEY + "-another").status_code == 503
+        assert counts(app) == (1, 0, 0, 0)
         monkeypatch.setattr(service, "provision", original)
-        assert post(client).status_code == 200
+        recovered = post(client, key=KEY + "-another")
+        assert recovered.status_code == 200
+        assert recovered.json()["replay"] is True
         assert counts(app) == (1, 1, 1, 1)
 
 
@@ -346,7 +356,11 @@ def test_postgres_concurrent_replicas_preserve_trial_identity(settings, collisio
 
         with ThreadPoolExecutor(max_workers=2) as executor:
             statuses = list(executor.map(lambda item: request(*item), ((first, 0), (second, 1))))
-        assert sorted(statuses) == ([200, 201] if collision == "same_key" else [201, 409])
+        # Exact-email/offer under a second key is now a recoverable replay.
+        # Different payload under the SAME key remains a hard 409.
+        assert sorted(statuses) == (
+            [201, 409] if collision == "changed_payload" else [200, 201]
+        )
         assert counts(app) == (1, 1, 1, 1)
 
 

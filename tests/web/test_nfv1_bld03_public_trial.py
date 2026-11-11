@@ -375,3 +375,56 @@ def test_public_trial_streamed_payload_is_bounded_before_parsing() -> None:
     assert response.status_code == 413
     assert response.json() == {"detail": "payload too large"}
     assert service.calls == []
+
+
+def test_public_trial_catalog_hides_a_published_but_unprovisionable_edition() -> None:
+    from decimal import Decimal
+
+    from kordena_fiscal.product.pricing import (
+        BillingCadence,
+        CommercialPricingConfiguration,
+        PlanDefinition,
+        PriceDefinition,
+    )
+
+    pricing = CommercialPricingConfiguration(
+        configuration_id="synthetic-broken-trial",
+        version=1,
+        prices=(
+            PriceDefinition(
+                price_id="broken-monthly",
+                currency="BRL",
+                cadence=BillingCadence.MONTHLY,
+                base_amount=Decimal("99.00"),
+            ),
+        ),
+        plans=(
+            PlanDefinition(
+                plan_id="broken",
+                display_name="Broken",
+                edition_id="not-in-canonical-catalog",
+                price_ids=("broken-monthly",),
+                trial_days=14,
+            ),
+        ),
+    )
+    trial = Trial()
+    app = FastAPI()
+    app.include_router(
+        create_public_trial_router(
+            trial,  # type: ignore[arg-type]
+            pricing=SimpleNamespace(current=pricing),  # type: ignore[arg-type]
+            allowed_origins=("https://fmtecnologia.com.br",),
+            rate_limiter=FixedWindowRateLimiter(max_requests=3, window_seconds=3600),
+            delivery=Delivery(),  # type: ignore[arg-type]
+            commercially_authorized=lambda: True,
+        )
+    )
+    response = TestClient(app).post(
+        "/v1/public/trial-plans",
+        headers={"Origin": "https://fmtecnologia.com.br"},
+    )
+    assert response.status_code == 503
+    assert response.json() == {"detail": "trial plans temporarily unavailable"}
+    assert "plans" not in response.json()
+    assert trial.calls == []

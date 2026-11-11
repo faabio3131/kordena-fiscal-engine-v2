@@ -17,6 +17,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from kordena_fiscal.application.commercial_trial import GovernedTrialService, TrialPricingReader
+from kordena_fiscal.product.catalog import DEFAULT_COMMERCIAL_CATALOG
 from kordena_fiscal.product.commercial_fulfillment import CommercialFulfillmentError
 from kordena_fiscal.web.human_recovery import PasswordResetDelivery
 
@@ -92,6 +93,10 @@ def create_public_trial_router(
             for plan in catalog.plans:
                 if not plan.enabled or plan.trial_days < 1:
                     continue
+                # An enabled/public offer must actually be provisionable.
+                # Otherwise this page would invite customers to a trial
+                # that inevitably conflicts after reserving their email.
+                DEFAULT_COMMERCIAL_CATALOG.edition(plan.edition_id)
                 for price_id in plan.price_ids:
                     price = catalog.price(price_id)
                     if price.enabled:

@@ -280,6 +280,16 @@ DEFAULT_COMMERCIAL_CATALOG = CommercialCatalog(
     ),
     entitlements=_DEFAULT_ENTITLEMENTS,
     editions=(
+        # The four approved consumption-based plans intentionally share one
+        # capability edition; plan-specific quotas/prices remain in the
+        # versioned commercial pricing authority. Fiscal production gates
+        # remain independent of entitlements.
+        EditionBlueprint(
+            edition_id="nfcore-total-feature-parity",
+            display_name="NFCore Full Feature Parity",
+            modules=tuple(CommercialModule),
+            entitlement_ids=tuple(item.entitlement_id for item in _DEFAULT_ENTITLEMENTS),
+        ),
         EditionBlueprint(
             edition_id="foundation",
             display_name="Foundation",
