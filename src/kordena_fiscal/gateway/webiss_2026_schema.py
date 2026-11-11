@@ -16,7 +16,12 @@ from dataclasses import dataclass
 from typing import Mapping
 
 from kordena_fiscal.domain import FiscalValidationError
-from kordena_fiscal.xml.schema import XmlSchemaValidationError, XmlSchemaValidator
+from kordena_fiscal.xml.schema import (
+    SchemaResource,
+    SchemaSet,
+    XmlSchemaValidationError,
+    XmlSchemaValidator,
+)
 
 WEBISS_RTC_LAYOUT_VERSION = "2.02"
 WEBISS_MG_IBGE = frozenset({"3125101", "3170107"})
@@ -73,3 +78,47 @@ def validate_webiss_official_xml(
         raise WebissMunicipalSchemaUnverified(
             "WebISS municipal schema package hash mismatch"
         )
+
+def build_pinned_webiss_municipal_schema(
+    *,
+    municipality_ibge: str,
+    root_schema: str,
+    resources: tuple[SchemaResource, ...],
+    source_uri: str,
+) -> tuple[Webiss2026SchemaEvidence, XmlSchemaValidator]:
+    """Load a reviewed WebISS RTC package, offline and matched by SHA-256.
+
+    The XSD/manifest must be reviewed and version-controlled before runtime.
+    No host/network, tenant upload or dynamic fetch is permitted here. An
+    unknown or unpinned municipal package always fails closed.
+    """
+    if municipality_ibge not in WEBISS_MG_IBGE:
+        raise WebissMunicipalSchemaUnverified("Unknown municipal schema jurisdiction")
+    official_hosts = {
+        "3125101": "https://extremamg.webiss.com.br/",
+        "3170107": "https://uberabamg.webiss.com.br/",
+    }
+    if source_uri != official_hosts[municipality_ibge]:
+        raise WebissMunicipalSchemaUnverified(
+            "WebISS XSD provenance must match its municipal official portal"
+        )
+    expected_digest = PINNED_WEBISS_MG_2026_SCHEMA_DIGESTS.get(municipality_ibge)
+    if expected_digest is None:
+        raise WebissMunicipalSchemaUnverified(
+            "Official WebISS RTC 2026 XSD package is not yet verified"
+        )
+    schema_set = SchemaSet(
+        version=WEBISS_RTC_LAYOUT_VERSION,
+        root_schema=root_schema,
+        resources=resources,
+        source_uri=source_uri,
+    )
+    if schema_set.package_sha256 != expected_digest:
+        raise WebissMunicipalSchemaUnverified(
+            "Municipal schema package differs from reviewed SHA-256"
+        )
+    validator = XmlSchemaValidator(schema_set)
+    return (
+        Webiss2026SchemaEvidence(municipality_ibge, expected_digest),
+        validator,
+    )
