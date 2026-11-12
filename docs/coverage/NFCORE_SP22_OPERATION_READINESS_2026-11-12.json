@@ -29,7 +29,7 @@
       "candidate_provider_labels": [
         "barueri-proprio"
       ],
-      "municipal_authoritative_url": null,
+      "municipal_authoritative_url": "https://portal.barueri.sp.gov.br/secretarias/secretaria-de-financas/nota-fiscal",
       "municipal_contract_verified": false,
       "issuer_profile_specific_rules_verified": false,
       "municipal_layout_version": null,
@@ -49,7 +49,10 @@
       "full_functional_e2e_ci_sha": null,
       "official_taxpayer_homologation": false,
       "production_authorization": false,
-      "status": "INTERNAL_INCOMPLETE"
+      "status": "INTERNAL_INCOMPLETE",
+      "public_issuer_policy_reviewed_at": "2026-11-12",
+      "public_issuer_policy_summary": "Own municipal emitter; PMB 003->004 transition described. Not a certificate of PMB API interoperability.",
+      "official_webservice_contract_reviewed": false
     },
     {
       "priority": 2,
@@ -79,7 +82,10 @@
       "full_functional_e2e_ci_sha": null,
       "official_taxpayer_homologation": false,
       "production_authorization": false,
-      "status": "INTERNAL_INCOMPLETE"
+      "status": "INTERNAL_INCOMPLETE",
+      "public_issuer_policy_reviewed_at": "2026-11-12",
+      "public_issuer_policy_summary": "Capital: ME/EPP Simples national since 2026-11-01; legacy issuer limited to retroactive competences, with separate autonomous regime.",
+      "official_webservice_contract_reviewed": false
     },
     {
       "priority": 3,
@@ -89,7 +95,7 @@
         "dsf",
         "nfse-nacional"
       ],
-      "municipal_authoritative_url": null,
+      "municipal_authoritative_url": "https://portal-adm.campinas.sp.gov.br/node/148803",
       "municipal_contract_verified": false,
       "issuer_profile_specific_rules_verified": false,
       "municipal_layout_version": null,
@@ -109,7 +115,10 @@
       "full_functional_e2e_ci_sha": null,
       "official_taxpayer_homologation": false,
       "production_authorization": false,
-      "status": "INTERNAL_INCOMPLETE"
+      "status": "INTERNAL_INCOMPLETE",
+      "public_issuer_policy_reviewed_at": "2026-11-12",
+      "public_issuer_policy_summary": "Municipal emitter transition and activities timeline 2026-09/10/12; national ME/EPP since 2026-11-01.",
+      "official_webservice_contract_reviewed": false
     },
     {
       "priority": 4,
@@ -139,7 +148,10 @@
       "full_functional_e2e_ci_sha": null,
       "official_taxpayer_homologation": false,
       "production_authorization": false,
-      "status": "INTERNAL_INCOMPLETE"
+      "status": "INTERNAL_INCOMPLETE",
+      "public_issuer_policy_reviewed_at": null,
+      "public_issuer_policy_summary": null,
+      "official_webservice_contract_reviewed": false
     },
     {
       "priority": 5,
@@ -169,7 +181,10 @@
       "full_functional_e2e_ci_sha": null,
       "official_taxpayer_homologation": false,
       "production_authorization": false,
-      "status": "INTERNAL_INCOMPLETE"
+      "status": "INTERNAL_INCOMPLETE",
+      "public_issuer_policy_reviewed_at": null,
+      "public_issuer_policy_summary": null,
+      "official_webservice_contract_reviewed": false
     },
     {
       "priority": 6,
@@ -179,7 +194,7 @@
         "ginfes",
         "nfse-nacional"
       ],
-      "municipal_authoritative_url": null,
+      "municipal_authoritative_url": "https://www.santos.sp.gov.br/?q=content%2Fduvidas-mais-frequentes-financas",
       "municipal_contract_verified": false,
       "issuer_profile_specific_rules_verified": false,
       "municipal_layout_version": null,
@@ -199,7 +214,10 @@
       "full_functional_e2e_ci_sha": null,
       "official_taxpayer_homologation": false,
       "production_authorization": false,
-      "status": "INTERNAL_INCOMPLETE"
+      "status": "INTERNAL_INCOMPLETE",
+      "public_issuer_policy_reviewed_at": "2026-11-12",
+      "public_issuer_policy_summary": "Santos retains municipal GISS On-Line; national ADN participation does not imply same municipal emitter API.",
+      "official_webservice_contract_reviewed": false
     },
     {
       "priority": 7,
@@ -209,7 +227,7 @@
         "ginfes",
         "nfse-nacional"
       ],
-      "municipal_authoritative_url": null,
+      "municipal_authoritative_url": "https://iss.saocaetanodosul.sp.gov.br/TributosMobiliarios/InformacoesNFe",
       "municipal_contract_verified": false,
       "issuer_profile_specific_rules_verified": false,
       "municipal_layout_version": null,
@@ -229,7 +247,10 @@
       "full_functional_e2e_ci_sha": null,
       "official_taxpayer_homologation": false,
       "production_authorization": false,
-      "status": "INTERNAL_INCOMPLETE"
+      "status": "INTERNAL_INCOMPLETE",
+      "public_issuer_policy_reviewed_at": "2026-11-12",
+      "public_issuer_policy_summary": "Municipality states GissOnline supports issue, query, replacement and cancel in municipal platform; no NFCore adapter certified.",
+      "official_webservice_contract_reviewed": false
     },
     {
       "priority": 8,
@@ -239,7 +260,7 @@
         "ginfes",
         "nfse-nacional"
       ],
-      "municipal_authoritative_url": null,
+      "municipal_authoritative_url": "https://jundiai.sp.gov.br/noticias/2026/08/12/prefeitura-esclarece-mudancas-no-sistema-de-emissao-de-notas-fiscais-gissonline/",
       "municipal_contract_verified": false,
       "issuer_profile_specific_rules_verified": false,
       "municipal_layout_version": null,
@@ -259,7 +280,10 @@
       "full_functional_e2e_ci_sha": null,
       "official_taxpayer_homologation": false,
       "production_authorization": false,
-      "status": "INTERNAL_INCOMPLETE"
+      "status": "INTERNAL_INCOMPLETE",
+      "public_issuer_policy_reviewed_at": "2026-11-12",
+      "public_issuer_policy_summary": "Municipal GissOnline retained; national DANFSe/RTC updates require current provider contract.",
+      "official_webservice_contract_reviewed": false
     },
     {
       "priority": 9,
@@ -289,7 +313,10 @@
       "full_functional_e2e_ci_sha": null,
       "official_taxpayer_homologation": false,
       "production_authorization": false,
-      "status": "INTERNAL_INCOMPLETE"
+      "status": "INTERNAL_INCOMPLETE",
+      "public_issuer_policy_reviewed_at": null,
+      "public_issuer_policy_summary": null,
+      "official_webservice_contract_reviewed": false
     },
     {
       "priority": 10,
@@ -319,7 +346,10 @@
       "full_functional_e2e_ci_sha": null,
       "official_taxpayer_homologation": false,
       "production_authorization": false,
-      "status": "INTERNAL_INCOMPLETE"
+      "status": "INTERNAL_INCOMPLETE",
+      "public_issuer_policy_reviewed_at": null,
+      "public_issuer_policy_summary": null,
+      "official_webservice_contract_reviewed": false
     },
     {
       "priority": 11,
@@ -331,7 +361,7 @@
         "e-receita",
         "nfse-nacional"
       ],
-      "municipal_authoritative_url": null,
+      "municipal_authoritative_url": "https://nfe.osasco.sp.gov.br/EissnfeWebApp/portal/NfEletronica.aspx",
       "municipal_contract_verified": false,
       "issuer_profile_specific_rules_verified": false,
       "municipal_layout_version": null,
@@ -351,7 +381,10 @@
       "full_functional_e2e_ci_sha": null,
       "official_taxpayer_homologation": false,
       "production_authorization": false,
-      "status": "INTERNAL_INCOMPLETE"
+      "status": "INTERNAL_INCOMPLETE",
+      "public_issuer_policy_reviewed_at": "2026-11-12",
+      "public_issuer_policy_summary": "Own municipal emitter and distinct RTC_ webservice methods; official homologation portal documented, not tested.",
+      "official_webservice_contract_reviewed": false
     },
     {
       "priority": 12,
@@ -363,7 +396,7 @@
         "e-receita",
         "nfse-nacional"
       ],
-      "municipal_authoritative_url": null,
+      "municipal_authoritative_url": "https://itapevi.sp.gov.br/emissao-nota-fiscal-eletronica/",
       "municipal_contract_verified": false,
       "issuer_profile_specific_rules_verified": false,
       "municipal_layout_version": null,
@@ -383,7 +416,10 @@
       "full_functional_e2e_ci_sha": null,
       "official_taxpayer_homologation": false,
       "production_authorization": false,
-      "status": "INTERNAL_INCOMPLETE"
+      "status": "INTERNAL_INCOMPLETE",
+      "public_issuer_policy_reviewed_at": "2026-11-12",
+      "public_issuer_policy_summary": "Own municipal national-style emitter and SIL Tecnologia WebService; city publishes homologation URL and contributor credentials prerequisite.",
+      "official_webservice_contract_reviewed": false
     },
     {
       "priority": 13,
@@ -415,7 +451,10 @@
       "full_functional_e2e_ci_sha": null,
       "official_taxpayer_homologation": false,
       "production_authorization": false,
-      "status": "INTERNAL_INCOMPLETE"
+      "status": "INTERNAL_INCOMPLETE",
+      "public_issuer_policy_reviewed_at": null,
+      "public_issuer_policy_summary": null,
+      "official_webservice_contract_reviewed": false
     },
     {
       "priority": 14,
@@ -447,7 +486,10 @@
       "full_functional_e2e_ci_sha": null,
       "official_taxpayer_homologation": false,
       "production_authorization": false,
-      "status": "INTERNAL_INCOMPLETE"
+      "status": "INTERNAL_INCOMPLETE",
+      "public_issuer_policy_reviewed_at": null,
+      "public_issuer_policy_summary": null,
+      "official_webservice_contract_reviewed": false
     },
     {
       "priority": 15,
@@ -479,7 +521,10 @@
       "full_functional_e2e_ci_sha": null,
       "official_taxpayer_homologation": false,
       "production_authorization": false,
-      "status": "INTERNAL_INCOMPLETE"
+      "status": "INTERNAL_INCOMPLETE",
+      "public_issuer_policy_reviewed_at": null,
+      "public_issuer_policy_summary": null,
+      "official_webservice_contract_reviewed": false
     },
     {
       "priority": 16,
@@ -511,7 +556,10 @@
       "full_functional_e2e_ci_sha": null,
       "official_taxpayer_homologation": false,
       "production_authorization": false,
-      "status": "INTERNAL_INCOMPLETE"
+      "status": "INTERNAL_INCOMPLETE",
+      "public_issuer_policy_reviewed_at": null,
+      "public_issuer_policy_summary": null,
+      "official_webservice_contract_reviewed": false
     },
     {
       "priority": 17,
@@ -543,7 +591,10 @@
       "full_functional_e2e_ci_sha": null,
       "official_taxpayer_homologation": false,
       "production_authorization": false,
-      "status": "INTERNAL_INCOMPLETE"
+      "status": "INTERNAL_INCOMPLETE",
+      "public_issuer_policy_reviewed_at": null,
+      "public_issuer_policy_summary": null,
+      "official_webservice_contract_reviewed": false
     },
     {
       "priority": 18,
@@ -575,7 +626,10 @@
       "full_functional_e2e_ci_sha": null,
       "official_taxpayer_homologation": false,
       "production_authorization": false,
-      "status": "INTERNAL_INCOMPLETE"
+      "status": "INTERNAL_INCOMPLETE",
+      "public_issuer_policy_reviewed_at": null,
+      "public_issuer_policy_summary": null,
+      "official_webservice_contract_reviewed": false
     },
     {
       "priority": 19,
@@ -607,7 +661,10 @@
       "full_functional_e2e_ci_sha": null,
       "official_taxpayer_homologation": false,
       "production_authorization": false,
-      "status": "INTERNAL_INCOMPLETE"
+      "status": "INTERNAL_INCOMPLETE",
+      "public_issuer_policy_reviewed_at": null,
+      "public_issuer_policy_summary": null,
+      "official_webservice_contract_reviewed": false
     },
     {
       "priority": 20,
@@ -619,7 +676,7 @@
         "e-receita",
         "nfse-nacional"
       ],
-      "municipal_authoritative_url": null,
+      "municipal_authoritative_url": "https://www.montemor.sp.gov.br/portal/servicos/1082/nota-fiscal-nacional/",
       "municipal_contract_verified": false,
       "issuer_profile_specific_rules_verified": false,
       "municipal_layout_version": null,
@@ -639,7 +696,10 @@
       "full_functional_e2e_ci_sha": null,
       "official_taxpayer_homologation": false,
       "production_authorization": false,
-      "status": "INTERNAL_INCOMPLETE"
+      "status": "INTERNAL_INCOMPLETE",
+      "public_issuer_policy_reviewed_at": "2026-11-12",
+      "public_issuer_policy_summary": "Municipality declares exclusive National NFS-e from 2026-01-01; municipal ISS settlement remains separate.",
+      "official_webservice_contract_reviewed": false
     },
     {
       "priority": 21,
@@ -671,7 +731,10 @@
       "full_functional_e2e_ci_sha": null,
       "official_taxpayer_homologation": false,
       "production_authorization": false,
-      "status": "INTERNAL_INCOMPLETE"
+      "status": "INTERNAL_INCOMPLETE",
+      "public_issuer_policy_reviewed_at": null,
+      "public_issuer_policy_summary": null,
+      "official_webservice_contract_reviewed": false
     },
     {
       "priority": 22,
@@ -703,7 +766,18 @@
       "full_functional_e2e_ci_sha": null,
       "official_taxpayer_homologation": false,
       "production_authorization": false,
-      "status": "INTERNAL_INCOMPLETE"
+      "status": "INTERNAL_INCOMPLETE",
+      "public_issuer_policy_reviewed_at": null,
+      "public_issuer_policy_summary": null,
+      "official_webservice_contract_reviewed": false
     }
-  ]
+  ],
+  "extra_provider_notice": {
+    "municipality": "Santana de Parnaíba",
+    "ibge": "3547304",
+    "source_url": "https://santanadeparnaiba.simplissweb.com.br/contrib/Home/NotificacaoNovoLayout",
+    "source_type": "PROVIDER_HOSTED_NOTICE_ONLY",
+    "warning": "Publisher is the provider, not independently reviewed as a city authority; manual/schema hash and municipal contract remain unverified."
+  },
+  "note": "Reviewed public notice is NOT the official WebService contract or a provider certification. All 22 stay INTERNAL_INCOMPLETE."
 }
