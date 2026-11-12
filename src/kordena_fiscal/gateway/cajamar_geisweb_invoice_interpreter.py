@@ -108,7 +108,7 @@ def _amount(value: str) -> Decimal:
         raise Sp4CanonicalMunicipalError("GeisWeb official amount is invalid") from None
     if (
         not amount.is_finite() or amount < 0
-        or amount.as_tuple().exponent < -2
+        or amount * 100 != (amount * 100).to_integral_value()
     ):
         raise Sp4CanonicalMunicipalError("GeisWeb service amount precision is invalid")
     return amount
