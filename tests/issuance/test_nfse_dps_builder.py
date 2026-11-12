@@ -463,3 +463,41 @@ def test_bh_national_series_above_official_2026_limit_fails_schema() -> None:
     )
     with pytest.raises(XmlSchemaValidationError, match="serie"):
         build_signed_dps(request, _certificate(), reservation=reserved)
+
+
+def test_bh_nt009_mandatory_purpose_and_cserv_sequence() -> None:
+    signed = _signed_bh(_bh_request("001"))
+    root = etree.fromstring(signed)
+    info = root.find(f"{{{_NFSE_NS}}}infDPS")
+    assert info is not None
+    children = [etree.QName(child).localname for child in info]
+    assert children.index("tpEmit") < children.index("finNFSe") < children.index("cLocEmi")
+    assert info.findtext(f"{{{_NFSE_NS}}}finNFSe") == "0"
+    c_serv = info.find(f"{{{_NFSE_NS}}}serv/{{{_NFSE_NS}}}cServ")
+    assert c_serv is not None
+    assert [etree.QName(child).localname for child in c_serv] == [
+        "cTribNac", "cTribMun", "cNBS", "xDescServ",
+    ]
+    national_dps_validator("1.01", profile=NT009_RESTRICTED_PROFILE).validate_document(signed)
+
+
+def test_bh_nt009_deduction_uses_reviewed_adjustment_group_not_removed_vdedred() -> None:
+    request = _bh_request("001")
+    service = replace(
+        request.document.services[0],
+        deduction_amount=Money(Decimal("10.00")),
+        iss_amount=Money(Decimal("2.70")),
+        source_normative="urn:nfcore:synthetic-reviewed-iss-adjustment-2026",
+    )
+    updated = NfseAuthorizationRequest.build(replace(
+        request.document, services=(service,),
+    ))
+    signed = _signed_bh(updated)
+    national_dps_validator("1.01", profile=NT009_RESTRICTED_PROFILE).validate_document(signed)
+    root = etree.fromstring(signed)
+    valores = root.find(f".//{{{_NFSE_NS}}}valores")
+    assert valores is not None
+    assert valores.find(f"{{{_NFSE_NS}}}vDedRed") is None
+    assert valores.findtext(
+        f"{{{_NFSE_NS}}}vAjusteBC/{{{_NFSE_NS}}}vAjusteBCISSQN"
+    ) == "10.00"
