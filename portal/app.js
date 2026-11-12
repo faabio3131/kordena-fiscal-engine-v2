@@ -1493,7 +1493,7 @@ function appendA1UploadForm(article) {
       } else {
         status.textContent = "O cofre não apresentou uma confirmação verificável.";
       }
-    } catch (_) {
+    } catch {
       status.textContent = "Não foi possível confirmar o A1 no cofre."
         + " Não reenvie o certificado antes de investigar o erro.";
     } finally {
@@ -1538,7 +1538,7 @@ function appendA1UploadForm(article) {
       let readback = null;
       try {
         readback = await api(statusUrl());
-      } catch (_) {
+      } catch {
         // The write may have succeeded; never encourage a blind second POST.
       }
       if (result.status === "stored" && readback?.status === "stored"
