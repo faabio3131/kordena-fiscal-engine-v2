@@ -11,14 +11,26 @@ from decimal import Decimal
 from kordena_fiscal.application import FiscalApplicationService
 from kordena_fiscal.archive import FiscalArchiveKind, RetentionPolicyMetadata
 from kordena_fiscal.domain import (
-    BrazilianJurisdiction, CnaeCode, Cnpj, ExecutionScope, FiscalAddress,
-    FiscalEnvironment, FiscalProfile, Money, SourceReference,
-    StateRegistration, TaxRegimeCode,
+    BrazilianJurisdiction,
+    CnaeCode,
+    Cnpj,
+    ExecutionScope,
+    FiscalAddress,
+    FiscalEnvironment,
+    FiscalProfile,
+    Money,
+    SourceReference,
+    StateRegistration,
+    TaxRegimeCode,
 )
 from kordena_fiscal.gateway import AuthorizationStatus, GatewayProviderMetadata
 from kordena_fiscal.issuance import (
-    NfseAuthorizationRequest, NfseAuthorizationResult, NfseCanonicalDocument,
-    NfseGatewayClient, NfseQueryClient, NfseServiceLine,
+    NfseAuthorizationRequest,
+    NfseAuthorizationResult,
+    NfseCanonicalDocument,
+    NfseGatewayClient,
+    NfseQueryClient,
+    NfseServiceLine,
 )
 from kordena_fiscal.issuance.nfe_nfse import NfseRejectionDetail
 from kordena_fiscal.lifecycle import FiscalDocumentState
@@ -26,7 +38,10 @@ from kordena_fiscal.persistence import SqliteFiscalDatabase
 
 _NOW = datetime(2026, 11, 12, 11, 0, tzinfo=UTC)
 _RETENTION = RetentionPolicyMetadata("nfcore-test-recovered-nfse", 1)
-_RECEIPT = b'<NFSe xmlns="http://www.sped.fazenda.gov.br/nfse"><infNFSe Id="NFSsynthetic-only"/></NFSe>'
+_RECEIPT = (
+    b'<NFSe xmlns="http://www.sped.fazenda.gov.br/nfse">'
+    b'<infNFSe Id="NFSsynthetic-only"/></NFSe>'
+)
 
 
 def _document() -> NfseCanonicalDocument:
@@ -76,7 +91,9 @@ def _result(
         idempotency_key=request.idempotency_key,
         request_fingerprint=request.request_fingerprint,
         provider=GatewayProviderMetadata("synthetic-receipt", "1"),
-        invoice_reference="synthetic-access-key" if status is AuthorizationStatus.AUTHORIZED else None,
+        invoice_reference=(
+            "synthetic-access-key" if status is AuthorizationStatus.AUTHORIZED else None
+        ),
         authorized_xml=_RECEIPT if status is AuthorizationStatus.AUTHORIZED else None,
     )
 
@@ -208,7 +225,9 @@ class _RejectingQuery:
         return _rejected_result(request)
 
 
-def _assert_exact_rejection_archived(database: SqliteFiscalDatabase, document: NfseCanonicalDocument) -> None:
+def _assert_exact_rejection_archived(
+    database: SqliteFiscalDatabase, document: NfseCanonicalDocument,
+) -> None:
     with database() as uow:
         entries = uow.archive.list_for_document(document.scope, document.document_id)
         raw = [
