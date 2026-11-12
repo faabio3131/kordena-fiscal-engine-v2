@@ -163,7 +163,10 @@ def _tax_fields(fields: JundiaiGissTaxFields) -> None:
     if any(x is not None for x in indicators):
         if any(x is None for x in indicators):
             raise JundiaiGissIssueError("Partial GissOnline 2026 RTC classification")
-        assert all(x is not None for x in indicators)
+        assert fields.national_service_code is not None
+        assert fields.operation_indicator is not None
+        assert fields.rtc_cst is not None
+        assert fields.rtc_classification is not None
         _digits(fields.national_service_code, "NBS", 12)
         _digits(fields.operation_indicator, "INDOP", 12)
         _digits(fields.rtc_cst, "IBS/CBS CST", 3)
@@ -204,10 +207,6 @@ def build_jundiai_giss_issue_xml(
     ):
         raise JundiaiGissIssueError("GissOnline source RPS and fiscal document differ")
     _tax_fields(fields)
-    if doc.issuer.tax_regime.value not in ("NORMAL", "SIMPLES_NACIONAL", "MEI",
-                                           "SIMPLES_NACIONAL_EXCESS_SUBLIMIT"):
-        # The statutory tax regime is reviewed by canonical municipal policy.
-        pass
     if (
         doc.service_jurisdiction.municipality_ibge_code is None
         or len(doc.service_jurisdiction.municipality_ibge_code) != 7
