@@ -203,3 +203,56 @@ Não houve merge, deploy, migration, envio fiscal real ou alteração do Agente 
   `d5b8e7203ad64f3895e2ff30cce6f295fb84cfa0`, **antes** destas
   novas alterações. Esta etapa de retenções e tipo 5 exige nova
   certificação do HEAD atualizado, sem reaproveitar o resultado anterior.
+
+
+## Auditoria e correções SP4 — revisão de 12/11/2026
+
+**CURRENT do código:** branch `fix/nfcore-sp22-legal-readiness-20261112`,
+PR #446 OPEN/DRAFT. A CI anterior de `08ceb39` estava verde antes
+destas alterações; nenhuma evidência do commit antigo certifica este conjunto.
+**Sem merge, deploy, segredos, certificado de contribuinte ou emissão real.**
+
+Correções municipais aplicadas nesta revisão:
+
+- **Cajamar:** o `EnviaLoteRps` assinado precisa preservar também o
+  endereço e identidade do tomador, ISS, regime, código de serviço,
+  discriminação, base, alíquota e as retenções PIS/COFINS/CSLL/IRRF/INSS;
+  testes de adulteração antes do port de assinatura e XSD. Corte de
+  contribuintes Simples Nacional para o Emissor Nacional em **01/09/2026**,
+  corrigido a partir do anúncio oficial da Prefeitura, publicado em 15/07/2026:
+  https://cajamar.sp.gov.br/noticias/2026/07/15/empresas-do-simples-nacional-deverao-emitir-nfs-e-exclusivamente-pelo-emissor-nacional-a-partir-de-setembro/
+  ; testes dos limites 31/08 e 01/09.
+- **Osasco:** DTO `RTC_EmitirNFE` exige `ClassTrib` com 6 dígitos,
+  `CodigoNBS` com 12 caracteres pontuados, `IndOperacao` com 6
+  dígitos e `IdLocalIncidencia` de um dígito; cobertura de endereço
+  condicional de prestação e `CodObra` com ordem alfabética WCF;
+  cancelamento exige competência da NFS-e igual à do RPS original;
+  testes negativos para campos malformados e incompletos.
+- **Barueri:** arquivo PMB004 Tipo 2 não pode declarar retenção sem
+  detalhamento Tipo 3; teto máximo da retenção igual ao valor da nota;
+  `VN` é valor **não incluído na base**, não retenção federal e
+  só pode ser montado quando for idêntico à dedução canônica já calculada.
+  `3VN` reconcilia com o Tipo 9 sem inflar o campo de retenção Tipo 2.
+  Foram acrescidos testes de valor zero, retenção excessiva e soma
+  combinada de VN mais retenções federais.
+- **Jundiaí:** árvore fiscal do `EnviarLoteRpsEnvio` é comparada
+  integralmente antes/depois da assinatura, ignorando apenas elementos
+  XMLDSig; qualquer modificação tributária ou de identificação falha
+  antes de chamar o validador. `CodigoNbs` é opcional quando não há
+  dados RTC; quando o grupo RTC estiver presente, exige NBS correlacionado.
+  Testes cobrem ambos os caminhos.
+
+**Limite de conclusão:** esses reparos são implementação e testes
+propostos, não declaração de prontidão comercial nem homologação. Os
+provedores municipais precisam de contratos oficiais WSDL/XSD pinados
+e fixtures verificáveis de emissão, consulta, cancelamento e substituição;
+o motor de apuração e o fluxo HTTP/Portal devem ser reconciliados com o
+Agente B e com a PR de integração #450 sem editar suas autoridades.
+Concluir internamente todos os cenários técnicos é obrigação distinta de
+obter A1, IM, chave municipal e prova fiscal com contribuinte externo.
+**Não inferir cobertura 100% de quatro municípios a partir de CI verde.**
+
+**Gates desta revisão:** somente considerar aprovados se
+`FM NFCORE V1 CI`, `NFCore Plan Governance` e
+`PR Block Completeness` terminarem `SUCCESS` no HEAD exato após
+este checkpoint. Não usar SHAs pré-revisão como evidência.
