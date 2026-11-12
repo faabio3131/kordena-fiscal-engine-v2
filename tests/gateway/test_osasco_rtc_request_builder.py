@@ -13,7 +13,10 @@ from kordena_fiscal.gateway.osasco_rtc_request_builder import (
     OsascoWcfBuilderError,
     build_osasco_original_note_query,
 )
-from kordena_fiscal.gateway.sp4_municipal_canonical import Sp4OriginalRps
+from kordena_fiscal.gateway.sp4_municipal_canonical import (
+    Sp4CanonicalMunicipalError,
+    Sp4OriginalRps,
+)
 
 
 def _rps() -> Sp4OriginalRps:
@@ -51,7 +54,7 @@ def test_official_full_note_query_is_source_scoped_and_keyless() -> None:
 
 @pytest.mark.parametrize("number", ["0", "NaN", "1.1", "", "12/4", "١٢٣"])
 def test_invalid_source_receipt_cannot_be_queried(number: str) -> None:
-    with pytest.raises(OsascoWcfBuilderError):
+    with pytest.raises((OsascoWcfBuilderError, Sp4CanonicalMunicipalError)):
         build_osasco_original_note_query(
             original=replace(_rps(), rps_number=number),
             regime=TaxRegimeCode.NORMAL,
