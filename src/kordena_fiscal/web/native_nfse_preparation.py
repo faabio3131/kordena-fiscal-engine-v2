@@ -20,21 +20,35 @@ from kordena_fiscal.compliance.nfse_preaudit import nfse_preaudit
 from kordena_fiscal.control_plane.commercial import ConfiguredFiscalOperation
 from kordena_fiscal.control_plane.service import ControlPlaneNotFoundError
 from kordena_fiscal.domain import (
-    BrazilianJurisdiction, Cnpj, Cpf, ExecutionScope, FiscalDocumentKind,
-    FiscalEnvironment, FiscalValidationError, Money, SourceReference,
+    BrazilianJurisdiction,
+    Cnpj,
+    Cpf,
+    ExecutionScope,
+    FiscalDocumentKind,
+    FiscalEnvironment,
+    FiscalValidationError,
+    Money,
+    SourceReference,
 )
 from kordena_fiscal.gateway.nfse_nacional_homologation import (
     NACIONAL_HOMOLOGATION_PROVIDER_ID,
 )
 from kordena_fiscal.issuance import (
-    NfseAuthorizationRequest, NfseCanonicalDocument, NfseServiceLine,
+    NfseAuthorizationRequest,
+    NfseCanonicalDocument,
+    NfseServiceLine,
     NfseServiceTaker,
 )
 from kordena_fiscal.persistence.ports import (
-    FiscalUnitOfWorkFactory, PersistenceConflictError, PersistenceStateError,
+    FiscalUnitOfWorkFactory,
+    PersistenceConflictError,
+    PersistenceStateError,
 )
 from kordena_fiscal.security.human_identity import (
-    AuthenticatedHuman, HumanAuthorizationError, PortalPermission, PortalRole,
+    AuthenticatedHuman,
+    HumanAuthorizationError,
+    PortalPermission,
+    PortalRole,
 )
 
 _FIELDS = frozenset({

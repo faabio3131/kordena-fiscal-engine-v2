@@ -13,8 +13,15 @@ from kordena_fiscal.control_plane.commercial import (
     ProviderBinding,
 )
 from kordena_fiscal.domain import (
-    BrazilianJurisdiction, CnaeCode, Cnpj, ExecutionScope, FiscalAddress,
-    FiscalDocumentKind, FiscalEnvironment, FiscalProfile, StateRegistration,
+    BrazilianJurisdiction,
+    CnaeCode,
+    Cnpj,
+    ExecutionScope,
+    FiscalAddress,
+    FiscalDocumentKind,
+    FiscalEnvironment,
+    FiscalProfile,
+    StateRegistration,
     TaxRegimeCode,
 )
 from kordena_fiscal.gateway.nfse_nacional_homologation import (
@@ -23,8 +30,12 @@ from kordena_fiscal.gateway.nfse_nacional_homologation import (
 from kordena_fiscal.lifecycle import FiscalDocumentState
 from kordena_fiscal.persistence import SqliteFiscalDatabase
 from kordena_fiscal.security.human_identity import (
-    HumanAccount, HumanIdentityService, InMemoryHumanAccountRepository,
-    InMemoryWebSessionRepository, PortalRole, ScryptPasswordHasher,
+    HumanAccount,
+    HumanIdentityService,
+    InMemoryHumanAccountRepository,
+    InMemoryWebSessionRepository,
+    PortalRole,
+    ScryptPasswordHasher,
 )
 from kordena_fiscal.web import create_app
 from kordena_fiscal.web.human_auth import CSRF_COOKIE, CSRF_HEADER
