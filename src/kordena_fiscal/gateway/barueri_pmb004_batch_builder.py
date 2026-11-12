@@ -109,12 +109,18 @@ def build_barueri_single_rps_batch(
     )
     if retained_cents >= 10**15 or federal_cents >= 10**15:
         raise BarueriBatchBuilderError("Barueri Type 3 fiscal total overflow")
-    if retentions:
-        withheld = detail[483:498]
-        if not withheld.isdigit() or int(withheld) != federal_cents:
-            raise BarueriBatchBuilderError(
-                "Barueri Type 2 withheld tax conflicts with Type 3 details"
-            )
+    # The mandatory Type 2 retained-tax total must agree with Type 3 even
+    # when no records were supplied. Otherwise a caller could declare a
+    # positive withholding in Type 2 without any recoverable tax detail.
+    withheld = detail[483:498]
+    if not withheld.isdigit() or int(withheld) != federal_cents:
+        raise BarueriBatchBuilderError(
+            "Barueri Type 2 withheld tax conflicts with Type 3 details"
+        )
+    if federal_cents > cents:
+        raise BarueriBatchBuilderError(
+            "Barueri federal withholding exceeds original service amount"
+        )
     header = (
         b"1" + municipal_registration.encode("ascii")
         + b"PMB004" + source.municipal_batch_id.encode("ascii")
