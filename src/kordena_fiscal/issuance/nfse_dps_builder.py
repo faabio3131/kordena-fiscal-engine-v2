@@ -197,6 +197,15 @@ def build_signed_dps(
     if service.municipal_taxation_detail is not None:
         _child(c_serv, "cTribMun", service.municipal_taxation_detail)
     _child(c_serv, "xDescServ", service.description.strip())
+    # BHISS requires the official NBS classification for 2026 service
+    # competencies. Never infer NBS from cTribNac or service description.
+    if service_municipality == "3106200" and document.competence_date.year >= 2026:
+        if service.national_service_nbs is None:
+            raise FiscalValidationError(
+                "Belo Horizonte requires reviewed nine-digit cNBS for 2026 competence"
+            )
+    if service.national_service_nbs is not None:
+        _child(c_serv, "cNBS", service.national_service_nbs)
 
     valores = etree.SubElement(info, f"{{{_NFSE_NS}}}valores")
     v_serv_prest = etree.SubElement(valores, f"{{{_NFSE_NS}}}vServPrest")
