@@ -247,13 +247,16 @@ def _parse_reply(raw: bytes, method: str) -> OsascoOperationReceipt:
     if len(results) != 1:
         raise OsascoRtcContractError("Osasco response result mismatch")
     errors = results[0].findall(f".//{{{_DTO}}}Erro")
-    if len(errors) != 1 or (errors[0].text or "").lower() not in ("true", "false"):
+    if len(errors) != 1 or (errors[0].text or "").strip().lower() not in (
+        "true", "false",
+    ):
         raise OsascoRtcContractError("Osasco response lacks canonical fiscal status")
+    failed = (errors[0].text or "").strip().lower() == "true"
     note: OsascoNoteReference | None = None
     references = results[0].findall(f"{{{_DTO}}}NotaFiscalGerada")
     if len(references) > 1:
         raise OsascoRtcContractError("Ambiguous municipal note references")
-    if references and errors[0].text == "true":
+    if references and failed:
         raise OsascoRtcContractError("Osasco response carries contradictory note and error")
     if references:
         candidate = references[0]
@@ -268,7 +271,7 @@ def _parse_reply(raw: bytes, method: str) -> OsascoOperationReceipt:
             identifier=one("Identificador"),
         )
     return OsascoOperationReceipt(
-        method=method, fiscal_error=errors[0].text == "true",
+        method=method, fiscal_error=failed,
         note_reference=note,
         response_xml=raw,
     )
