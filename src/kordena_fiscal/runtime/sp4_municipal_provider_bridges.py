@@ -176,6 +176,38 @@ def build_cajamar_reviewed_ports(
             req, original, build_signed_operation(req, original, method),
             expected_type=CajamarPreparedNfse, expected_method=method,
         )
+        # GeisWeb ConsultaLoteRps is keyed by NumeroLote (10 chars),
+        # NOT the invoice number. Without a durable lot ID a lost POST
+        # cannot be reconciled and must not be retransmitted.
+        if (
+            original.municipal_batch_id is None
+            or len(original.municipal_batch_id) > 10
+        ):
+            raise Sp4CanonicalMunicipalError(
+                "Cajamar requires persisted original GeisWeb lot ID"
+            )
+        try:
+            root = etree.fromstring(
+                operation.signed_request_xml,
+                parser=etree.XMLParser(
+                    no_network=True, resolve_entities=False, load_dtd=False,
+                ),
+            )
+        except etree.XMLSyntaxError:
+            raise Sp4CanonicalMunicipalError("Cajamar signed lot XML malformed") from None
+        lots = [
+            child for child in root.iter()
+            if etree.QName(child).localname == "NumeroLote"
+        ]
+        if (
+            etree.QName(root).localname != method
+            or bool(getattr(root.getroottree().docinfo, "doctype", ""))
+            or len(lots) != 1
+            or (lots[0].text or "").strip() != original.municipal_batch_id
+        ):
+            raise Sp4CanonicalMunicipalError(
+                "Cajamar lot XML differs from persisted original batch"
+            )
         verify_signed_rps_identity(original, operation.signed_request_xml)
         receipt = transport.invoke(operation)
         return _verified_outcome(interpret_official_result(receipt, req, original))
