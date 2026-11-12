@@ -188,6 +188,14 @@ def build_signed_dps(
     _child(loc_prest, "cLocPrestacao", service_municipality)
     c_serv = etree.SubElement(serv, f"{{{_NFSE_NS}}}cServ")
     _child(c_serv, "cTribNac", service.national_taxation_code)
+    # BHISS requires a three-digit municipal tax detail for ISS due to BH.
+    # It must be reviewed, not guessed from the generic LC 116 service code.
+    if service_municipality == "3106200" and service.municipal_taxation_detail is None:
+        raise FiscalValidationError(
+            "Belo Horizonte requires reviewed three-digit cTribMun for national DPS"
+        )
+    if service.municipal_taxation_detail is not None:
+        _child(c_serv, "cTribMun", service.municipal_taxation_detail)
     _child(c_serv, "xDescServ", service.description.strip())
 
     valores = etree.SubElement(info, f"{{{_NFSE_NS}}}valores")
