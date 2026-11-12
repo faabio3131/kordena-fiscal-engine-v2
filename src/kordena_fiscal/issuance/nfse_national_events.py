@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -27,7 +27,7 @@ _APP = "nfcore-ev-v1"
 _MAX_BYTES = 2_097_152
 
 
-class NationalEventType(str, Enum):
+class NationalEventType(StrEnum):
     CANCEL = "101101"
     CANCEL_BY_REPLACEMENT = "105102"
 
