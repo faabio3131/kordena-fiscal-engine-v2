@@ -179,7 +179,7 @@ def build_signed_dps(
         + _FEDERAL_INSCRIPTION_TYPE_CNPJ
         + cnpj
         + serie.zfill(5)
-        + n_dps
+        + n_dps.zfill(15)  # TSIdDPS: fixed 45-char Id; nDPS element stays unpadded
     )
 
     schema_version = "1.01" if is_bh else _SCHEMA_VERSION
