@@ -17,8 +17,8 @@ from urllib.request import HTTPSHandler, Request, build_opener
 from lxml import etree
 
 from kordena_fiscal.domain import FiscalValidationError
-from kordena_fiscal.issuance.nfe_nfse import NfseRejectionDetail
 from kordena_fiscal.gateway.fiscal_tls import RejectFiscalRedirects, build_fiscal_tls_context
+from kordena_fiscal.issuance.nfe_nfse import NfseRejectionDetail
 from kordena_fiscal.signing.nfse_xmldsig import sign_nfse_dps_xml
 from kordena_fiscal.vault import EphemeralCertificateMaterial
 from kordena_fiscal.xml.nfse_nacional_schema import national_dps_validator
