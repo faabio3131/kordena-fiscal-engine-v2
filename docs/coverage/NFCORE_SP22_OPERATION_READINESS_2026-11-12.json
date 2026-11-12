@@ -257,7 +257,7 @@
       "ibge": "3525904",
       "municipality": "Jundiaí",
       "candidate_provider_labels": [
-        "ginfes",
+        "gissonline",
         "nfse-nacional"
       ],
       "municipal_authoritative_url": "https://jundiai.sp.gov.br/noticias/2026/08/12/prefeitura-esclarece-mudancas-no-sistema-de-emissao-de-notas-fiscais-gissonline/",
@@ -356,9 +356,7 @@
       "ibge": "3534401",
       "municipality": "Osasco",
       "candidate_provider_labels": [
-        "sigiss",
-        "betha",
-        "e-receita",
+        "osasco-proprio-rtc",
         "nfse-nacional"
       ],
       "municipal_authoritative_url": "https://nfe.osasco.sp.gov.br/EissnfeWebApp/portal/NfEletronica.aspx",
