@@ -22,6 +22,16 @@ from kordena_fiscal.gateway.barueri_pmb004_homologation import (
 )
 
 
+def _synthetic_pmb004() -> bytes:
+    """Physical record widths only: full fiscal values need official validator."""
+    header = b"11234567PMB00420261113001"
+    record2 = b"2RPS  " + b" " * (1970 - 6)
+    record4 = b"41" + b" " * (531 - 2)
+    trailer = b"9" + b"0000004" + b"0" * 30
+    assert list(map(len, (header, record2, record4, trailer))) == [25, 1970, 531, 38]
+    return b"\r\n".join((header, record2, record4, trailer)) + b"\r\n"
+
+
 def _batch(
     regime: TaxRegimeCode = TaxRegimeCode.NORMAL,
     competence: date = date(2026, 11, 13),
@@ -38,7 +48,7 @@ def _batch(
         competence_date=competence,
         remittance="20261113001",
         file_name="20261113001.txt",
-        rps_bytes=data or b"11234567PMB00420261113001\r\n2RPS  1234\r\n",
+        rps_bytes=data if data is not None else _synthetic_pmb004(),
     )
 
 
@@ -87,9 +97,19 @@ def test_national_taxpayer_cannot_submit_municipal_batch(
 
 def test_batch_rejects_layout_and_remittance_tampering() -> None:
     with pytest.raises(BarueriContractError, match="header/remittance"):
-        _batch(data=b"11234567PMB00320261113001\r\n2RPS  1234\r\n")
+        _batch(data=_synthetic_pmb004().replace(b"PMB004", b"PMB003", 1))
     with pytest.raises(BarueriContractError, match="header/remittance"):
-        _batch(data=b"11234567PMB00420261113002\r\n2RPS  1234\r\n")
+        _batch(data=_synthetic_pmb004().replace(b"20261113001", b"20261113002", 1))
+
+
+def test_pmb004_requires_complete_rps_rtc_and_footer() -> None:
+    valid = _synthetic_pmb004()
+    with pytest.raises(BarueriContractError, match="fixed-width"):
+        _batch(data=valid.replace(b"2RPS  ", b"2RPS ", 1))
+    with pytest.raises(BarueriContractError, match="each RPS"):
+        _batch(data=valid.replace(b"41" + b" " * 529 + b"\r\n", b"", 1))
+    with pytest.raises(BarueriContractError, match="trailer count"):
+        _batch(data=valid.replace(b"90000004", b"90000003", 1))
 
 
 def test_provider_mismatch_prevents_a1_and_http() -> None:
