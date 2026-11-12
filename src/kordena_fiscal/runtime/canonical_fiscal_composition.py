@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import ssl
 from collections.abc import Callable, Mapping
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 from kordena_fiscal.application.service import FiscalApplicationService
@@ -268,8 +268,11 @@ def _require_sp4_municipal_channel(request: NfseAuthorizationRequest) -> None:
     jurisdiction = issuer.address.jurisdiction
     if jurisdiction.state_code != "SP":
         raise FiscalValidationError("SP4 municipal operation requires SP issuer")
-    if type(issuer.tax_regime) is not TaxRegimeCode:
-        raise FiscalValidationError("SP4 requires reviewed issuer regime")
+    if (
+        type(issuer.tax_regime) is not TaxRegimeCode
+        or type(request.document.competence_date) is not date
+    ):
+        raise FiscalValidationError("SP4 requires reviewed issuer regime and competence")
     try:
         classify_sp_national_nfse_eligibility(
             issuer_jurisdiction=jurisdiction,
