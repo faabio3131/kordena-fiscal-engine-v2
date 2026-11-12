@@ -678,8 +678,9 @@ class FiscalApplicationService:
                     document.scope,
                     model=InternalFiscalSequenceStream.NFSE_DPS,
                     series=national_dps_series,
+                    issuer_cnpj=document.issuer.cnpj.value,
                 )
-                dps_number = uow.sequences.reserve_next(
+                dps_number = uow.dps_sequences.reserve_next(
                     dps_key, FiscalSequencePolicy(max_number=999_999_999_999_999),
                 )
                 national_dps_entry = FiscalArchiveEntry.build(
