@@ -13,9 +13,11 @@ from kordena_fiscal.gateway.barueri_pmb004_record_builder import (
     BarueriPmb004IssueFields,
     BarueriPmb004Recipient,
     BarueriPmb004RecordError,
+    BarueriPmb004Type5Data,
     build_barueri_reviewed_issue_batch,
     build_barueri_rps_type2,
     build_barueri_rtc_type4,
+    build_barueri_special_rtc_type5,
 )
 from kordena_fiscal.gateway.sp4_municipal_canonical import Sp4OriginalRps
 from kordena_fiscal.issuance.nfe_nfse import NfseAuthorizationRequest
@@ -195,3 +197,87 @@ def test_reviewed_federal_taxes_reject_repeated_codes_and_excessive_amounts() ->
                 fields=replace(_fields(), federal_retentions=taxes),
                 municipal_registration="1234567",
             )
+
+
+def test_type5_domestic_recipient_different_from_taker_is_position_accurate() -> None:
+    original = _original()
+    destination = replace(
+        _fields().recipient,
+        tax_id="12345678901", legal_name="Destinatario Distinto",
+        city="Osasco", city_ibge="3534401", state="SP",
+        postal_code="06018090", email="destino@example.com",
+    )
+    fields = replace(
+        _fields(), recipient_differs="1",
+        special_rtc=BarueriPmb004Type5Data(final_recipient=destination),
+    )
+    rows = build_barueri_special_rtc_type5(
+        request=_request(original), original=original, fields=fields,
+    )
+    assert len(rows) == 1
+    row = rows[0]
+    assert len(row) == 697
+    assert row[0:1] == b"5"
+    assert row[217:218] == b"2"
+    assert row[218:232] == b"00012345678901"
+    assert row[232:292].rstrip() == b"Destinatario Distinto"
+    assert row[486:493] == b"3534401"
+    assert row[493:495] == b"SP"
+    assert row[498:506] == b"06018090"
+    batch = build_barueri_reviewed_issue_batch(
+        request=_request(original), original=original,
+        fields=fields, municipal_registration="1234567",
+    )
+    lines = batch.rps_bytes.split(b"\r\n")
+    assert lines[3] == row
+    assert lines[-2][:8] == b"90000005"
+
+
+def test_type5_presumed_credit_government_and_referenced_nfse() -> None:
+    original = _original()
+    fields = replace(
+        _fields(),
+        special_rtc=BarueriPmb004Type5Data(
+            presumed_credit_code="01", government_entity_type="4",
+            government_operation_type="2", referenced_nfse_key="1" * 50,
+        ),
+    )
+    row = build_barueri_special_rtc_type5(
+        request=_request(original), original=original, fields=fields,
+    )[0]
+    assert row[:5] == b"50142"
+    assert row[5:55] == b"1" * 50
+
+
+def test_type5_required_by_rtc_class_and_rental_activity() -> None:
+    original = _original()
+    for fields in (
+        replace(_fields(), recipient_differs="1"),
+        replace(_fields(), tax_classification="410003", ibs_cbs_status="410"),
+        replace(_fields(), service_code="990401000"),
+    ):
+        with pytest.raises(BarueriPmb004RecordError, match="Type 5"):
+            build_barueri_reviewed_issue_batch(
+                request=_request(original), original=original, fields=fields,
+                municipal_registration="1234567",
+            )
+    donation = replace(
+        _fields(), tax_classification="410003", ibs_cbs_status="410",
+        special_rtc=BarueriPmb004Type5Data(donation_indicator="1"),
+    )
+    assert build_barueri_special_rtc_type5(
+        request=_request(original), original=original, fields=donation,
+    )[0][216:217] == b"1"
+    lease = replace(
+        _fields(), service_code="990401000",
+        special_rtc=BarueriPmb004Type5Data(
+            rental_ncm="84713012", rental_description="Computadores portateis",
+            rental_quantity=2,
+        ),
+    )
+    row = build_barueri_special_rtc_type5(
+        request=_request(original), original=original, fields=lease,
+    )[0]
+    assert row[55:63] == b"84713012"
+    assert row[63:213].rstrip() == b"Computadores portateis"
+    assert row[213:216] == b"002"
