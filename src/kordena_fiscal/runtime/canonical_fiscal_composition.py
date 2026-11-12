@@ -48,6 +48,7 @@ from kordena_fiscal.gateway.nfse_nacional_homologation import (
     NACIONAL_HOMOLOGATION_PROVIDER_ID,
     NfseNacionalHomologationGateway,
 )
+from kordena_fiscal.gateway.nfse_nacional_query import NfseNacionalHomologationQueryGateway
 from kordena_fiscal.gateway.webiss_2026_schema import (
     load_pinned_extrema_webiss_rtc_schema,
 )
@@ -175,10 +176,12 @@ class _GovernedNationalNfseGateway:
         application: FiscalApplicationService,
         preaudit: Callable[[NfseAuthorizationRequest], None],
         gateway: NfseNacionalHomologationGateway,
+        query_gateway: NfseNacionalHomologationQueryGateway | None = None,
     ) -> None:
         self._application = application
         self._preaudit = preaudit
         self._gateway = gateway
+        self._query_gateway = query_gateway
 
     def authorize(self, request: NfseAuthorizationRequest) -> NfseAuthorizationResult:
         document = request.document
@@ -203,6 +206,30 @@ class _GovernedNationalNfseGateway:
             raise FiscalValidationError("Provedor do vinculo NFS-e Nacional incompativel")
         self._preaudit(request)
         return self._gateway.authorize(request)
+
+    def query(self, request: NfseAuthorizationRequest) -> NfseAuthorizationResult:
+        if self._query_gateway is None:
+            raise FiscalValidationError("Read-only National NFS-e recovery not configured")
+        doc = request.document
+        scope = doc.scope
+        if (
+            scope.environment is not FiscalEnvironment.HOMOLOGATION
+            or not scope.host_namespace
+            or doc.issuer.address.jurisdiction.municipality_ibge_code is None
+        ):
+            raise FiscalValidationError("National NFS-e query requires governed scope")
+        try:
+            selected = self._application.resolve_configured_provider_id(
+                scope=scope, document_kind=FiscalDocumentKind.NFSE,
+                jurisdiction=doc.issuer.address.jurisdiction,
+                operation=ConfiguredFiscalOperation.QUERY.value,
+            )
+        except ControlPlaneNotFoundError as exc:
+            raise FiscalValidationError("National NFS-e query binding unavailable") from exc
+        if selected != NACIONAL_HOMOLOGATION_PROVIDER_ID:
+            raise FiscalValidationError("National NFS-e query provider does not match binding")
+        self._preaudit(request)
+        return self._query_gateway.query(request)
 
 
 class _CanonicalWebissProviderResolver:
@@ -262,14 +289,16 @@ class _GovernedNfseRouter:
 
     def query(self, request: NfseAuthorizationRequest) -> NfseAuthorizationResult:
         provider = self._provider(request)
+        if provider == NACIONAL_HOMOLOGATION_PROVIDER_ID and self._national is not None:
+            return self._national.query(request)
         if (
-            provider != EXTREMA_WEBISS_PROVIDER_ID
-            or self._extrema is None
-            or request.document.issuer.address.jurisdiction.municipality_ibge_code
-            != EXTREMA_IBGE
+            provider == EXTREMA_WEBISS_PROVIDER_ID
+            and self._extrema is not None
+            and request.document.issuer.address.jurisdiction.municipality_ibge_code
+            == EXTREMA_IBGE
         ):
-            raise FiscalValidationError("Read-only NFS-e provider recovery is unavailable")
-        return self._extrema.query(request)
+            return self._extrema.query(request)
+        raise FiscalValidationError("Read-only NFS-e provider recovery is unavailable")
 
 
 class _GovernedMgQueryGateway:
@@ -376,7 +405,13 @@ def build_runtime_fiscal_handler_factory(
                 "WebISS requires A1 vault, canonical audit, service audit and approved exchange"
             )
     national_nfse = None
+    national_query: NfseNacionalHomologationQueryGateway | None = None
     if certificate_vault is not None and trusted_signed_dps_builder is not None:
+        national_query = NfseNacionalHomologationQueryGateway(
+            resolve_certificate=lambda scope, cnpj: certificate_vault.resolve(
+                scope=scope, issuer_cnpj=cnpj
+            ),
+        )
         national_nfse = NfseNacionalHomologationGateway(
             resolve_certificate=lambda scope, cnpj: certificate_vault.resolve(
                 scope=scope, issuer_cnpj=cnpj
@@ -445,6 +480,7 @@ def build_runtime_fiscal_handler_factory(
             _GovernedNationalNfseGateway(
                 application=application, preaudit=nfse_preaudit,
                 gateway=national_nfse,
+                query_gateway=national_query,
             )
             if national_nfse is not None and nfse_preaudit is not None else None
         )
@@ -486,10 +522,10 @@ def build_runtime_fiscal_handler_factory(
                 extrema=extrema_adapter,
             )
             selected_nfse = NfseGatewayClient(router)
-            if extrema_adapter is not None:
-                # The canonical durable recovery handler performs only the
-                # original RPS query, never a second issuance POST.
-                nfse_query_client = NfseQueryClient(router)
+            # Nacional: GET /dps -> GET /nfse only, with independent QUERY
+            # provider binding. Extrema retains its original RPS recovery.
+            # Neither path resubmits issuance.
+            nfse_query_client = NfseQueryClient(router)
         handlers = build_provider_operation_handlers(
             FiscalOperationsClient(gateway),
             application=application,
