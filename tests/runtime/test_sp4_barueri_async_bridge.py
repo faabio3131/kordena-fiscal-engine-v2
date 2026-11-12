@@ -21,6 +21,7 @@ from kordena_fiscal.gateway.barueri_official_return_file import (
     BarueriConvertedNfseEvidence,
 )
 from kordena_fiscal.gateway.barueri_pmb004_homologation import (
+    BarueriContractError,
     BarueriListedFile,
     BarueriPmb004HomologationTransport,
     BarueriReceipt,
@@ -106,6 +107,20 @@ def _setup(
     transport.submit = submit  # type: ignore[method-assign]
     transport.status = status  # type: ignore[method-assign]
     transport.download = download  # type: ignore[method-assign]
+    def list_files(*, batch, situation, submitted_on):
+        assert batch.remittance == "20261113001"
+        assert submitted_on == date(2026, 11, 13)
+        files = (
+            (BarueriListedFile(
+                original_file_name="20261113001.txt",
+                remittance="20261113001", situation="1",
+                return_file_name="result.txt", validation_only=False,
+            ),) if situation == "1" else ()
+        )
+        return BarueriReceipt(
+            operation="NFeLoteListarArquivos", code="OK200", listed_files=files,
+        )
+    transport.list_on_date = Mock(side_effect=list_files)  # type: ignore[method-assign]
     interpreter = Mock(return_value=Sp4ProviderOutcome(status=AuthorizationStatus.PENDING))
     authority = Sp4BridgeAuthority(
         load_original_rps=Mock(), fiscal_issuer_policy=Mock(),
@@ -249,33 +264,26 @@ def test_ambiguous_barueri_post_is_recovered_by_read_only_listing() -> None:
     ports, submit, status, download, request, original = _setup(
         protocol=None, submitted_on=date(2026, 11, 13),
     )
-    # The original POST ACK was lost; search all five municipal queue states.
-    transport = status.__self__ if hasattr(status, "__self__") else None
-    assert transport is None  # mocks are callable attributes, no hidden network
-    listing = Mock()
-    def list_files(*, batch, situation, submitted_on):
-        assert batch.remittance == "20261113001"
-        assert submitted_on == date(2026, 11, 13)
-        files = (
-            (BarueriListedFile(
-                original_file_name="20261113001.txt",
-                remittance="20261113001",
-                situation="1", return_file_name="result.txt",
-                validation_only=False,
-            ),) if situation == "1" else ()
-        )
-        return BarueriReceipt(
-            operation="NFeLoteListarArquivos", code="OK200", listed_files=files,
-        )
-    # Re-create only the original bridge transport using the same review ports
-    # access through closure is intentionally avoided; see dedicated adapter fixture.
-    assert ports.query_official_rps is not None
-    assert callable(list_files)
-    assert listing.call_count == 0
+    outcome = ports.query_official_rps(request, original)
+    assert outcome.status is AuthorizationStatus.PENDING
+    submit.assert_not_called()
+    status.assert_not_called()
+    download.assert_called_once()
+    assert download.call_args.kwargs["file_name"] == "result.txt"
+
+
+def test_unrecoverable_post_without_original_sent_date_never_retransmits() -> None:
+    ports, submit, status, download, request, original = _setup(
+        protocol=None, submitted_on=None,
+    )
+    assert ports.query_official_rps(request, original).status is AuthorizationStatus.PENDING
+    submit.assert_not_called()
+    status.assert_not_called()
+    download.assert_not_called()
 
 
 def test_listing_parser_rejects_duplicate_fiscal_origin() -> None:
-    with pytest.raises(Exception):
+    with pytest.raises(BarueriContractError):
         BarueriListedFile(
             original_file_name="../other.txt", remittance="20261113001",
             situation="1", return_file_name="result.txt",
