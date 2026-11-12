@@ -203,16 +203,29 @@ def _parse_reply(raw: bytes, method: str) -> BarueriReceipt:
     result = body.find(f".//{{{_NS}}}{method}Result")
     if result is None:
         raise BarueriContractError("Barueri SOAP result mismatch")
-    codes = result.findall(".//Codigo")
-    if len(codes) != 1 or not codes[0].text or len(codes[0].text) > 32:
-        raise BarueriContractError("Barueri response lacks a single result code")
-    code = codes[0].text
+    def official_text(name: str, *, required: bool = False) -> str | None:
+        # The official ASMX example uses a DEFAULT municipal XML namespace
+        # for its result and descendants; unqualified XML is never assumed.
+        nodes = [
+            element for element in result.iter()
+            if element.tag == f"{{{_NS}}}{name}"
+        ]
+        if len(nodes) > 1 or (required and len(nodes) != 1):
+            raise BarueriContractError("Ambiguous Barueri response field")
+        if not nodes:
+            return None
+        value = nodes[0].text
+        if value is not None and len(value) > 256:
+            raise BarueriContractError("Barueri response field exceeds limit")
+        return value
+
+    code = official_text("Codigo", required=True)
     if code != "OK200":
         raise BarueriContractError("Barueri rejected the request (consult structured audit)")
-    protocol = result.findtext("ProtocoloRemessa")
-    situation = result.findtext(".//SituacaoArq")
-    return_file = result.findtext(".//NomeArqRetorno")
-    encoded = result.findtext("ArquivoRPSBase64")
+    protocol = official_text("ProtocoloRemessa")
+    situation = official_text("SituacaoArq")
+    return_file = official_text("NomeArqRetorno")
+    encoded = official_text("ArquivoRPSBase64")
     decoded: bytes | None = None
     if encoded:
         try:
