@@ -73,7 +73,11 @@ def test_pinned_soap_action_and_method(method: str) -> None:
     xml, action = _build_soap(method, (("InscricaoMunicipal", "1234567"),))
     assert method.encode() in xml
     assert action == f'"http://www.barueri.sp.gov.br/nfe/{method}"'
-    assert b"<MensagemXML>" in xml
+    from lxml import etree
+
+    root = etree.fromstring(xml)
+    fields = root.xpath("//*[local-name()='MensagemXML']")
+    assert len(fields) == 1  # SOAP serializes default namespace with a prefix
 
 
 def test_async_receipt_is_never_authorization() -> None:
