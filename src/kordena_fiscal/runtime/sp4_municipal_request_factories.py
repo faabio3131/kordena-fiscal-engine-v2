@@ -18,6 +18,11 @@ from kordena_fiscal.gateway.cajamar_geisweb_issue_builder import (
 from kordena_fiscal.gateway.cajamar_geisweb_request_builder import (
     prepare_cajamar_original_lot_query,
 )
+from kordena_fiscal.gateway.osasco_rtc_homologation import OsascoPreparedOperation
+from kordena_fiscal.gateway.osasco_rtc_issue_builder import (
+    OsascoRtcTaxFields,
+    prepare_osasco_rtc_issue,
+)
 from kordena_fiscal.gateway.jundiai_giss_homologation import JundiaiSignedOperation
 from kordena_fiscal.gateway.jundiai_giss_request_builder import (
     prepare_jundiai_original_rps_query,
@@ -99,6 +104,37 @@ def build_cajamar_geisweb_issue_request_factory(
         build_signed_issue=issue, sign_lot_query=sign_lot_query,
         validate_signed_query=validate_signed_query,
     )
+
+
+def build_osasco_rtc_issue_request_factory(
+    *,
+    resolve_rtc_fields: Callable[
+        [NfseAuthorizationRequest, Sp4OriginalRps], OsascoRtcTaxFields
+    ],
+    validate_official_request: Callable[[bytes], None],
+) -> Callable[
+    [NfseAuthorizationRequest, Sp4OriginalRps, str], OsascoPreparedOperation
+]:
+    """Prepare Osasco's reviewed 2026 WCF RTC method for the canonical bridge.
+
+    Read-only ConsultarNotaCompleta is separately assembled by the existing
+    bridge from the original receipt, with the scoped key injected at transport.
+    """
+    if not callable(resolve_rtc_fields) or not callable(validate_official_request):
+        raise Sp4CanonicalMunicipalError("Osasco RTC issue/schema ports unavailable")
+
+    def prepare(
+        request: NfseAuthorizationRequest, source: Sp4OriginalRps, method: str,
+    ) -> OsascoPreparedOperation:
+        if method != "RTC_EmitirNFE":
+            raise Sp4CanonicalMunicipalError("Unsupported Osasco issue method")
+        return prepare_osasco_rtc_issue(
+            request=request, original=source,
+            fields=resolve_rtc_fields(request, source),
+            validate_request=validate_official_request,
+        )
+
+    return prepare
 
 def build_jundiai_reviewed_request_factory(
     *,
