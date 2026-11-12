@@ -9,7 +9,6 @@ Optional Type 3/5 records are separate specialist tax-engine ports.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
 from decimal import Decimal
 
 from kordena_fiscal.domain import FiscalValidationError, TaxRegimeCode
@@ -141,13 +140,8 @@ def _source(
         or len(original.municipal_batch_id) != 11
     ):
         raise BarueriPmb004RecordError("Barueri record differs from persisted RPS")
-    if (
-        doc.service_jurisdiction.state_code != fields.state
-        or doc.service_jurisdiction.municipality_ibge_code
-        != fields.recipient.city_ibge and fields.recipient.city_ibge == ""
-    ):
-        # Recipient municipality is independent from service jurisdiction.
-        raise BarueriPmb004RecordError("Barueri service location cannot be unknown")
+    if doc.service_jurisdiction.state_code != fields.state:
+        raise BarueriPmb004RecordError("Barueri service state differs from canonical source")
     _digits(fields.service_code, "service code", 9)
     _digits(fields.nbs_code, "NBS", 9)
     _digits(fields.operation_indicator, "operation indicator", 6)
