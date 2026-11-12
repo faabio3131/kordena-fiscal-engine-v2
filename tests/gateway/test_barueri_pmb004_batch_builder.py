@@ -122,7 +122,9 @@ def test_duplicate_and_unbalanced_type3_entries_rejected() -> None:
 
 def test_vn_is_not_federal_withholding_but_counts_in_trailer() -> None:
     vn = b"3VN000000000001000"
-    batch = _build(retained_tax_records=(vn,))
+    detail = bytearray(_detail())
+    detail[483:498] = b"000000000000000"
+    batch = _build(rps_detail=bytes(detail), retained_tax_records=(vn,))
     parts = batch.rps_bytes.split(b"\r\n")
     assert parts[-2] == (
         b"90000005" + b"000000000015000" + b"000000000001000"
