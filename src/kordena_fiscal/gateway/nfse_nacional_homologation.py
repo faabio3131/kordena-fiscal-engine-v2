@@ -5,6 +5,7 @@ preparation authority. Never builds a DPS from untrusted browser JSON.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import ssl
 from collections.abc import Callable
@@ -259,6 +260,11 @@ class NfseNacionalHomologationGateway:
             or key.environment != scope.environment
             or key.host_namespace != scope.host_namespace
             or key.model is not InternalFiscalSequenceStream.NFSE_DPS
+            or not 0 <= key.series <= 99999
+            or not 1 <= dps_reservation.number <= 999_999_999_999_999
+            or dps_reservation.reservation_token != hashlib.sha256(
+                f"{key.canonical_material}|{dps_reservation.number}".encode()
+            ).hexdigest()
         ):
             raise OfficialNfseTransportError("Reserva DPS pertence a outro escopo")
         cnpj = issuer.cnpj.value
