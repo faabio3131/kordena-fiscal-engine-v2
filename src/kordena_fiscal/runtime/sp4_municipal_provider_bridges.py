@@ -395,6 +395,13 @@ def build_jundiai_reviewed_ports(
     )
 
 
+def _validated_barueri_export(
+    batch: BarueriRpsBatch, receipt: BarueriReceipt,
+) -> BarueriConvertedNfseEvidence:
+    """Current v3 municipal export schema per official January/2026 guide."""
+    return parse_barueri_official_return_file(batch=batch, receipt=receipt)
+
+
 def build_barueri_reviewed_ports(
     *, authority: Sp4BridgeAuthority,
     transport: BarueriPmb004HomologationTransport,
@@ -409,7 +416,7 @@ def build_barueri_reviewed_ports(
     ],
     validate_return_file: Callable[
         [BarueriRpsBatch, BarueriReceipt], BarueriConvertedNfseEvidence
-    ] = parse_barueri_official_return_file,
+    ] = _validated_barueri_export,
     retrieve_official_invoice_xml: Callable[
         [BarueriConvertedNfseEvidence], bytes
     ] | None = None,
