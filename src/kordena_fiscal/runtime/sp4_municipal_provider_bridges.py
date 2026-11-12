@@ -43,14 +43,24 @@ from kordena_fiscal.issuance.nfe_nfse import NfseAuthorizationRequest
 
 from .sp4_municipal_canonical_composition import Sp4ReviewedMunicipalPorts
 
-class _PreparedSp4Operation(Protocol):
-    """Structural contract shared by the three distinct signed municipal DTOs."""
 
-    scope: ExecutionScope
-    issuer_cnpj: Cnpj
-    tax_regime: TaxRegimeCode
-    competence_date: date
-    method: str
+class _PreparedSp4Operation(Protocol):
+    """Read-only contract for distinct signed, frozen municipal operation DTOs."""
+
+    @property
+    def scope(self) -> ExecutionScope: ...
+
+    @property
+    def issuer_cnpj(self) -> Cnpj: ...
+
+    @property
+    def tax_regime(self) -> TaxRegimeCode: ...
+
+    @property
+    def competence_date(self) -> date: ...
+
+    @property
+    def method(self) -> str: ...
 
 
 P = TypeVar("P", bound=_PreparedSp4Operation)
