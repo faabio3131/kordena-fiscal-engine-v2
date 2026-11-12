@@ -48,6 +48,11 @@ from kordena_fiscal.persistence.fiscal_scope_schema import (
     FISCAL_SCOPE_SCHEMA,
     FISCAL_SCOPE_VERSION,
 )
+from kordena_fiscal.persistence.national_dps_schema import (
+    NATIONAL_DPS_SEQUENCE_NAME,
+    NATIONAL_DPS_SEQUENCE_SCHEMA,
+    NATIONAL_DPS_SEQUENCE_VERSION,
+)
 from kordena_fiscal.persistence.postgres import (
     _COMMERCIAL_ACQUISITION_SCHEMA,
     _COMMERCIAL_CLAIM_SCHEMA,
@@ -68,11 +73,6 @@ from kordena_fiscal.persistence.secret_binding_schema import (
     SECRET_BINDING_VERSION,
 )
 from kordena_fiscal.persistence.sqlite import _MIGRATIONS
-from kordena_fiscal.persistence.national_dps_schema import (
-    NATIONAL_DPS_SEQUENCE_VERSION,
-    NATIONAL_DPS_SEQUENCE_NAME,
-    NATIONAL_DPS_SEQUENCE_SCHEMA,
-)
 
 _DESTRUCTIVE = re.compile(
     r"\b(?:DROP\s+(?:TABLE|SCHEMA|DATABASE|COLUMN)|TRUNCATE|DELETE\s+FROM)\b",
