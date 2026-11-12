@@ -11,6 +11,10 @@ from collections.abc import Callable
 
 from kordena_fiscal.domain import ExecutionScope
 from kordena_fiscal.gateway.cajamar_geisweb_homologation import CajamarPreparedNfse
+from kordena_fiscal.gateway.cajamar_geisweb_issue_builder import (
+    CajamarGeiswebIssueData,
+    prepare_cajamar_signed_issue,
+)
 from kordena_fiscal.gateway.cajamar_geisweb_request_builder import (
     prepare_cajamar_original_lot_query,
 )
@@ -56,6 +60,45 @@ def build_cajamar_reviewed_request_factory(
 
     return prepare
 
+
+
+def build_cajamar_geisweb_issue_request_factory(
+    *,
+    resolve_issue_fields: Callable[
+        [NfseAuthorizationRequest, Sp4OriginalRps], CajamarGeiswebIssueData
+    ],
+    sign_issue: Callable[[bytes], bytes],
+    validate_signed_issue: Callable[[bytes], None],
+    sign_lot_query: Callable[[bytes], bytes],
+    validate_signed_query: Callable[[bytes], None],
+) -> Callable[
+    [NfseAuthorizationRequest, Sp4OriginalRps, str], CajamarPreparedNfse
+]:
+    """Concrete GeisWeb issue + recovery factory using existing fiscal ports.
+
+    Fiscal policy owns the city-specific issue fields. The builder never
+    substitutes a new RPS number, taxpayer, tax amount or signature engine.
+    """
+    if not all(callable(x) for x in (
+        resolve_issue_fields, sign_issue, validate_signed_issue,
+        sign_lot_query, validate_signed_query,
+    )):
+        raise Sp4CanonicalMunicipalError("Cajamar fiscal issue ports unavailable")
+
+    def issue(
+        request: NfseAuthorizationRequest, source: Sp4OriginalRps,
+    ) -> CajamarPreparedNfse:
+        return prepare_cajamar_signed_issue(
+            request=request, original=source,
+            fields=resolve_issue_fields(request, source),
+            sign_document=sign_issue,
+            validate_signed_request=validate_signed_issue,
+        )
+
+    return build_cajamar_reviewed_request_factory(
+        build_signed_issue=issue, sign_lot_query=sign_lot_query,
+        validate_signed_query=validate_signed_query,
+    )
 
 def build_jundiai_reviewed_request_factory(
     *,
