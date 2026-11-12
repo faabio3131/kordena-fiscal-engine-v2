@@ -3,6 +3,9 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from collections.abc import Callable
+
+import pytest
 
 from fastapi.testclient import TestClient
 
@@ -27,6 +30,7 @@ from kordena_fiscal.domain import (
 from kordena_fiscal.gateway.nfse_nacional_homologation import (
     NACIONAL_HOMOLOGATION_PROVIDER_ID,
 )
+from kordena_fiscal.gateway.sp4_municipal_canonical import SP4_MUNICIPAL_PROVIDERS
 from kordena_fiscal.lifecycle import FiscalDocumentState
 from kordena_fiscal.persistence import SqliteFiscalDatabase
 from kordena_fiscal.security.human_identity import (
@@ -47,10 +51,14 @@ IBGE = "3509205"
 ROUTE = "/v1/portal/operations/prepareNativeNfse"
 
 
-def _database(path: Path, *, with_binding: bool = True) -> SqliteFiscalDatabase:
+def _database(
+    path: Path, *, with_binding: bool = True,
+    ibge: str = IBGE, tax_regime: TaxRegimeCode = TaxRegimeCode.SIMPLES_NACIONAL,
+    provider_id: str = NACIONAL_HOMOLOGATION_PROVIDER_ID,
+) -> SqliteFiscalDatabase:
     db = SqliteFiscalDatabase(path)
     db.initialize()
-    jurisdiction = BrazilianJurisdiction("SP", IBGE)
+    jurisdiction = BrazilianJurisdiction("SP", ibge)
     scope = ExecutionScope(
         TENANT, UNIT, FiscalEnvironment.HOMOLOGATION, "setup", "fm-nfcore"
     )
@@ -65,7 +73,7 @@ def _database(path: Path, *, with_binding: bool = True) -> SqliteFiscalDatabase:
         uow.control_plane.add_profile(FiscalProfile(
             profile_id="issuer-native", scope=scope,
             cnpj=Cnpj("11222333000181"), legal_name="Emissor Sintetico Ltda",
-            tax_regime=TaxRegimeCode.SIMPLES_NACIONAL,
+            tax_regime=tax_regime,
             state_registration=StateRegistration("SP", "123456789"),
             primary_cnae=CnaeCode("6201501"),
             address=FiscalAddress(
@@ -82,13 +90,19 @@ def _database(path: Path, *, with_binding: bool = True) -> SqliteFiscalDatabase:
                 document_kind=FiscalDocumentKind.NFSE,
                 jurisdiction=jurisdiction,
                 operation=ConfiguredFiscalOperation.AUTHORIZE,
-                provider_id=NACIONAL_HOMOLOGATION_PROVIDER_ID,
+                provider_id=provider_id,
             ))
         uow.commit()
     return db
 
 
-def _client(db: SqliteFiscalDatabase, role: PortalRole = PortalRole.OWNER) -> TestClient:
+def _client(
+    db: SqliteFiscalDatabase, role: PortalRole = PortalRole.OWNER,
+    *,
+    resolve_sp4_numbering: Callable[
+        [ExecutionScope, str, str], tuple[int, str]
+    ] | None = None,
+) -> TestClient:
     password = "only-for-synthetic-fixtures-2026"
     hasher = ScryptPasswordHasher()
     accounts = InMemoryHumanAccountRepository((HumanAccount(
@@ -103,7 +117,9 @@ def _client(db: SqliteFiscalDatabase, role: PortalRole = PortalRole.OWNER) -> Te
     web = TestClient(
         create_app(
             human_identity=identity,
-            portal_executor=DurableHumanPortalExecutor(db),
+            portal_executor=DurableHumanPortalExecutor(
+                db, resolve_sp4_numbering=resolve_sp4_numbering,
+            ),
         ),
         base_url="https://nfcore.test",
     )
@@ -207,3 +223,61 @@ def test_unmodeled_untaxed_iss_and_malformed_money_fail_before_preparation(tmp_p
     assert _post(web, _payload() | {"gross_amount": "100.001"}).status_code == 400
     assert _post(web, _payload() | {"national_taxation_code": "bad"}).status_code == 400
     assert _post(web, _payload()).status_code == 200
+
+
+@pytest.mark.parametrize("provider_id,ibge", sorted(SP4_MUNICIPAL_PROVIDERS.items()))
+def test_native_portal_persists_exact_original_rps_for_four_sp_cities(
+    tmp_path: Path, provider_id: str, ibge: str,
+) -> None:
+    db = _database(
+        tmp_path / (ibge + ".sqlite"), ibge=ibge,
+        tax_regime=TaxRegimeCode.NORMAL, provider_id=provider_id,
+    )
+    approved = lambda scope, issuer, provider: (1, "NF")
+    portal = _client(db, resolve_sp4_numbering=approved)
+    payload = _payload() | {
+        "service_municipality_ibge": ibge,
+        "source_id": "reviewed-sp4-" + ibge,
+    }
+    first = _post(portal, payload)
+    assert first.status_code == 200, first.text
+    state = first.json()
+    assert state["status"] == FiscalDocumentState.READY_TO_TRANSMIT.value
+    assert state["dps_numbering"] == "not_applicable_municipal"
+    assert state["rps_number"] == "1"
+    assert state["rps_series"] == "NF"
+    assert state["transmitted"] is False
+    again = _post(portal, payload, key="replay-with-other-http-key")
+    assert again.status_code == 200, again.text
+    assert again.json()["replay"] is True
+    assert again.json()["rps_number"] == "1"
+
+    scope = ExecutionScope(
+        TENANT, UNIT, FiscalEnvironment.HOMOLOGATION,
+        "audit", "fm-nfcore",
+    )
+    original = FiscalApplicationService(db).load_sp4_original_rps(
+        scope, state["document_id"],
+    )
+    assert original.issuer_ibge == ibge
+    assert original.rps_number == "1"
+    second = _post(portal, payload | {"source_id": "next-" + ibge}, "next")
+    assert second.status_code == 200, second.text
+    assert second.json()["rps_number"] == "2"
+
+
+@pytest.mark.parametrize("provider_id,ibge", sorted(SP4_MUNICIPAL_PROVIDERS.items()))
+def test_municipal_native_preparation_requires_reviewed_rps_policy_before_writing(
+    tmp_path: Path, provider_id: str, ibge: str,
+) -> None:
+    db = _database(
+        tmp_path / (ibge + ".sqlite"), ibge=ibge,
+        tax_regime=TaxRegimeCode.NORMAL, provider_id=provider_id,
+    )
+    web = _client(db)
+    response = _post(web, _payload() | {"service_municipality_ibge": ibge})
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "NATIVE_NFSE_INVALID_FISCAL_FACTS"
+    scoped = ExecutionScope(TENANT, UNIT, FiscalEnvironment.HOMOLOGATION, "check", "fm-nfcore")
+    with db() as uow:
+        assert not uow.lifecycle.list_for_scope(scoped)
