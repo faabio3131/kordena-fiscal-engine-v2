@@ -140,9 +140,21 @@ def parse_nfse_homologation_response(raw: bytes) -> dict[str, str]:
                 document = stream.read(_MAX_RESPONSE_BYTES + 1)
             if len(document) > _MAX_RESPONSE_BYTES:
                 raise ValueError
-            etree.fromstring(
+            root = etree.fromstring(
                 document, parser=etree.XMLParser(resolve_entities=False, no_network=True)
             )
+            ns = "http://www.sped.fazenda.gov.br/nfse"
+            if (
+                root.tag != f"{{{ns}}}NFSe"
+                or bool(getattr(root.getroottree().docinfo, "doctype", ""))
+                or not access_key.isascii()
+                or not access_key.isdecimal()
+                or len(access_key) != 50
+            ):
+                raise ValueError("Invalid national access key or NFS-e root")
+            infos = root.findall(f"{{{ns}}}infNFSe")
+            if len(infos) != 1 or infos[0].get("Id") != "NFS" + access_key:
+                raise ValueError("XML does not belong to the returned NFS-e access key")
         except (ValueError, OSError, etree.XMLSyntaxError):
             raise OfficialNfseTransportError(
                 "XML retornado pela NFS-e Nacional é inválido"
