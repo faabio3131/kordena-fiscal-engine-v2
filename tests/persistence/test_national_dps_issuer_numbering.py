@@ -66,7 +66,7 @@ def test_dps_counter_is_shared_by_same_issuer_across_units_not_other_issuer(tmp_
 
 def test_dps_rollback_does_not_consume_number(tmp_path) -> None:
     db = SqliteFiscalDatabase(tmp_path / "rollback.sqlite")
-    db.initialize()
+    db.initialize(enable_national_dps=True)
     with db() as uow:
         first = uow.dps_sequences.reserve_next(
             _key(), FiscalSequencePolicy(max_number=2),
