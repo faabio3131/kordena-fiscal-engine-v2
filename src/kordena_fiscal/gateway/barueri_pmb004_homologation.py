@@ -338,8 +338,10 @@ def _parse_reply(raw: bytes, method: str) -> BarueriReceipt:
             raise BarueriContractError("Barueri file listing exceeded safe bound")
         listed: list[BarueriListedFile] = []
         for record in records:
-            def one(name: str, *, required: bool = True) -> str | None:
-                elements = record.findall(f"{{{_NS}}}{name}")
+            def one(
+                name: str, *, required: bool = True, item: etree._Element = record,
+            ) -> str | None:
+                elements = item.findall(f"{{{_NS}}}{name}")
                 if len(elements) > 1 or (required and len(elements) != 1):
                     raise BarueriContractError("Ambiguous Barueri listed file attribute")
                 if not elements or not elements[0].text:
