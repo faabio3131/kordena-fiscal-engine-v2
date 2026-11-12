@@ -25,9 +25,9 @@ from kordena_fiscal.numbering import (
     FiscalNumberReservation,
     FiscalSequenceKey,
     FiscalSequencePolicy,
+    InternalFiscalSequenceStream,
     SequenceExhaustedError,
     SequenceStateError,
-    InternalFiscalSequenceStream,
 )
 
 from ._sqlite_common import dt, host_key, integer, iso, one_row, scoped_page, text
