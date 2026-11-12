@@ -177,7 +177,7 @@ def test_bh_http_fiscal_preflight_refuses_invalid_scope_or_review(
     result = _post(web, payload)
     assert result.status_code in {400, 403, 409}
     with db() as uow:
-        assert uow.sequences.last_reserved(
+        assert uow.dps_sequences.last_reserved(
             FiscalSequenceKey.from_scope(
                 ExecutionScope(
                     "tenant-bh", "unit-bh", FiscalEnvironment.HOMOLOGATION,
@@ -185,6 +185,7 @@ def test_bh_http_fiscal_preflight_refuses_invalid_scope_or_review(
                 ),
                 model=InternalFiscalSequenceStream.NFSE_DPS,
                 series=1,
+                issuer_cnpj="11222333000181",
             )
         ) is None
 
