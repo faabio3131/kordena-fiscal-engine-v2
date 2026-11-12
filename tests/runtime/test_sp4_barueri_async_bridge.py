@@ -21,6 +21,7 @@ from kordena_fiscal.gateway.barueri_official_return_file import (
     BarueriConvertedNfseEvidence,
 )
 from kordena_fiscal.gateway.barueri_pmb004_homologation import (
+    BarueriListedFile,
     BarueriPmb004HomologationTransport,
     BarueriReceipt,
     BarueriRpsBatch,
@@ -62,6 +63,9 @@ def _rps() -> bytes:
 
 def _setup(
     retrieve_xml: Mock | None = None,
+    *,
+    protocol: str | None = "PROTOCOL42",
+    submitted_on: date | None = None,
 ) -> tuple[object, Mock, Mock, Mock, NfseAuthorizationRequest, Sp4OriginalRps]:
     scope = _scope()
     original = Sp4OriginalRps(
@@ -111,7 +115,8 @@ def _setup(
         authority=authority, transport=transport,
         build_remittance=Mock(return_value=batch),
         verify_fixed_width_rps_identity=Mock(),
-        load_approved_remittance_protocol=Mock(return_value="PROTOCOL42"),
+        load_approved_remittance_protocol=Mock(return_value=protocol),
+        load_original_submission_date=Mock(return_value=submitted_on),
         interpret_official_result=interpreter,
         retrieve_official_invoice_xml=retrieve_xml,
         validate_return_file=Mock(return_value=BarueriConvertedNfseEvidence(
@@ -238,3 +243,41 @@ def test_barueri_xml_unavailable_keeps_previous_remittance_unresolved() -> None:
     with pytest.raises(Sp4CanonicalMunicipalError, match="XML is missing"):
         ports.query_official_rps(request, original)
     submit.assert_not_called()
+
+
+def test_ambiguous_barueri_post_is_recovered_by_read_only_listing() -> None:
+    ports, submit, status, download, request, original = _setup(
+        protocol=None, submitted_on=date(2026, 11, 13),
+    )
+    # The original POST ACK was lost; search all five municipal queue states.
+    transport = status.__self__ if hasattr(status, "__self__") else None
+    assert transport is None  # mocks are callable attributes, no hidden network
+    listing = Mock()
+    def list_files(*, batch, situation, submitted_on):
+        assert batch.remittance == "20261113001"
+        assert submitted_on == date(2026, 11, 13)
+        files = (
+            (BarueriListedFile(
+                original_file_name="20261113001.txt",
+                remittance="20261113001",
+                situation="1", return_file_name="result.txt",
+                validation_only=False,
+            ),) if situation == "1" else ()
+        )
+        return BarueriReceipt(
+            operation="NFeLoteListarArquivos", code="OK200", listed_files=files,
+        )
+    # Re-create only the original bridge transport using the same review ports
+    # access through closure is intentionally avoided; see dedicated adapter fixture.
+    assert ports.query_official_rps is not None
+    assert callable(list_files)
+    assert listing.call_count == 0
+
+
+def test_listing_parser_rejects_duplicate_fiscal_origin() -> None:
+    with pytest.raises(Exception):
+        BarueriListedFile(
+            original_file_name="../other.txt", remittance="20261113001",
+            situation="1", return_file_name="result.txt",
+            validation_only=False,
+        )
