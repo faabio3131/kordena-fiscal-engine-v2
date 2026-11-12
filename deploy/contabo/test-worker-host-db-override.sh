@@ -56,7 +56,8 @@ for worker in gsm bling; do
     exit 1
   fi
 
-  # The new override must fix ONLY the dependency while retaining security.
+  # The host overlay fixes the dependency and preserves the approved GSM restart policy.
+  # Bling remains opt-in with restart=no until its own operational gates pass.
   files=("${base[@]}" -f "$original" -f "$override")
   if "${files[@]}" config --services | grep -Fxq "$service"; then
     echo "NO_GO: $worker enabled without profile" >&2
@@ -82,7 +83,7 @@ assert worker["depends_on"]["db"]["condition"] == "service_healthy"
 assert set(worker["networks"]) == {"internal"}
 assert worker["user"] == "10001:10001"
 assert worker["read_only"] is True
-assert worker["restart"] == "no"
+assert worker["restart"] == ("unless-stopped" if service_name == "nfcore-worker" else "no")
 assert "ALL" in worker["cap_drop"]
 assert "no-new-privileges:true" in worker["security_opt"]
 assert "ports" not in worker
