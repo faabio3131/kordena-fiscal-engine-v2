@@ -16,6 +16,10 @@ from lxml import etree
 
 from kordena_fiscal.domain import Cnpj, ExecutionScope, TaxRegimeCode
 from kordena_fiscal.gateway.authorization import AuthorizationStatus
+from kordena_fiscal.gateway.barueri_official_return_file import (
+    BarueriConvertedNfseEvidence,
+    parse_barueri_official_return_file,
+)
 from kordena_fiscal.gateway.barueri_pmb004_homologation import (
     BarueriPmb004HomologationTransport,
     BarueriReceipt,
@@ -312,6 +316,9 @@ def build_barueri_reviewed_ports(
         [BarueriReceipt, NfseAuthorizationRequest, Sp4OriginalRps],
         Sp4ProviderOutcome,
     ],
+    validate_return_file: Callable[
+        [BarueriRpsBatch, BarueriReceipt], BarueriConvertedNfseEvidence
+    ] | None = None,
 ) -> Sp4ReviewedMunicipalPorts:
     if not isinstance(transport, BarueriPmb004HomologationTransport) or not all(
         callable(x) for x in (
@@ -404,6 +411,22 @@ def build_barueri_reviewed_ports(
             raise Sp4CanonicalMunicipalError(
                 "Barueri downloaded return file cannot be correlated"
             )
+        if validate_return_file is None:
+            evidence = parse_barueri_official_return_file(batch=batch, receipt=receipt)
+        else:
+            evidence = validate_return_file(batch, receipt)
+        if (
+            not isinstance(evidence, BarueriConvertedNfseEvidence)
+            or int(evidence.rps_number) != int(original.rps_number)
+            or evidence.rps_series != original.rps_series
+            or evidence.service_total != original.gross_amount
+            or evidence.remittance != batch.remittance
+        ):
+            raise Sp4CanonicalMunicipalError(
+                "Barueri official return does not prove original RPS"
+            )
+        # The TXT evidence is still NOT an official XML. The interpreter
+        # must retrieve and verify authentic provider/ADN NFS-e XML by key.
         return _verified_outcome(interpret_official_result(receipt, req, original))
 
     return authority.wrap(authorize, query)
