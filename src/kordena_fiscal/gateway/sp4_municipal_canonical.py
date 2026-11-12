@@ -69,6 +69,10 @@ class Sp4OriginalRps:
     rps_number: str
     rps_series: str
     gross_amount: Decimal
+    # Immutable, issuer-scoped lot/remittance identifier allocated and
+    # persisted BEFORE POST. GeisWeb needs it for read-only lot recovery;
+    # Barueri must reuse the same remittance for status/download.
+    municipal_batch_id: str | None = None
 
     def __post_init__(self) -> None:
         if (
@@ -94,6 +98,14 @@ class Sp4OriginalRps:
             pass
         else:
             _label(self.rps_series, "RPS series", 16)
+        if self.municipal_batch_id is not None:
+            _label(self.municipal_batch_id, "municipal batch ID", 32)
+            if (
+                not self.municipal_batch_id.isascii()
+                or not self.municipal_batch_id.isdecimal()
+                or int(self.municipal_batch_id) < 1
+            ):
+                raise Sp4CanonicalMunicipalError("Invalid durable municipal batch ID")
 
 
 @dataclass(frozen=True, slots=True)
