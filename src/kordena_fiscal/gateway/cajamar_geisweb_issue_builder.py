@@ -269,6 +269,7 @@ def prepare_cajamar_signed_issue(
     # recipient details or ISS classification while preserving only the RPS
     # number and gross amount. Reconcile every fiscal wire field BEFORE the
     # pinned XSD/XMLDSig port receives the signed document.
+    doc = request.document
     fiscal_fields = (
         ("Rps/DataEmissao", doc.issued_at.strftime("%d/%m/%Y")),
         ("Rps/Servico/Valores/BaseCalculo", _money(
