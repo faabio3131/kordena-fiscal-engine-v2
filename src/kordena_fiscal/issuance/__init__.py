@@ -28,6 +28,8 @@ from .nfe_nfse import (
     NfseQueryGateway,
     NfseRejectionDetail,
     NfseServiceLine,
+    NfseServiceTaker,
+    NfseForeignAddress,
     build_nfse_issuance_key,
     build_nfse_request_fingerprint,
 )
@@ -58,6 +60,8 @@ __all__ = [
     "NfseQueryGateway",
     "NfseRejectionDetail",
     "NfseServiceLine",
+    "NfseServiceTaker",
+    "NfseForeignAddress",
     "build_nfse_issuance_key",
     "build_nfse_request_fingerprint",
 ]
