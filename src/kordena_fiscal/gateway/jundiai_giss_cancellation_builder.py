@@ -74,7 +74,7 @@ def build_jundiai_cancel_xml(
         f"{{{_ROOT}}}CancelarNfseEnvio",
         nsmap={"giss": _ROOT, "tipos": _TYPES},
     )
-    pedido = etree.SubElement(root, f"{{{_TYPES}}}Pedido")
+    pedido = etree.SubElement(root, f"{{{_ROOT}}}Pedido")
     info = etree.SubElement(
         pedido, f"{{{_TYPES}}}InfPedidoCancelamento",
         Id=signature_reference_id,
@@ -126,7 +126,7 @@ def prepare_jundiai_cancel(
     except etree.XMLSyntaxError:
         raise JundiaiGissCancelError("Signed Giss cancellation XML malformed") from None
     types = f"{{{_TYPES}}}"
-    info = root.findall(f"{types}Pedido/{types}InfPedidoCancelamento")
+    info = root.findall(f"{{{_ROOT}}}Pedido/{types}InfPedidoCancelamento")
     if (
         root.tag != f"{{{_ROOT}}}CancelarNfseEnvio"
         or bool(getattr(root.getroottree().docinfo, "doctype", ""))
