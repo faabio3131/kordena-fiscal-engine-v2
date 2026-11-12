@@ -193,3 +193,50 @@ def test_pmb004_rps_identity_and_footer_amount_are_canonical() -> None:
         _batch(data=good.replace(b"000000004220261113", b"000000004220261131", 1))
     with pytest.raises(BarueriContractError, match="monetary checksum"):
         _batch(data=good[:-32] + b"000000000015001" + good[-17:])
+
+
+def test_official_list_files_parses_original_remittance_without_fake_protocol() -> None:
+    raw = (
+        '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" '
+        'xmlns:b="http://www.barueri.sp.gov.br/nfe"><soap:Body>'
+        '<b:NFeLoteListarArquivosResponse><b:NFeLoteListarArquivosResult>'
+        '<b:ListaMensagemRetorno><b:Codigo>OK200</b:Codigo></b:ListaMensagemRetorno>'
+        '<b:ListaNfeArquivosRPS>'
+        '<b:NomeArquivoOrginal>20261113001.txt</b:NomeArquivoOrginal>'
+        '<b:CodigoRemessa>20261113001</b:CodigoRemessa>'
+        '<b:ApenasValidaArq>false</b:ApenasValidaArq>'
+        '<b:SituacaoArq>1</b:SituacaoArq>'
+        '<b:NomeArqRetorno>return.txt</b:NomeArqRetorno>'
+        '</b:ListaNfeArquivosRPS>'
+        '</b:NFeLoteListarArquivosResult></b:NFeLoteListarArquivosResponse>'
+        '</soap:Body></soap:Envelope>'
+    ).encode()
+    parsed = _parse_reply(raw, "NFeLoteListarArquivos")
+    assert parsed.document_authorized is False
+    assert len(parsed.listed_files) == 1
+    item = parsed.listed_files[0]
+    assert item.original_file_name == "20261113001.txt"
+    assert item.remittance == "20261113001"
+    assert item.situation == "1"
+    assert item.return_file_name == "return.txt"
+    assert item.validation_only is False
+
+
+def test_barueri_listing_uses_actual_submission_day_not_service_competence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gateway = BarueriPmb004HomologationTransport(
+        provider_resolver=Mock(), resolve_certificate=Mock(),
+        validate_pmb004=Mock(), exchange=Mock(),
+    )
+    send = Mock(return_value=Mock())
+    monkeypatch.setattr(gateway, "_send", send)
+    gateway.list_on_date(
+        batch=_batch(competence=date(2026, 10, 31)),
+        situation="1", submitted_on=date(2026, 11, 13),
+    )
+    assert send.call_args.kwargs["operation"] == "query"
+    fields = dict(send.call_args.kwargs["fields"])
+    assert fields["DataEnvioArq"] == "2026-11-13"
+    assert fields["SituacaoArq"] == "1"
+    assert send.call_args.kwargs["method"] == "NFeLoteListarArquivos"
