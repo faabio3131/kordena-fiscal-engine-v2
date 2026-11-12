@@ -118,3 +118,57 @@ def test_cajamar_pilot_is_not_limited_by_the_22_city_candidate_catalog() -> None
         tax_regime=TaxRegimeCode.SIMPLES_NACIONAL,
         competence_date=date(2026, 11, 13),
     )
+
+
+def test_official_national_authorization_keeps_the_xml_for_auditable_archival(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An access key without its matching NFSe XML is not sufficient evidence."""
+    import base64
+    import gzip
+    import json
+
+    from kordena_fiscal.domain import ExecutionScope
+    from kordena_fiscal.gateway import nfse_nacional_homologation as national
+    from kordena_fiscal.gateway.authorization import AuthorizationStatus
+    from kordena_fiscal.lifecycle import IdempotencyKey
+
+    key = "35" + "0" * 48
+    xml = (
+        '<NFSe xmlns="http://www.sped.fazenda.gov.br/nfse">'
+        f'<infNFSe Id="NFS{key}"/></NFSe>'
+    ).encode()
+    response = json.dumps({
+        "tipoAmbiente": 2,
+        "chaveAcesso": key,
+        "idDps": "DPS-SYNTHETIC",
+        "nfseXmlGZipB64": base64.b64encode(gzip.compress(xml)).decode("ascii"),
+    }).encode("utf-8")
+    request = _request(
+        "3509205", TaxRegimeCode.SIMPLES_NACIONAL, date(2026, 11, 13)
+    )
+    request.document.scope = ExecutionScope(
+        tenant_id="pilot-tenant", unit_id="pilot-unit",
+        environment=FiscalEnvironment.HOMOLOGATION,
+        correlation_id="cajamar-no-transport",
+    )
+    request.document.document_id = "nfse-cajamar-local-only"
+    request.idempotency_key = IdempotencyKey("a" * 64)
+    request.request_fingerprint = "b" * 64
+
+    # This is a deterministic OFFLINE adapter unit test, not a signed-DPS or
+    # network homologation. The separate signing/XSD suites remain mandatory.
+    monkeypatch.setattr(national, "validate_a1_for_issuer", lambda *args, **kw: None)
+    monkeypatch.setattr(national, "build_fiscal_tls_context", lambda cert: Mock())
+    monkeypatch.setattr(national, "encode_signed_dps", lambda *args, **kw: b"{}")
+    exchange = Mock(return_value=response)
+    gateway = NfseNacionalHomologationGateway(
+        resolve_certificate=Mock(return_value=Mock()),
+        build_signed_dps=Mock(return_value=b"synthetic-signature"),
+        exchange=exchange,
+    )
+    result = gateway.authorize(request)
+    assert result.status is AuthorizationStatus.AUTHORIZED
+    assert result.invoice_reference == key
+    assert result.authorized_xml == xml
+    exchange.assert_called_once()
