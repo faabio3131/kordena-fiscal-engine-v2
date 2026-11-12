@@ -43,7 +43,6 @@ from kordena_fiscal.gateway.sp4_municipal_canonical import (
 from kordena_fiscal.issuance.nfe_nfse import NfseAuthorizationRequest
 
 
-
 def build_barueri_pmb004_issue_remittance_factory(
     *,
     resolve_issue_fields: Callable[
