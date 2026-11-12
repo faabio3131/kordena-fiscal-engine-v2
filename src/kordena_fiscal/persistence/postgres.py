@@ -79,6 +79,11 @@ from .customer_configuration_schema import (
     CUSTOMER_CONFIGURATION_VERSION,
 )
 from .fiscal_scope_schema import FISCAL_SCOPE_NAME, FISCAL_SCOPE_SCHEMA, FISCAL_SCOPE_VERSION
+from .national_dps_schema import (
+    NATIONAL_DPS_SEQUENCE_NAME,
+    NATIONAL_DPS_SEQUENCE_SCHEMA,
+    NATIONAL_DPS_SEQUENCE_VERSION,
+)
 from .ports import PersistenceStateError
 from .pricing_catalog import PostgresPricingCatalogRepository
 from .public_trial_rate_schema import (
@@ -102,11 +107,6 @@ from .sqlite_core import (
 from .sqlite_delivery import SqliteFiscalDeliveryAuditStore, SqliteFiscalOutboxOrderingStore
 from .sqlite_idempotency import SqliteIdempotencyStore
 from .sqlite_national_dps import SqliteNationalDpsSequenceStore
-from .national_dps_schema import (
-    NATIONAL_DPS_SEQUENCE_VERSION,
-    NATIONAL_DPS_SEQUENCE_NAME,
-    NATIONAL_DPS_SEQUENCE_SCHEMA,
-)
 from .sqlite_inbox import SqliteFiscalInboxStore
 from .sqlite_outbox_archive import SqliteFiscalArchiveStore, SqliteFiscalOutboxStore
 from .sqlite_reconciliation import SqliteReconciliationRepository
