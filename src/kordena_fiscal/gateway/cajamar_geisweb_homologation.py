@@ -119,7 +119,7 @@ class CajamarPreparedNfse:
                     TaxRegimeCode.SIMPLES_NACIONAL,
                     TaxRegimeCode.SIMPLES_NACIONAL_EXCESS_SUBLIMIT,
                 )
-                and self.competence_date >= date(2026, 11, 1)
+                and self.competence_date >= date(2026, 9, 1)
             ):
                 raise CajamarGeiswebContractError(
                     "National NFS-e required for Cajamar fiscal competence"
