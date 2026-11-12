@@ -54,9 +54,55 @@ Travas e EGM **não** verificam se uma alíquota, um campo ou uma regra municipa
 - Piloto proposto (duas semanas): (a) `egm-review` na especificação do B17a antes de qualquer código; (b) `egm-drift-report` semanal entre cronograma, documentos e código. O pacote de laboratório com Codex foi enviado pelo proprietário e nada nele foi executado.
 - Métricas: achados Blocker pegos antes de existir código; PRs refeitas; drafts abertos; afirmações de "pronto" sem evidência. Se as métricas não mudarem, descarta-se.
 
-## 6. Decisões pendentes do proprietário
+## 6. Protocolo de aprovação por conversa (decisão do proprietário, 12/11/2026)
+
+O proprietário **não** abre o GitHub para revisar nem aprovar. Os agentes pedem a permissão e o proprietário decide por conversa, em linguagem simples.
+
+### 6.1 Níveis
+
+| Nível | Classe de mudança | Quem decide |
+|---|---|---|
+| **N1 — automático** | Apenas documentação **que não altera ordem de prioridade, regra ou escopo**; apenas testes sem alterar código de produção. CI verde no HEAD exato, checklist do bloco completo e conferência independente de outro agente. | Ninguém (auto-merge), **depende de configuração única do proprietário** (ver 6.5) |
+| **N2 — decisão em conversa** | Qualquer alteração em `src/`; qualquer alteração em fronteira protegida; mudança de prioridade, ordem ou escopo nos cronogramas; nova dependência; mudança de contrato de API. | Proprietário, por mensagem curta |
+| **N3 — sempre o proprietário, com confirmação explícita** | Promoção para `production` (deploy automático a cada 5 minutos); migração ou DDL (incluindo a v22 da #427); certificado A1, Vault e segredos; `tpAmb=1` ou qualquer ativação de produção fiscal; cobrança e licença (Cakto); alteração de CI, ruleset, `CODEOWNERS` ou permissões; homologação externa; apagar ou forçar push. | Proprietário, por mensagem curta, citando o item |
+
+Em caso de dúvida sobre o nível, aplica-se o **mais alto**.
+
+### 6.2 Como o agente pede
+
+O agente **não faz merge, deploy nem aplica migração**. Ele publica um comentário na PR e na issue #447, com o título `PEDIDO DE APROVAÇÃO`, neste formato:
+
+1. **Nível** (N2 ou N3) e **PR + SHA do HEAD** a que o pedido se refere.
+2. **Bloco** do cronograma.
+3. **O que muda**, em até 5 linhas, em linguagem simples.
+4. **Evidência**: links dos runs de CI, testes executados e o checklist do bloco.
+5. **O que NÃO foi provado.**
+6. **Risco e como reverter.**
+7. **Decisão pedida**, numa frase (por exemplo: "aprovar o merge da PR #N").
+
+### 6.3 Como o proprietário decide
+
+O proprietário responde na conversa com o assistente, por exemplo "aprovo" ou "não, porque...". A decisão vale **somente para o SHA citado**. Commit novo na PR invalida a aprovação. **Silêncio não é aprovação.**
+
+### 6.4 Execução
+
+Com a aprovação, o assistente executa o merge se o acesso e o ruleset permitirem. Caso contrário, informa o que falta. O assistente registra a decisão do proprietário na PR, citando data e SHA. O assistente nunca aprova nem mescla por conta própria; só por pedido expresso do proprietário, que pode ser permanente para uma classe (por exemplo, "mescle PRs só de documentação quando a CI estiver verde").
+
+### 6.5 Limites práticos
+
+- **Os agentes executores não escrevem na conversa do proprietário com o assistente.** Os pedidos chegam por comentário na PR e na issue #447. O assistente os vê enquanto a sessão estiver ativa e assinada na PR, ou quando o proprietário pedir ("o que está esperando minha decisão?"). Para não depender disso, pode-se agendar um resumo periódico (decisão do proprietário, 6.7).
+- **N1 exige configuração única do proprietário no GitHub:** ligar auto-merge e ajustar o ruleset para exigir checks, e não aprovação humana, nas classes de baixo risco. O assistente não altera ruleset.
+- Se o ruleset da `main` hoje exigir aprovação humana, o merge por conversa continua bloqueado até esse ajuste.
+
+### 6.6 O que o agente nunca faz
+
+Merge, deploy, migração, mudança de ruleset ou permissão, ou qualquer ação de N3, sem a aprovação registrada. Agente aprovando PR de agente não conta como aprovação humana nos níveis N2 e N3.
+
+### 6.7 Decisões pendentes do proprietário
 
 1. Autorizar a implementação de T1 a T6, em ordem de retorno (T1, T2, T3 primeiro).
 2. Definir N de T3 e o limite de tamanho da regra 10.
 3. Autorizar o piloto do EGM e onde ele roda (Codex no Windows do proprietário ou outro).
 4. Definir quem faz a auditoria independente de fechamento (regra 11).
+5. Configuração única de auto-merge e do ruleset para o N1 (6.5).
+6. Resumo periódico agendado das decisões pendentes (6.5): sim ou não, e com que frequência.
