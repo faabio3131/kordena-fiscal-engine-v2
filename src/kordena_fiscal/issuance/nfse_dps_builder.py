@@ -159,6 +159,7 @@ def build_signed_dps(
             or key.unit_id != scope.unit_id
             or key.environment != scope.environment
             or key.host_namespace != scope.host_namespace
+            or key.issuer_cnpj != issuer.cnpj.value
             or not 0 <= key.series <= 99999
             or not 1 <= reservation.number <= 999_999_999_999_999
         ):
