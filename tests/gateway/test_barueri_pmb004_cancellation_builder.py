@@ -140,3 +140,31 @@ def test_existing_original_remittance_must_not_be_resubmitted_as_cancel() -> Non
             reviewed_rtc_record=b"4" + b"1" + b" " * 529,
             human_approved=True,
         )
+
+
+def test_two_different_cancelled_notes_with_zero_rps_can_share_one_lot() -> None:
+    single = _build("01")
+    header, detail1, rtc, _, _ = single.rps_bytes.split(b"\r\n")
+    detail2 = bytearray(detail1)
+    detail2[42:49] = b"0008766"
+    trailer = (
+        b"90000006" + b"000000000030000" + b"0" * 15
+    )
+    multi = b"\r\n".join((
+        header, detail1, rtc, bytes(detail2), rtc, trailer,
+    )) + b"\r\n"
+    approved = replace(single, rps_bytes=multi)
+    assert approved.rps_bytes == multi
+
+
+def test_same_note_cannot_be_cancelled_twice_in_same_remittance() -> None:
+    from kordena_fiscal.gateway.barueri_pmb004_homologation import BarueriContractError
+
+    single = _build("01")
+    header, detail, rtc, _, _ = single.rps_bytes.split(b"\r\n")
+    trailer = b"90000006" + b"000000000030000" + b"0" * 15
+    duplicate = b"\r\n".join((
+        header, detail, rtc, detail, rtc, trailer,
+    )) + b"\r\n"
+    with pytest.raises(BarueriContractError, match="Duplicate"):
+        replace(single, rps_bytes=duplicate)
