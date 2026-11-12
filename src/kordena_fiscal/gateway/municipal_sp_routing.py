@@ -35,12 +35,15 @@ longer accept new issuance for that regime.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import date, datetime
 
 from kordena_fiscal.domain import (
     BrazilianJurisdiction,
     ExecutionScope,
     FiscalDocumentKind,
+    FiscalValidationError,
+    TaxRegimeCode,
 )
 from kordena_fiscal.gateway.provider import (
     ProviderOperation,
@@ -93,6 +96,60 @@ def ensure_municipal_sp_transport_permitted(
             "for competences on or after 2026-11-01 (CGSN 191/2026); "
             "retroactive services before this date require reviewed municipal eligibility"
         )
+
+
+# A national NFS-e legal channel does NOT imply the National API is
+# configured for this CNPJ, tenant or operation. This is only a strict
+# federal eligibility classification for all SP issuer municipalities.
+_MEI_NATIONAL_FROM = date(2023, 9, 1)
+
+
+@dataclass(frozen=True, slots=True)
+class SpNationalNfseEligibility:
+    """Non-authorizing regulatory channel intent; never a provider binding."""
+
+    municipality_ibge: str
+    channel: str = "nfse-national"
+    requires_official_homologation: bool = True
+    is_runtime_authority: bool = False
+
+
+def classify_sp_national_nfse_eligibility(
+    *,
+    issuer_jurisdiction: BrazilianJurisdiction,
+    tax_regime: TaxRegimeCode,
+    competence_date: date,
+) -> SpNationalNfseEligibility:
+    """Classify MEI and ME/EPP Simples only; all other cases fail closed.
+
+    Unlike the 3-city pilot catalog, this federal rule applies to *any*
+    valid SP issuer municipality. It never registers adapters or transmits
+    a fiscal document, and must not be used as a proof of 22 certified cities.
+    """
+    if (
+        not isinstance(issuer_jurisdiction, BrazilianJurisdiction)
+        or issuer_jurisdiction.state_code != "SP"
+        or not isinstance(issuer_jurisdiction.municipality_ibge_code, str)
+        or not issuer_jurisdiction.municipality_ibge_code.startswith("35")
+        or type(tax_regime) is not TaxRegimeCode
+        or type(competence_date) is not date
+    ):
+        raise FiscalValidationError("Invalid SP National NFS-e issuer and fiscal context")
+    is_mei = tax_regime is TaxRegimeCode.MEI and competence_date >= _MEI_NATIONAL_FROM
+    is_simples = (
+        tax_regime in (
+            TaxRegimeCode.SIMPLES_NACIONAL,
+            TaxRegimeCode.SIMPLES_NACIONAL_EXCESS_SUBLIMIT,
+        )
+        and competence_date >= SIMPLES_NACIONAL_EMISSOR_NACIONAL_MANDATORY_FROM
+    )
+    if not (is_mei or is_simples):
+        raise FiscalValidationError(
+            "SP NFS-e channel is not nationally established for this regime/competence"
+        )
+    return SpNationalNfseEligibility(
+        municipality_ibge=issuer_jurisdiction.municipality_ibge_code,
+    )
 
 
 # Candidate migration/UX catalog: NOT approved municipal provider bindings.
