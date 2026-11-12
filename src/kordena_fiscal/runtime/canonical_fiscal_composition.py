@@ -24,6 +24,7 @@ from kordena_fiscal.domain import (
     FiscalDocumentKind,
     FiscalEnvironment,
     FiscalValidationError,
+    TaxRegimeCode,
 )
 from kordena_fiscal.gateway import AuthorizationRequest, FiscalGatewayClient
 from kordena_fiscal.gateway.mg_webiss_soap import (
@@ -44,6 +45,7 @@ from kordena_fiscal.gateway.nfe_sp_operations_homologation import (
     SefazSpHomologationOperationsGateway,
 )
 from kordena_fiscal.gateway.nfse_abrasf203_envelope import AbrasfServiceFacts
+from kordena_fiscal.gateway.municipal_sp_routing import classify_sp_national_nfse_eligibility
 from kordena_fiscal.gateway.nfse_nacional_homologation import (
     NACIONAL_HOMOLOGATION_PROVIDER_ID,
     NfseNacionalHomologationGateway,
@@ -248,17 +250,62 @@ class _CanonicalWebissProviderResolver:
         )
 
 
+_SP4_MUNICIPAL_PROVIDER_IBGE = {
+    "cajamar-geisweb-homologation": "3509205",
+    "barueri-pmb004-homologation": "3505708",
+    "osasco-rtc-homologation": "3534401",
+    "jundiai-giss-v2-homologation": "3525904",
+}
+
+
+def _require_sp4_municipal_channel(request: NfseAuthorizationRequest) -> None:
+    """Reject a municipal submission when the federal channel is mandatory.
+
+    No municipal provider binding can override an obligatory National NFS-e
+    route. The fiscal issuer's city is used, never the service taker's.
+    """
+    issuer = request.document.issuer
+    jurisdiction = issuer.address.jurisdiction
+    if jurisdiction.state_code != "SP":
+        raise FiscalValidationError("SP4 municipal operation requires SP issuer")
+    if type(issuer.tax_regime) is not TaxRegimeCode:
+        raise FiscalValidationError("SP4 requires reviewed issuer regime")
+    try:
+        classify_sp_national_nfse_eligibility(
+            issuer_jurisdiction=jurisdiction,
+            tax_regime=issuer.tax_regime,
+            competence_date=request.document.competence_date,
+        )
+    except FiscalValidationError:
+        return
+    raise FiscalValidationError(
+        "SP4 issuer must use National NFS-e for this regime and competence"
+    )
+
+
 class _GovernedNfseRouter:
-    """Route national/Extrema issuances solely from exact persisted provider bindings."""
+    """Route national, Extrema and opt-in SP4 through persisted provider authority."""
 
     def __init__(
         self, *, application: FiscalApplicationService,
         national: _GovernedNationalNfseGateway | None,
         extrema: WebissExtremaCanonicalNfseGateway | None,
+        sp4_municipal_gateways: Mapping[str, NfseGatewayClient] | None = None,
+        sp4_municipal_query: Mapping[str, NfseQueryClient] | None = None,
     ) -> None:
         self._application = application
         self._national = national
         self._extrema = extrema
+        self._sp4 = dict(sp4_municipal_gateways or {})
+        self._sp4_query = dict(sp4_municipal_query or {})
+        if not set(self._sp4).issubset(_SP4_MUNICIPAL_PROVIDER_IBGE):
+            raise ValueError("SP4 municipal gateways must use reviewed provider IDs")
+        if not set(self._sp4_query).issubset(self._sp4):
+            raise ValueError("SP4 query gateway must have matching issuer gateway")
+        if not all(isinstance(value, NfseGatewayClient) for value in self._sp4.values()):
+            raise TypeError("SP4 requires canonical NFS-e gateway clients")
+        if not all(isinstance(value, NfseQueryClient) for value in self._sp4_query.values()):
+            raise TypeError("SP4 requires canonical read-only query clients")
 
     def _provider(self, request: NfseAuthorizationRequest) -> str:
         scope = request.document.scope
@@ -285,12 +332,24 @@ class _GovernedNfseRouter:
             return self._extrema.authorize(request)
         if provider == NACIONAL_HOMOLOGATION_PROVIDER_ID and self._national is not None:
             return self._national.authorize(request)
+        if provider in self._sp4:
+            issuer_ibge = request.document.issuer.address.jurisdiction.municipality_ibge_code
+            if issuer_ibge != _SP4_MUNICIPAL_PROVIDER_IBGE[provider]:
+                raise FiscalValidationError("SP4 municipal provider binding/city mismatch")
+            _require_sp4_municipal_channel(request)
+            return self._sp4[provider].authorize(request)
         raise FiscalValidationError("NFS-e issuance has no approved matching provider")
 
     def query(self, request: NfseAuthorizationRequest) -> NfseAuthorizationResult:
         provider = self._provider(request)
         if provider == NACIONAL_HOMOLOGATION_PROVIDER_ID and self._national is not None:
             return self._national.query(request)
+        if provider in self._sp4_query:
+            issuer_ibge = request.document.issuer.address.jurisdiction.municipality_ibge_code
+            if issuer_ibge != _SP4_MUNICIPAL_PROVIDER_IBGE[provider]:
+                raise FiscalValidationError("SP4 read-only provider binding/city mismatch")
+            _require_sp4_municipal_channel(request)
+            return self._sp4_query[provider].query(request)
         if (
             provider == EXTREMA_WEBISS_PROVIDER_ID
             and self._extrema is not None
@@ -358,6 +417,8 @@ def build_runtime_fiscal_handler_factory(
         [NfseAuthorizationRequest, EphemeralCertificateMaterial], bytes
     ] | None = None,
     nfse_preaudit: Callable[[NfseAuthorizationRequest], None] | None = None,
+    sp4_municipal_gateways: Mapping[str, NfseGatewayClient] | None = None,
+    sp4_municipal_query: Mapping[str, NfseQueryClient] | None = None,
     webiss_extrema_exchange: Callable[
         [bytes, str, ssl.SSLContext, float], bytes
     ] | None = None,
@@ -515,11 +576,16 @@ def build_runtime_fiscal_handler_factory(
                 cancellation_preaudit=extrema_cancellation_preaudit,
                 municipal_validator=validator,
             )
-        if national_adapter is not None or extrema_adapter is not None:
+        if (
+            national_adapter is not None or extrema_adapter is not None
+            or sp4_municipal_gateways
+        ):
             router = _GovernedNfseRouter(
                 application=application,
                 national=national_adapter,
                 extrema=extrema_adapter,
+                sp4_municipal_gateways=sp4_municipal_gateways,
+                sp4_municipal_query=sp4_municipal_query,
             )
             selected_nfse = NfseGatewayClient(router)
             # Nacional: GET /dps -> GET /nfse only, with independent QUERY
