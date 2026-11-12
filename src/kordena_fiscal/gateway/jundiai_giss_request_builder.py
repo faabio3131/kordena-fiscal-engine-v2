@@ -48,11 +48,11 @@ def build_jundiai_original_rps_query_xml(
         f"{{{_ROOT}}}ConsultarNfseRpsEnvio",
         nsmap=namespaces,
     )
-    rps = etree.SubElement(root, f"{{{_TYPES}}}IdentificacaoRps")
+    rps = etree.SubElement(root, f"{{{_ROOT}}}IdentificacaoRps")
     etree.SubElement(rps, f"{{{_TYPES}}}Numero").text = original.rps_number
     etree.SubElement(rps, f"{{{_TYPES}}}Serie").text = original.rps_series
     etree.SubElement(rps, f"{{{_TYPES}}}Tipo").text = rps_type
-    issuer = etree.SubElement(root, f"{{{_TYPES}}}Prestador")
+    issuer = etree.SubElement(root, f"{{{_ROOT}}}Prestador")
     identity = etree.SubElement(issuer, f"{{{_TYPES}}}CpfCnpj")
     etree.SubElement(identity, f"{{{_TYPES}}}Cnpj").text = original.issuer_cnpj.value
     etree.SubElement(issuer, f"{{{_TYPES}}}InscricaoMunicipal").text = (
@@ -93,13 +93,13 @@ def prepare_jundiai_original_rps_query(
     ):
         raise JundiaiGissBuilderError("Jundiai signed query schema root mismatch")
     source_numbers = root.findall(
-        f".//{{{_TYPES}}}IdentificacaoRps/{{{_TYPES}}}Numero"
+        f".//{{{_ROOT}}}IdentificacaoRps/{{{_TYPES}}}Numero"
     )
-    series = root.findall(f".//{{{_TYPES}}}IdentificacaoRps/{{{_TYPES}}}Serie")
+    series = root.findall(f".//{{{_ROOT}}}IdentificacaoRps/{{{_TYPES}}}Serie")
     issuers = root.findall(
-        f".//{{{_TYPES}}}Prestador/{{{_TYPES}}}CpfCnpj/{{{_TYPES}}}Cnpj"
+        f".//{{{_ROOT}}}Prestador/{{{_TYPES}}}CpfCnpj/{{{_TYPES}}}Cnpj"
     )
-    registrations = root.findall(f".//{{{_TYPES}}}InscricaoMunicipal")
+    registrations = root.findall(f".//{{{_ROOT}}}Prestador/{{{_TYPES}}}InscricaoMunicipal")
     if (
         len(source_numbers) != 1 or len(series) != 1
         or len(issuers) != 1 or len(registrations) != 1
