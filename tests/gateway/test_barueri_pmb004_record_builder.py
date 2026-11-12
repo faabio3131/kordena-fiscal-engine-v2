@@ -160,3 +160,38 @@ def test_pmb004_canonical_remittance_port_uses_reviewed_source() -> None:
     assert batch.remittance == original.municipal_batch_id
     assert batch.issuer_cnpj == original.issuer_cnpj
     assert batch.rps_bytes.split(b"\r\n")[1][15:25] == b"0000000042"
+
+
+def test_reviewed_federal_taxes_generate_correlated_type2_type3_and_type9() -> None:
+    original = _original()
+    fields = replace(
+        _fields(), federal_retentions=(
+            ("01", Decimal("10.00")), ("02", Decimal("5.00")),
+        ),
+    )
+    batch = build_barueri_reviewed_issue_batch(
+        request=_request(original), original=original,
+        fields=fields, municipal_registration="1234567",
+    )
+    parts = batch.rps_bytes.split(b"\r\n")
+    assert len(parts[:-1]) == 6
+    assert parts[1][483:498] == b"000000000001500"
+    assert parts[2] == b"301000000000001000"
+    assert parts[3] == b"302000000000000500"
+    assert parts[-2][23:38] == b"000000000001500"
+
+
+def test_reviewed_federal_taxes_reject_repeated_codes_and_excessive_amounts() -> None:
+    original = _original()
+    for taxes in (
+        (("01", Decimal("1.00")), ("01", Decimal("2.00"))),
+        (("XX", Decimal("1.00")),),
+        (("01", Decimal("0.00")),),
+        (("01", Decimal("151.00")),),
+    ):
+        with pytest.raises(BarueriPmb004RecordError):
+            build_barueri_reviewed_issue_batch(
+                request=_request(original), original=original,
+                fields=replace(_fields(), federal_retentions=taxes),
+                municipal_registration="1234567",
+            )
