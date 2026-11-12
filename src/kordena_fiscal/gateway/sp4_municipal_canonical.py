@@ -273,7 +273,9 @@ class Sp4MunicipalCanonicalGateway:
         read_only: bool,
     ) -> NfseAuthorizationResult:
         if not isinstance(outcome, Sp4ProviderOutcome):
-            raise Sp4CanonicalMunicipalError("Municipal transport did not return a canonical result")
+            raise Sp4CanonicalMunicipalError(
+                "Municipal transport did not return a canonical result"
+            )
         status = outcome.status
         invoice = outcome.official_invoice
         if status is AuthorizationStatus.AUTHORIZED:
@@ -307,7 +309,9 @@ class Sp4MunicipalCanonicalGateway:
             invoice_number=invoice.invoice_number if invoice is not None else None,
             verification_code=invoice.verification_code if invoice is not None else None,
             authorized_xml=invoice.authorized_xml if invoice is not None else None,
-            rejection_code=outcome.rejection_code if status is AuthorizationStatus.REJECTED else None,
+            rejection_code=(
+                outcome.rejection_code if status is AuthorizationStatus.REJECTED else None
+            ),
             rejection_message=(
                 outcome.rejection_message if status is AuthorizationStatus.REJECTED else None
             ),
