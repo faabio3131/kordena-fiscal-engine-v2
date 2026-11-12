@@ -83,11 +83,47 @@ def test_cancel_action_is_not_mistaken_for_regular_issuance() -> None:
 
 
 def test_optional_retention_record_is_accounted_for_in_trailer() -> None:
-    retained = b"3" + b"  " + b"000000000001000"
+    retained = b"301" + b"000000000001000"
     assert len(retained) == 18
-    batch = _build(retained_tax_record=retained)
+    detail = bytearray(_detail())
+    detail[483:498] = b"000000000001000"
+    batch = _build(rps_detail=bytes(detail), retained_tax_record=retained)
     parts = batch.rps_bytes.split(b"\r\n")
     assert len(parts[:-1]) == 5
+    assert parts[-2] == (
+        b"90000005" + b"000000000015000" + b"000000000001000"
+    )
+
+
+def test_multiple_federal_withholdings_reconcile_type2_and_trailer() -> None:
+    detail = bytearray(_detail())
+    detail[483:498] = b"000000000001500"
+    rows = (
+        b"301000000000001000",
+        b"302000000000000500",
+    )
+    batch = _build(rps_detail=bytes(detail), retained_tax_records=rows)
+    parts = batch.rps_bytes.split(b"\r\n")
+    assert [x[:1] for x in parts[:-1]] == [b"1", b"2", b"3", b"3", b"4", b"9"]
+    assert parts[-2] == (
+        b"90000006" + b"000000000015000" + b"000000000001500"
+    )
+
+
+def test_duplicate_and_unbalanced_type3_entries_rejected() -> None:
+    valid = b"301000000000001000"
+    with pytest.raises(BarueriBatchBuilderError, match="duplicate"):
+        _build(retained_tax_records=(valid, valid))
+    with pytest.raises(BarueriBatchBuilderError, match="conflicts"):
+        _build(retained_tax_records=(valid,))
+    with pytest.raises(BarueriBatchBuilderError, match="code"):
+        _build(retained_tax_records=(b"3XX000000000001000",))
+
+
+def test_vn_is_not_federal_withholding_but_counts_in_trailer() -> None:
+    vn = b"3VN000000000001000"
+    batch = _build(retained_tax_records=(vn,))
+    parts = batch.rps_bytes.split(b"\r\n")
     assert parts[-2] == (
         b"90000005" + b"000000000015000" + b"000000000001000"
     )
