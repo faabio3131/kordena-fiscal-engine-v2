@@ -173,6 +173,10 @@ class NfseNacionalHomologationGateway:
             raise OfficialNfseTransportError("Resposta SEFIN sem homologação válida") from None
 
         key = result.get("chaveAcesso")
+        invoice_reference: str | None = None
+        authorized_xml: bytes | None = None
+        rejection_code: str | None = None
+        rejection_message: str | None = None
         if isinstance(key, str) and key:
             # The access key alone is not proof of an authorized invoice.
             # The SEFIN must provide the corresponding decompressible XML.
@@ -181,26 +185,21 @@ class NfseNacionalHomologationGateway:
             if parsed.get("chaveAcesso") != key:
                 raise OfficialNfseTransportError("NFS-e autorizada com chave divergente")
             status = AuthorizationStatus.AUTHORIZED
-            kwargs = {
-                "invoice_reference": key[:512],
-                "authorized_xml": parsed["xml"].encode("utf-8"),
-            }
+            invoice_reference = key[:512]
+            authorized_xml = parsed["xml"].encode("utf-8")
         else:
             errors = result.get("erros")
             if isinstance(errors, list) and errors:
                 first = errors[0] if isinstance(errors[0], dict) else {}
                 status = AuthorizationStatus.REJECTED
-                kwargs = {
-                    "rejection_code": str(
-                        first.get("Codigo", first.get("codigo", "NFSE_REJECTED"))
-                    )[:512],
-                    "rejection_message": str(
-                        first.get("Descricao", first.get("descricao", "DPS rejeitada"))
-                    )[:512],
-                }
+                rejection_code = str(
+                    first.get("Codigo", first.get("codigo", "NFSE_REJECTED"))
+                )[:512]
+                rejection_message = str(
+                    first.get("Descricao", first.get("descricao", "DPS rejeitada"))
+                )[:512]
             else:
                 status = AuthorizationStatus.PENDING
-                kwargs = {}
         return NfseAuthorizationResult(
             status=status, scope=document.scope, document_id=document.document_id,
             idempotency_key=request.idempotency_key,
@@ -208,8 +207,8 @@ class NfseNacionalHomologationGateway:
             provider=_PROVIDER,
             provider_request_id=str(result["idDps"])[:512]
             if isinstance(result.get("idDps"), str) else None,
-            invoice_reference=kwargs.get("invoice_reference"),
-            authorized_xml=kwargs.get("authorized_xml"),
-            rejection_code=kwargs.get("rejection_code"),
-            rejection_message=kwargs.get("rejection_message"),
+            invoice_reference=invoice_reference,
+            authorized_xml=authorized_xml,
+            rejection_code=rejection_code,
+            rejection_message=rejection_message,
         )
