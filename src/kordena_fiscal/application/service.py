@@ -164,6 +164,50 @@ class DurableCancellationOutcome:
     archive_reference: str
 
 
+def _nfse_rejection_archive(
+    result: NfseAuthorizationResult,
+    *,
+    scope: ExecutionScope,
+    document_id: str,
+    occurred_at: datetime,
+    retention: RetentionPolicyMetadata,
+) -> FiscalArchiveEntry:
+    """Keep complete typed rejection evidence in tenant-scoped fiscal archive.
+
+    Raw provider messages never become HTTP/Portal status strings or logs.
+    No truncation is allowed; over-limit payloads fail at the model boundary.
+    """
+    if result.status is not AuthorizationStatus.REJECTED:
+        raise FiscalValidationError("Only rejected NFS-e can have rejection evidence")
+    content = json.dumps(
+        {
+            "status": result.status.value,
+            "provider_name": result.provider.provider_name,
+            "provider_request_id": result.provider_request_id,
+            "rejections": [
+                {
+                    "code": item.code,
+                    "origin": item.origin,
+                    "raw_message": item.raw_message,
+                }
+                for item in result.normalized_rejections()
+            ],
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    return FiscalArchiveEntry.build(
+        scope=scope,
+        document_reference=document_id,
+        kind=FiscalArchiveKind.PROVIDER_RESPONSE,
+        content=content,
+        media_type="application/vnd.nfcore.nfse-rejection.v1+json",
+        archived_at=occurred_at,
+        retention=retention,
+    )
+
+
 class FiscalApplicationService:
     """Host-neutral application boundary with explicit transactional state changes.
 
@@ -446,6 +490,7 @@ class FiscalApplicationService:
         rejection_reason: str,
         occurred_at: datetime,
         correlation_id: str,
+        archive_entry: FiscalArchiveEntry | None = None,
     ) -> FiscalStateSnapshot:
         """Atomically couple terminal rejection and idempotency result."""
 
@@ -469,6 +514,11 @@ class FiscalApplicationService:
             )
             uow.idempotency.mark_rejected(key, generation, rejection_reason)
             uow.lifecycle.save(updated, expected_version=current.version)
+            if archive_entry is not None:
+                uow.lifecycle.assert_scope(document_id, archive_entry.scope)
+                if archive_entry.document_reference != document_id:
+                    raise PersistenceConflictError("Rejection archive document does not match")
+                uow.archive.append(archive_entry)
             uow.commit()
             return updated
 
@@ -776,6 +826,18 @@ class FiscalApplicationService:
                 rejection_reason=result.rejection_code,
                 occurred_at=occurred_at,
                 correlation_id=scope.correlation_id,
+                archive_entry=(
+                    _nfse_rejection_archive(
+                        result,
+                        scope=scope,
+                        document_id=document_id,
+                        occurred_at=occurred_at,
+                        retention=RetentionPolicyMetadata(
+                            policy_id="nfcore-fiscal-archive", policy_version=1,
+                        ),
+                    )
+                    if isinstance(result, NfseAuthorizationResult) else None
+                ),
             )
         with self._uow_factory() as uow:
             latest = uow.idempotency.attempts(attempt.key)[-1]
@@ -1019,6 +1081,13 @@ class FiscalApplicationService:
                     attempt.key, attempt.generation, result.rejection_code
                 )
                 uow.lifecycle.save(updated, expected_version=current.version)
+                uow.archive.append(_nfse_rejection_archive(
+                    result,
+                    scope=scope,
+                    document_id=document_id,
+                    occurred_at=occurred_at,
+                    retention=retention,
+                ))
                 current = updated
             uow.archive.append(evidence)
             uow.commit()
