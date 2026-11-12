@@ -252,6 +252,9 @@ class NfseCanonicalDocument:
     service_taker_reference: str | None = None
     schema_version: int = 1
     special_tax_regime: str | None = None
+    substituted_invoice_access_key: str | None = None
+    substitution_reason_code: str | None = None
+    substitution_reason_text: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "document_id", _required(self.document_id, "document_id", 128))
@@ -293,6 +296,31 @@ class NfseCanonicalDocument:
             or self.special_tax_regime not in {"0", "1", "2", "4", "5", "6", "9"}
         ):
             raise FiscalValidationError("special_tax_regime must be a reviewed BH regime code")
+        if self.substituted_invoice_access_key is None:
+            if (
+                self.substitution_reason_code is not None
+                or self.substitution_reason_text is not None
+            ):
+                raise FiscalValidationError("Substitution requires a reviewed original invoice key")
+        else:
+            key = self.substituted_invoice_access_key
+            if (
+                not isinstance(key, str)
+                or len(key) != 50
+                or not key.isascii()
+                or not key.isdecimal()
+                or key[9:23] != self.issuer.cnpj.value
+                or self.substitution_reason_code
+                not in {"01", "02", "03", "04", "05", "99"}
+            ):
+                raise FiscalValidationError(
+                    "Substitution requires same-issuer invoice key and approved reason"
+                )
+            if self.substitution_reason_text is not None and (
+                not isinstance(self.substitution_reason_text, str)
+                or not 15 <= len(self.substitution_reason_text.strip()) <= 255
+            ):
+                raise FiscalValidationError("Substitution reason text must be 15-255 chars")
 
     @property
     def totals(self) -> NfseDocumentTotals:
@@ -375,6 +403,12 @@ def build_nfse_request_fingerprint(document: NfseCanonicalDocument) -> str:
     service_payloads = cast(list[dict[str, object]], payload["services"])
     if document.special_tax_regime is not None:
         payload["special_tax_regime"] = document.special_tax_regime
+    if document.substituted_invoice_access_key is not None:
+        payload["substitution"] = {
+            "access_key": document.substituted_invoice_access_key,
+            "reason_code": document.substitution_reason_code,
+            "reason_text": document.substitution_reason_text,
+        }
     for line_payload, line in zip(service_payloads, document.services, strict=True):
         if line.municipal_taxation_detail is not None:
             line_payload["municipal_taxation_detail"] = line.municipal_taxation_detail
