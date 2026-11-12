@@ -20,7 +20,7 @@ _CNPJ_B = "12345678000195"
 
 def _key(
     *, unit: str = "unit-a", tenant: str = "tenant-a",
-    cnpj: str = _CNPJ_A, series: int = 1,
+    cnpj: str | None = _CNPJ_A, series: int = 1,
     environment: FiscalEnvironment = FiscalEnvironment.HOMOLOGATION,
 ) -> FiscalSequenceKey:
     return FiscalSequenceKey.from_scope(
