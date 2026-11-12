@@ -88,7 +88,12 @@ class Sp4OriginalRps:
         if self.issuer_ibge not in SP4_MUNICIPAL_PROVIDERS.values():
             raise Sp4CanonicalMunicipalError("Unknown SP4 RPS issuer")
         _label(self.rps_number, "RPS number", 32)
-        _label(self.rps_series, "RPS series", 16)
+        # Barueri PMB004 permits a blank original RPS series (PDF field
+        # optional); all other municipal adapters require an explicit series.
+        if self.rps_series == "" and self.issuer_ibge == "3505708":
+            pass
+        else:
+            _label(self.rps_series, "RPS series", 16)
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,12 +124,13 @@ class Sp4VerifiedInvoice:
             raise Sp4CanonicalMunicipalError("Official NFS-e proof is malformed")
         for value, name in (
             (self.rps_number, "RPS number"),
-            (self.rps_series, "RPS series"),
             (self.invoice_number, "invoice number"),
             (self.verification_code, "verification code"),
             (self.invoice_reference, "invoice reference"),
         ):
             _label(value, name, 128)
+        if self.rps_series != "" or self.issuer_ibge != "3505708":
+            _label(self.rps_series, "RPS series", 16)
 
 
 @dataclass(frozen=True, slots=True)
