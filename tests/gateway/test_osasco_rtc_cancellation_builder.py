@@ -86,6 +86,17 @@ def test_source_and_invoice_from_different_rps_cannot_be_cancelled() -> None:
         )
 
 
+def test_cancel_cannot_retarget_invoice_from_another_service_competence() -> None:
+    with pytest.raises(OsascoCancelBuilderError):
+        build_osasco_cancel_request(
+            source=_source(),
+            issued=replace(_note(), competence_date=date(2026, 9, 30)),
+            regime=TaxRegimeCode.NORMAL,
+            cancel_type="N", reason="Erro de emissao",
+            human_approved=True,
+        )
+
+
 def test_unknown_cancellation_type_not_treated_as_normal() -> None:
     with pytest.raises(OsascoCancelBuilderError):
         build_osasco_cancel_request(
