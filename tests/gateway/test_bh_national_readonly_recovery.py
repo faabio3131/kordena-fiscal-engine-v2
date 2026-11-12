@@ -24,7 +24,8 @@ from kordena_fiscal.domain import (
     StateRegistration,
     TaxRegimeCode,
 )
-from kordena_fiscal.gateway import AuthorizationStatus, nfse_nacional_homologation as national
+from kordena_fiscal.gateway import AuthorizationStatus
+from kordena_fiscal.gateway import nfse_nacional_homologation as national
 from kordena_fiscal.issuance.nfe_nfse import (
     NfseAuthorizationRequest,
     NfseCanonicalDocument,
