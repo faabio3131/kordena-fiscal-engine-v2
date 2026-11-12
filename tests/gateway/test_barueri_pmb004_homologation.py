@@ -197,20 +197,20 @@ def test_pmb004_rps_identity_and_footer_amount_are_canonical() -> None:
 
 def test_official_list_files_parses_original_remittance_without_fake_protocol() -> None:
     raw = (
-        '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" '
-        'xmlns:b="http://www.barueri.sp.gov.br/nfe"><soap:Body>'
-        '<b:NFeLoteListarArquivosResponse><b:NFeLoteListarArquivosResult>'
-        '<b:ListaMensagemRetorno><b:Codigo>OK200</b:Codigo></b:ListaMensagemRetorno>'
-        '<b:ListaNfeArquivosRPS>'
-        '<b:NomeArquivoOrginal>20261113001.txt</b:NomeArquivoOrginal>'
-        '<b:CodigoRemessa>20261113001</b:CodigoRemessa>'
-        '<b:ApenasValidaArq>false</b:ApenasValidaArq>'
-        '<b:SituacaoArq>1</b:SituacaoArq>'
-        '<b:NomeArqRetorno>return.txt</b:NomeArqRetorno>'
-        '</b:ListaNfeArquivosRPS>'
-        '</b:NFeLoteListarArquivosResult></b:NFeLoteListarArquivosResponse>'
-        '</soap:Body></soap:Envelope>'
-    ).encode()
+        b'<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" '
+        b'xmlns:b="http://www.barueri.sp.gov.br/nfe"><soap:Body>'
+        b'<b:NFeLoteListarArquivosResponse><b:NFeLoteListarArquivosResult>'
+        b'<b:ListaMensagemRetorno><b:Codigo>OK200</b:Codigo></b:ListaMensagemRetorno>'
+        b'<b:ListaNfeArquivosRPS>'
+        b'<b:NomeArquivoOrginal>20261113001.txt</b:NomeArquivoOrginal>'
+        b'<b:CodigoRemessa>20261113001</b:CodigoRemessa>'
+        b'<b:ApenasValidaArq>false</b:ApenasValidaArq>'
+        b'<b:SituacaoArq>1</b:SituacaoArq>'
+        b'<b:NomeArqRetorno>return.txt</b:NomeArqRetorno>'
+        b'</b:ListaNfeArquivosRPS>'
+        b'</b:NFeLoteListarArquivosResult></b:NFeLoteListarArquivosResponse>'
+        b'</soap:Body></soap:Envelope>'
+    )
     parsed = _parse_reply(raw, "NFeLoteListarArquivos")
     assert parsed.document_authorized is False
     assert len(parsed.listed_files) == 1
