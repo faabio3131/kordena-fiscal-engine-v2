@@ -102,6 +102,11 @@ from .sqlite_core import (
 from .sqlite_delivery import SqliteFiscalDeliveryAuditStore, SqliteFiscalOutboxOrderingStore
 from .sqlite_idempotency import SqliteIdempotencyStore
 from .sqlite_national_dps import SqliteNationalDpsSequenceStore
+from .national_dps_schema import (
+    NATIONAL_DPS_SEQUENCE_VERSION,
+    NATIONAL_DPS_SEQUENCE_NAME,
+    NATIONAL_DPS_SEQUENCE_SCHEMA,
+)
 from .sqlite_inbox import SqliteFiscalInboxStore
 from .sqlite_outbox_archive import SqliteFiscalArchiveStore, SqliteFiscalOutboxStore
 from .sqlite_reconciliation import SqliteReconciliationRepository
@@ -907,6 +912,19 @@ class PostgresFiscalDatabase:
                         ),
                     )
                     new_versions.append(BLING_WORKER_POLICY_VERSION)
+                if NATIONAL_DPS_SEQUENCE_VERSION not in applied:
+                    for statement in NATIONAL_DPS_SEQUENCE_SCHEMA:
+                        raw.execute(_translate_ddl(statement))
+                    raw.execute(
+                        "INSERT INTO fm_schema_migrations (version, name, applied_at) "
+                        "VALUES (%s, %s, %s)",
+                        (
+                            NATIONAL_DPS_SEQUENCE_VERSION,
+                            NATIONAL_DPS_SEQUENCE_NAME,
+                            datetime.now().astimezone().isoformat(),
+                        ),
+                    )
+                    new_versions.append(NATIONAL_DPS_SEQUENCE_VERSION)
                 raw.commit()
                 return tuple(new_versions)
             except Exception:
@@ -934,10 +952,15 @@ class PostgresFiscalDatabase:
         applied = self.applied_migrations()
         baseline = tuple(range(1, COGNITIVE_QUOTA_VERSION + 1))
         bling_ready = tuple(range(1, BLING_WORKER_POLICY_VERSION + 1))
-        # A code-only release accepts either original production baseline or
-        # the fully installed optional Bling schema. Partial v20 is NOT ready.
-        if (require_bling and applied != bling_ready) or (
-            not require_bling and applied not in (baseline, bling_ready)
+        dps_baseline = (*baseline, NATIONAL_DPS_SEQUENCE_VERSION)
+        dps_bling = (*bling_ready, NATIONAL_DPS_SEQUENCE_VERSION)
+        # This version accepts legacy hosts during code-only rollout and
+        # the new additive DPS table where the controlled migration ran.
+        # Partial Bling installation remains forbidden.
+        if (require_bling and applied not in (bling_ready, dps_bling)) or (
+            not require_bling and applied not in (
+                baseline, bling_ready, dps_baseline, dps_bling,
+            )
         ):
             raise PersistenceStateError(
                 "PostgreSQL schema is not at the certified migration version"
