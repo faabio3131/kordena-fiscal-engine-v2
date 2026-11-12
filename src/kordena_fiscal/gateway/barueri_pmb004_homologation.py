@@ -15,7 +15,7 @@ import base64
 import binascii
 import ssl
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from urllib.error import HTTPError, URLError
 from urllib.request import HTTPSHandler, Request, build_opener
@@ -63,7 +63,7 @@ class BarueriRpsBatch:
     competence_date: date
     remittance: str
     file_name: str
-    rps_bytes: bytes
+    rps_bytes: bytes = field(repr=False)
 
     def __post_init__(self) -> None:
         if not isinstance(self.scope, ExecutionScope):
@@ -129,7 +129,7 @@ class BarueriReceipt:
     remittance_protocol: str | None = None
     situation: str | None = None
     return_file_name: str | None = None
-    downloaded_file: bytes | None = None
+    downloaded_file: bytes | None = field(default=None, repr=False)
 
     @property
     def document_authorized(self) -> bool:
