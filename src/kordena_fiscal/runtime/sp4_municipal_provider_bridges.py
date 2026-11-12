@@ -447,6 +447,17 @@ def build_barueri_reviewed_ports(
             or batch.remittance != original.municipal_batch_id
         ):
             raise Sp4CanonicalMunicipalError("Barueri remittance conflicts with canonical RPS")
+        # The PMB004 type-2 action flag is fiscal authority, not a
+        # cosmetic field. Emission routes may not carry cancellation ("C")
+        # or replacement ("R") records without human-approved event flow.
+        fiscal_details = [
+            line for line in batch.rps_bytes.split(b"\r\n")
+            if line.startswith(b"2")
+        ]
+        if len(fiscal_details) != 1 or fiscal_details[0][39:40] != b"E":
+            raise Sp4CanonicalMunicipalError(
+                "Barueri issuance must not submit cancellation or substitution"
+            )
         verify_fixed_width_rps_identity(original, batch)
         return batch
 
