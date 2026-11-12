@@ -295,14 +295,18 @@ class _GovernedNfseRouter:
         extrema: WebissExtremaCanonicalNfseGateway | None,
         sp4_municipal_gateways: Mapping[str, NfseGatewayClient] | None = None,
         sp4_municipal_query: Mapping[str, NfseQueryClient] | None = None,
+        sp4_preaudit: Callable[[NfseAuthorizationRequest], None] | None = None,
     ) -> None:
         self._application = application
         self._national = national
         self._extrema = extrema
+        self._sp4_preaudit = sp4_preaudit
         self._sp4 = dict(sp4_municipal_gateways or {})
         self._sp4_query = dict(sp4_municipal_query or {})
         if not set(self._sp4).issubset(_SP4_MUNICIPAL_PROVIDER_IBGE):
             raise ValueError("SP4 municipal gateways must use reviewed provider IDs")
+        if self._sp4 and not callable(self._sp4_preaudit):
+            raise ValueError("SP4 municipal routing requires canonical fiscal pre-audit")
         if not set(self._sp4_query).issubset(self._sp4):
             raise ValueError("SP4 query gateway must have matching issuer gateway")
         if not all(isinstance(value, NfseGatewayClient) for value in self._sp4.values()):
@@ -340,6 +344,8 @@ class _GovernedNfseRouter:
             if issuer_ibge != _SP4_MUNICIPAL_PROVIDER_IBGE[provider]:
                 raise FiscalValidationError("SP4 municipal provider binding/city mismatch")
             _require_sp4_municipal_channel(request)
+            assert self._sp4_preaudit is not None
+            self._sp4_preaudit(request)
             return self._sp4[provider].authorize(request)
         raise FiscalValidationError("NFS-e issuance has no approved matching provider")
 
@@ -363,6 +369,8 @@ class _GovernedNfseRouter:
                 raise FiscalValidationError("SP4 read-only provider binding unavailable") from exc
             if query_provider != provider:
                 raise FiscalValidationError("SP4 read-only provider binding mismatch")
+            assert self._sp4_preaudit is not None
+            self._sp4_preaudit(request)
             return self._sp4_query[provider].query(request)
         if (
             provider == EXTREMA_WEBISS_PROVIDER_ID
@@ -600,6 +608,7 @@ def build_runtime_fiscal_handler_factory(
                 extrema=extrema_adapter,
                 sp4_municipal_gateways=sp4_municipal_gateways,
                 sp4_municipal_query=sp4_municipal_query,
+                sp4_preaudit=nfse_preaudit,
             )
             selected_nfse = NfseGatewayClient(router)
             # Nacional: GET /dps -> GET /nfse only, with independent QUERY
