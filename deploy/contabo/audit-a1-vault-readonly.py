@@ -107,9 +107,12 @@ def main() -> int:
     print("VAULT_DIR_CONFIGURADO=" + _yes(bool(root)))
     print("CHAVE_MESTRA_FORMATO_32_BYTES=" + _yes(key_is_valid))
     print("MOUNT_PERSISTENTE_DECLARADO=" + _yes(persistent))
-    print("DIRETORIO_ACESSIVEL=" + (_yes(probe.get("directory_present")) if probe else "NAO_VERIFICADO"))
-    print("DIRETORIO_PERMISSOES_RESTRITAS=" + (_yes(probe.get("directory_permissions_ok")) if probe else "NAO_VERIFICADO"))
-    print("ARQUIVOS_PERMISSOES_RESTRITAS=" + (_yes(probe.get("record_permissions_ok")) if probe else "NAO_VERIFICADO"))
+    def _probe_flag(field: str) -> str:
+        return _yes(probe.get(field)) if probe else "NAO_VERIFICADO"
+
+    print("DIRETORIO_ACESSIVEL=" + _probe_flag("directory_present"))
+    print("DIRETORIO_PERMISSOES_RESTRITAS=" + _probe_flag("directory_permissions_ok"))
+    print("ARQUIVOS_PERMISSOES_RESTRITAS=" + _probe_flag("record_permissions_ok"))
     print("ARQUIVOS_A1_CIFRADOS_PRESENTES=" + (
         "SIM" if probe and probe.get("record_count", 0) > 0
         else "NAO" if probe else "NAO_VERIFICADO"
