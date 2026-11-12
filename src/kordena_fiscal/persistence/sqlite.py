@@ -731,7 +731,9 @@ class SqliteFiscalDatabase:
         finally:
             connection.close()
 
-    def initialize(self, *, enable_bling: bool = False) -> tuple[int, ...]:
+    def initialize(
+        self, *, enable_bling: bool = False, enable_national_dps: bool = False,
+    ) -> tuple[int, ...]:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         connection = self._connect()
         try:
@@ -856,7 +858,7 @@ class SqliteFiscalDatabase:
                     ),
                 )
                 new_versions.append(BLING_WORKER_POLICY_VERSION)
-            if NATIONAL_DPS_SEQUENCE_VERSION not in applied:
+            if enable_national_dps and NATIONAL_DPS_SEQUENCE_VERSION not in applied:
                 for statement in NATIONAL_DPS_SEQUENCE_SCHEMA:
                     connection.execute(statement)
                 connection.execute(
