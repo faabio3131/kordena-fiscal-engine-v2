@@ -34,7 +34,10 @@ from kordena_fiscal.domain import (
 from kordena_fiscal.gateway.nfse_nacional_homologation import (
     NACIONAL_HOMOLOGATION_PROVIDER_ID,
 )
-from kordena_fiscal.gateway.sp4_municipal_canonical import SP4_MUNICIPAL_PROVIDERS
+from kordena_fiscal.gateway.sp4_municipal_canonical import (
+    SP4_MUNICIPAL_PROVIDERS,
+    Sp4OriginalRps,
+)
 from kordena_fiscal.issuance import (
     NfseAuthorizationRequest,
     NfseCanonicalDocument,
@@ -45,6 +48,7 @@ from kordena_fiscal.issuance.sp4_original_rps_archive import (
     build_sp4_original_from_reservation,
 )
 from kordena_fiscal.lifecycle.idempotency import IdempotencyConflictError
+from kordena_fiscal.numbering import FiscalNumberReservation
 from kordena_fiscal.persistence.ports import (
     FiscalUnitOfWorkFactory,
     PersistenceConflictError,
@@ -229,7 +233,7 @@ def prepare_native_nfse(
             service_taker=taker,
         )
         nfse_preaudit(NfseAuthorizationRequest.build(document))
-        sp4_intent_builder = None
+        sp4_intent_builder: Callable[[FiscalNumberReservation], Sp4OriginalRps] | None = None
         if sp4_series is not None:
             # Reuse the same canonical immutable document, not a second RPS
             # numbering allocation or a provider-specific database.
