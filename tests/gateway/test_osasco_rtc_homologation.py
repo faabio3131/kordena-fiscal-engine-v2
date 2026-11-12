@@ -100,14 +100,14 @@ def test_mismatched_provider_denies_key_and_transport() -> None:
 
 def test_wcf_reply_never_infers_authorization_from_success_boolean() -> None:
     raw = (
-        '<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" '
-        'xmlns:t="http://tempuri.org/" '
-        'xmlns:a="http://schemas.datacontract.org/2004/07/'
-        'Eissnfe.Negocio.WebServices.Mensagem">'
-        '<s:Body><t:RTC_EmitirNFEResponse><t:RTC_EmitirNFEResult>'
-        '<a:Erro>false</a:Erro></t:RTC_EmitirNFEResult></t:RTC_EmitirNFEResponse>'
-        '</s:Body></s:Envelope>'
-    ).encode()
+        b'<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" '
+        b'xmlns:t="http://tempuri.org/" '
+        b'xmlns:a="http://schemas.datacontract.org/2004/07/'
+        b'Eissnfe.Negocio.WebServices.Mensagem">'
+        b'<s:Body><t:RTC_EmitirNFEResponse><t:RTC_EmitirNFEResult>'
+        b'<a:Erro>false</a:Erro></t:RTC_EmitirNFEResult></t:RTC_EmitirNFEResponse>'
+        b'</s:Body></s:Envelope>'
+    )
     result = _parse_reply(raw, "RTC_EmitirNFE")
     assert result.fiscal_error is False
     assert result.confirmed_authorization is False
@@ -119,14 +119,14 @@ def test_rtc_soap_verified_binding_and_key_offline() -> None:
     key = Mock(return_value="12345678-1234-1234-1234-123456789012")
     validator = Mock()
     reply = (
-        '<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" '
-        'xmlns:t="http://tempuri.org/" '
-        'xmlns:a="http://schemas.datacontract.org/2004/07/'
-        'Eissnfe.Negocio.WebServices.Mensagem">'
-        '<s:Body><t:RTC_EmitirNFEResponse><t:RTC_EmitirNFEResult>'
-        '<a:Erro>false</a:Erro></t:RTC_EmitirNFEResult></t:RTC_EmitirNFEResponse>'
-        '</s:Body></s:Envelope>'
-    ).encode()
+        b'<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" '
+        b'xmlns:t="http://tempuri.org/" '
+        b'xmlns:a="http://schemas.datacontract.org/2004/07/'
+        b'Eissnfe.Negocio.WebServices.Mensagem">'
+        b'<s:Body><t:RTC_EmitirNFEResponse><t:RTC_EmitirNFEResult>'
+        b'<a:Erro>false</a:Erro></t:RTC_EmitirNFEResult></t:RTC_EmitirNFEResponse>'
+        b'</s:Body></s:Envelope>'
+    )
     exchange = Mock(return_value=reply)
     adapter = OsascoRtcHomologationTransport(
         resolver=res, resolve_key=key, validated_request=validator,
