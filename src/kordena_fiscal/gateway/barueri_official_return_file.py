@@ -1,9 +1,11 @@
-"""Decode the OFFICIAL Barueri NFE Export v3 return, not the PMB004 input.
+"""Historical Barueri NFE Export v3 return-file structural parser.
 
-A downloaded file may be an error mirror of the uploaded RPS. It is NEVER
-safe to claim a converted note from HTTP 200, OK200, file presence, or
-SituacaoArq=1 alone. This parser accepts only the separate official layout
-NFE_Layout-v3 (August/2025): 1+2+3+[4]+9 positional records.
+This parser implements the historical NFE_Layout.pdf (v3.0, Aug/2025).
+It is NOT the 2026 return-layout verifier: the municipality's Dec/2025
+conversion guide points to NFE_Layout-v53.pdf (v5.3). The canonical
+Barueri adapter requires an independently reviewed current verifier.
+A downloaded file may be the RPS error mirror; HTTP 200, OK200 and a
+completed batch cannot authorize a fiscal document.
 
 Even a fully correlated source is not XML: the canonical AUTHORIZED transition
 requires separate retrieval and verification of the official NFS-e XML/ADN
@@ -42,8 +44,33 @@ class BarueriConvertedNfseEvidence:
     return_file: bytes
 
     def __post_init__(self) -> None:
-        if not isinstance(self.return_file, bytes) or not self.return_file:
-            raise BarueriReturnError("Official Barueri return must retain original bytes")
+        if (
+            not isinstance(self.return_file, bytes)
+            or not 0 < len(self.return_file) <= _LIMIT
+            or not isinstance(self.service_total, Decimal)
+            or not self.service_total.is_finite()
+            or self.service_total <= 0
+            or self.service_total * 100
+            != (self.service_total * 100).to_integral_value()
+            or not isinstance(self.access_key, str)
+            or len(self.access_key) != 50
+            or not self.access_key.isascii()
+            or not self.access_key.isdecimal()
+            or not isinstance(self.rps_number, str)
+            or not self.rps_number.isascii()
+            or not self.rps_number.isdecimal()
+            or not isinstance(self.note_number, str)
+            or not self.note_number.isascii()
+            or not self.note_number.isdecimal()
+            or not isinstance(self.verification_code, str)
+            or not 1 <= len(self.verification_code) <= 64
+            or any(ord(c) < 33 or ord(c) > 126 for c in self.verification_code)
+            or not isinstance(self.remittance, str)
+            or len(self.remittance) != 11
+            or not self.remittance.isascii()
+            or not self.remittance.isdecimal()
+        ):
+            raise BarueriReturnError("Untrusted Barueri return-file invoice evidence")
 
 
 def _as_digits(raw: bytes, name: str, *, width: int) -> str:
