@@ -8,6 +8,7 @@ from .manager import (
     FiscalSequencePolicy,
     FiscalSequenceStore,
     InMemoryFiscalSequenceStore,
+    InternalFiscalSequenceStream,
     SequenceExhaustedError,
     SequenceStateError,
 )
@@ -21,6 +22,7 @@ __all__ = [
     "FiscalSequencePolicy",
     "FiscalSequenceStore",
     "InMemoryFiscalSequenceStore",
+    "InternalFiscalSequenceStream",
     "SequenceExhaustedError",
     "SequenceStateError",
 ]
