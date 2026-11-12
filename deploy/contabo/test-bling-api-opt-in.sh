@@ -5,11 +5,12 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 T="$(mktemp -d)"
 trap 'rm -rf "$T"' EXIT
 cp "$HERE/compose.prod.yml" "$T/docker-compose.yml"
-mkdir -p "$T/src" "$T/host-blind"
+mkdir -p "$T/src" "$T/host-blind" "$T/host-policies"
 printf 'POSTGRES_PASSWORD=synthetic-ci-only\n' > "$T/.env"
 printf 'NFCORE_BLING_CLIENT_ID=synthetic-ci-app\nNFCORE_BLING_APPROVED_SCOPES=synthetic\n' > "$T/.env.bling.api"
 export POSTGRES_PASSWORD=synthetic-ci-only
 export NFCORE_BLING_SECRETS_HOST_DIR="$T/host-blind"
+export NFCORE_BLING_POLICIES_HOST_DIR="$T/host-policies"
 (cd "$T" && docker compose config --format json) > "$T/base.json"
 python3 - "$T/base.json" <<'PY'
 import json, sys
@@ -30,11 +31,13 @@ assert api["environment"]["NFCORE_BLING_CLIENT_ID"] == "synthetic-ci-app"
 assert api["environment"]["NFCORE_BLING_APPROVED_SCOPES"] == "synthetic"
 assert api["environment"]["NFCORE_BLING_CLIENT_SECRET_FILE"] == "/run/nfcore/bling/client-secret"
 assert api["environment"]["NFCORE_BLING_TOKEN_MASTER_KEY_FILE"] == "/run/nfcore/bling/master-key"
-assert len(api["volumes"]) == 1
-mount=api["volumes"][0]
-assert mount["type"] == "bind" and mount["read_only"] is True
-assert mount["target"] == "/run/nfcore/bling"
-assert mount.get("bind",{}).get("create_host_path") is False
+assert api["environment"]["NFCORE_BLING_FISCAL_POLICY_ROOT"] == "/run/nfcore/bling-policies"
+assert len(api["volumes"]) == 2
+mounts={mount["target"]: mount for mount in api["volumes"]}
+assert set(mounts) == {"/run/nfcore/bling", "/run/nfcore/bling-policies"}
+for mount in mounts.values():
+    assert mount["type"] == "bind" and mount["read_only"] is True
+    assert mount.get("bind",{}).get("create_host_path") is False
 assert "proxy-net" in api["networks"] and "internal" in api["networks"]
 assert set(config["services"]) == {"nfcore-api", "nfcore-db", "nfcore-portal"}
 PY
@@ -45,5 +48,8 @@ fi
 cp "$HERE/.env.bling.api.example" "$T/.env.bling.api"
 if (cd "$T" && env -u NFCORE_BLING_SECRETS_HOST_DIR docker compose config -q) >/dev/null 2>&1; then
   echo "FAIL: missing secret mount was silently accepted"; exit 1
+fi
+if (cd "$T" && env -u NFCORE_BLING_POLICIES_HOST_DIR docker compose config -q) >/dev/null 2>&1; then
+  echo "FAIL: missing fiscal policy root was silently accepted"; exit 1
 fi
 echo "PASS: Bling API compose opt-in is persistent, isolated and fail-closed"
