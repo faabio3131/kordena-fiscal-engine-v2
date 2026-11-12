@@ -85,7 +85,7 @@ def _parse_key(raw: bytes, municipality: str) -> str:
     return key
 
 
-def _validate_official_nfse(raw: bytes, key: str) -> None:
+def _validate_official_nfse(raw: bytes, key: str) -> bytes:
     """A bare key or unrelated XML can never produce AUTHORIZED."""
     if not isinstance(raw, bytes) or not 0 < len(raw) <= _MAX_RESPONSE:
         raise OfficialNfseTransportError("Invalid official NFS-e receipt length")
@@ -113,6 +113,10 @@ def _validate_official_nfse(raw: bytes, key: str) -> None:
     infos = root.findall(f"{{{_NS}}}infNFSe")
     if len(infos) != 1 or infos[0].get("Id") != "NFS" + key:
         raise OfficialNfseTransportError("NFS-e receipt belongs to a different access key")
+    # Preserve the exact receipt bytes verified against this key for atomic
+    # archival with the durable authorization lifecycle. This is not an
+    # authorization inference from a bare access key.
+    return xml
 
 
 def _read_only_get(path: str, context: ssl.SSLContext, timeout: float) -> bytes:
@@ -186,7 +190,7 @@ class NfseNationalHomologationQueryGateway:
             self._get(f"{_URL_BASE}/dps/{dps_id}", tls, self._timeout),
             jurisdiction.municipality_ibge_code,
         )
-        _validate_official_nfse(
+        authorized_xml = _validate_official_nfse(
             self._get(f"{_URL_BASE}/nfse/{key}", tls, self._timeout), key,
         )
         return NfseAuthorizationResult(
@@ -197,4 +201,5 @@ class NfseNationalHomologationQueryGateway:
             provider=_PROVIDER,
             provider_request_id=dps_id,
             invoice_reference=key,
+            authorized_xml=authorized_xml,
         )
