@@ -106,8 +106,8 @@ from .sqlite_core import (
 )
 from .sqlite_delivery import SqliteFiscalDeliveryAuditStore, SqliteFiscalOutboxOrderingStore
 from .sqlite_idempotency import SqliteIdempotencyStore
-from .sqlite_national_dps import SqliteNationalDpsSequenceStore
 from .sqlite_inbox import SqliteFiscalInboxStore
+from .sqlite_national_dps import SqliteNationalDpsSequenceStore
 from .sqlite_outbox_archive import SqliteFiscalArchiveStore, SqliteFiscalOutboxStore
 from .sqlite_reconciliation import SqliteReconciliationRepository
 from .sqlite_secret_binding import SqliteSecretBindingStore
