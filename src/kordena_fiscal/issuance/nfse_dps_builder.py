@@ -20,8 +20,8 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from lxml import etree
 
-from kordena_fiscal.domain import FiscalValidationError, TaxRegimeCode
-from kordena_fiscal.issuance.nfe_nfse import NfseAuthorizationRequest
+from kordena_fiscal.domain import Cnpj, Cpf, FiscalValidationError, TaxRegimeCode
+from kordena_fiscal.issuance.nfe_nfse import NfseAuthorizationRequest, NfseForeignAddress
 from kordena_fiscal.signing.nfse_xmldsig import sign_nfse_dps_xml
 from kordena_fiscal.vault import EphemeralCertificateMaterial
 from kordena_fiscal.xml.nfse_nacional_schema import national_dps_validator
@@ -177,6 +177,43 @@ def build_signed_dps(
         # revisit with the owner before relying on this for real submission.
         _child(reg_trib, "regApTribSN", "3")
     _child(reg_trib, "regEspTrib", "0")  # Nenhum; FiscalProfile models no special regime today
+
+    # Toma is placed after prest and before serv under the official 1.01 XSD.
+    # The source reference is NOT a tax identity and is never substituted here.
+    if document.service_taker is not None:
+        taker = document.service_taker
+        toma = etree.SubElement(info, f"{{{_NFSE_NS}}}toma")
+        if isinstance(taker.tax_id, Cnpj):
+            _child(toma, "CNPJ", taker.tax_id.value)
+        elif isinstance(taker.tax_id, Cpf):
+            _child(toma, "CPF", taker.tax_id.value)
+        elif taker.nif is not None:
+            _child(toma, "NIF", taker.nif)
+        elif taker.no_nif_reason is not None:
+            _child(toma, "cNaoNIF", taker.no_nif_reason)
+        else:
+            raise FiscalValidationError("Canonical taker tax identity is missing")
+        if taker.municipal_registration is not None:
+            _child(toma, "IM", taker.municipal_registration)
+        _child(toma, "xNome", taker.legal_name)
+        if taker.address is not None:
+            address = taker.address
+            end_taker = etree.SubElement(toma, f"{{{_NFSE_NS}}}end")
+            if isinstance(address, NfseForeignAddress):
+                ext = etree.SubElement(end_taker, f"{{{_NFSE_NS}}}endExt")
+                _child(ext, "cPais", address.country_code)
+                _child(ext, "cEndPost", address.postal_code)
+                _child(ext, "xCidade", address.city)
+                _child(ext, "xEstProvReg", address.region)
+            else:
+                national = etree.SubElement(end_taker, f"{{{_NFSE_NS}}}endNac")
+                _child(national, "cMun", address.jurisdiction.municipality_ibge_code or "")
+                _child(national, "CEP", address.postal_code)
+            _child(end_taker, "xLgr", address.street)
+            _child(end_taker, "nro", address.number)
+            if address.complement is not None:
+                _child(end_taker, "xCpl", address.complement)
+            _child(end_taker, "xBairro", address.district)
 
     serv = etree.SubElement(info, f"{{{_NFSE_NS}}}serv")
     loc_prest = etree.SubElement(serv, f"{{{_NFSE_NS}}}locPrest")
