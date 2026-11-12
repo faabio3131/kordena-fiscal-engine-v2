@@ -1,11 +1,11 @@
-"""Historical Barueri NFE Export v3 return-file structural parser.
+"""Barueri official January/2026 return layout v3 structural parser.
 
-This parser implements the historical NFE_Layout.pdf (v3.0, Aug/2025).
-It is NOT the 2026 return-layout verifier: the municipality's Dec/2025
-conversion guide points to NFE_Layout-v53.pdf (v5.3). The canonical
-Barueri adapter requires an independently reviewed current verifier.
-A downloaded file may be the RPS error mirror; HTTP 200, OK200 and a
-completed batch cannot authorize a fiscal document.
+Confirmed against Prefeitura de Barueri Guia para Conversao RPS em Lote
+v1.07 (January/2026), section 7 and annexes: return NFE_Layout-v3.pdf
+(August/2025), paired with *input* RPS_Layout-v4.2.pdf (January/2026).
+Do not confuse the version 5.5 ERROR LIST with return layout. An error
+mirror or OK200 does not prove authorization. The actual fiscal XML must
+still be recovered and independently verified by the canonical gateway.
 
 Even a fully correlated source is not XML: the canonical AUTHORIZED transition
 requires separate retrieval and verification of the official NFS-e XML/ADN
