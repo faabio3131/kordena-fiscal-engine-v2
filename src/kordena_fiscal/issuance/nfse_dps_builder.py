@@ -265,6 +265,10 @@ def build_signed_dps(
         rate = (iss_amount / taxable * 100).quantize(_CENT, rounding=ROUND_HALF_UP)
         _child(trib_mun, "pAliq", _money(rate))
     _child(trib_mun, "tpRetISSQN", "2" if service.iss_withheld else "1")
+    if schema_version == "1.01" and taxable > 0 and iss_amount > 0:
+        # The official v1.01 sequence moved pAliq AFTER tpRetISSQN.
+        rate = (iss_amount / taxable * 100).quantize(_CENT, rounding=ROUND_HALF_UP)
+        _child(trib_mun, "pAliq", _money(rate))
     tot_trib = etree.SubElement(trib, f"{{{_NFSE_NS}}}totTrib")
     _child(tot_trib, "indTotTrib", "0")  # Decreto 8.264/2014: no tax-total estimate declared
 
