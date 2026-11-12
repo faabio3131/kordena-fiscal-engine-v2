@@ -1011,6 +1011,7 @@ class DurableHumanPortalExecutor:
             rate = Decimal(str(payload["iss_rate_fraction"]))
             if any(not value.is_finite() for value in (amount, deductions, rate)):
                 raise FiscalValidationError("Fiscal amounts must be finite")
+            rate_exponent = rate.as_tuple().exponent
             if (
                 not Decimal("0") < amount <= Decimal("999999999")
                 or not Decimal("0") <= deductions < amount
@@ -1021,11 +1022,8 @@ class DurableHumanPortalExecutor:
                         amount.as_tuple().exponent, deductions.as_tuple().exponent,
                     )
                 )
-                or not isinstance(rate.as_tuple().exponent, int)
-                or (
-                    isinstance(rate.as_tuple().exponent, int)
-                    and rate.as_tuple().exponent < -4
-                )
+                or not isinstance(rate_exponent, int)
+                or (isinstance(rate_exponent, int) and rate_exponent < -4)
                 or not 0 <= payload["dps_series"] <= 99999
                 or not 1 <= payload["rule_version"] <= 99999
             ):
