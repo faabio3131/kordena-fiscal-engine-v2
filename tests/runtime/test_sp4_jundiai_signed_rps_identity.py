@@ -11,14 +11,18 @@ import pytest
 from kordena_fiscal.domain import Cnpj, ExecutionScope, FiscalEnvironment, TaxRegimeCode
 from kordena_fiscal.gateway.authorization import AuthorizationStatus
 from kordena_fiscal.gateway.jundiai_giss_homologation import (
-    JundiaiGissHomologationTransport, JundiaiGissReceipt, JundiaiSignedOperation,
+    JundiaiGissHomologationTransport,
+    JundiaiGissReceipt,
+    JundiaiSignedOperation,
 )
 from kordena_fiscal.gateway.sp4_municipal_canonical import (
-    Sp4CanonicalMunicipalError, Sp4OriginalRps,
+    Sp4CanonicalMunicipalError,
+    Sp4OriginalRps,
 )
 from kordena_fiscal.issuance.nfe_nfse import NfseAuthorizationRequest
 from kordena_fiscal.runtime.sp4_municipal_provider_bridges import (
-    Sp4BridgeAuthority, build_jundiai_reviewed_ports,
+    Sp4BridgeAuthority,
+    build_jundiai_reviewed_ports,
 )
 
 
@@ -40,15 +44,14 @@ def _operation(
     source: Sp4OriginalRps, method: str, *,
     number: str = "42", series: str = "NF", lot: str = "1234",
 ) -> JundiaiSignedOperation:
-    root = (
-        "EnviarLoteRpsEnvio" if method == "RecepcionarLoteRps"
-        else "ConsultarNfseRpsEnvio"
-    )
+    sending = method == "RecepcionarLoteRps"
+    root = "EnviarLoteRpsEnvio" if sending else "ConsultarNfseRpsEnvio"
+    service = "enviar-lote-rps-envio" if sending else "consultar-nfse-rps-envio"
+    lot_tag = f"<t:NumeroLote>{lot}</t:NumeroLote>" if sending else ""
     signed = (
-        f'<g:{root} xmlns:g="http://www.giss.com.br/'
-        f'{("enviar-lote-rps-envio" if method == "RecepcionarLoteRps" else "consultar-nfse-rps-envio")}-v2_04.xsd" '
+        f'<g:{root} xmlns:g="http://www.giss.com.br/{service}-v2_04.xsd" '
         'xmlns:t="http://www.giss.com.br/tipos-v2_04.xsd">'
-        f'{"<t:NumeroLote>" + lot + "</t:NumeroLote>" if method == "RecepcionarLoteRps" else ""}'
+        f"{lot_tag}"
         f'<t:IdentificacaoRps><t:Numero>{number}</t:Numero>'
         f'<t:Serie>{series}</t:Serie></t:IdentificacaoRps>'
         f'</g:{root}>'
