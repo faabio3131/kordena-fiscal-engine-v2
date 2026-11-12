@@ -34,7 +34,7 @@ docker run -d --cidfile "$CIDFILE" --name "$T" --network none \
   -e POSTGRES_PASSWORD=restore-test -e POSTGRES_DB=nfcore \
   postgres:16-alpine >/dev/null
 
-for i in $(seq 1 30); do
+for ((attempt=1; attempt<=30; attempt++)); do
   docker exec "$T" pg_isready -U postgres -d nfcore >/dev/null 2>&1 && break
   sleep 2
 done
