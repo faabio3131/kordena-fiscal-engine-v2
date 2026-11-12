@@ -111,15 +111,45 @@ class BarueriRpsBatch:
         lines = data.split(b"\r\n")
         if lines[-1] != b"":
             raise BarueriContractError("PMB004 must end in CRLF")
-        if len(lines) < 3 or not lines[0].isascii():
-            raise BarueriContractError("PMB004 missing details")
-        header = lines[0]
+        records = lines[:-1]
+        if len(records) < 4 or not records[0].isascii():
+            raise BarueriContractError("PMB004 missing required fiscal records")
+        header = records[0]
         expected = (
             b"1" + self.municipal_registration.encode("ascii")
             + b"PMB004" + self.remittance.encode("ascii")
         )
-        if header != expected or not any(line.startswith(b"2") for line in lines[1:-1]):
-            raise BarueriContractError("PMB004 header/remittance or RPS details mismatch")
+        if header != expected:
+            raise BarueriContractError("PMB004 header/remittance mismatch")
+        # Official RPS Layout v4.2 (06/01/2026): field positions are fixed
+        # length BEFORE CRLF: records 1=25,2=1970,3=18,4=531,5=697,9=38.
+        # A validator supplied by the trusted issuer still verifies ALL fiscal
+        # fields (ISS, RTC, withholding and municipality-specific conditions).
+        lengths = {b"1": 25, b"2": 1970, b"3": 18, b"4": 531, b"5": 697, b"9": 38}
+        counts: dict[bytes, int] = {}
+        for i, line in enumerate(records):
+            kind = line[:1]
+            if kind not in lengths or len(line) != lengths[kind]:
+                raise BarueriContractError("PMB004 fixed-width fiscal record mismatch")
+            counts[kind] = counts.get(kind, 0) + 1
+            if (i == 0) != (kind == b"1"):
+                raise BarueriContractError("PMB004 header must be first")
+            if (i == len(records) - 1) != (kind == b"9"):
+                raise BarueriContractError("PMB004 trailer must be last")
+        if (
+            counts.get(b"1") != 1 or counts.get(b"9") != 1
+            or not counts.get(b"2") or counts.get(b"2") != counts.get(b"4")
+        ):
+            raise BarueriContractError("PMB004 requires each RPS and its RTC ADN record")
+        footer = records[-1]
+        if (
+            not footer[1:].isascii() or not footer[1:].isdecimal()
+            or int(footer[1:8]) != len(records)
+        ):
+            raise BarueriContractError("PMB004 trailer count or monetary totals are invalid")
+        # Header and trailer controls are structural. They are NOT a substitute
+        # for validation of the complete tax and RPS content by validate_pmb004.
+
 
 
 @dataclass(frozen=True, slots=True)
