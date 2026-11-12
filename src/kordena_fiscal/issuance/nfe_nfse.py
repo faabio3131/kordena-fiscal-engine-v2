@@ -158,6 +158,7 @@ class NfseServiceLine:
     iss_amount: Money = Money.zero()
     iss_withheld: bool = False
     national_taxation_code: str | None = None
+    municipal_taxation_detail: str | None = None
     rule_version: int = 1
     source_normative: str = "external-rule-set"
 
@@ -192,6 +193,16 @@ class NfseServiceLine:
             "national_taxation_code",
             _optional(self.national_taxation_code, "national_taxation_code", 64),
         )
+        object.__setattr__(
+            self, "municipal_taxation_detail",
+            _optional(self.municipal_taxation_detail, "municipal_taxation_detail", 3),
+        )
+        if self.municipal_taxation_detail is not None and (
+            len(self.municipal_taxation_detail) != 3
+            or not self.municipal_taxation_detail.isascii()
+            or not self.municipal_taxation_detail.isdecimal()
+        ):
+            raise FiscalValidationError("municipal_taxation_detail must be three ASCII digits")
         if not isinstance(self.rule_version, int) or isinstance(self.rule_version, bool):
             raise FiscalValidationError("rule_version must be an integer")
         if self.rule_version < 1:
@@ -342,6 +353,11 @@ def build_nfse_request_fingerprint(document: NfseCanonicalDocument) -> str:
             for line in document.services
         ],
     }
+    # Preserve the historical hash for all service lines that do not carry
+    # municipal detail; changing it would invalidate existing durable requests.
+    for line_payload, line in zip(payload["services"], document.services, strict=True):
+        if line.municipal_taxation_detail is not None:
+            line_payload["municipal_taxation_detail"] = line.municipal_taxation_detail
     encoded = json.dumps(
         payload,
         ensure_ascii=False,
