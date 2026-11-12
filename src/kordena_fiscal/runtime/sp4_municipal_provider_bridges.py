@@ -217,8 +217,9 @@ def build_osasco_reviewed_ports(
             req, original, build_wcf_operation(req, original, method),
             expected_type=OsascoPreparedOperation, expected_method=method,
         )
-        # Municipal v2.1 provides ConsultarNotaCompleta by NumeroReciboUnico;
-        # RTC_ConsultarNFE was not present in the official published method list.
+        # The April 2026 municipal v2.1 manual includes RTC_ConsultarNFE
+        # and ConsultarNotaCompleta. The latter retrieves complete invoice
+        # XML by the original NumeroReciboUnico without a second issuance.
         if (
             not original.rps_number.isascii()
             or not original.rps_number.isdecimal()
@@ -259,6 +260,23 @@ def build_osasco_reviewed_ports(
             )
         verify_wcf_rps_identity(original, operation.request_xml)
         receipt = transport.invoke(operation)
+        if not isinstance(receipt, OsascoOperationReceipt) or receipt.method != method:
+            raise Sp4CanonicalMunicipalError(
+                "Osasco returned an unexpected official operation"
+            )
+        if method == "RTC_EmitirNFE":
+            # Even a synchronous NotaFiscalGerada with Erro=false is only a
+            # provider reference until read-only ConsultarNotaCompleta
+            # reconciles the original receipt and official invoice XML.
+            return Sp4ProviderOutcome(
+                status=AuthorizationStatus.PENDING,
+                provider_request_id=(
+                    receipt.note_reference.number
+                    if receipt.note_reference is not None else None
+                ),
+            )
+        if not receipt.response_xml or receipt.fiscal_error:
+            return Sp4ProviderOutcome(status=AuthorizationStatus.PENDING)
         return _verified_outcome(interpret_official_result(receipt, req, original))
 
     return authority.wrap(
