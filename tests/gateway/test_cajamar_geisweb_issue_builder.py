@@ -153,3 +153,45 @@ def test_municipal_fields_require_reviewed_classification_and_recipient() -> Non
             build_cajamar_issue_xml(
                 request=_request(source), original=source, fields=fields,
             )
+
+
+@pytest.mark.parametrize("old,new", [
+    (b"BaseCalculo>150.00", b"BaseCalculo>149.00"),
+    (b"Aliquota>2.00", b"Aliquota>5.00"),
+    (b"CodigoServico>0107", b"CodigoServico>0108"),
+    (b"TipoLancamento>N", b"TipoLancamento>T"),
+    (b"Regime>6", b"Regime>1"),
+    (b"RazaoSocial>Cliente Teste", b"RazaoSocial>Outra Empresa"),
+    (b"Cofins>3.00", b"Cofins>4.00"),
+    (b"Discriminacao>Consultoria", b"Discriminacao>Engenharia"),
+])
+def test_signed_issue_rejects_tax_or_recipient_mutation_before_schema(
+    old: bytes, new: bytes,
+) -> None:
+    source = _source()
+    checked = Mock()
+
+    def tamper(xml: bytes) -> bytes:
+        assert old in xml
+        return xml.replace(old, new)
+
+    with pytest.raises(CajamarGeiswebIssueError, match="no longer matches"):
+        prepare_cajamar_signed_issue(
+            request=_request(source), original=source, fields=_data(),
+            sign_document=tamper, validate_signed_request=checked,
+        )
+    checked.assert_not_called()
+
+
+def test_signed_issue_detects_removed_mandatory_tax_without_recalculation() -> None:
+    source = _source()
+    checked = Mock()
+    with pytest.raises(CajamarGeiswebIssueError, match="no longer matches"):
+        prepare_cajamar_signed_issue(
+            request=_request(source), original=source, fields=_data(),
+            sign_document=lambda xml: xml.replace(
+                b"<geis:Pis>0.65</geis:Pis>", b"",
+            ),
+            validate_signed_request=checked,
+        )
+    checked.assert_not_called()
