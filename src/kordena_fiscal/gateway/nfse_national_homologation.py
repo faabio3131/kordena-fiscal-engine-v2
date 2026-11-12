@@ -17,6 +17,7 @@ from urllib.request import HTTPSHandler, Request, build_opener
 from lxml import etree
 
 from kordena_fiscal.domain import FiscalValidationError
+from kordena_fiscal.issuance.nfe_nfse import NfseRejectionDetail
 from kordena_fiscal.gateway.fiscal_tls import RejectFiscalRedirects, build_fiscal_tls_context
 from kordena_fiscal.signing.nfse_xmldsig import sign_nfse_dps_xml
 from kordena_fiscal.vault import EphemeralCertificateMaterial
@@ -86,6 +87,35 @@ def build_nfse_dps_request(
         {"dpsXmlGZipB64": base64.b64encode(gzip.compress(signed_dps_xml, mtime=0)).decode("ascii")},
         separators=(",", ":"),
     ).encode("ascii")
+
+
+def parse_national_nfse_rejections(payload: object) -> tuple[NfseRejectionDetail, ...]:
+    """Normalize all SEFIN error entries without truncation or secret echo.
+
+    Preserves raw provider descriptions in the private fiscal result; callers
+    must never return that text directly through HTTP or log it. The caller
+    stores details under the scoped fiscal archive's retention policy.
+    """
+    if not isinstance(payload, dict):
+        raise OfficialNfseTransportError("Resposta NFS-e Nacional inválida")
+    errors = payload.get("erros")
+    if errors is None:
+        return ()
+    if not isinstance(errors, list) or not 1 <= len(errors) <= 32:
+        raise OfficialNfseTransportError("Lista de rejeições SEFIN inválida")
+    details: list[NfseRejectionDetail] = []
+    for entry in errors:
+        if not isinstance(entry, dict):
+            raise OfficialNfseTransportError("Rejeição SEFIN inválida")
+        code = entry.get("Codigo", entry.get("codigo"))
+        message = entry.get("Descricao", entry.get("descricao"))
+        if (not isinstance(code, (str, int)) or isinstance(code, bool)
+                or not isinstance(message, str)):
+            raise OfficialNfseTransportError("Rejeição SEFIN sem código e motivo")
+        details.append(NfseRejectionDetail(
+            code=str(code), origin="SEFIN_NACIONAL", raw_message=message,
+        ))
+    return tuple(details)
 
 
 def parse_nfse_homologation_response(raw: bytes) -> dict[str, str]:
