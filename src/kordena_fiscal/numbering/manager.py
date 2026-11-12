@@ -21,12 +21,13 @@ from kordena_fiscal.domain.primitives import _normalize_host_namespace
 class InternalFiscalSequenceStream(IntEnum):
     """Private numbering namespace; never an official invoice model code.
 
-    Value 90 is reserved only in the NFCore fm_fiscal_sequences persistence
-    partition for municipal RPS. It MUST NOT be serialized as a fiscal
+    Value 90 is reserved for municipal RPS; 91 is reserved for National DPS
+    in the NFCore fm_fiscal_sequences persistence partition. It MUST NOT be serialized as a fiscal
     document model, access-key model, or NFS-e XML value.
     """
 
     NFSE_RPS = 90
+    NFSE_DPS = 91  # National DPS; independent from municipal RPS
 
 
 class SequenceExhaustedError(FiscalDomainError):
