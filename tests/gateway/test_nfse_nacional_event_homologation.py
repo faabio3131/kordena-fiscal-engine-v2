@@ -77,10 +77,11 @@ def _receipt(key: str = _KEY, cnpj: str = _CNPJ) -> bytes:
 def _transport(exchange: Mock, resolver: Mock | None = None, **kw: object):
     from kordena_fiscal.gateway import nfse_nacional_event_homologation as mod
 
-    provider = resolver or Mock()
-    provider.resolve_provider_id.return_value = (
-        "nfse-nacional-producao-restrita"
-    )
+    provider = resolver if resolver is not None else Mock()
+    if resolver is None:
+        provider.resolve_provider_id.return_value = (
+            "nfse-nacional-producao-restrita"
+        )
     a1 = Mock()
     a1.pkcs12_bytes = b"synthetic"
     a1.password = b"synthetic"
