@@ -63,6 +63,8 @@ class BarueriPmb004IssueFields:
     recipient_differs: str = "0"
     municipal_note_series: str = ""
     street_complement: str = ""
+    # Reviewed retained taxes: IRRF, PIS, COFINS, CSLL, INSS.
+    federal_retentions: tuple[tuple[str, Decimal], ...] = ()
     # Type 5 is created by the separate fiscal-special-cases rule component.
 
 
@@ -205,6 +207,27 @@ def _source(
         _ascii(value, name, length, required=name not in (
             "recipient complement", "service complement", "recipient email",
         ))
+    if not isinstance(fields.federal_retentions, tuple):
+        raise BarueriPmb004RecordError("Barueri federal withholdings must be reviewed")
+    seen: set[str] = set()
+    total = 0
+    for item in fields.federal_retentions:
+        if not isinstance(item, tuple) or len(item) != 2:
+            raise BarueriPmb004RecordError("Barueri withholding entry invalid")
+        code, amount = item
+        if not isinstance(code, str) or code not in {"01", "02", "03", "04", "05"}:
+            raise BarueriPmb004RecordError("Barueri unsupported federal withholding code")
+        if code in seen:
+            raise BarueriPmb004RecordError("Barueri duplicate federal withholding")
+        seen.add(code)
+        cents = _cents(amount, "federal withholding")
+        if cents <= 0:
+            raise BarueriPmb004RecordError("Barueri withholding must be positive")
+        total += cents
+    if total >= 10**15:
+        raise BarueriPmb004RecordError("Barueri withholding total overflow")
+    if Decimal(total) / 100 > original.gross_amount:
+        raise BarueriPmb004RecordError("Barueri withholdings exceed service value")
     if doc.services[0].deduction_amount.amount != Decimal("0"):
         # Existing municipal special tax rules must supply Type 3/VN to
         # represent deductions, not silently omit them from the remittance.
@@ -240,7 +263,11 @@ def build_barueri_rps_type2(
     _write(detail, 458, 463, b"1", numeric=True)
     unit_cents = _cents(original.gross_amount, "service gross")
     _write(detail, 464, 478, str(unit_cents).encode("ascii"), numeric=True)
-    _write(detail, 484, 498, b"0", numeric=True)
+    withheld_cents = sum(
+        _cents(amount, "withheld federal tax")
+        for _, amount in fields.federal_retentions
+    )
+    _write(detail, 484, 498, str(withheld_cents).encode("ascii"), numeric=True)
     _write(detail, 499, 499, b"2")  # domestic buyer
     _write(detail, 503, 503, b"2")  # non-exported service
     _write(detail, 504, 504, b"1" if len(p.tax_id) == 11 else b"2")
@@ -282,6 +309,22 @@ def build_barueri_rtc_type4(
     return bytes(rtc)
 
 
+def build_barueri_federal_retention_type3(
+    *, request: NfseAuthorizationRequest, original: Sp4OriginalRps,
+    fields: BarueriPmb004IssueFields,
+) -> tuple[bytes, ...]:
+    """PMB004 Type 3 records, one per reviewed withheld federal tax.
+
+    VN (other values outside the service base) is separate, not a retention.
+    """
+    _source(request, original, fields)
+    return tuple(
+        b"3" + code.encode("ascii")
+        + f"{_cents(amount, 'withheld tax'):015d}".encode("ascii")
+        for code, amount in fields.federal_retentions
+    )
+
+
 def build_barueri_reviewed_issue_batch(
     *, request: NfseAuthorizationRequest, original: Sp4OriginalRps,
     fields: BarueriPmb004IssueFields,
@@ -301,8 +344,12 @@ def build_barueri_reviewed_issue_batch(
     rtc = build_barueri_rtc_type4(
         request=request, original=original, fields=fields,
     )
+    retentions = build_barueri_federal_retention_type3(
+        request=request, original=original, fields=fields,
+    )
     return build_barueri_single_rps_batch(
         source=original, regime=request.document.issuer.tax_regime,
         municipal_registration=municipal_registration,
         rps_detail=detail, rtc_adn_detail=rtc,
+        retained_tax_records=retentions,
     )
