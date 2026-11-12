@@ -261,6 +261,7 @@ def test_mg_national_channel_generates_signed_schema_valid_dps_envelope(
             FiscalSequenceKey.from_scope(
                 request.document.scope,
                 model=InternalFiscalSequenceStream.NFSE_DPS, series=1,
+                issuer_cnpj=request.document.issuer.cnpj.value,
             ), FiscalSequencePolicy(),
         )
         signed = build_signed_dps(request, _certificate(), reservation=reservation)
