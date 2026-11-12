@@ -148,6 +148,7 @@ class OsascoOperationReceipt:
     # SOAP true/false and municipal number cannot independently authorize
     # the immutable original NFS-e without official document proof.
     confirmed_authorization: bool = False
+    status_available: bool = True
     note_reference: OsascoNoteReference | None = None
     response_xml: bytes = field(default=b"", repr=False)
 
@@ -247,6 +248,13 @@ def _parse_reply(raw: bytes, method: str) -> OsascoOperationReceipt:
     if len(results) != 1:
         raise OsascoRtcContractError("Osasco response result mismatch")
     errors = results[0].findall(f".//{{{_DTO}}}Erro")
+    if not errors and method == "ConsultarNotaCompleta":
+        # Municipal v2.1 returns complete XML rather than Erro boolean.
+        # Preserve evidence but keep official authorization unconfirmed.
+        return OsascoOperationReceipt(
+            method=method, fiscal_error=False, status_available=False,
+            response_xml=raw,
+        )
     if len(errors) != 1 or (errors[0].text or "").strip().lower() not in (
         "true", "false",
     ):
