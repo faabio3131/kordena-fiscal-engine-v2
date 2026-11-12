@@ -43,7 +43,7 @@ def build_jundiai_original_rps_query_xml(
         or rps_type not in ("1", "2", "3")
     ):
         raise JundiaiGissBuilderError("Untrusted Giss original receipt metadata")
-    namespaces: dict[str | None, str] = {None: _ROOT, "tipos": _TYPES}
+    namespaces: dict[str, str] = {"giss": _ROOT, "tipos": _TYPES}
     root = etree.Element(
         f"{{{_ROOT}}}ConsultarNfseRpsEnvio",
         nsmap=namespaces,
