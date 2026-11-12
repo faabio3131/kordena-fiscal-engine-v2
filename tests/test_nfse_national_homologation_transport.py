@@ -30,6 +30,9 @@ _DS = "http://www.w3.org/2000/09/xmldsig#"
 
 def _unsigned_dps(environment: str = "2") -> bytes:
     root = etree.Element(f"{{{_NS}}}DPS", nsmap={None: _NS})
+    # Signature fixtures target the pinned legacy 1.00 contract unless
+    # a test explicitly selects 1.01; missing version is invalid by design.
+    root.set("versao", "1.00")
     info = etree.SubElement(root, f"{{{_NS}}}infDPS", Id="DPS1234567890")
     etree.SubElement(info, f"{{{_NS}}}tpAmb").text = environment
     return etree.tostring(root, encoding="utf-8")

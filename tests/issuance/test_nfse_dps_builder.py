@@ -143,6 +143,12 @@ def test_build_signed_dps_produces_schema_valid_and_signed_document() -> None:
     assert dps_id.startswith("DPS") and len(dps_id) == 45 and dps_id[3:].isdigit()
     assert info.findtext(f"{{{_NFSE_NS}}}tpAmb") == "2"
     assert info.findtext(f"{{{_NFSE_NS}}}cLocEmi") == "3550308"
+    national_address = info.find(
+        f"{{{_NFSE_NS}}}prest/{{{_NFSE_NS}}}end/{{{_NFSE_NS}}}endNac"
+    )
+    assert national_address is not None
+    assert national_address.findtext(f"{{{_NFSE_NS}}}cMun") == "3550308"
+    assert national_address.findtext(f"{{{_NFSE_NS}}}CEP") == "01001000"
     signature = root.find("{http://www.w3.org/2000/09/xmldsig#}Signature")
     assert signature is not None
     signature_method = signature.find(
