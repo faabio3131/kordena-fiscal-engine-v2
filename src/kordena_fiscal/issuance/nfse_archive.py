@@ -25,8 +25,11 @@ from kordena_fiscal.domain import (
 )
 
 from .nfe_nfse import (
-    NfseAuthorizationRequest, NfseCanonicalDocument, NfseForeignAddress,
-    NfseServiceLine, NfseServiceTaker,
+    NfseAuthorizationRequest,
+    NfseCanonicalDocument,
+    NfseForeignAddress,
+    NfseServiceLine,
+    NfseServiceTaker,
 )
 
 NFSE_PREPARED_MEDIA_TYPE = "application/vnd.nfcore.prepared-nfse.v1+json"
