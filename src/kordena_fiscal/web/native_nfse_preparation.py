@@ -27,9 +27,9 @@ from kordena_fiscal.domain import (
     FiscalDocumentKind,
     FiscalEnvironment,
     FiscalValidationError,
-    TaxRegimeCode,
     Money,
     SourceReference,
+    TaxRegimeCode,
 )
 from kordena_fiscal.gateway.nfse_nacional_homologation import (
     NACIONAL_HOMOLOGATION_PROVIDER_ID,
@@ -239,9 +239,12 @@ def prepare_native_nfse(
             # numbering allocation or a provider-specific database.
             prepared_request = NfseAuthorizationRequest.build(document)
             _, label = sp4_series
-            sp4_intent_builder = lambda numbered: build_sp4_original_from_reservation(
-                prepared_request, numbered, rps_series=label,
-            )
+            def build_reviewed_sp4_rps(numbered: FiscalNumberReservation) -> Sp4OriginalRps:
+                return build_sp4_original_from_reservation(
+                    prepared_request, numbered, rps_series=label,
+                )
+
+            sp4_intent_builder = build_reviewed_sp4_rps
         result = app.prepare_nfse_authorization(
             document, occurred_at=now,
             retention=RetentionPolicyMetadata("nfcore-fiscal-archive", 1),
