@@ -143,3 +143,33 @@ municipal `EXTERNAL_BLOCKED` por contribuinte sem certificado/IM/credencial
 e, em alguns casos, por ausência de contrato e fixture final pinada.
 A inexistência desses insumos **não impede** a continuação da programação.
 O CI deve ser validado no commit final, nunca herdado de sha anterior.
+
+
+## Implementação adicional SP4 — serializers de emissão canônica (12/11/2026)
+
+Novos componentes desta etapa, todos **na branch da PR #446**, isolados
+do núcleo fiscal do Agente B:
+
+| Município | Emissão construída | Ponte de uso e testes | Limites ainda não resolvidos |
+|---|---|---|---|
+| Cajamar | `gateway/cajamar_geisweb_issue_builder.py`: `EnviaLoteRps` com emitente, lote, número do RPS original, ISS, tomador e assinatura/XSD por injeção. | `build_cajamar_geisweb_issue_request_factory` + `test_cajamar_geisweb_issue_builder.py`. | Contrato GeisWeb vigente e assinatura/XSD pinados, outros cenários de serviço, tratamento integral dos retornos e publicação em runtime Portal. |
+| Osasco | `gateway/osasco_rtc_issue_builder.py`: WCF `RTC_EmitirNFE`, registro original e tributação revisada; campo de credencial vazio até o transporte scoped. | `build_osasco_rtc_issue_request_factory` + `test_osasco_rtc_issue_builder.py`. | Paridade WSDL/DTO em outras modalidades fiscais, normalização do XML de NFS-e, PDF/Portal e cenários com outras rotas. |
+| Barueri | `gateway/barueri_pmb004_record_builder.py`: RPS tipo 2, RTC/ADN tipo 4, codificação por posição e lote RPS tipo 1/9 já existente. | `build_barueri_pmb004_issue_remittance_factory` + `test_barueri_pmb004_record_builder.py`. | Tipos 3/5 e situações específicas de dedução/intermediário, schema oficial e reconciliação completa da remessa. |
+| Jundiaí | `gateway/jundiai_giss_issue_builder.py`: `EnviarLoteRpsEnvio` ABRASF 2.04, original RPS/IM/tomador, `CodigoNbs` 9 dígitos, grupo `IBSCBS` quando tributação e base foram revisadas e informadas, assinatura/XSD por ports. | `build_jundiai_giss_issue_request_factory` + `test_jundiai_giss_issue_builder.py`. | Conferir XML final com RAR XSD vigente do GissOnline v1.8; assinar precisamente `InfDeclaracaoPrestacaoServico` e `LoteRps`; casos legais de substituição e integração de Portal. |
+
+**Princípio da revisão:** gerar leiaute a partir do documento de domínio
+imutável; não criar novo motor tributário, não remapear número de RPS,
+não calcular IBS/CBS/ISS artificialmente nem usar sucesso HTTP como autorização.
+
+**Critério de fechamento interno não alcançado:** factories ainda precisam
+ser compostos com todos os campos e portas oficiais na árvore canônica final,
+inclusive provas de respostas, PDF e simulação HTTP/Portal de todos os ciclos
+(emissão, consulta, cancelamento, substituição quando legal).
+Os arquivos XSD/WSDL de município ainda não foram todos pinados e verificados,
+mas sua falta **não interrompe** o avanço em funcionalidades internas independentes.
+A homologação real com A1/IM/credencial permanece em trilha externa.
+
+**Controle de qualidade:** o aceite desta adição exige Ruff, Mypy,
+Pytest e governança integralmente verdes no HEAD final da PR #446.
+Não reutilizar a CI verde de um commit anterior como prova do novo código.
+Não houve merge, deploy, migration, envio fiscal real ou alteração do Agente B.
