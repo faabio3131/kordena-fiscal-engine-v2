@@ -95,7 +95,7 @@ def test_envelope_contains_full_lot_issuer_taker_tax_and_original_rps() -> None:
 
 
 @pytest.mark.parametrize("change", [
-    {"municipal_batch_id": "12346"},
+    {"municipal_batch_id": None},
     {"document_id": "another-document"},
     {"gross_amount": Decimal("151.00")},
 ])
