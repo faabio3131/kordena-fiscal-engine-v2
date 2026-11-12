@@ -106,7 +106,7 @@ def test_pmb004_requires_complete_rps_rtc_and_footer() -> None:
     valid = _synthetic_pmb004()
     with pytest.raises(BarueriContractError, match="fixed-width"):
         _batch(data=valid.replace(b"2RPS  ", b"2RPS ", 1))
-    with pytest.raises(BarueriContractError, match="each RPS"):
+    with pytest.raises(BarueriContractError, match="missing required fiscal records"):
         _batch(data=valid.replace(b"41" + b" " * 529 + b"\r\n", b"", 1))
     with pytest.raises(BarueriContractError, match="trailer count"):
         _batch(data=valid.replace(b"90000004", b"90000003", 1))
