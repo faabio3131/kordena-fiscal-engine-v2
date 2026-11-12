@@ -252,7 +252,8 @@ class Sp4MunicipalCanonicalGateway:
             )
         original = self._load(scope, doc.document_id)
         if not isinstance(original, Sp4OriginalRps) or (
-            original.scope != scope
+            original.scope.identity_partition_key != scope.identity_partition_key
+            or original.scope.environment != scope.environment
             or original.document_id != doc.document_id
             or original.request_fingerprint != request.request_fingerprint
             or original.issuer_cnpj != doc.issuer.cnpj
@@ -296,7 +297,7 @@ class Sp4MunicipalCanonicalGateway:
             status = AuthorizationStatus.PENDING
         return NfseAuthorizationResult(
             status=status,
-            scope=original.scope,
+            scope=request.document.scope,
             document_id=original.document_id,
             idempotency_key=request.idempotency_key,
             request_fingerprint=request.request_fingerprint,
