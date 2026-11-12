@@ -44,3 +44,16 @@ O roteador principal `_GovernedNfseRouter` reconhece os canais Nacional e WebISS
 - Jundiaí: https://jundiai.giss.com.br/giss-ajuda/desenvolvedores.html ; https://jundiai.giss.com.br/giss-ajuda/manuais/Manual%20T%C3%A9cnico%20-%20Servi%C3%A7os%20Prestados%20-%20V1.8.pdf
 
 **Risco documental:** a comunicação pública de Barueri exibe literalmente `31/11/2026`, dia inexistente, no corte do PMB003. Não codificar essa data sem retificação oficial.
+
+## Avanço posterior — roteamento canônico opt-in e evento Nacional (12/11/2026)
+
+A auditoria inicial deste documento foi superada **apenas** nos pontos explicitados a seguir; os gates 1–7 continuam abertos.
+
+- `canonical_fiscal_composition.py` agora aceita `sp4_municipal_gateways` e `sp4_municipal_query` como adaptadores `NfseGatewayClient`/`NfseQueryClient` **injetados**. O roteador valida o provider exato, município do prestador, escopo e pré-auditoria, e exige autorização separada de `QUERY` no Control Plane. Não há adaptadores canônicos efetivos instanciados para os quatro provedores, nem ativação automática destes canais. O operador não deve inferir que passar um transporte HTTP ao roteador equivale a completar o contrato `NfseAuthorizationRequest`.
+- `nfse_nacional_event_homologation.py` acrescenta fronteira isolada de `POST /nfse/{chave}/eventos` para cancelamento `e101101` com aprovação humana, A1, assinatura do pedido, exigência de validadores XSD/XMLDSig (pedido e resposta), binding `cancel`, resposta correlacionada, proteção anti-retry e testes sintéticos. **Ainda não compõe o Portal nem a máquina de estados fiscal e não certifica cancelamento/substituição.** Eventos com análise fiscal e substituição precisam de contratos próprios.
+- Regressões de catálogo corrigidas: Osasco usa indicação de WCF RTC próprio, Jundiaí de GissOnline. O inventário `SP22` permanece não-autorizativo e nenhum município recebe estado CERTIFIED.
+- Testes novos de preaudit, roteamento, isolamento por cidade/tenant, competência e evento Nacional foram incluídos; a CI integral é válida apenas para seu HEAD final. **Nenhuma transmissão real foi realizada.**
+
+**Pendência crítica de produto compartilhado:** a preparação direta no Portal está sendo trabalhada por outra frente (#447), e a numeração fiscal nacional durável não pode ser substituída pelo hash provisório. Para a homologação na contabilidade, não presumir que a tela final já está ligada aos gateways da branch.
+
+**Conclusão de engenharia ainda proibida:** faltam schemas completos, builders fiscais canônicos, normalização inequívoca das notas por RPS, XML/PDF, cancelamento/substituição integrado e provas fiscais externas por município. A primeira ocorrência de `OK200`, `Erro=false` ou `Situacao=4` **não** é evidência de documento autorizado.
