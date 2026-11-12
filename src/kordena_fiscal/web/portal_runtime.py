@@ -743,7 +743,8 @@ class DurableHumanPortalExecutor:
             idempotency_key=str(row["original_key"]),
         )
         updated = recovery.finish(
-            authority, scope, row, result.get("entry_id", result.get("document_id"))
+            authority, scope, row, result.get("entry_id", result.get("document_id")),
+            operation_result=result,
         )
         if not legacy_result:
             return recovery.project(updated, replay=False)

@@ -112,6 +112,11 @@ def build_provider_issuance_handler(
             "recovery_required": outcome.recovery_required,
             "result_reference": outcome.attempt.result_reference,
             "rejection_reason": outcome.attempt.rejection_reason,
+            "rejection_message": (
+                outcome.provider_result.rejection_message
+                if isinstance(outcome.provider_result, NfseAuthorizationResult)
+                else None
+            ),
         }
 
     return PreflightFiscalOperationHandler(issue, preflight)

@@ -3058,7 +3058,14 @@ operationForm.addEventListener("submit", async (event) => {
     status.setAttribute("aria-live", "polite");
     if (mutation) {
       status.textContent = "Resposta registrada. O recibo do pedido não confirma autorização fiscal. Confira o estado do documento em Emissões.";
-      if (typeof result.reference_id === "string") status.textContent += ` Referência: ${result.reference_id}.`;
+      if (typeof result.reference_id === "string") status.textContent += ` Referência: \${result.reference_id}.`;
+      const evidence = result.operation_result;
+      if (evidence && typeof evidence === "object") {
+        if (typeof evidence.status === "string") status.textContent += ` Estado fiscal: \${evidence.status}.`;
+        if (typeof evidence.rejection_reason === "string") status.textContent += ` Código de rejeição: \${evidence.rejection_reason}.`;
+        if (typeof evidence.rejection_message === "string") status.textContent += ` Motivo: \${evidence.rejection_message}.`;
+        if (evidence.recovery_required === true) status.textContent += " Resultado incerto: reconcilie antes de retransmitir.";
+      }
     } else {
       status.textContent = `Resultado da consulta: ${typeof result.status === "string" ? result.status : "não informado"}.`;
       if (typeof result.access_key === "string") status.textContent += ` Chave: ${result.access_key}.`;
