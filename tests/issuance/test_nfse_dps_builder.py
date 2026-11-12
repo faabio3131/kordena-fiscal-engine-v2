@@ -293,7 +293,8 @@ def test_tomador_identification_and_address_match_xsd101(
 ) -> None:
     from kordena_fiscal.domain import Cpf
     from kordena_fiscal.issuance.nfe_nfse import (
-        NfseForeignAddress, NfseServiceTaker,
+        NfseForeignAddress,
+        NfseServiceTaker,
     )
 
     foreign = NfseForeignAddress(
@@ -339,7 +340,7 @@ def test_tomador_identification_and_address_match_xsd101(
     else:
         assert toma.find(f"{{{_NFSE_NS}}}end/{{{_NFSE_NS}}}endNac") is not None
 
-    from kordena_fiscal.issuance.nfse_archive import encode_prepared_nfse, decode_prepared_nfse
+    from kordena_fiscal.issuance.nfse_archive import decode_prepared_nfse, encode_prepared_nfse
 
     recovered = decode_prepared_nfse(
         encode_prepared_nfse(request), scope=document.scope,
