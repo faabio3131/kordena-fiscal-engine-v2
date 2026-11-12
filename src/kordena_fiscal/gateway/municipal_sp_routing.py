@@ -163,7 +163,7 @@ SP_MUNICIPAL_CANDIDATES: dict[str, tuple[str, tuple[str, ...]]] = {
     "3518800": ("Guarulhos", ("ginfes", "nfse-nacional")),
     "3548500": ("Santos", ("ginfes", "nfse-nacional")),
     "3548807": ("São Caetano do Sul", ("ginfes", "nfse-nacional")),
-    "3525904": ("Jundiaí", ("ginfes", "nfse-nacional")),
+    "3525904": ("Jundiaí", ("gissonline", "nfse-nacional")),
     "3552502": ("Suzano", ("ginfes", "nfse-nacional")),
     "3547304": ("Santana de Parnaíba", ("smarapd", "municipal-proprio")),
     # Prefeitura Osasco operates its own EissNfe/RTC WebService; historical
