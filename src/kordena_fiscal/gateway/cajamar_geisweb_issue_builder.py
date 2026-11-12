@@ -265,6 +265,70 @@ def prepare_cajamar_signed_issue(
             raise CajamarGeiswebIssueError(
                 "Signed Cajamar issue no longer matches original fiscal document"
             )
+    # A signature provider must not be allowed to alter service taxation,
+    # recipient details or ISS classification while preserving only the RPS
+    # number and gross amount. Reconcile every fiscal wire field BEFORE the
+    # pinned XSD/XMLDSig port receives the signed document.
+    fiscal_fields = (
+        ("Rps/DataEmissao", doc.issued_at.strftime("%d/%m/%Y")),
+        ("Rps/Servico/Valores/BaseCalculo", _money(
+            doc.services[0].taxable_amount.amount, "ISS base",
+        )),
+        ("Rps/Servico/Valores/Aliquota", str(fields.iss_rate)),
+        ("Rps/Servico/CodigoServico", fields.service_code),
+        ("Rps/Servico/TipoLancamento", fields.launch_type),
+        ("Rps/Servico/Discriminacao", _field(
+            doc.services[0].description, "description", 1500,
+        )),
+        ("Rps/Servico/MunicipioPrestacaoServico", fields.service_city),
+        ("Rps/Servico/PrestadorServico/IdentificacaoPrestador/InscricaoMunicipal",
+         fields.municipal_registration),
+        ("Rps/Servico/PrestadorServico/IdentificacaoPrestador/Regime",
+         fields.issuer_regime),
+        ("Rps/Servico/TomadorServico/IdentificacaoTomador/RazaoSocial",
+         fields.recipient_name),
+        ("Rps/Servico/TomadorServico/Endereco/Rua", fields.recipient_street),
+        ("Rps/Servico/TomadorServico/Endereco/Numero", fields.recipient_number),
+        ("Rps/Servico/TomadorServico/Endereco/Bairro",
+         fields.recipient_neighborhood),
+        ("Rps/Servico/TomadorServico/Endereco/Cidade", fields.recipient_city),
+        ("Rps/Servico/TomadorServico/Endereco/Estado", fields.recipient_state),
+        ("Rps/Servico/TomadorServico/Endereco/Cep",
+         fields.recipient_postal_code),
+        ("Rps/Servico/OrgaoGerador/CodigoMunicipio", "3509205"),
+        ("Rps/Servico/OrgaoGerador/Uf", "SP"),
+    )
+    for path, expected in fiscal_fields:
+        path_ns = "/".join(f"{{{_NS}}}{part}" for part in path.split("/"))
+        elements = root.findall(path_ns)
+        if len(elements) != 1 or elements[0].text != expected:
+            raise CajamarGeiswebIssueError(
+                "Signed Cajamar issue no longer matches original fiscal document"
+            )
+    taxes = (
+        ("Pis", fields.pis), ("Cofins", fields.cofins),
+        ("Csll", fields.csll), ("Irrf", fields.irrf), ("Inss", fields.inss),
+    )
+    other_ns = "/".join(
+        f"{{{_NS}}}{part}" for part in ("Rps", "Servico", "OutrosImpostos")
+    )
+    tax_nodes = root.findall(other_ns)
+    if len(tax_nodes) != (1 if any(v is not None for _, v in taxes) else 0):
+        raise CajamarGeiswebIssueError(
+            "Signed Cajamar issue no longer matches original fiscal document"
+        )
+    if tax_nodes:
+        expected_taxes = {
+            f"{{{_NS}}}{name}": _money(amount, name)
+            for name, amount in taxes if amount is not None
+        }
+        received_taxes = {
+            node.tag: node.text for node in tax_nodes[0]
+        }
+        if received_taxes != expected_taxes or len(tax_nodes[0]) != len(expected_taxes):
+            raise CajamarGeiswebIssueError(
+                "Signed Cajamar issue no longer matches original fiscal document"
+            )
     validate_signed_request(signed)
     return CajamarPreparedNfse(
         scope=original.scope,
