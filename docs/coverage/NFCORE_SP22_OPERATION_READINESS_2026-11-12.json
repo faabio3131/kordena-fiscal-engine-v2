@@ -711,7 +711,7 @@
         "e-receita",
         "nfse-nacional"
       ],
-      "municipal_authoritative_url": null,
+      "municipal_authoritative_url": "https://www.guaruja.sp.gov.br/plataforma/wp-content/uploads/2025/09/01-1h08i0Fk20-2025.pdf",
       "municipal_contract_verified": false,
       "issuer_profile_specific_rules_verified": false,
       "municipal_layout_version": null,
@@ -732,8 +732,8 @@
       "official_taxpayer_homologation": false,
       "production_authorization": false,
       "status": "INTERNAL_INCOMPLETE",
-      "public_issuer_policy_reviewed_at": null,
-      "public_issuer_policy_summary": null,
+      "public_issuer_policy_reviewed_at": "2026-11-12",
+      "public_issuer_policy_summary": "Municipal Diário Oficial 01/10/2025 p.3 describes updated V2 GissOnline issuer/ISS platform at guaruja.giss.com.br; no current 2026 WebService/version/endpoint or independent NFCore interoperability/homologation proof. Third-party ERP says cancel is administrative but this remains UNVERIFIED by local authority.",
       "official_webservice_contract_reviewed": false
     },
     {
@@ -779,5 +779,5 @@
     "source_type": "PROVIDER_HOSTED_NOTICE_ONLY",
     "warning": "Publisher is the provider, not independently reviewed as a city authority; manual/schema hash and municipal contract remain unverified."
   },
-  "note": "21/22 city-level public municipal notices or laws located, including historical/indirect sources explicitly marked as NOT current technical contracts. Guarujá municipal issuer/API remains without verified current source. ALL 22 INTERNAL_INCOMPLETE: no operational certification from notices alone."
+  "note": "22/22 official municipal public portals, notices or historical legal documents located; NONE constitutes a reviewed 2026 WebService contract, XSD/hash, issuer binding, full fiscal operations, taxpayer A1 homologation or operational approval. All 22 status INTERNAL_INCOMPLETE and public-issuer notes may be stale. Separate federal Simples/MEI mandatory channel eligibility never certifies transport."
 }
