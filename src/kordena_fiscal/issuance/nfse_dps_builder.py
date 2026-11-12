@@ -23,12 +23,15 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from lxml import etree
 
-from kordena_fiscal.domain import FiscalValidationError, TaxRegimeCode
+from kordena_fiscal.domain import FiscalEnvironment, FiscalValidationError, TaxRegimeCode
 from kordena_fiscal.issuance.nfe_nfse import NfseAuthorizationRequest
 from kordena_fiscal.numbering import FiscalNumberReservation, InternalFiscalSequenceStream
 from kordena_fiscal.signing.nfse_xmldsig import sign_nfse_dps_xml
 from kordena_fiscal.vault import EphemeralCertificateMaterial
-from kordena_fiscal.xml.nfse_nacional_schema import national_dps_validator
+from kordena_fiscal.xml.nfse_nacional_schema import (
+    NT009_RESTRICTED_PROFILE,
+    national_dps_validator,
+)
 
 _NFSE_NS = "http://www.sped.fazenda.gov.br/nfse"
 _SCHEMA_VERSION = "1.00"
@@ -130,6 +133,7 @@ def build_signed_dps(
     service_municipality = service_municipality.zfill(7)
 
     is_bh = service_municipality == "3106200"
+    is_nt009 = is_bh and document.scope.environment is FiscalEnvironment.HOMOLOGATION
     if is_bh:
         if service.municipal_taxation_detail is None:
             raise FiscalValidationError(
@@ -199,6 +203,10 @@ def build_signed_dps(
     _child(info, "nDPS", n_dps)
     _child(info, "dCompet", document.competence_date.strftime("%Y-%m-%d"))
     _child(info, "tpEmit", "1")  # Prestador -- this flow always submits on the issuer's own behalf
+    if is_nt009:
+        # NT009 Release 1 moved the mandatory regular-purpose flag from
+        # the optional IBSCBS group into infDPS, before cLocEmi.
+        _child(info, "finNFSe", "0")
     _child(info, "cLocEmi", issuer_municipality)
 
     prest = etree.SubElement(info, f"{{{_NFSE_NS}}}prest")
@@ -245,18 +253,32 @@ def build_signed_dps(
     # It must be reviewed, not guessed from the generic LC 116 service code.
     if service.municipal_taxation_detail is not None:
         _child(c_serv, "cTribMun", service.municipal_taxation_detail)
-    _child(c_serv, "xDescServ", service.description.strip())
-    # BHISS requires the official NBS classification for 2026 service
-    # competencies. Never infer NBS from cTribNac or service description.
+    # NT009 reordered xDescServ to the end of cServ, AFTER cNBS.
+    # Production retains the February 2026 layout until official cutover.
+    if not is_nt009:
+        _child(c_serv, "xDescServ", service.description.strip())
     if service.national_service_nbs is not None:
         _child(c_serv, "cNBS", service.national_service_nbs)
+    if is_nt009:
+        _child(c_serv, "xDescServ", service.description.strip())
 
     valores = etree.SubElement(info, f"{{{_NFSE_NS}}}valores")
     v_serv_prest = etree.SubElement(valores, f"{{{_NFSE_NS}}}vServPrest")
     _child(v_serv_prest, "vServ", _money(service.gross_amount.amount))
     if service.deduction_amount.amount > 0:
-        ded_red = etree.SubElement(valores, f"{{{_NFSE_NS}}}vDedRed")
-        _child(ded_red, "vDR", _money(service.deduction_amount.amount))
+        if is_nt009:
+            # NT009 merged vDedRed/gReeRepRes into the reviewed vAjusteBC
+            # group. Use only the explicitly supplied ISS adjustment, never
+            # infer an IBS/CBS deduction or generate unsupported documents.
+            if not service.source_normative:
+                raise FiscalValidationError(
+                    "National DPS NT009 adjustment requires reviewed normative source"
+                )
+            ajuste = etree.SubElement(valores, f"{{{_NFSE_NS}}}vAjusteBC")
+            _child(ajuste, "vAjusteBCISSQN", _money(service.deduction_amount.amount))
+        else:
+            ded_red = etree.SubElement(valores, f"{{{_NFSE_NS}}}vDedRed")
+            _child(ded_red, "vDR", _money(service.deduction_amount.amount))
     trib = etree.SubElement(valores, f"{{{_NFSE_NS}}}trib")
     trib_mun = etree.SubElement(trib, f"{{{_NFSE_NS}}}tribMun")
     _child(trib_mun, "tribISSQN", "1")  # Operacao tributavel; domain models no exemption flag yet
@@ -274,5 +296,10 @@ def build_signed_dps(
     _child(tot_trib, "indTotTrib", "0")  # Decreto 8.264/2014: no tax-total estimate declared
 
     unsigned_xml = etree.tostring(root, encoding="utf-8", xml_declaration=False)
-    national_dps_validator(schema_version).validate_document(unsigned_xml)
+    if is_nt009:
+        national_dps_validator(
+            schema_version, profile=NT009_RESTRICTED_PROFILE,
+        ).validate_document(unsigned_xml)
+    else:
+        national_dps_validator(schema_version).validate_document(unsigned_xml)
     return sign_nfse_dps_xml(unsigned_xml, certificate)
