@@ -166,7 +166,9 @@ SP_MUNICIPAL_CANDIDATES: dict[str, tuple[str, tuple[str, ...]]] = {
     "3525904": ("Jundiaí", ("ginfes", "nfse-nacional")),
     "3552502": ("Suzano", ("ginfes", "nfse-nacional")),
     "3547304": ("Santana de Parnaíba", ("smarapd", "municipal-proprio")),
-    "3534401": ("Osasco", ("sigiss", "betha", "e-receita", "nfse-nacional")),
+    # Prefeitura Osasco operates its own EissNfe/RTC WebService; historical
+    # generic SigISS/Betha labels are not contracts and mislead onboarding.
+    "3534401": ("Osasco", ("osasco-proprio-rtc", "nfse-nacional")),
     "3522505": ("Itapevi", ("sigiss", "betha", "e-receita", "nfse-nacional")),
     "3525003": ("Jandira", ("sigiss", "betha", "e-receita", "nfse-nacional")),
     "3528502": ("Mairiporã", ("sigiss", "betha", "e-receita", "nfse-nacional")),
