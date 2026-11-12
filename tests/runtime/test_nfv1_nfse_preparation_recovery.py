@@ -341,7 +341,7 @@ def _bh_document() -> NfseCanonicalDocument:
 
 def test_bh_numbering_is_atomic_and_recovers_after_restart(tmp_path) -> None:
     db = SqliteFiscalDatabase(tmp_path / "bh-national-dps.sqlite")
-    db.initialize()
+    db.initialize(enable_national_dps=True)
     first = _bh_document()
     app = FiscalApplicationService(db)
     prepared = app.prepare_nfse_authorization(
@@ -378,7 +378,7 @@ def test_bh_numbering_is_atomic_and_recovers_after_restart(tmp_path) -> None:
 
 def test_bh_preparation_rejects_unnumbered_and_changed_replay(tmp_path) -> None:
     db = SqliteFiscalDatabase(tmp_path / "bh-preflight.sqlite")
-    db.initialize()
+    db.initialize(enable_national_dps=True)
     document = _bh_document()
     app = FiscalApplicationService(db)
     with pytest.raises(FiscalValidationError, match="atomic DPS"):
