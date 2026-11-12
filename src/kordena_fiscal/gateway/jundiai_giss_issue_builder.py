@@ -166,7 +166,7 @@ def _tax_fields(fields: JundiaiGissTaxFields) -> None:
     indicators = (
         fields.operation_indicator, fields.rtc_cst, fields.rtc_classification,
         fields.rtc_fin_nfse, fields.rtc_ind_dest,
-        fields.rtc_incidence_ibge, fields.rtc_taxable_base,
+        fields.rtc_incidence_ibge, fields.rtc_taxable_base, fields.rtc_ind_final,
     )
     if any(x is not None for x in indicators):
         if any(x is None for x in indicators):
