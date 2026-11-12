@@ -182,8 +182,9 @@ def build_signed_dps(
         + n_dps
     )
 
+    schema_version = "1.01" if is_bh else _SCHEMA_VERSION
     root = etree.Element(f"{{{_NFSE_NS}}}DPS", nsmap={None: _NFSE_NS})  # type: ignore[dict-item]
-    root.set("versao", _SCHEMA_VERSION)
+    root.set("versao", schema_version)
     info = etree.SubElement(root, f"{{{_NFSE_NS}}}infDPS", Id=dps_id)
 
     _child(info, "tpAmb", "2")  # governed gateway only authorizes FiscalEnvironment.HOMOLOGATION
@@ -258,5 +259,5 @@ def build_signed_dps(
     _child(tot_trib, "indTotTrib", "0")  # Decreto 8.264/2014: no tax-total estimate declared
 
     unsigned_xml = etree.tostring(root, encoding="utf-8", xml_declaration=False)
-    national_dps_validator(_SCHEMA_VERSION).validate_document(unsigned_xml)
+    national_dps_validator(schema_version).validate_document(unsigned_xml)
     return sign_nfse_dps_xml(unsigned_xml, certificate)
