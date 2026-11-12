@@ -36,6 +36,12 @@ from kordena_fiscal.issuance.nfe_nfse import (
 )
 from kordena_fiscal.issuance.nfse_archive import decode_prepared_nfse, encode_prepared_nfse
 from kordena_fiscal.issuance.nfse_dps_builder import build_signed_dps
+from kordena_fiscal.numbering import (
+    FiscalSequenceKey,
+    FiscalSequencePolicy,
+    InMemoryFiscalSequenceStore,
+    InternalFiscalSequenceStream,
+)
 from kordena_fiscal.vault import EphemeralCertificateMaterial
 from kordena_fiscal.xml.nfse_nacional_schema import national_dps_validator
 
@@ -253,13 +259,23 @@ def _bh_request(detail: str | None, nbs: str | None = "123456789") -> NfseAuthor
     return _request(document)
 
 
+def _signed_bh(request: NfseAuthorizationRequest) -> bytes:
+    key = FiscalSequenceKey.from_scope(
+        request.document.scope, model=InternalFiscalSequenceStream.NFSE_DPS, series=1,
+    )
+    reserved = InMemoryFiscalSequenceStore().reserve_next(
+        key, FiscalSequencePolicy(),
+    )
+    return build_signed_dps(request, _certificate(), reservation=reserved)
+
+
 def test_bh_requires_reviewed_municipal_taxation_detail() -> None:
     with pytest.raises(FiscalValidationError, match="Belo Horizonte requires"):
         build_signed_dps(_bh_request(None), _certificate())
 
 
 def test_bh_pins_municipal_taxation_detail_in_schema_valid_signed_dps() -> None:
-    signed = build_signed_dps(_bh_request("001"), _certificate())
+    signed = _signed_bh(_bh_request("001"))
     national_dps_validator("1.00").validate_document(signed)
     assert etree.fromstring(signed).findtext(
         f".//{{{_NFSE_NS}}}cServ/{{{_NFSE_NS}}}cTribMun"
@@ -291,7 +307,7 @@ def test_bh_requires_reviewed_nbs_in_2026() -> None:
 
 
 def test_bh_national_dps_contains_provided_nbs_after_description() -> None:
-    signed = build_signed_dps(_bh_request("001", nbs="123456789"), _certificate())
+    signed = _signed_bh(_bh_request("001", nbs="123456789"))
     national_dps_validator("1.00").validate_document(signed)
     root = etree.fromstring(signed)
     c_serv = root.find(f".//{{{_NFSE_NS}}}cServ")
@@ -335,3 +351,26 @@ def test_legacy_prepared_archive_without_new_optional_fields_remains_readable() 
     del stored["services"][0]["national_service_nbs"]
     recovered = decode_prepared_nfse(json.dumps(stored).encode(), scope=original.document.scope)
     assert recovered.request_fingerprint == original.request_fingerprint
+
+
+def test_bh_rejects_hash_derived_number_without_durable_reservation() -> None:
+    with pytest.raises(FiscalValidationError, match="atomic durable DPS"):
+        build_signed_dps(_bh_request("001"), _certificate())
+
+
+def test_bh_rejects_sequence_reservation_from_other_tenant() -> None:
+    request = _bh_request("001")
+    other = replace(request.document.scope, tenant_id="another-tenant")
+    key = FiscalSequenceKey.from_scope(
+        other, model=InternalFiscalSequenceStream.NFSE_DPS, series=1,
+    )
+    reserved = InMemoryFiscalSequenceStore().reserve_next(key, FiscalSequencePolicy())
+    with pytest.raises(FiscalValidationError, match="violates fiscal scope"):
+        build_signed_dps(request, _certificate(), reservation=reserved)
+
+
+def test_bh_reserved_number_is_preserved_in_dps_identity() -> None:
+    request = _bh_request("001")
+    info = etree.fromstring(_signed_bh(request)).find(f"{{{_NFSE_NS}}}infDPS")
+    assert info.findtext(f"{{{_NFSE_NS}}}nDPS") == "1"
+    assert info.findtext(f"{{{_NFSE_NS}}}serie") == "1"
