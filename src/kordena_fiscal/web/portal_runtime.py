@@ -52,7 +52,7 @@ from kordena_fiscal.domain import (
     FiscalEnvironment,
     FiscalValidationError,
 )
-from kordena_fiscal.lifecycle import FiscalDocumentState
+from kordena_fiscal.lifecycle import FiscalDocumentState, IdempotencyConflictError
 from kordena_fiscal.persistence.ports import (
     FiscalUnitOfWorkFactory,
     PersistenceConflictError,
@@ -1128,7 +1128,7 @@ class DurableHumanPortalExecutor:
             }
         except HumanAuthorizationError as exc:
             raise _portal_error(403, "BH_UNIT_FORBIDDEN", "Unit is not permitted") from exc
-        except PersistenceConflictError as exc:
+        except (PersistenceConflictError, IdempotencyConflictError) as exc:
             raise _portal_error(
                 409, "BH_PREPARATION_CONFLICT", "Original fiscal facts must be preserved",
             ) from exc
