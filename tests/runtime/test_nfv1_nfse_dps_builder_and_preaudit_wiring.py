@@ -57,7 +57,10 @@ from kordena_fiscal.issuance.nfe_nfse import (
 from kordena_fiscal.issuance.nfse_dps_builder import build_signed_dps
 from kordena_fiscal.runtime.canonical_fiscal_composition import _GovernedNationalNfseGateway
 from kordena_fiscal.vault import EphemeralCertificateMaterial
-from kordena_fiscal.xml.nfse_nacional_schema import national_dps_validator
+from kordena_fiscal.xml.nfse_nacional_schema import (
+    NT009_RESTRICTED_PROFILE,
+    national_dps_validator,
+)
 
 _NOW = datetime(2026, 11, 6, 12, 0, tzinfo=UTC)
 _ISSUER_CNPJ = Cnpj("11222333000181")
@@ -267,7 +270,12 @@ def test_mg_national_channel_generates_signed_schema_valid_dps_envelope(
         signed = build_signed_dps(request, _certificate(), reservation=reservation)
     else:
         signed = build_signed_dps(request, _certificate())
-    national_dps_validator("1.01" if ibge == "3106200" else "1.00").validate_document(signed)
+    if ibge == "3106200":
+        national_dps_validator(
+            "1.01", profile=NT009_RESTRICTED_PROFILE,
+        ).validate_document(signed)
+    else:
+        national_dps_validator("1.00").validate_document(signed)
     payload = encode_signed_dps(
         signed,
         issuer_cnpj=request.document.issuer.cnpj.value,
