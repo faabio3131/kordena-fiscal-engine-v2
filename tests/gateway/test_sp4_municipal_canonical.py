@@ -318,3 +318,18 @@ def test_only_barueri_may_use_official_blank_rps_series() -> None:
             replace(_original(city), rps_series="")
         with pytest.raises(Sp4CanonicalMunicipalError, match="RPS series"):
             _invoice(city, rps_series="")
+
+
+@pytest.mark.parametrize("unsafe_total", [
+    Decimal("NaN"), Decimal("Infinity"), Decimal("-Infinity"),
+    Decimal("150.001"), Decimal("-1.00"),
+])
+def test_municipal_source_and_invoice_proof_reject_unsafe_money(
+    unsafe_total: Decimal,
+) -> None:
+    from dataclasses import replace
+
+    with pytest.raises(Sp4CanonicalMunicipalError):
+        replace(_original("3505708"), gross_amount=unsafe_total)
+    with pytest.raises(Sp4CanonicalMunicipalError):
+        replace(_invoice("3505708"), gross_amount=unsafe_total)
