@@ -223,7 +223,11 @@ def build_signed_dps(
         # carry an explicit regApTribSN signal to pick 1/2/3 with certainty;
         # revisit with the owner before relying on this for real submission.
         _child(reg_trib, "regApTribSN", "3")
-    _child(reg_trib, "regEspTrib", "0")  # Nenhum; FiscalProfile models no special regime today
+    if is_bh and document.special_tax_regime is None:
+        raise FiscalValidationError(
+            "Belo Horizonte requires reviewed special tax regime classification"
+        )
+    _child(reg_trib, "regEspTrib", document.special_tax_regime or "0")  # Nenhum; FiscalProfile models no special regime today
 
     serv = etree.SubElement(info, f"{{{_NFSE_NS}}}serv")
     loc_prest = etree.SubElement(serv, f"{{{_NFSE_NS}}}locPrest")
