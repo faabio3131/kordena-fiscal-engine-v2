@@ -157,6 +157,11 @@ def build_signed_dps(
         _child(prest, "IM", im)
     _child(prest, "xNome", issuer.legal_name.strip())
     end = etree.SubElement(prest, f"{{{_NFSE_NS}}}end")
+    # Official National DPS 1.01 TCEndereco requires endNac/endExt before
+    # xLgr. This issuer carries a Brazilian CNPJ/IBGE and must use endNac.
+    end_nac = etree.SubElement(end, f"{{{_NFSE_NS}}}endNac")
+    _child(end_nac, "cMun", issuer_municipality)
+    _child(end_nac, "CEP", issuer.address.postal_code)
     _child(end, "xLgr", issuer.address.street.strip())
     _child(end, "nro", issuer.address.number.strip())
     if issuer.address.complement:
