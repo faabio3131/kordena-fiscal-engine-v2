@@ -135,6 +135,9 @@ class DurableHumanPortalExecutor:
         commercial_reader: CommercialPortalReader | None = None,
         danfe_renderer: Callable[[bytes], bytes] | None = None,
         danfse_renderer: Callable[[bytes], bytes] | None = None,
+        resolve_sp4_numbering: Callable[
+            [ExecutionScope, str, str], tuple[int, str]
+        ] | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
         self._operation_executor = operation_executor
@@ -142,6 +145,7 @@ class DurableHumanPortalExecutor:
         self._commercial_reader = commercial_reader
         self._danfe_renderer = danfe_renderer
         self._danfse_renderer = danfse_renderer
+        self._resolve_sp4_numbering = resolve_sp4_numbering
         self._capabilities = (
             GovernedCapabilityReadinessService(
                 unit_of_work_factory=unit_of_work_factory,
@@ -787,6 +791,7 @@ class DurableHumanPortalExecutor:
                 authority=authority,
                 payload=payload,
                 idempotency_key=idempotency_key,
+                resolve_sp4_numbering=self._resolve_sp4_numbering,
             )
         if operation_id == "prepareExtremaNfse":
             return self._prepare_extrema_nfse(
