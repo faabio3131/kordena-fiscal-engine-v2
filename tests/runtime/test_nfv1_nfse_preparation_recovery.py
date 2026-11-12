@@ -324,6 +324,7 @@ def _bh_document() -> NfseCanonicalDocument:
     bh = BrazilianJurisdiction("MG", "3106200")
     issuer = replace(
         original.issuer,
+        state_registration=StateRegistration("MG", "123456789"),
         address=replace(
             original.issuer.address, jurisdiction=bh,
             municipality_name="Belo Horizonte",
