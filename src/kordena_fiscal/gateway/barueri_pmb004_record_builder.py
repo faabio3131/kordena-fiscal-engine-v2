@@ -40,6 +40,25 @@ class BarueriPmb004Recipient:
 
 
 @dataclass(frozen=True, slots=True)
+class BarueriPmb004Type5Data:
+    """Tax-engine-reviewed special-case fields for the PMB004 ADN Type 5.
+
+    Supports domestic third-party recipients. Foreign recipients require an
+    explicit provider-specialization port; never invent foreign NIF or region.
+    """
+
+    presumed_credit_code: str | None = None
+    government_entity_type: str | None = None
+    government_operation_type: str | None = None
+    referenced_nfse_key: str | None = None
+    rental_ncm: str | None = None
+    rental_description: str | None = None
+    rental_quantity: int | None = None
+    donation_indicator: str | None = None
+    final_recipient: BarueriPmb004Recipient | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class BarueriPmb004IssueFields:
     """Municipal service and RTC code correlations resolved by the tax engine."""
 
@@ -65,6 +84,7 @@ class BarueriPmb004IssueFields:
     street_complement: str = ""
     # Reviewed retained taxes: IRRF, PIS, COFINS, CSLL, INSS.
     federal_retentions: tuple[tuple[str, Decimal], ...] = ()
+    special_rtc: BarueriPmb004Type5Data | None = None
     # Type 5 is created by the separate fiscal-special-cases rule component.
 
 
@@ -162,7 +182,6 @@ def _source(
         or fields.public_way_code not in ("1", "2")
         or fields.personal_use not in ("0", "1")
         or fields.recipient_differs not in ("0", "1")
-        or fields.recipient_differs != "0"
         or fields.simples_status not in ("1", "2", "3")
         or fields.simples_assessment not in ("", "1", "2", "3")
     ):
@@ -325,6 +344,120 @@ def build_barueri_federal_retention_type3(
     )
 
 
+
+def build_barueri_special_rtc_type5(
+    *, request: NfseAuthorizationRequest, original: Sp4OriginalRps,
+    fields: BarueriPmb004IssueFields,
+) -> tuple[bytes, ...]:
+    """Serialize one official 697-byte PMB004 special-case Type 5, if needed.
+
+    The tax-policy adapter supplies cCredPres, government attributes and
+    recipient facts. Municipal locations remain canonical and no tax amount
+    is computed here.
+    """
+    _source(request, original, fields)
+    review = fields.special_rtc
+    is_rental = fields.service_code.startswith("990401")
+    is_donation = fields.tax_classification in ("410003", "410026")
+    needs_recipient = fields.recipient_differs == "1"
+    if review is None:
+        if is_rental or is_donation or needs_recipient:
+            raise BarueriPmb004RecordError("Barueri conditional Type 5 fields missing")
+        return ()
+    if not isinstance(review, BarueriPmb004Type5Data):
+        raise BarueriPmb004RecordError("Invalid Barueri reviewed Type 5 facts")
+    if needs_recipient != (review.final_recipient is not None):
+        raise BarueriPmb004RecordError("Barueri third-party recipient mismatches Type 4")
+    if is_rental and (
+        review.rental_ncm is None or review.rental_description is None
+        or review.rental_quantity is None
+    ):
+        raise BarueriPmb004RecordError("Barueri rental requires Type 5 NCM and quantity")
+    if is_donation and review.donation_indicator != "1":
+        raise BarueriPmb004RecordError("Barueri donation classification requires marker")
+    if review.government_entity_type is not None and (
+        review.government_entity_type not in ("1", "2", "3", "4")
+        or review.government_operation_type is None
+    ):
+        raise BarueriPmb004RecordError("Barueri government operation requires type")
+    if review.government_operation_type is not None and (
+        review.government_operation_type not in ("1", "2", "3", "4")
+        or (review.government_operation_type in ("2", "3")
+            and review.referenced_nfse_key is None)
+    ):
+        raise BarueriPmb004RecordError("Barueri government operation reference missing")
+
+    row = bytearray(b" " * 697)
+    _write(row, 1, 1, b"5")
+    if review.presumed_credit_code is not None:
+        code = _digits(review.presumed_credit_code, "presumed IBS/CBS credit", 2)
+        if len(code) != 2:
+            raise BarueriPmb004RecordError("Barueri cCredPres must be two digits")
+        _write(row, 2, 3, code)
+    if review.government_entity_type is not None:
+        _write(row, 4, 4, review.government_entity_type.encode("ascii"))
+    if review.government_operation_type is not None:
+        _write(row, 5, 5, review.government_operation_type.encode("ascii"))
+    if review.referenced_nfse_key is not None:
+        key = _digits(review.referenced_nfse_key, "referenced NFSe key", 50)
+        if len(key) != 50:
+            raise BarueriPmb004RecordError("Barueri referenced NFSe key must be 50 digits")
+        _write(row, 6, 55, key)
+    if review.rental_ncm is not None:
+        ncm = _digits(review.rental_ncm, "rental NCM", 8)
+        if len(ncm) != 8:
+            raise BarueriPmb004RecordError("Barueri rental NCM requires eight digits")
+        _write(row, 56, 63, ncm)
+    if review.rental_description is not None:
+        _write(row, 64, 213, _ascii(review.rental_description, "rental description", 150))
+    if review.rental_quantity is not None:
+        if (
+            not isinstance(review.rental_quantity, int)
+            or isinstance(review.rental_quantity, bool)
+            or not 1 <= review.rental_quantity <= 999
+        ):
+            raise BarueriPmb004RecordError("Barueri rental quantity invalid")
+        _write(row, 214, 216, str(review.rental_quantity).encode("ascii"), numeric=True)
+    if review.donation_indicator is not None:
+        if review.donation_indicator != "1":
+            raise BarueriPmb004RecordError("Barueri unsupported donation indicator")
+        _write(row, 217, 217, b"1")
+    recipient = review.final_recipient
+    if recipient is not None:
+        # Review data currently covers Brazilian recipients only. Foreign
+        # recipient data is a separate taxpayer/municipal contract.
+        _write(row, 218, 218, b"2")
+        tax_id = _digits(recipient.tax_id, "final recipient CPF/CNPJ", 14)
+        if len(tax_id) not in (11, 14):
+            raise BarueriPmb004RecordError("Invalid Barueri third-party recipient ID")
+        _write(row, 219, 232, tax_id, numeric=True)
+        for first, last, field, limit in (
+            (233, 292, recipient.legal_name, 60),
+            (293, 367, recipient.street, 75),
+            (368, 376, recipient.street_number, 9),
+            (377, 406, recipient.complement, 30),
+            (407, 446, recipient.district, 40),
+            (447, 486, recipient.city, 40),
+        ):
+            _write(row, first, last, _ascii(
+                field, "third-party recipient", limit,
+                required=(first != 377),
+            ))
+        city = _digits(recipient.city_ibge, "recipient IBGE", 7)
+        cep = _digits(recipient.postal_code, "recipient CEP", 8)
+        if len(city) != 7 or len(cep) != 8:
+            raise BarueriPmb004RecordError("Barueri third-party locality invalid")
+        _write(row, 487, 493, city)
+        state = _ascii(recipient.state, "recipient state", 2)
+        if len(state) != 2:
+            raise BarueriPmb004RecordError("Barueri third-party state missing")
+        _write(row, 494, 495, state)
+        _write(row, 499, 506, cep)
+        if recipient.email:
+            _write(row, 507, 586, _ascii(recipient.email, "recipient e-mail", 80))
+    return (bytes(row),)
+
+
 def build_barueri_reviewed_issue_batch(
     *, request: NfseAuthorizationRequest, original: Sp4OriginalRps,
     fields: BarueriPmb004IssueFields,
@@ -347,9 +480,13 @@ def build_barueri_reviewed_issue_batch(
     retentions = build_barueri_federal_retention_type3(
         request=request, original=original, fields=fields,
     )
+    special = build_barueri_special_rtc_type5(
+        request=request, original=original, fields=fields,
+    )
     return build_barueri_single_rps_batch(
         source=original, regime=request.document.issuer.tax_regime,
         municipal_registration=municipal_registration,
         rps_detail=detail, rtc_adn_detail=rtc,
         retained_tax_records=retentions,
+        optional_record_5=special,
     )
