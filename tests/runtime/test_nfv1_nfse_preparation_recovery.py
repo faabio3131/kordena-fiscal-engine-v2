@@ -1,6 +1,7 @@
 """Durable provider-neutral NFS-e preparation and restart recovery."""
 
 import json
+from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -316,3 +317,78 @@ def test_national_gateway_requires_binding_and_preaudit_before_dispatch(case):
         jurisdiction=request.document.issuer.address.jurisdiction,
         operation="authorize",
     )
+
+
+def _bh_document() -> NfseCanonicalDocument:
+    original = nfse_document()
+    bh = BrazilianJurisdiction("MG", "3106200")
+    issuer = replace(
+        original.issuer,
+        address=replace(
+            original.issuer.address, jurisdiction=bh,
+            municipality_name="Belo Horizonte",
+        ),
+    )
+    return replace(
+        original, issuer=issuer, service_jurisdiction=bh,
+        services=(replace(
+            original.services[0],
+            municipal_taxation_detail="001", national_service_nbs="123456789",
+        ),),
+    )
+
+
+def test_bh_numbering_is_atomic_and_recovers_after_restart(tmp_path) -> None:
+    db = SqliteFiscalDatabase(tmp_path / "bh-national-dps.sqlite")
+    db.initialize()
+    first = _bh_document()
+    app = FiscalApplicationService(db)
+    prepared = app.prepare_nfse_authorization(
+        first, occurred_at=NOW, retention=RETENTION, national_dps_series=1,
+    )
+    assert not prepared.replay
+    reserved = app.load_national_dps_reservation(first.scope, first.document_id)
+    assert reserved.number == 1 and reserved.key.series == 1
+    assert reserved.key.model.value == 91
+
+    restarted = FiscalApplicationService(SqliteFiscalDatabase(db.path))
+    again = restarted.prepare_nfse_authorization(
+        first, occurred_at=NOW, retention=RETENTION, national_dps_series=1,
+    )
+    assert again.replay
+    assert restarted.load_national_dps_reservation(
+        first.scope, first.document_id,
+    ) == reserved
+
+    second = replace(
+        first,
+        document_id="bh-prepared-second",
+        source=SourceReference("service-order", "bh-second-source"),
+    )
+    restarted.prepare_nfse_authorization(
+        second, occurred_at=NOW, retention=RETENTION, national_dps_series=1,
+    )
+    assert restarted.load_national_dps_reservation(
+        second.scope, second.document_id,
+    ).number == 2
+    with db() as uow:
+        assert len(uow.archive.list_for_document(first.scope, first.document_id)) == 2
+
+
+def test_bh_preparation_rejects_unnumbered_and_changed_replay(tmp_path) -> None:
+    db = SqliteFiscalDatabase(tmp_path / "bh-preflight.sqlite")
+    db.initialize()
+    document = _bh_document()
+    app = FiscalApplicationService(db)
+    with pytest.raises(FiscalValidationError, match="atomic DPS"):
+        app.prepare_nfse_authorization(document, occurred_at=NOW, retention=RETENTION)
+    app.prepare_nfse_authorization(
+        document, occurred_at=NOW, retention=RETENTION, national_dps_series=1,
+    )
+    with pytest.raises(PersistenceConflictError, match="series changed"):
+        app.prepare_nfse_authorization(
+            document, occurred_at=NOW, retention=RETENTION, national_dps_series=2,
+        )
+    wrong = replace(document.scope, unit_id="wrong-unit")
+    with pytest.raises((PersistenceConflictError, PersistenceStateError)):
+        app.load_national_dps_reservation(wrong, document.document_id)
