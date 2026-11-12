@@ -9,6 +9,10 @@ digest=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 
 parse_audit_request "nfcore-audit $sha $digest"
 [[ "$AUDIT_PRODUCTION_SHA" == "$sha" && "$AUDIT_SCRIPT_SHA256" == "$digest" ]]
+[[ "$AUDIT_KIND" == "bling" ]]
+parse_audit_request "nfcore-gsm-audit $sha $digest"
+[[ "$AUDIT_PRODUCTION_SHA" == "$sha" && "$AUDIT_SCRIPT_SHA256" == "$digest" ]]
+[[ "$AUDIT_KIND" == "gsm" ]]
 
 for invalid in \
     "" \
@@ -25,6 +29,18 @@ for invalid in \
   fi
 done
 
+# The GSM verb is a separate allowlisted mode, never an arbitrary command.
+for invalid in \
+    "nfcore-gsm-audit $sha" \
+    "nfcore-gsm-audit $sha $digest extra" \
+    "nfcore-gsm-audit $sha $digest;id" \
+    "nfcore-other-audit $sha $digest"; do
+  if parse_audit_request "$invalid"; then
+    echo 'FAIL: accepted invalid GSM audit command' >&2
+    exit 1
+  fi
+done
+
 # The entrypoint must fail closed on untrusted commands without probing host.
 if SSH_ORIGINAL_COMMAND='cat /etc/shadow' bash "$here/host-audit-command.sh" >/dev/null 2>&1; then
   echo 'FAIL: accepted arbitrary command' >&2
@@ -35,11 +51,19 @@ if SSH_ORIGINAL_COMMAND="nfcore-audit $sha $digest; id" \
   echo 'FAIL: accepted shell injection' >&2
   exit 1
 fi
-# Public repository's current main is unprotected; never unlock audit SSH on an
-# unprotected workflow branch or automatically on pull_request.
+# Never unlock audit SSH on unprotected workflow branches or pull_request.
 workflow="$here/../../.github/workflows/contabo-readonly-host-audit.yml"
 grep -Fq "github.ref_protected == true" "$workflow"
 grep -Fq "github.ref == 'refs/heads/main'" "$workflow"
+gsm_workflow="$here/../../.github/workflows/contabo-gsm-readonly-host-audit.yml"
+grep -Fq "github.ref_protected == true" "$gsm_workflow"
+grep -Fq "github.ref == 'refs/heads/main'" "$gsm_workflow"
+grep -Fq 'nfcore-gsm-audit $REQUESTED_SHA $script_digest' "$gsm_workflow"
+grep -Fq 'worker-readonly-preflight.py' "$gsm_workflow"
+if grep -Eq '^[[:space:]]+pull_request:' "$gsm_workflow"; then
+  echo 'FAIL: GSM SSH audit must never execute on pull_request' >&2
+  exit 1
+fi
 if grep -Eq '^[[:space:]]+pull_request:' "$workflow"; then
   echo 'FAIL: SSH audit must never execute on pull_request' >&2
   exit 1

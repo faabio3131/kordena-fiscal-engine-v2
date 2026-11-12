@@ -1,9 +1,24 @@
 # NFCore — Plano B de acesso e auditoria Contabo sem Desktop Commander
 
 **Data:** 2026-11-10. **Prioridade:** preparar homologação fiscal de 11/11.
-**Estado:** implementação candidata; nenhum acesso SSH, chave, ambiente GitHub ou mudança no host é confirmado por este documento.
+**Estado CURRENT confirmado em 10/11/2026:** SSH restrito GitHub Actions→Contabo **ATIVADO E TESTADO**. Bling operacional permanece **NO-GO**. Este documento não autoriza migração, deploy ou operação fiscal.
 **Servidor alvo conhecido:** Contabo `vmi3692211`, aplicação em `/opt/fm/nfcore`.
 **Autoridade:** produção é o host real; o código e a CI do GitHub não provam estado do host.
+
+## Checkpoint CURRENT comprovado — não repetir configuração
+
+Evidência primária: [GitHub Actions run #42941524225](https://github.com/faabio3131/nf-core-v001/actions/runs/42941524225), main `545b7606208eedf77b3fd6b852ccb82b4716f6b8`, production `61015a837be8b2e5e3b0f1cdb5fb14c5c875fb91` (SHA histórico; reconfirmar antes de operações futuras).
+
+- `main` protegida pelo ruleset `proteger-main`, com checks `quality` e `execution-plan`.
+- Environment `nfcore-contabo-audit` tem reviewer `faabio3131`, bypass administrativo desabilitado e branch explicitamente limitada à `main`.
+- Os **quatro** Secrets `NFCORE_AUDIT_HOST`, `NFCORE_AUDIT_USER`, `NFCORE_AUDIT_SSH_PRIVATE_KEY`, `NFCORE_AUDIT_KNOWN_HOSTS` foram cadastrados em GitHub Environment, nunca no Git.
+- Bootstrap do host retornou `PLAN_B_HOST_BOOTSTRAP_PASS`; o comando forçado da conta `nfcoreaudit` foi executado por um runner GitHub com host key pinado.
+- Audit report retornou `DEPLOY_SHA_EXACT=PASS`, backup/checksum PASS, container DB/API/Portal PASS, readiness PASS e schema guard baseline PASS.
+- A execução geral terminou FAILURE **por pendências de Bling**, não por SSH: `BLING_SCHEMA_20_21=PENDING`, worker/segredos/políticas pendentes e `RESULT=CODE_READY_BUT_BLING_NOT_ACTIVE`.
+- **Acesso GitHub Actions→VPS comprovado. Bling operacional NÃO comprovado.** Não gerar nova chave, repetir cadastro de Secrets, habilitar fiscal real ou reimplantar os scripts SSH para tentar deixar verde.
+- A PR #422 separa o PASS visível do canal da falha de prontidão Bling sem enfraquecer o bloqueio; é candidata até CI e integração autorizadas.
+
+Os avisos históricos de branch não protegida e secrets ausentes abaixo foram superados pela configuração comprovada em 10/11/2026; não segui-los como tarefas pendentes.
 
 ## Objetivo e limites
 
@@ -52,7 +67,7 @@ O diagnóstico do Bling completo está em `deploy/contabo/bling-operational-host
 
 Workflow proposto: `.github/workflows/contabo-readonly-host-audit.yml`.
 
-**BLOQUEIO DE SEGURANÇA CONFIRMADO NO GITHUB EM 10/11/2026:** o repositório
+**HISTÓRICO ANTERIOR À PROTEÇÃO DE MAIN (SUPERADO EM 10/11/2026):** o repositório
 `faabio3131/nf-core-v001` é **público** e a branch `main` consta como
 **NÃO PROTEGIDA** (`protected=false`). O workflow verifica
 `github.ref_protected == true` e **não executa a auditoria** enquanto a
@@ -103,13 +118,13 @@ Referências oficiais:
 
 ## Critério de aceite do Plano B
 
-- [ ] Branch `main` efetivamente protegida e GitHub environment com required reviewers (antes de instalar secrets).
-- [ ] Comandos SSH de somente leitura executados na VPS correta, com identidade do host verificada.
-- [ ] Instalação root-owned dos três scripts, ancestralidade confiável e sudoers de comando único sem argumentos (aprovação específica).
-- [ ] Usuário SSH sem grupo Docker e sem sudo geral; chave exclusiva com forced command, sem shell interativo e sem forwardings.
-- [ ] GitHub environment e secrets configurados fora do Git, com aprovação quando suportada.
-- [ ] Execução do workflow em `main`, com SHA `production` correto, PASS/NO_GO real (não simulação).
-- [ ] Audit trail persistente e classificação de erros sem informações confidenciais.
+- [x] Branch `main` efetivamente protegida e GitHub environment com required reviewers (antes de instalar secrets).
+- [x] Comandos SSH de somente leitura executados na VPS correta, com identidade do host verificada.
+- [x] Instalação root-owned dos três scripts, ancestralidade confiável e sudoers de comando único sem argumentos (aprovação específica).
+- [x] Usuário SSH sem grupo Docker e sem sudo geral; chave exclusiva com forced command, sem shell interativo e sem forwardings.
+- [x] GitHub environment e secrets configurados fora do Git, com aprovação quando suportada.
+- [x] Execução do workflow em `main`, com SHA `production` correto, PASS/NO_GO real (não simulação).
+- [x] Audit trail persistente e classificação de erros sem informações confidenciais.
 - [ ] Após verificação do host, gates separadamente autorizados para migration, OAuth, Worker e A1/homologação.
 
-**NO-GO enquanto os itens não tiverem evidência.** Nenhuma parte do Plano B autoriza merge na branch `production`, mudança em firewall/DNS, instalação de credenciais ou emissão fiscal.
+**Canal Plano B validado; Bling operacional e homologação continuam NO-GO enquanto não houver evidência.** Nenhuma parte do Plano B autoriza merge na branch `production`, mudança em firewall/DNS, instalação de credenciais ou emissão fiscal.
