@@ -192,8 +192,10 @@ def _parse_reply(raw: bytes, method: str) -> BarueriReceipt:
         )
     except etree.XMLSyntaxError:
         raise BarueriContractError("Invalid Barueri SOAP XML") from None
-    if node.tag != f"{{{_SOAP}}}Envelope" or bool(getattr(node.getroottree().docinfo, "doctype", "")):
-
+    if (
+        node.tag != f"{{{_SOAP}}}Envelope"
+        or bool(getattr(node.getroottree().docinfo, "doctype", ""))
+    ):
         raise BarueriContractError("Barueri SOAP root mismatch")
     body = node.find(f"{{{_SOAP}}}Body")
     if body is None or body.find(f"{{{_SOAP}}}Fault") is not None:
