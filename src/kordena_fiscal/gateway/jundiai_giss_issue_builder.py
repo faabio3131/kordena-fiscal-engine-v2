@@ -75,6 +75,11 @@ class JundiaiGissTaxFields:
     operation_indicator: str | None = None
     rtc_cst: str | None = None
     rtc_classification: str | None = None
+    rtc_fin_nfse: str | None = None
+    rtc_ind_dest: str | None = None
+    rtc_incidence_ibge: str | None = None
+    rtc_taxable_base: Decimal | None = None
+    rtc_ind_final: str | None = None
 
 
 def _label(value: str, name: str, limit: int = 256) -> str:
@@ -160,6 +165,8 @@ def _tax_fields(fields: JundiaiGissTaxFields) -> None:
     # taxpayers supply them, require all correlated identifiers together.
     indicators = (
         fields.operation_indicator, fields.rtc_cst, fields.rtc_classification,
+        fields.rtc_fin_nfse, fields.rtc_ind_dest,
+        fields.rtc_incidence_ibge, fields.rtc_taxable_base,
     )
     if any(x is not None for x in indicators):
         if any(x is None for x in indicators):
@@ -167,6 +174,17 @@ def _tax_fields(fields: JundiaiGissTaxFields) -> None:
         assert fields.operation_indicator is not None
         assert fields.rtc_cst is not None
         assert fields.rtc_classification is not None
+        assert fields.rtc_fin_nfse is not None
+        assert fields.rtc_ind_dest is not None
+        assert fields.rtc_incidence_ibge is not None
+        assert fields.rtc_taxable_base is not None
+        if fields.rtc_fin_nfse not in ("0", "1") or fields.rtc_ind_dest not in ("0", "1"):
+            raise JundiaiGissIssueError("Invalid GissOnline 2026 RTC operation type")
+        if fields.rtc_ind_final is not None and fields.rtc_ind_final not in ("0", "1"):
+            raise JundiaiGissIssueError("Invalid GissOnline final-use flag")
+        if len(_digits(fields.rtc_incidence_ibge, "IBS locality", 7)) != 7:
+            raise JundiaiGissIssueError("GissOnline IBSCBS incidence locality missing")
+        _decimal(fields.rtc_taxable_base, "IBS/CBS taxable base")
         _digits(fields.operation_indicator, "INDOP", 12)
         _digits(fields.rtc_cst, "IBS/CBS CST", 3)
         _digits(fields.rtc_classification, "IBS/CBS class", 6)
@@ -249,6 +267,28 @@ def build_jundiai_giss_issue_xml(
     ):
         _tag(amounts, name, _decimal(amount, name))
     _tag(amounts, "Aliquota", _decimal(fields.iss_rate, "ISS rate", 4))
+    if fields.rtc_cst is not None:
+        # Official manual v1.8 tcIBSCBS + the municipal 2.04 Valores group.
+        # The shared tax engine must pass the reviewed amounts and location.
+        assert fields.rtc_fin_nfse is not None
+        assert fields.rtc_ind_dest is not None
+        assert fields.operation_indicator is not None
+        assert fields.rtc_classification is not None
+        assert fields.rtc_incidence_ibge is not None
+        assert fields.rtc_taxable_base is not None
+        ibscbs = _part(amounts, "IBSCBS")
+        _tag(ibscbs, "finNFSe", fields.rtc_fin_nfse)
+        if fields.rtc_ind_final is not None:
+            _tag(ibscbs, "indFinal", fields.rtc_ind_final)
+        _tag(ibscbs, "cIndOp", fields.operation_indicator)
+        _tag(ibscbs, "indDest", fields.rtc_ind_dest)
+        rtc_values = _part(ibscbs, "valores")
+        rtc_trib = _part(rtc_values, "trib")
+        g = _part(rtc_trib, "gIBSCBS")
+        _tag(g, "CST", fields.rtc_cst)
+        _tag(g, "cClassTrib", fields.rtc_classification)
+        _tag(rtc_values, "cLocalidadeIncid", fields.rtc_incidence_ibge)
+        _tag(rtc_values, "vBC", _decimal(fields.rtc_taxable_base, "IBS/CBS taxable base"))
     _tag(srv, "IssRetido", "1" if service.iss_withheld else "2")
     _tag(srv, "ItemListaServico", fields.item_lista_servico)
     _tag(srv, "CodigoTributacaoMunicipio", fields.municipal_taxation_code)
