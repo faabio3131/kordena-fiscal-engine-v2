@@ -121,7 +121,7 @@ def test_full_header_records_footer_and_original_remittance_id() -> None:
 
 @pytest.mark.parametrize("change", [
     {"gross_amount": Decimal("149.00")},
-    {"rps_number": "43"},
+    {"document_id": "different-invoice"},
     {"issuer_ibge": "3534401"},
 ])
 def test_record_rejects_source_conflicts(change: dict[str, object]) -> None:
