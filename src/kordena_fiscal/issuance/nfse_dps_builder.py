@@ -209,6 +209,12 @@ def build_signed_dps(
         _child(prest, "IM", im)
     _child(prest, "xNome", issuer.legal_name.strip())
     end = etree.SubElement(prest, f"{{{_NFSE_NS}}}end")
+    if schema_version == "1.01":
+        # Official DPS 1.01 requires the domestic address group before xLgr.
+        # v1.00 permitted omission; retain that legacy layout unchanged.
+        end_nac = etree.SubElement(end, f"{{{_NFSE_NS}}}endNac")
+        _child(end_nac, "cMun", issuer_municipality)
+        _child(end_nac, "CEP", issuer.address.postal_code)
     _child(end, "xLgr", issuer.address.street.strip())
     _child(end, "nro", issuer.address.number.strip())
     if issuer.address.complement:
