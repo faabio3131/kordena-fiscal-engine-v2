@@ -73,6 +73,7 @@ def test_contract_preserves_escaped_signed_abrasf_xml() -> None:
     packed = _soap(request, _contract(request.method))
     assert b"nfseCabecMsg" in packed
     assert b"nfseDadosMsg" in packed
+    assert b"RecepcionarLoteRpsRequest" in packed
     assert b"&lt;EnviarLoteRpsEnvio" in packed
     assert b"http://www.giss.com.br/enviar-lote-rps-envio-v2_04.xsd" in packed
     assert b"http://www.giss.com.br/cabecalho-v2_04.xsd" in packed
@@ -147,3 +148,43 @@ def test_real_giss_204_root_namespaces_are_not_generic_abrasf(method: str) -> No
     )
     with pytest.raises(JundiaiGissContractError, match="operation XML root"):
         _validate_xml_shape(legacy, method)
+
+
+def test_escaped_giss_204_official_result_is_retained_without_authorizing() -> None:
+    from xml.sax.saxutils import escape
+
+    official = (
+        '<ConsultarLoteRpsResposta '
+        'xmlns="http://www.giss.com.br/consultar-lote-rps-resposta-v2_04.xsd">'
+        '<Protocolo>1234</Protocolo><Situacao>4</Situacao>'
+        '</ConsultarLoteRpsResposta>'
+    )
+    soap = (
+        '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">'
+        '<soap:Body><ns:ConsultarLoteRpsResponse xmlns:ns="http://nfse.abrasf.org.br">'
+        '<outputXML>' + escape(official) + '</outputXML>'
+        '</ns:ConsultarLoteRpsResponse></soap:Body></soap:Envelope>'
+    ).encode()
+    result = _parse_reply(soap, "ConsultarLoteRps")
+    assert result.batch_protocol == "1234"
+    assert result.batch_state == 4
+    assert result.confirmed_document_authorization is False
+    assert result.official_response_xml == official.encode()
+    assert "outputXML" not in repr(result)
+
+
+def test_giss_204_official_reply_from_other_method_cannot_be_reused() -> None:
+    from xml.sax.saxutils import escape
+
+    other = (
+        '<ConsultarLoteRpsResposta '
+        'xmlns="http://www.giss.com.br/consultar-lote-rps-resposta-v2_04.xsd"/>'
+    )
+    soap = (
+        '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">'
+        '<soap:Body><ns:ConsultarNfsePorRpsResponse xmlns:ns="http://nfse.abrasf.org.br">'
+        '<outputXML>' + escape(other) + '</outputXML>'
+        '</ns:ConsultarNfsePorRpsResponse></soap:Body></soap:Envelope>'
+    ).encode()
+    with pytest.raises(JundiaiGissContractError, match="namespace mismatch"):
+        _parse_reply(soap, "ConsultarNfsePorRps")

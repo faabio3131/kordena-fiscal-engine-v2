@@ -54,6 +54,20 @@ _GISS_REQUEST_ROOTS = {
         "CancelarNfseEnvio", _GISS + "cancelar-nfse-envio-v2_04.xsd",
     ),
 }
+_GISS_RESPONSE_ROOTS = {
+    "RecepcionarLoteRps": (
+        "EnviarLoteRpsResposta", _GISS + "enviar-lote-rps-resposta-v2_04.xsd",
+    ),
+    "ConsultarLoteRps": (
+        "ConsultarLoteRpsResposta", _GISS + "consultar-lote-rps-resposta-v2_04.xsd",
+    ),
+    "ConsultarNfsePorRps": (
+        "ConsultarNfseRpsResposta", _GISS + "consultar-nfse-rps-resposta-v2_04.xsd",
+    ),
+    "CancelarNfse": (
+        "CancelarNfseResposta", _GISS + "cancelar-nfse-resposta-v2_04.xsd",
+    ),
+}
 _MAX = 2_097_152
 _OPERATION_MAP = {
     "RecepcionarLoteRps": "authorize",
@@ -141,6 +155,7 @@ class JundiaiGissReceipt:
     # archive and audited lifecycle separately.
     confirmed_document_authorization: bool = False
     response_xml: bytes = field(default=b"", repr=False)
+    official_response_xml: bytes = field(default=b"", repr=False)
 
 
 def _validate_xml_shape(payload: bytes, method: str) -> etree._Element:
@@ -165,7 +180,9 @@ def _soap(operation: JundiaiSignedOperation, contract: JundiaiGissWsdlContract) 
     # must run separately before this method is called.
     root = etree.Element(f"{{{_SOAP}}}Envelope", nsmap={"soapenv": _SOAP})
     body = etree.SubElement(root, f"{{{_SOAP}}}Body")
-    method_node = etree.SubElement(body, f"{{{contract.service_namespace}}}{operation.method}")
+    method_node = etree.SubElement(
+        body, f"{{{contract.service_namespace}}}{operation.method}Request"
+    )
     header = etree.SubElement(method_node, "nfseCabecMsg")
     header.text = (
         '<?xml version="1.0" encoding="utf-8"?>'
@@ -215,22 +232,66 @@ def _parse_reply(raw: bytes, method: str) -> JundiaiGissReceipt:
     body = root.find(f"{{{_SOAP}}}Body")
     if body is None or body.find(f"{{{_SOAP}}}Fault") is not None:
         raise JundiaiGissContractError("GissOnline SOAP Fault")
-    # Java JAX-WS may put the XML inside an escaped string; do not mark that
-    # as an authorization without a signed, verified provider XML.
-    leaves = body.findall(".//*")
-    protocols = [n.text for n in leaves if etree.QName(n).localname == "Protocolo" and n.text]
-    situations = [n.text for n in leaves if etree.QName(n).localname == "Situacao" and n.text]
+    # GissOnline JAX-WS returns escaped, service-specific XML inside outputXML.
+    # Preserve it so the separately pinned XSD and official signature verifier
+    # can correlate CompNfse with the originally reserved RPS.
+    embedded = [
+        n for n in body.iter()
+        if etree.QName(n).localname == "outputXML"
+    ]
+    if len(embedded) > 1:
+        raise JundiaiGissContractError("Ambiguous GissOnline outputXML")
+    official = b""
+    fiscal_root = body
+    if embedded:
+        node = embedded[0]
+        parent = node.getparent()
+        if (
+            parent is None
+            or etree.QName(parent).localname != method + "Response"
+            or not isinstance(node.text, str)
+            or not node.text.strip()
+        ):
+            raise JundiaiGissContractError("GissOnline outputXML wrapper mismatch")
+        official = node.text.strip().encode("utf-8")
+        if len(official) > _MAX:
+            raise JundiaiGissContractError("GissOnline official reply exceeds limit")
+        try:
+            fiscal_root = etree.fromstring(
+                official, parser=etree.XMLParser(
+                    resolve_entities=False, no_network=True, load_dtd=False,
+                ),
+            )
+        except etree.XMLSyntaxError:
+            raise JundiaiGissContractError("GissOnline returned invalid official XML") from None
+        expected, namespace = _GISS_RESPONSE_ROOTS[method]
+        if (
+            fiscal_root.tag != f"{{{namespace}}}{expected}"
+            or bool(getattr(fiscal_root.getroottree().docinfo, "doctype", ""))
+        ):
+            raise JundiaiGissContractError("GissOnline fiscal response namespace mismatch")
+    leaves = list(fiscal_root.iter())
+    protocols = [
+        n.text for n in leaves
+        if etree.QName(n).localname == "Protocolo" and n.text
+    ]
+    situations = [
+        n.text for n in leaves
+        if etree.QName(n).localname == "Situacao" and n.text
+    ]
     if len(protocols) > 1 or len(situations) > 1:
         raise JundiaiGissContractError("Ambiguous GissOnline result")
     state = int(situations[0]) if situations and situations[0] in {"1", "2", "3", "4"} else None
     if situations and state is None:
         raise JundiaiGissContractError("Invalid Giss batch state")
-    # A successful batch status is not enough to prove the specific RPS
-    # was authorized; the returned NFSe must be correlated to original intent.
+    if protocols and len(protocols[0]) > 128:
+        raise JundiaiGissContractError("GissOnline protocol exceeds limit")
+    # Even status 4 requires query by the durable RPS plus XSD/XML proof;
+    # the SOAP status itself can never authorize or cancel a fiscal invoice.
     return JundiaiGissReceipt(
-        method=method, batch_protocol=protocols[0][:128] if protocols else None,
+        method=method, batch_protocol=protocols[0] if protocols else None,
         batch_state=state, authorized=state == 4,
-        response_xml=raw,
+        response_xml=raw, official_response_xml=official,
     )
 
 
