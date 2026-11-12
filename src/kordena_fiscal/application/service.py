@@ -754,7 +754,7 @@ class FiscalApplicationService:
                         policy_id="nfcore-fiscal-archive", policy_version=1
                     ),
                 )
-                if isinstance(result, AuthorizationResult)
+                if isinstance(result, (AuthorizationResult, NfseAuthorizationResult))
                 and result.authorized_xml is not None else None
             )
             self.finalize_authorized(
@@ -993,6 +993,18 @@ class FiscalApplicationService:
                     attempt.key, attempt.generation, result.invoice_reference
                 )
                 uow.lifecycle.save(updated, expected_version=current.version)
+                if result.authorized_xml is not None:
+                    # Atomic with the terminal state and provider query evidence;
+                    # no second POST or newly allocated serial during recovery.
+                    uow.archive.append(FiscalArchiveEntry.build(
+                        scope=scope,
+                        document_reference=document_id,
+                        kind=FiscalArchiveKind.AUTHORIZED_XML,
+                        content=result.authorized_xml,
+                        media_type="application/xml",
+                        archived_at=occurred_at,
+                        retention=retention,
+                    ))
                 current = updated
             elif result.status is AuthorizationStatus.REJECTED:
                 assert result.rejection_code is not None
