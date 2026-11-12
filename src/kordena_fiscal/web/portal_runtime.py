@@ -776,6 +776,15 @@ class DurableHumanPortalExecutor:
                 payload=payload,
                 idempotency_key=idempotency_key,
             )
+        if operation_id == "prepareNativeNfse":
+            from .native_nfse_preparation import prepare_native_nfse
+
+            return prepare_native_nfse(
+                factory=self._unit_of_work_factory,
+                authority=authority,
+                payload=payload,
+                idempotency_key=idempotency_key,
+            )
         if operation_id == "prepareExtremaNfse":
             return self._prepare_extrema_nfse(
                 authority=authority, payload=payload, idempotency_key=idempotency_key,

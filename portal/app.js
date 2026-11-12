@@ -220,6 +220,114 @@ function appendFiscalFilters(article, viewId) {
   article.append(notice);
 }
 
+/** Build one native National NFS-e prepared record; no ERP and no provider POST.
+ * @param {HTMLElement} article
+ */
+function appendNativeNfsePreparation(article) {
+  if (!bootstrapState?.permissions.includes("configuration.write")
+    || !bootstrapState.permissions.includes("document.issue")
+    || !["owner", "admin"].includes(bootstrapState.role)
+    || selectedFiscalEnvironment !== "homologation") return;
+
+  const form = document.createElement("form");
+  form.id = "native-nfse-preparation";
+  form.className = "panel-form";
+  const heading = document.createElement("h3");
+  heading.textContent = "Preparar NFS-e Nacional pelo NFCore";
+  const info = document.createElement("p");
+  info.className = "empty-state";
+  info.textContent = "Emissor próprio, sem ERP. Somente homologação. Informe dados efetivamente revisados; preparar não emite a nota. A numeração definitiva da DPS e a homologação oficial possuem gates separados.";
+  form.append(heading, info);
+  /** @type {Record<string, HTMLInputElement>} */
+  const inputs = {};
+  /** @type {Array<[string, string, string, string]>} */
+  const fields = [
+    ["source_id", "Referência imutável da ordem de serviço", "text", ""],
+    ["competence_date", "Competência do serviço", "date", ""],
+    ["service_state_code", "UF da prestação", "text", "[A-Za-z]{2}"],
+    ["service_municipality_ibge", "IBGE do local da prestação", "text", "[0-9]{7}"],
+    ["national_taxation_code", "cTribNac oficial (6 dígitos)", "text", "[0-9]{6}"],
+    ["municipal_service_code", "Código municipal de serviço", "text", ""],
+    ["description", "Descrição do serviço prestado", "text", ""],
+    ["gross_amount", "Valor bruto (R$ 0.00)", "text", "[0-9]+\\.[0-9]{2}"],
+    ["deduction_amount", "Deduções (R$ 0.00)", "text", "[0-9]+\\.[0-9]{2}"],
+    ["iss_amount", "ISS apurado e revisado (R$ 0.00)", "text", "[0-9]+\\.[0-9]{2}"],
+    ["taker_document", "CPF ou CNPJ do tomador", "text", "[0-9]{11}|[0-9]{14}"],
+    ["taker_name", "Nome ou razão social do tomador", "text", ""],
+    ["source_normative", "Referência da regra fiscal aprovada", "text", ""],
+    ["rule_version", "Versão da regra fiscal", "number", ""],
+  ];
+  for (const [name, labelText, type, pattern] of fields) {
+    const label = document.createElement("label");
+    label.textContent = labelText;
+    const input = document.createElement("input");
+    input.type = type; input.name = name; input.required = true; input.autocomplete = "off";
+    input.id = "native-nfse-" + name.replaceAll("_", "-");
+    if (type === "number") { input.min = "1"; input.max = "99999"; input.step = "1"; }
+    if (type === "text" && pattern) input.pattern = pattern;
+    input.maxLength = name === "description" ? 1000 : name === "source_normative" ? 512 : 160;
+    label.append(input); form.append(label); inputs[name] = input;
+  }
+  const withholding = document.createElement("label");
+  const select = document.createElement("select");
+  select.name = "iss_withheld"; select.required = true;
+  for (const [value, titleText] of [["", "Selecione após revisão"], ["false", "ISS não retido"], ["true", "ISS retido"]]) {
+    const option = document.createElement("option"); option.value = value;
+    option.textContent = titleText; select.append(option);
+  }
+  withholding.append("Retenção do ISS", select);
+  const reviewedLabel = document.createElement("label");
+  const reviewed = document.createElement("input");
+  reviewed.type = "checkbox"; reviewed.required = true;
+  reviewedLabel.append(reviewed, document.createTextNode(
+    " Confirmo a revisão dos dados fiscais, competência, tomador, código de serviço e ISS. A aplicação não presume enquadramento tributário."
+  ));
+  const submit = document.createElement("button");
+  submit.type = "submit"; submit.className = "primary"; submit.textContent = "Preparar NFS-e em homologação";
+  const result = document.createElement("p"); result.id = "native-nfse-result";
+  result.setAttribute("role", "status"); result.setAttribute("aria-live", "polite");
+  form.append(withholding, reviewedLabel, submit, result); article.append(form);
+  /** @type {{fingerprint:string,key:string}|null} */
+  let attempt = null;
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    if (!selectedFiscalUnit || selectedFiscalEnvironment !== "homologation") {
+      result.textContent = "Selecione unidade fiscal autorizada em homologação."; return;
+    }
+    const payload = {
+      ...Object.fromEntries(Object.entries(inputs).map(([key, input]) => [key, input.value.trim()])),
+      unit_id: selectedFiscalUnit, environment: "homologation",
+      rule_version: Number(inputs.rule_version.value),
+      iss_withheld: select.value === "true",
+      fiscal_review_approved: reviewed.checked,
+    };
+    if (!Number.isSafeInteger(payload.rule_version)) {
+      result.textContent = "Informe a versão fiscal inteira."; return;
+    }
+    const fingerprint = JSON.stringify(payload);
+    if (attempt && attempt.fingerprint !== fingerprint) {
+      result.textContent = "Os dados mudaram após tentativa incerta. Consulte o pedido original."; return;
+    }
+    attempt ||= {fingerprint, key: crypto.randomUUID()};
+    submit.disabled = true; result.textContent = "Preparando documento no motor fiscal próprio...";
+    try {
+      const prepared = await api("/v1/portal/operations/prepareNativeNfse", {
+        method: "POST",
+        headers: {"X-CSRF-Token": csrfToken(), "Idempotency-Key": attempt.key},
+        body: JSON.stringify(payload),
+      });
+      operationDocument.value = String(prepared.document_id);
+      result.textContent = "NFS-e preparada: " + String(prepared.document_id)
+        + ". Referência preenchida na emissão. Documento não transmitido nem autorizado.";
+      attempt = null;
+    } catch (error) {
+      result.textContent = (error instanceof Error ? error.message : "Preparação falhou")
+        + " Não gere outra ordem enquanto houver resultado incerto.";
+    } finally { submit.disabled = false; }
+  });
+}
+
 /** @param {HTMLElement} article */
 function appendExtremaNfsePreparation(article) {
   if (!bootstrapState?.permissions.includes("configuration.write")
@@ -2196,6 +2304,7 @@ async function renderSurface(viewId) {
     if (viewId === "users") appendUserAdministration(article, rows);
     if (viewId === "errors" || viewId === "reconciliation") appendCognitiveAdvisor(article, viewId);
     if (["inutilizations", "documents", "issuances", "reconciliation"].includes(viewId)) await appendFiscalRecovery(article);
+    if (viewId === "issuances") appendNativeNfsePreparation(article);
     if (viewId === "issuances") appendExtremaNfsePreparation(article);
     if (viewId === "issuances") appendExtremaCancellation(article);
     if (viewId === "issuances") appendExtremaSubstitution(article);
