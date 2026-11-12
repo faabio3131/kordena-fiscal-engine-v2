@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -27,17 +27,22 @@ from kordena_fiscal.domain import (
     FiscalDocumentKind,
     FiscalEnvironment,
     FiscalValidationError,
+    TaxRegimeCode,
     Money,
     SourceReference,
 )
 from kordena_fiscal.gateway.nfse_nacional_homologation import (
     NACIONAL_HOMOLOGATION_PROVIDER_ID,
 )
+from kordena_fiscal.gateway.sp4_municipal_canonical import SP4_MUNICIPAL_PROVIDERS
 from kordena_fiscal.issuance import (
     NfseAuthorizationRequest,
     NfseCanonicalDocument,
     NfseServiceLine,
     NfseServiceTaker,
+)
+from kordena_fiscal.issuance.sp4_original_rps_archive import (
+    build_sp4_original_from_reservation,
 )
 from kordena_fiscal.lifecycle.idempotency import IdempotencyConflictError
 from kordena_fiscal.persistence.ports import (
@@ -73,8 +78,15 @@ def _error(status_code: int, code: str) -> HTTPException:
 def prepare_native_nfse(
     *, factory: FiscalUnitOfWorkFactory, authority: AuthenticatedHuman,
     payload: Mapping[str, Any], idempotency_key: str | None,
+    resolve_sp4_numbering: Callable[
+        [ExecutionScope, str, str], tuple[int, str]
+    ] | None = None,
 ) -> Mapping[str, Any]:
-    """Persist one immutable reviewed NFS-e; never submit to SEFIN or allocate a DPS."""
+    """Persist one reviewed NFS-e, using the existing issuer/sequence authority.
+
+    For municipalities the already-authorized, scoped RPS series comes from
+    trusted composition, never from the HTTP request or an arbitrary fallback.
+    """
     key = (idempotency_key or "").strip()
     if (
         not isinstance(payload, Mapping) or set(payload) != _FIELDS
@@ -167,8 +179,29 @@ def prepare_native_nfse(
             jurisdiction=profile.address.jurisdiction,
             operation=ConfiguredFiscalOperation.AUTHORIZE.value,
         )
-        if provider != NACIONAL_HOMOLOGATION_PROVIDER_ID:
-            raise FiscalValidationError("National NFS-e binding is not approved")
+        municipal = provider in SP4_MUNICIPAL_PROVIDERS
+        if not municipal and provider != NACIONAL_HOMOLOGATION_PROVIDER_ID:
+            raise FiscalValidationError("NFS-e binding is not approved")
+        sp4_series: tuple[int, str] | None = None
+        if municipal:
+            if (
+                resolve_sp4_numbering is None
+                or SP4_MUNICIPAL_PROVIDERS[provider]
+                != profile.address.jurisdiction.municipality_ibge_code
+                or profile.tax_regime is not TaxRegimeCode.NORMAL
+            ):
+                raise FiscalValidationError("Reviewed SP4 municipal policy is unavailable")
+            sp4_series = resolve_sp4_numbering(
+                scope, profile.cnpj.value, provider,
+            )
+            if (
+                not isinstance(sp4_series, tuple) or len(sp4_series) != 2
+                or type(sp4_series[0]) is not int
+                or not 0 <= sp4_series[0] <= 99_999
+                or not isinstance(sp4_series[1], str)
+                or not 0 <= len(sp4_series[1]) <= 16
+            ):
+                raise FiscalValidationError("Reviewed SP4 RPS numbering series invalid")
         previous = None
         try:
             previous = app.load_prepared_nfse_authorization(scope, document_id)
@@ -196,9 +229,24 @@ def prepare_native_nfse(
             service_taker=taker,
         )
         nfse_preaudit(NfseAuthorizationRequest.build(document))
+        sp4_intent_builder = None
+        if sp4_series is not None:
+            # Reuse the same canonical immutable document, not a second RPS
+            # numbering allocation or a provider-specific database.
+            prepared_request = NfseAuthorizationRequest.build(document)
+            _, label = sp4_series
+            sp4_intent_builder = lambda numbered: build_sp4_original_from_reservation(
+                prepared_request, numbered, rps_series=label,
+            )
         result = app.prepare_nfse_authorization(
             document, occurred_at=now,
             retention=RetentionPolicyMetadata("nfcore-fiscal-archive", 1),
+            sp4_intent_builder=sp4_intent_builder,
+            sp4_rps_series=sp4_series[0] if sp4_series is not None else None,
+        )
+        source = (
+            app.load_sp4_original_rps(scope, result.attempt.document_id)
+            if sp4_series is not None else None
         )
         return {
             "document_id": result.attempt.document_id,
@@ -207,7 +255,18 @@ def prepare_native_nfse(
             "environment": "homologation",
             "transmitted": False,
             "fiscal_authorization": "not_inferred_from_preparation",
-            "dps_numbering": "pending_durable_authority",
+            "dps_numbering": (
+                "not_applicable_municipal"
+                if source is not None else "pending_durable_authority"
+            ),
+            **(
+                {
+                    "rps_number": source.rps_number,
+                    "rps_series": source.rps_series,
+                    "municipal_batch_id": source.municipal_batch_id,
+                }
+                if source is not None else {}
+            ),
         }
     except HumanAuthorizationError as exc:
         raise _error(403, "NATIVE_NFSE_UNIT_FORBIDDEN") from exc
