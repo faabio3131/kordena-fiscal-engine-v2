@@ -24,7 +24,12 @@ from kordena_fiscal.domain import (
     TaxRegimeCode,
 )
 
-from .nfe_nfse import NfseAuthorizationRequest, NfseCanonicalDocument, NfseServiceLine, NfseServiceTaker
+from .nfe_nfse import (
+    NfseAuthorizationRequest,
+    NfseCanonicalDocument,
+    NfseServiceLine,
+    NfseServiceTaker,
+)
 
 NFSE_PREPARED_MEDIA_TYPE = "application/vnd.nfcore.prepared-nfse.v1+json"
 
@@ -103,7 +108,9 @@ def encode_prepared_nfse(request: NfseAuthorizationRequest) -> bytes:
                 "district": document.service_taker.address.district,
                 "municipality_name": document.service_taker.address.municipality_name,
                 "state_code": document.service_taker.address.jurisdiction.state_code,
-                "municipality_ibge_code": document.service_taker.address.jurisdiction.municipality_ibge_code,
+                "municipality_ibge_code": (
+                    document.service_taker.address.jurisdiction.municipality_ibge_code
+                ),
                 "postal_code": document.service_taker.address.postal_code,
                 "complement": document.service_taker.address.complement,
             },
