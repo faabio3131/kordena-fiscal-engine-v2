@@ -12,7 +12,7 @@ from decimal import Decimal
 
 from lxml import etree
 
-from kordena_fiscal.domain import FiscalValidationError, TaxRegimeCode
+from kordena_fiscal.domain import FiscalValidationError
 from kordena_fiscal.gateway.cajamar_geisweb_homologation import CajamarPreparedNfse
 from kordena_fiscal.gateway.sp4_municipal_canonical import Sp4OriginalRps
 from kordena_fiscal.issuance.nfe_nfse import NfseAuthorizationRequest
