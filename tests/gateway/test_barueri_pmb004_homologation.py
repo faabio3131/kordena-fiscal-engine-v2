@@ -148,7 +148,10 @@ def test_signed_remittance_dispatch_stays_pending(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(mod, "validate_a1_for_issuer", lambda *a, **kw: None)
     monkeypatch.setattr(mod, "build_fiscal_tls_context", lambda cert: Mock())
     resolver, cert, exchange = Mock(), Mock(return_value=Mock()), Mock(
-        return_value=_receipt("NFeLoteEnviarArquivo")
+        side_effect=[
+            _receipt("NFeLoteEnviarArquivo"),
+            _receipt("NFeLoteStatusArquivo"),
+        ]
     )
     resolver.resolve_provider_id.return_value = BARUERI_PMB004_PROVIDER
     validator = Mock()
