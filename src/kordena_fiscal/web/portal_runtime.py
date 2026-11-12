@@ -134,12 +134,14 @@ class DurableHumanPortalExecutor:
         user_administration: HumanAdministrationService | None = None,
         commercial_reader: CommercialPortalReader | None = None,
         danfe_renderer: Callable[[bytes], bytes] | None = None,
+        danfse_renderer: Callable[[bytes], bytes] | None = None,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
         self._operation_executor = operation_executor
         self._user_administration = user_administration
         self._commercial_reader = commercial_reader
         self._danfe_renderer = danfe_renderer
+        self._danfse_renderer = danfse_renderer
         self._capabilities = (
             GovernedCapabilityReadinessService(
                 unit_of_work_factory=unit_of_work_factory,
@@ -866,7 +868,11 @@ class DurableHumanPortalExecutor:
             raise _portal_error(
                 403, "FISCAL_ARTIFACT_FORBIDDEN", "Document access denied"
             ) from exc
-        if kind not in {FiscalArchiveKind.AUTHORIZED_XML, FiscalArchiveKind.DANFE}:
+        if kind not in {
+            FiscalArchiveKind.AUTHORIZED_XML,
+            FiscalArchiveKind.DANFE,
+            FiscalArchiveKind.AUXILIARY_PDF,
+        }:
             raise _portal_error(
                 400, "FISCAL_ARTIFACT_KIND_INVALID", "Unsupported fiscal file"
             )
@@ -884,7 +890,9 @@ class DurableHumanPortalExecutor:
         with self._unit_of_work_factory() as uow:
             entries = uow.archive.list_for_document(scope, document_reference)
         matches = [entry for entry in entries if entry.kind is kind]
-        if not matches and kind is FiscalArchiveKind.DANFE and self._danfe_renderer:
+        if not matches and kind in {
+            FiscalArchiveKind.DANFE, FiscalArchiveKind.AUXILIARY_PDF,
+        }:
             # Generate the printable PDF ONLY from an already archived, genuine
             # authorized XML. No synthetic fiscal authorization or XML is created.
             authorized = [
@@ -898,11 +906,36 @@ class DurableHumanPortalExecutor:
                     )
                 try:
                     FiscalArchiveVerifier().verify_entry(original)
-                    pdf = self._danfe_renderer(original.content)
+                    if len(original.content) > 2 * 1024 * 1024:
+                        raise FiscalValidationError("Authorized XML too large")
+                    renderer = self._danfe_renderer
+                    if kind is FiscalArchiveKind.AUXILIARY_PDF:
+                        from lxml import etree
+
+                        root = etree.fromstring(
+                            original.content,
+                            parser=etree.XMLParser(resolve_entities=False, no_network=True),
+                        )
+                        if getattr(root.getroottree().docinfo, "doctype", ""):
+                            raise FiscalValidationError("Forbidden XML DOCTYPE")
+                        if root.tag == "{http://www.sped.fazenda.gov.br/nfse}NFSe":
+                            renderer = self._danfse_renderer
+                        elif root.tag != "{http://www.portalfiscal.inf.br/nfe}nfeProc":
+                            raise FiscalValidationError("Unsupported authorized XML kind")
+                    if renderer is None:
+                        raise FiscalValidationError("Auxiliary PDF generator unavailable")
+                    pdf = renderer(original.content)
+                    if not pdf.startswith(b"%PDF-") or len(pdf) > 8 * 1024 * 1024:
+                        raise FiscalValidationError("Invalid auxiliary PDF")
                 except (ArchiveIntegrityError, FiscalValidationError) as exc:
                     raise _portal_error(
-                        409, "FISCAL_DANFE_RENDER_FAILED",
-                        "Não foi possível gerar DANFE do XML autorizado",
+                        409, "FISCAL_PDF_RENDER_FAILED",
+                        "Não foi possível gerar o PDF do XML autorizado",
+                    ) from exc
+                except etree.XMLSyntaxError as exc:
+                    raise _portal_error(
+                        409, "FISCAL_PDF_RENDER_FAILED",
+                        "XML autorizado inválido para impressão",
                     ) from exc
                 return pdf, "application/pdf"
         if len(matches) != 1:
@@ -928,6 +961,7 @@ class DurableHumanPortalExecutor:
                 {"application/xml", "text/xml"}
             ),
             FiscalArchiveKind.DANFE: frozenset({"application/pdf"}),
+            FiscalArchiveKind.AUXILIARY_PDF: frozenset({"application/pdf"}),
         }
         if entry.media_type not in allowed_media[kind]:
             raise _portal_error(

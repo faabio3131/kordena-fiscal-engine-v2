@@ -347,7 +347,7 @@ def create_portal_router(
         """Serve immutable fiscal files to the same authorized human session."""
         auth = authority(request)
         _authorized(auth, PortalPermission.DOCUMENT_QUERY, unit_id=unit_id)
-        if kind not in {"authorized_xml", "danfe"}:
+        if kind not in {"authorized_xml", "danfe", "auxiliary_pdf"}:
             raise HTTPException(400, detail={"code": "FISCAL_ARTIFACT_KIND_INVALID"})
         if not 1 <= len(document_reference) <= 256:
             raise HTTPException(400, detail={"code": "FISCAL_ARTIFACT_REFERENCE_INVALID"})

@@ -998,8 +998,8 @@ function fiscalRowElement(row) {
     if (kind === "authorized_xml") {
       const danfe = document.createElement("a");
       danfe.className = "ghost";
-      danfe.textContent = "Visualizar DANFE/PDF";
-      danfe.href = `/v1/portal/documents/${encodeURIComponent(reference)}/artifacts/danfe?${new URLSearchParams({
+      danfe.textContent = "Visualizar documento auxiliar (DANFE/DANFSe)";
+      danfe.href = `/v1/portal/documents/${encodeURIComponent(reference)}/artifacts/auxiliary_pdf?${new URLSearchParams({
         unit_id: unit, environment,
       })}`;
       danfe.target = "_blank";
