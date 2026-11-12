@@ -28,7 +28,6 @@ from kordena_fiscal.application.commercial_trial import GovernedTrialService
 from kordena_fiscal.application.service import FiscalApplicationService
 from kordena_fiscal.archive.danfe_pdf import render_authorized_nfe_danfe
 from kordena_fiscal.archive.danfse_pdf import render_authorized_national_danfse
-from kordena_fiscal.domain import ExecutionScope
 from kordena_fiscal.compliance import CapabilityReadinessService
 from kordena_fiscal.control_plane.cakto_checkout import (
     CaktoCheckoutAdministrationService,
@@ -37,6 +36,7 @@ from kordena_fiscal.control_plane.commercial_release import (
     CommercialReleaseAdministrationService,
 )
 from kordena_fiscal.control_plane.pricing_admin import CommercialPricingAdministrationService
+from kordena_fiscal.domain import ExecutionScope
 from kordena_fiscal.persistence.cakto import postgres_cakto_commercial_database
 from kordena_fiscal.persistence.commercial_fulfillment import (
     postgres_canonical_commercial_database,
