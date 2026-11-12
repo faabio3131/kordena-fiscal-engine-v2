@@ -64,7 +64,7 @@ def _receipt(
         'xmlns:g="http://www.geisweb.com.br/"><soap:Body>'
         f"<g:{method}Response><g:{method}Result>{escape(xml)}"
         f"</g:{method}Result></g:{method}Response></soap:Body></soap:Envelope>"
-    ).encode("utf-8")
+    ).encode()
     return CajamarGeiswebResult(method=method, response_xml=envelope)
 
 
