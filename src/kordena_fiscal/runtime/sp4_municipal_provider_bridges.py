@@ -29,6 +29,9 @@ from kordena_fiscal.gateway.jundiai_giss_homologation import (
     JundiaiGissReceipt,
     JundiaiSignedOperation,
 )
+from kordena_fiscal.gateway.jundiai_giss_invoice_interpreter import (
+    interpret_jundiai_giss_result,
+)
 from kordena_fiscal.gateway.osasco_rtc_homologation import (
     OsascoOperationReceipt,
     OsascoPreparedOperation,
@@ -210,7 +213,7 @@ def build_jundiai_reviewed_ports(
     interpret_official_result: Callable[
         [JundiaiGissReceipt, NfseAuthorizationRequest, Sp4OriginalRps],
         Sp4ProviderOutcome,
-    ],
+    ] = interpret_jundiai_giss_result,
 ) -> Sp4ReviewedMunicipalPorts:
     if not isinstance(transport, JundiaiGissHomologationTransport) or not all(
         callable(x) for x in (
