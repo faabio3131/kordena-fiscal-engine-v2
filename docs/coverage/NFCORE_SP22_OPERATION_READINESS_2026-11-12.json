@@ -128,7 +128,7 @@
         "dsf",
         "nfse-nacional"
       ],
-      "municipal_authoritative_url": null,
+      "municipal_authoritative_url": "https://notafiscal.sorocaba.sp.gov.br/",
       "municipal_contract_verified": false,
       "issuer_profile_specific_rules_verified": false,
       "municipal_layout_version": null,
@@ -149,8 +149,8 @@
       "official_taxpayer_homologation": false,
       "production_authorization": false,
       "status": "INTERNAL_INCOMPLETE",
-      "public_issuer_policy_reviewed_at": null,
-      "public_issuer_policy_summary": null,
+      "public_issuer_policy_reviewed_at": "2026-11-12",
+      "public_issuer_policy_summary": "Municipal Nova Nota Fiscal Sorocabana with municipal credentials; DSF catalog label alone is not a provider contract.",
       "official_webservice_contract_reviewed": false
     },
     {
@@ -571,7 +571,7 @@
         "e-receita",
         "nfse-nacional"
       ],
-      "municipal_authoritative_url": null,
+      "municipal_authoritative_url": "https://www.valinhos.sp.gov.br/portal/secretarias-paginas/526/carta-de-servicos/",
       "municipal_contract_verified": false,
       "issuer_profile_specific_rules_verified": false,
       "municipal_layout_version": null,
@@ -592,8 +592,8 @@
       "official_taxpayer_homologation": false,
       "production_authorization": false,
       "status": "INTERNAL_INCOMPLETE",
-      "public_issuer_policy_reviewed_at": null,
-      "public_issuer_policy_summary": null,
+      "public_issuer_policy_reviewed_at": "2026-11-12",
+      "public_issuer_policy_summary": "City describes local NFS-e/ISS contributor service but provides no certified 2026 API/XSD in this source.",
       "official_webservice_contract_reviewed": false
     },
     {
@@ -606,7 +606,7 @@
         "e-receita",
         "nfse-nacional"
       ],
-      "municipal_authoritative_url": null,
+      "municipal_authoritative_url": "https://itu.sp.gov.br/itu-ja-esta-preparada-para-atender-ao-novo-padrao-nacional-da-nota-fiscal-de-servicos-eletronica-nfs-e/",
       "municipal_contract_verified": false,
       "issuer_profile_specific_rules_verified": false,
       "municipal_layout_version": null,
@@ -627,8 +627,8 @@
       "official_taxpayer_homologation": false,
       "production_authorization": false,
       "status": "INTERNAL_INCOMPLETE",
-      "public_issuer_policy_reviewed_at": null,
-      "public_issuer_policy_summary": null,
+      "public_issuer_policy_reviewed_at": "2026-11-12",
+      "public_issuer_policy_summary": "Municipality states own GissOnline emitter is adapted to the national standard; not equivalent to migration to national API for all regimes.",
       "official_webservice_contract_reviewed": false
     },
     {
@@ -746,7 +746,7 @@
         "e-receita",
         "nfse-nacional"
       ],
-      "municipal_authoritative_url": null,
+      "municipal_authoritative_url": "https://www.saovicente.sp.gov.br/carta-de-servicos/tributos/issqn/faq-perguntas-frequentes",
       "municipal_contract_verified": false,
       "issuer_profile_specific_rules_verified": false,
       "municipal_layout_version": null,
@@ -767,8 +767,8 @@
       "official_taxpayer_homologation": false,
       "production_authorization": false,
       "status": "INTERNAL_INCOMPLETE",
-      "public_issuer_policy_reviewed_at": null,
-      "public_issuer_policy_summary": null,
+      "public_issuer_policy_reviewed_at": "2026-11-12",
+      "public_issuer_policy_summary": "Municipal FAQ refers to ISS.Net Online and municipal ISS support; no NFCore WS contract or 2026 adaptation certified.",
       "official_webservice_contract_reviewed": false
     }
   ],
@@ -779,5 +779,5 @@
     "source_type": "PROVIDER_HOSTED_NOTICE_ONLY",
     "warning": "Publisher is the provider, not independently reviewed as a city authority; manual/schema hash and municipal contract remain unverified."
   },
-  "note": "Reviewed public notice is NOT the official WebService contract or a provider certification. All 22 stay INTERNAL_INCOMPLETE."
+  "note": "13/22 city public issuer notices reviewed (including one portal notice); NONE constitutes a certified WebService, issuer credential, complete tax/RTC contract or legal authorization to emit. All 22 stay INTERNAL_INCOMPLETE."
 }
