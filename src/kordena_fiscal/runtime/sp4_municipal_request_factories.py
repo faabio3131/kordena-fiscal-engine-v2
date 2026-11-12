@@ -18,14 +18,14 @@ from kordena_fiscal.gateway.cajamar_geisweb_issue_builder import (
 from kordena_fiscal.gateway.cajamar_geisweb_request_builder import (
     prepare_cajamar_original_lot_query,
 )
+from kordena_fiscal.gateway.jundiai_giss_homologation import JundiaiSignedOperation
+from kordena_fiscal.gateway.jundiai_giss_request_builder import (
+    prepare_jundiai_original_rps_query,
+)
 from kordena_fiscal.gateway.osasco_rtc_homologation import OsascoPreparedOperation
 from kordena_fiscal.gateway.osasco_rtc_issue_builder import (
     OsascoRtcTaxFields,
     prepare_osasco_rtc_issue,
-)
-from kordena_fiscal.gateway.jundiai_giss_homologation import JundiaiSignedOperation
-from kordena_fiscal.gateway.jundiai_giss_request_builder import (
-    prepare_jundiai_original_rps_query,
 )
 from kordena_fiscal.gateway.sp4_municipal_canonical import (
     Sp4CanonicalMunicipalError,
