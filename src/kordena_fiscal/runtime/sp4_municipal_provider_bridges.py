@@ -18,7 +18,6 @@ from kordena_fiscal.domain import Cnpj, ExecutionScope, TaxRegimeCode
 from kordena_fiscal.gateway.authorization import AuthorizationStatus
 from kordena_fiscal.gateway.barueri_official_return_file import (
     BarueriConvertedNfseEvidence,
-    parse_barueri_official_return_file,
 )
 from kordena_fiscal.gateway.barueri_pmb004_homologation import (
     BarueriPmb004HomologationTransport,
@@ -336,12 +335,13 @@ def build_barueri_reviewed_ports(
     ],
     validate_return_file: Callable[
         [BarueriRpsBatch, BarueriReceipt], BarueriConvertedNfseEvidence
-    ] | None = None,
+    ],
 ) -> Sp4ReviewedMunicipalPorts:
     if not isinstance(transport, BarueriPmb004HomologationTransport) or not all(
         callable(x) for x in (
             build_remittance, verify_fixed_width_rps_identity,
             load_approved_remittance_protocol, interpret_official_result,
+            validate_return_file,
         )
     ):
         raise Sp4CanonicalMunicipalError("Barueri PMB004 provider adapter incomplete")
@@ -429,16 +429,18 @@ def build_barueri_reviewed_ports(
             raise Sp4CanonicalMunicipalError(
                 "Barueri downloaded return file cannot be correlated"
             )
-        if validate_return_file is None:
-            evidence = parse_barueri_official_return_file(batch=batch, receipt=receipt)
-        else:
-            evidence = validate_return_file(batch, receipt)
+        # Dec/2025 municipality guide points to NFE_Layout-v53.pdf
+        # (return layout v5.3), not the older NFE_Layout.pdf v3.0.
+        # A reviewed CURRENT-layout verifier is mandatory. The legacy
+        # parser may remain for historical files but is NOT a 2026 gate.
+        evidence = validate_return_file(batch, receipt)
         if (
             not isinstance(evidence, BarueriConvertedNfseEvidence)
             or int(evidence.rps_number) != int(original.rps_number)
             or evidence.rps_series != original.rps_series
             or evidence.service_total != original.gross_amount
             or evidence.remittance != batch.remittance
+            or evidence.return_file != receipt.downloaded_file
         ):
             raise Sp4CanonicalMunicipalError(
                 "Barueri official return does not prove original RPS"
