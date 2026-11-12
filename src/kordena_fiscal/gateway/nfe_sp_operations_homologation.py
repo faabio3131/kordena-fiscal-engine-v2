@@ -24,10 +24,6 @@ from kordena_fiscal.domain import (
 )
 from kordena_fiscal.gateway.authorization import GatewayProviderMetadata
 from kordena_fiscal.gateway.fiscal_tls import RejectFiscalRedirects
-from kordena_fiscal.gateway.pilot_sp_jurisdiction import (
-    require_sp_jurisdiction_operation_policy,
-)
-from kordena_fiscal.gateway.provider import ProviderOperation
 from kordena_fiscal.gateway.nfe_sp_homologation import (
     MG_NFCE_HOMOLOGATION_PROVIDER_ID,
     MG_NFE_HOMOLOGATION_PROVIDER_ID,
@@ -37,6 +33,10 @@ from kordena_fiscal.gateway.nfe_sp_homologation import (
     _parse_xml,
     _tls_context,
 )
+from kordena_fiscal.gateway.pilot_sp_jurisdiction import (
+    require_sp_jurisdiction_operation_policy,
+)
+from kordena_fiscal.gateway.provider import ProviderOperation
 from kordena_fiscal.operations import (
     CancellationRequest,
     CancellationResult,
