@@ -252,7 +252,9 @@ def test_mg_national_channel_generates_signed_schema_valid_dps_envelope(
     request = _mg_request(ibge, municipality)
     if ibge == "3106200":
         from kordena_fiscal.numbering import (
-            FiscalSequenceKey, FiscalSequencePolicy, InMemoryFiscalSequenceStore,
+            FiscalSequenceKey,
+            FiscalSequencePolicy,
+            InMemoryFiscalSequenceStore,
             InternalFiscalSequenceStream,
         )
         reservation = InMemoryFiscalSequenceStore().reserve_next(
