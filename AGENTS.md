@@ -1,3 +1,13 @@
+# DIRETRIZ SUPERVENIENTE — PRIORIDADE E GOVERNANÇA (12/11/2026)
+
+> **Decisão vigente do proprietário em 12/11/2026 — esta diretriz substitui a ordem sequencial do Centro-Oeste descrita abaixo, sem apagar o histórico.**
+
+1. **Prioridade de cobertura: SP-22.** Executar primeiro **Cajamar** (piloto, fora do catálogo dos 22), **Osasco**, **Barueri** e **Jundiaí**; depois, os demais municípios de SP-22. **MG-W1** permanece no checkpoint das PRs **#423** e **#440**. A expansão **Centro-Oeste (DF → GO → MT → MS)** só será retomada depois de SP-22 e do gate interno de MG-W1. Esta decisão prevalece sobre o sequenciamento Centro-Oeste registrado nas seções históricas seguintes.
+2. **Fechamento de bloco e aprovação por conversa.** As regras **um bloco, uma PR** e **PR em Draft até checklist integralmente concluído e CI verde no HEAD exato**, bem como o protocolo de aprovação por conversa com o proprietário, estão **especificados** em `docs/NFCORE_EXECUTION_CLOSING_RULES_AND_LOCKS_SPEC_2026-11-12.md`, na **PR #453**, ainda **Draft**. O texto da especificação não equivale à implantação dos controles.
+3. **Travas de governança T1 a T6.** São **apenas uma especificação**: **nenhuma das travas T1, T2, T3, T4, T5 e T6 está implementada no GitHub**. Não declarar bloqueios automáticos, regras de permissão ou checks novos como existentes em decorrência dessa documentação.
+
+---
+
 # AGENTS.md — Master Execution Schedule: Centro-Oeste Expansion (NFCore V1)
 
 > **Status do Documento:** Ativo / Governança de Execução  
