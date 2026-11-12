@@ -142,7 +142,12 @@ def _canonical_request(body: bytes, method: str) -> etree._Element:
     wrappers = root.findall(f"{{{_WCF}}}request")
     if len(wrappers) != 1:
         raise OsascoRtcContractError("Osasco SOAP requires exactly one request object")
-    keys = wrappers[0].findall(f"{{{_DTO}}}ChaveAutenticacao")
+    # RTC_EmitirNFELote nests its key under the Notas DTO; the other
+    # methods use a direct child. Match exactly one in either layout.
+    keys = [
+        node for node in wrappers[0].iter()
+        if etree.QName(node).localname == "ChaveAutenticacao"
+    ]
     if len(keys) != 1 or (keys[0].text or "") != "":
         # A secret is inserted below from a trusted provider; user XML must
         # never choose a foreign taxpayer authentication key.
@@ -157,10 +162,13 @@ def _build_soap(prepared: OsascoPreparedOperation, key: str) -> bytes:
     ):
         raise OsascoRtcContractError("Scoped municipality credential unavailable")
     root = _canonical_request(prepared.request_xml, prepared.method)
-    node = root.find(f".//{{{_DTO}}}ChaveAutenticacao")
-    if node is None:
+    nodes = [
+        node for node in root.iter()
+        if etree.QName(node).localname == "ChaveAutenticacao"
+    ]
+    if len(nodes) != 1:
         raise OsascoRtcContractError("Credential placement not found")
-    node.text = key
+    nodes[0].text = key
     soap = etree.Element(f"{{{_SOAP}}}Envelope", nsmap={"soap": _SOAP})
     body = etree.SubElement(soap, f"{{{_SOAP}}}Body")
     body.append(root)
