@@ -35,7 +35,7 @@ def _key(
 
 def test_dps_counter_is_shared_by_same_issuer_across_units_not_other_issuer(tmp_path) -> None:
     db = SqliteFiscalDatabase(tmp_path / "numbering.sqlite")
-    assert 22 in db.initialize()
+    assert 22 in db.initialize(enable_national_dps=True)
     policy = FiscalSequencePolicy(max_number=1000)
     with db() as uow:
         one = uow.dps_sequences.reserve_next(_key(), policy)
