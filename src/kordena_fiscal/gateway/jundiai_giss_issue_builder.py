@@ -72,7 +72,6 @@ class JundiaiGissTaxFields:
     income_tax: Decimal = Decimal("0.00")
     csll: Decimal = Decimal("0.00")
     other_retention: Decimal = Decimal("0.00")
-    national_service_code: str | None = None
     operation_indicator: str | None = None
     rtc_cst: str | None = None
     rtc_classification: str | None = None
