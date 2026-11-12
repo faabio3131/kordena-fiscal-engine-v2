@@ -71,10 +71,11 @@ def test_invalid_origins_cannot_be_used_as_lot_ids(lot: str) -> None:
 
 
 def test_cajamar_signer_cannot_change_scope_or_numbered_original_lot() -> None:
-    unsafe = lambda _: b"<ConsultaLoteRps><CnpjCpf>11222333000181</CnpjCpf>" + (
-        b"<Consulta><CnpjCpfPrestador>11222333000181</CnpjCpfPrestador>"
-        b"<NumeroLote>12346</NumeroLote></Consulta></ConsultaLoteRps>"
-    )
+    def unsafe(_: bytes) -> bytes:
+        return b"<ConsultaLoteRps><CnpjCpf>11222333000181</CnpjCpf>" + (
+            b"<Consulta><CnpjCpfPrestador>11222333000181</CnpjCpfPrestador>"
+            b"<NumeroLote>12346</NumeroLote></Consulta></ConsultaLoteRps>"
+        )
     validator = Mock()
     with pytest.raises(CajamarGeiswebBuilderError, match="persisted source"):
         prepare_cajamar_original_lot_query(
