@@ -101,7 +101,7 @@ def test_national_recovery_uses_only_two_gets_and_preserves_authorized_xml(
     assert result.authorized_xml == xml
     assert result.document_id == request.document.document_id
     assert result.scope == request.document.scope
-    assert result.provider.provider_id == NACIONAL_HOMOLOGATION_PROVIDER_ID
+    assert result.provider.provider_name == NACIONAL_HOMOLOGATION_PROVIDER_ID
     assert exchange.call_count == 2
     assert exchange.call_args_list[0].args[0] == "/dps/" + dps_id
     assert exchange.call_args_list[1].args[0] == "/nfse/" + key
