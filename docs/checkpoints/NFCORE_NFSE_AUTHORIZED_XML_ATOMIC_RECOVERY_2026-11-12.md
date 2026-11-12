@@ -82,3 +82,26 @@ após a #457. T2 confere o texto e o checklist de PR não-Draft; não certifica
 execução fiscal nem E2E. O topo de AGENTS.md, que afirma T1-T6 integralmente
 não implementadas, tornou-se desatualizado. Esta PR não modifica AGENTS.md
 ou CI, para preservar escopo e responsabilidade.
+
+
+## Checkpoint de integração CURRENT (12/11/2026, Agente B)
+
+- Base main reconciliada: fb7cc9bcc029ba9a4d5a91c487859fd7f32b2a13.
+- Integração na PR #454: merge interno bbbe380c8249df5efbc70eecd903ff3f8677bf80.
+- Retarget: PR #454 em Draft para main; **não** é merge na main.
+- Reconciliação seletiva: 82 arquivos exclusivos da main preservados; oito arquivos
+  de conflito foram conciliados por função, preservando código WebISS de Extrema,
+  serial RPS municipal, numeração DPS transacional, resposta NFS-e e segurança.
+- Corrigido: prepare_nfse_authorization reserva número DPS **somente** na rota
+  Nacional; na rota WebISS Extrema utiliza intenção/RPS no mesmo UoW, sem
+  reservar número DPS redundante.
+- Corrigido G2: domicílio nacional/estrangeiro, CPF/CNPJ/NIF/cNaoNIF no
+  modelo, fingerprint imutável, codec durável e XML toma por XSD 1.01.
+- Corrigido G9 candidato: erros SEFIN estruturados, código, origem e
+  mensagem original íntegra, arquivamento terminal atômico e status separado.
+- Evidência de teste: novos testes versionados; CI completa no SHA integrado
+  **NÃO COMPROVADA** até terminar o workflow sobre main.
+- Fronteiras protegidas e PR da cobertura #446 não foram modificadas.
+- Migração v22: apenas código de schema; **não aplicada**. Nenhuma emissão fiscal real.
+- A integração seletiva posterior com a #450 e o HEAD final da #446
+  permanece pendente antes da certificação geral do P0.
