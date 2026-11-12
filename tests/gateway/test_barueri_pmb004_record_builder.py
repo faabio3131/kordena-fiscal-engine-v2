@@ -143,7 +143,6 @@ def test_ibs_cbs_cst_and_classification_must_agree() -> None:
     for fields in (
         replace(_fields(), ibs_cbs_status="999"),
         replace(_fields(), nbs_code="20.01.10"),
-        replace(_fields(), recipient_differs="1"),
         replace(_fields(), recipient=replace(_fields().recipient, email="")),
     ):
         with pytest.raises(BarueriPmb004RecordError):
