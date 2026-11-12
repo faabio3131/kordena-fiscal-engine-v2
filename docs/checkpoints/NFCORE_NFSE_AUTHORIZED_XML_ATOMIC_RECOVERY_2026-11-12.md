@@ -40,3 +40,45 @@ O pacote XSD do ZIP oficial 1.01 precisa ser comparado byte a byte ao recurso ve
 
 **Classificação:** INTERNAL_IMPLEMENTATION_CANDIDATE / INTERNAL_CERTIFICATION_PENDING /
 EXTERNAL_HOMOLOGATION_PENDING. Nunca tratar status AUTHORIZED sintético como nota emitida.
+
+
+## Incremento G9 — Rejeição estruturada e evidência sem corte silencioso
+
+Estado: IMPLEMENTED_NOT_CERTIFIED, na mesma PR #454.
+
+Implementação: NfseRejectionDetail (code, origin, raw_message), uma coleção tipada
+e ordenada NfseAuthorizationResult.rejections (máximo de 32 itens). A mensagem
+crua pode conter até 32768 caracteres sem truncamento em 512. Valores maiores
+falham fechado e não geram retorno supostamente válido. O resumo legado é
+mantido por compatibilidade e não autoriza XML na presença de rejeições.
+
+gateway/nfse_national_homologation.py fornece parse_national_nfse_rejections,
+que interpreta todas as entradas de erros SEFIN e preserva código, origem,
+ordem e texto integral. Entradas malformadas são rejeitadas sem ecoar
+internals ou mensagens externas em exceções públicas.
+
+application/service.py armazena os dados em artefato PROVIDER_RESPONSE
+application/vnd.nfcore.nfse-rejection.v1+json sob escopo tenant/unidade
+na mesma UoW que registra REJECTED e a chave de idempotência. Isso cobre
+rejeição direta e rejeição confirmada em consulta após resultado incerto,
+sem segundo POST nem segundo registro terminal no replay.
+
+Testes novos, ainda NÃO EXECUTADOS no HEAD final de CI:
+- tests/issuance/test_nfse_rejection_details.py (mensagem longa, múltiplas rejeições, invariantes).
+- tests/gateway/test_nfse_national_rejections.py (JSON SEFIN completo, erros malformados, limite).
+- tests/application/test_nfse_recovered_receipt_atomicity.py (rejeição direta e por consulta, arquivo e replay).
+
+Dependência G9: conectar este parser ao gateway operacional da #450 durante
+a reconciliação por função, preservando os guards SP/MG da #446 e a numeração
+reservada da #427. O resultado privado não pode ser exposto integralmente
+no Portal nem nos logs. A projeção web de 512 caracteres é contrato público
+distinto da evidência íntegra arquivada.
+
+LACUNA: CI integrada, E2E Portal, XSD e XMLDSig do XML autorizado permanecem
+NÃO COMPROVADOS. Nenhum município é homologado por essa implementação.
+
+DRIFT DE GOVERNANÇA: a PR #458 implementou uma primeira versão de T2 na main
+após a #457. T2 confere o texto e o checklist de PR não-Draft; não certifica
+execução fiscal nem E2E. O topo de AGENTS.md, que afirma T1-T6 integralmente
+não implementadas, tornou-se desatualizado. Esta PR não modifica AGENTS.md
+ou CI, para preservar escopo e responsabilidade.
