@@ -47,8 +47,10 @@ def _receipt(method: str) -> bytes:
         '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" '
         'xmlns:b="http://www.barueri.sp.gov.br/nfe"><soap:Body>'
         f'<b:{method}Response><b:{method}Result>'
-        '<Root><Codigo>OK200</Codigo><ProtocoloRemessa>1234567</ProtocoloRemessa>'
-        '<SituacaoArq>PROCESSANDO</SituacaoArq></Root>'
+        '<b:ListaMensagemRetorno><b:Codigo>OK200</b:Codigo></b:ListaMensagemRetorno>'
+        '<b:ProtocoloRemessa>1234567</b:ProtocoloRemessa>'
+        '<b:ListaNfeArquivosRPS><b:SituacaoArq>-1</b:SituacaoArq>'
+        '</b:ListaNfeArquivosRPS>'
         f'</b:{method}Result></b:{method}Response></soap:Body></soap:Envelope>'
     ).encode()
 
