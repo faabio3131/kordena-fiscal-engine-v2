@@ -64,7 +64,7 @@ class JundiaiGissTaxFields:
     optante_simples: str
     fiscal_incentive: str
     recipient: JundiaiGissRecipient
-    national_service_code: str
+    national_service_code: str | None = None
     rps_type: str = "1"
     pis: Decimal = Decimal("0.00")
     cofins: Decimal = Decimal("0.00")
@@ -159,7 +159,9 @@ def _tax_fields(fields: JundiaiGissTaxFields) -> None:
         _label(receiver.email, "recipient email", 120)
     if receiver.municipal_registration is not None:
         _label(receiver.municipal_registration, "recipient IM", 20)
-    if len(_digits(fields.national_service_code, "NBS", 9)) != 9:
+    if fields.national_service_code is not None and len(
+        _digits(fields.national_service_code, "NBS", 9)
+    ) != 9:
         raise JundiaiGissIssueError("GissOnline NBS must have nine digits")
     # For 2026 GissOnline allows the RTC identifiers to be unprovided. When
     # taxpayers supply them, require all correlated identifiers together.
@@ -169,6 +171,8 @@ def _tax_fields(fields: JundiaiGissTaxFields) -> None:
         fields.rtc_incidence_ibge, fields.rtc_taxable_base, fields.rtc_ind_final,
     )
     if any(x is not None for x in indicators):
+        if fields.national_service_code is None:
+            raise JundiaiGissIssueError("GissOnline RTC requires NBS correlation")
         if any(x is None for x in indicators):
             raise JundiaiGissIssueError("Partial GissOnline 2026 RTC classification")
         assert fields.operation_indicator is not None
@@ -292,7 +296,8 @@ def build_jundiai_giss_issue_xml(
     _tag(srv, "IssRetido", "1" if service.iss_withheld else "2")
     _tag(srv, "ItemListaServico", fields.item_lista_servico)
     _tag(srv, "CodigoTributacaoMunicipio", fields.municipal_taxation_code)
-    _tag(srv, "CodigoNbs", fields.national_service_code)
+    if fields.national_service_code is not None:
+        _tag(srv, "CodigoNbs", fields.national_service_code)
     _tag(srv, "Discriminacao", _label(service.description, "description", 2000))
     _tag(srv, "CodigoMunicipio", doc.service_jurisdiction.municipality_ibge_code)
     _tag(srv, "ExigibilidadeISS", fields.iss_exigibility)
