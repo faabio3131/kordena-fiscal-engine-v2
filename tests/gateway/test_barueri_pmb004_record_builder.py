@@ -280,3 +280,68 @@ def test_type5_required_by_rtc_class_and_rental_activity() -> None:
     assert row[55:63] == b"84713012"
     assert row[63:213].rstrip() == b"Computadores portateis"
     assert row[213:216] == b"002"
+
+
+def test_reviewed_vn_deduction_reconciles_type3_and_type9_without_withholding() -> None:
+    original = _original()
+    request = _request(original)
+    request.document.services[0].deduction_amount.amount = Decimal("10.00")
+    fields = replace(_fields(), non_base_amount=Decimal("10.00"))
+    batch = build_barueri_reviewed_issue_batch(
+        request=request, original=original, fields=fields,
+        municipal_registration="1234567",
+    )
+    parts = batch.rps_bytes.split(b"\r\n")
+    assert [part[:1] for part in parts[:-1]] == [
+        b"1", b"2", b"3", b"4", b"9",
+    ]
+    assert parts[1][483:498] == b"000000000000000"
+    assert parts[2] == b"3VN000000000001000"
+    assert parts[-2][8:23] == b"000000000015000"
+    assert parts[-2][23:38] == b"000000000001000"
+
+
+@pytest.mark.parametrize("reported", [
+    None, Decimal("0.00"), Decimal("9.99"),
+    Decimal("10.01"), Decimal("-1.00"),
+])
+def test_vn_requires_exact_reviewed_canonical_deduction(
+    reported: Decimal | None,
+) -> None:
+    original = _original()
+    request = _request(original)
+    request.document.services[0].deduction_amount.amount = Decimal("10.00")
+    with pytest.raises(BarueriPmb004RecordError):
+        build_barueri_reviewed_issue_batch(
+            request=request, original=original,
+            fields=replace(_fields(), non_base_amount=reported),
+            municipal_registration="1234567",
+        )
+
+
+def test_vn_cannot_be_invented_if_canonical_deduction_is_zero() -> None:
+    original = _original()
+    with pytest.raises(BarueriPmb004RecordError, match="no canonical"):
+        build_barueri_reviewed_issue_batch(
+            request=_request(original), original=original,
+            fields=replace(_fields(), non_base_amount=Decimal("10.00")),
+            municipal_registration="1234567",
+        )
+
+
+def test_federal_retention_and_vn_use_distinct_pmb004_totals() -> None:
+    original = _original()
+    request = _request(original)
+    request.document.services[0].deduction_amount.amount = Decimal("10.00")
+    fields = replace(
+        _fields(), non_base_amount=Decimal("10.00"),
+        federal_retentions=(("01", Decimal("2.00")),),
+    )
+    rows = build_barueri_reviewed_issue_batch(
+        request=request, original=original,
+        fields=fields, municipal_registration="1234567",
+    ).rps_bytes.split(b"\r\n")
+    assert rows[1][483:498] == b"000000000000200"
+    assert rows[2] == b"301000000000000200"
+    assert rows[3] == b"3VN000000000001000"
+    assert rows[-2][23:38] == b"000000000001200"
