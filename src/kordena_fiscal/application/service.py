@@ -54,8 +54,11 @@ from kordena_fiscal.issuance.nfe_nfse import (
     NfseQueryClient,
 )
 from kordena_fiscal.issuance.nfse_archive import (
+    NATIONAL_DPS_RESERVATION_MEDIA_TYPE,
     NFSE_PREPARED_MEDIA_TYPE,
+    decode_national_dps_reservation,
     decode_prepared_nfse,
+    encode_national_dps_reservation,
     encode_prepared_nfse,
 )
 from kordena_fiscal.issuance.webiss_extrema_builder import (
@@ -571,6 +574,7 @@ class FiscalApplicationService:
             [FiscalNumberReservation], ExtremaRpsIntent
         ] | None = None,
         extrema_rps_series: int | None = None,
+        national_dps_series: int | None = None,
     ) -> DurablePreparedAuthorization:
         """Atomically reserve, validate and archive one provider-neutral NFS-e request."""
         if not isinstance(document, NfseCanonicalDocument):
@@ -578,6 +582,10 @@ class FiscalApplicationService:
         if not isinstance(retention, RetentionPolicyMetadata):
             raise FiscalValidationError("retention must be RetentionPolicyMetadata")
         request = NfseAuthorizationRequest.build(document)
+        if national_dps_series is not None and extrema_intent_builder is not None:
+            raise FiscalValidationError("National DPS and municipal RPS cannot share numbering")
+        if national_dps_series is not None and extrema_rps_series is not None:
+            raise FiscalValidationError("National DPS and municipal RPS cannot share numbering")
         if (extrema_intent_builder is None) != (extrema_rps_series is None):
             raise FiscalValidationError(
                 "WebISS intent builder and RPS numbering series must be supplied together"
@@ -615,6 +623,25 @@ class FiscalApplicationService:
                     )
                     if archived.media_type == EXTREMA_INTENT_MEDIA_TYPE
                 ]
+                prior_dps = [
+                    archived.content
+                    for archived in uow.archive.list_for_document(
+                        document.scope, document.document_id,
+                    )
+                    if archived.media_type == NATIONAL_DPS_RESERVATION_MEDIA_TYPE
+                ]
+                if len(prior_dps) > 1 or bool(prior_dps) != (
+                    national_dps_series is not None
+                ):
+                    raise PersistenceConflictError(
+                        "National DPS numbering cannot change after idempotency reservation"
+                    )
+                if prior_dps:
+                    reserved = decode_national_dps_reservation(
+                        prior_dps[0], request=prepared,
+                    )
+                    if reserved.key.series != national_dps_series:
+                        raise PersistenceConflictError("National DPS series changed on replay")
                 if len(prior_intents) > 1 or bool(prior_intents) != (
                     extrema_intent_builder is not None
                 ):
@@ -626,6 +653,37 @@ class FiscalApplicationService:
             if current is not None:
                 raise PersistenceConflictError("document_id already belongs to an issuance")
             municipal_entry: FiscalArchiveEntry | None = None
+            national_dps_entry: FiscalArchiveEntry | None = None
+            if national_dps_series is not None:
+                if (
+                    not isinstance(national_dps_series, int)
+                    or isinstance(national_dps_series, bool)
+                    or not 0 <= national_dps_series <= 99999
+                    or document.scope.environment is not FiscalEnvironment.HOMOLOGATION
+                    or not document.scope.host_namespace
+                    or document.issuer.address.jurisdiction.municipality_ibge_code
+                    != "3106200"
+                ):
+                    raise FiscalValidationError(
+                        "National DPS reservation requires scoped BH homologation"
+                    )
+                dps_key = FiscalSequenceKey.from_scope(
+                    document.scope,
+                    model=InternalFiscalSequenceStream.NFSE_DPS,
+                    series=national_dps_series,
+                )
+                dps_number = uow.sequences.reserve_next(
+                    dps_key, FiscalSequencePolicy(max_number=999_999_999_999_999),
+                )
+                national_dps_entry = FiscalArchiveEntry.build(
+                    scope=document.scope,
+                    document_reference=document.document_id,
+                    kind=FiscalArchiveKind.OTHER,
+                    content=encode_national_dps_reservation(request, dps_number),
+                    media_type=NATIONAL_DPS_RESERVATION_MEDIA_TYPE,
+                    archived_at=occurred_at,
+                    retention=retention,
+                )
             if extrema_intent_builder is not None:
                 assert extrema_rps_series is not None
                 if (
@@ -682,8 +740,31 @@ class FiscalApplicationService:
             uow.archive.append(entry)
             if municipal_entry is not None:
                 uow.archive.append(municipal_entry)
+            if national_dps_entry is not None:
+                uow.archive.append(national_dps_entry)
             uow.commit()
             return DurablePreparedAuthorization(attempt, current, request, False)
+
+    def load_national_dps_reservation(
+        self, scope: ExecutionScope, document_id: str,
+    ) -> FiscalNumberReservation:
+        """Load the original national DPS number; never allocate during issuance."""
+        with self._uow_factory() as uow:
+            prepared = self._load_prepared_from_uow(uow, scope, document_id)
+            if not isinstance(prepared, NfseAuthorizationRequest):
+                raise PersistenceStateError("Prepared document is not NFS-e")
+            entries = [
+                item for item in uow.archive.list_for_document(scope, document_id)
+                if item.kind is FiscalArchiveKind.OTHER
+                and item.media_type == NATIONAL_DPS_RESERVATION_MEDIA_TYPE
+            ]
+            if len(entries) != 1:
+                raise PersistenceStateError(
+                    "National DPS requires exactly one durable numbering reservation"
+                )
+            return decode_national_dps_reservation(
+                entries[0].content, request=prepared,
+            )
 
     def load_extrema_rps_intent(
         self, scope: ExecutionScope, document_id: str,
