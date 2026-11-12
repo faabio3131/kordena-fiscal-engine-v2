@@ -224,3 +224,11 @@ test("cognitive advisor is advisory-only, session-scoped and renders model text 
   // Only the two read-only explanation views expose the panel.
   assert.match(script, /viewId === "errors" \|\| viewId === "reconciliation"\) appendCognitiveAdvisor/);
 });
+
+test("A1 portal displays real scoped vault readback without sending certificate again", () => {
+  assert.match(script, /Verificar A1 armazenado/);
+  assert.match(script, /\/v1\/portal\/certificates\/a1\/status/);
+  assert.match(script, /fingerprint_sha256 === result\.fingerprint_sha256/);
+  assert.match(script, /Persistência após reinício e backup ainda/);
+  assert.match(script, /Não reenvie o certificado antes de investigar o erro/);
+});
