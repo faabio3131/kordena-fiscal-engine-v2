@@ -33,13 +33,13 @@ from kordena_fiscal.domain import (
 from kordena_fiscal.gateway.nfse_nacional_homologation import (
     NACIONAL_HOMOLOGATION_PROVIDER_ID,
 )
-from kordena_fiscal.lifecycle.idempotency import IdempotencyConflictError
 from kordena_fiscal.issuance import (
     NfseAuthorizationRequest,
     NfseCanonicalDocument,
     NfseServiceLine,
     NfseServiceTaker,
 )
+from kordena_fiscal.lifecycle.idempotency import IdempotencyConflictError
 from kordena_fiscal.persistence.ports import (
     FiscalUnitOfWorkFactory,
     PersistenceConflictError,
