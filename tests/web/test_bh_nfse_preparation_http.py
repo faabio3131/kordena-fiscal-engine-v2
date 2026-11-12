@@ -42,7 +42,7 @@ from kordena_fiscal.web.portal_runtime import DurableHumanPortalExecutor
 
 def _database(path: Path, *, binding: str = NACIONAL_HOMOLOGATION_PROVIDER_ID):
     db = SqliteFiscalDatabase(path)
-    db.initialize()
+    db.initialize(enable_national_dps=True)
     bh = BrazilianJurisdiction("MG", "3106200")
     scope = ExecutionScope(
         tenant_id="tenant-bh", unit_id="unit-bh",
