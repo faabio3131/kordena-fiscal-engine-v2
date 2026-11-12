@@ -188,6 +188,8 @@ def test_real_builder_and_preaudit_authorize_a_valid_document_end_to_end() -> No
     gateway = _governed_gateway()
     result = gateway.authorize(_request())
     assert result.status is AuthorizationStatus.AUTHORIZED
+    assert result.authorized_xml is not None
+    assert b"<NFSe" in result.authorized_xml
     assert result.invoice_reference == "35" + "0" * 48
 
 
@@ -377,3 +379,5 @@ def test_contagem_requires_federal_national_channel_for_eligible_simples(
     )
     result = gateway.authorize(request)
     assert result.status is AuthorizationStatus.AUTHORIZED
+    assert result.authorized_xml is not None
+    assert b"<NFSe" in result.authorized_xml
