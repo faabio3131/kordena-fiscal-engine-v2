@@ -71,6 +71,7 @@ def _fields() -> JundiaiGissTaxFields:
         municipal_taxation_code="819", iss_exigibility="1",
         incidence_ibge="3525904", iss_rate=Decimal("0.0200"),
         issuer_special_regime="1", optante_simples="2", fiscal_incentive="2",
+        national_service_code="120011000",
         recipient=JundiaiGissRecipient(
             tax_id="11222333000181", name="Cliente Teste",
             street="Rua das Flores", street_number="55", district="Centro",
@@ -99,6 +100,7 @@ def test_giss_issue_one_rps_lot_with_original_receipt_and_taker() -> None:
         "Cliente Teste"
     )
     assert lot.findtext(".//" + _TYPES + "OptanteSimplesNacional") == "2"
+    assert lot.findtext(".//" + _TYPES + "CodigoNbs") == "120011000"
 
 
 @pytest.mark.parametrize("change", [
