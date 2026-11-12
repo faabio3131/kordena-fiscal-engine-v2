@@ -251,6 +251,7 @@ class NfseCanonicalDocument:
     services: tuple[NfseServiceLine, ...]
     service_taker_reference: str | None = None
     schema_version: int = 1
+    special_tax_regime: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "document_id", _required(self.document_id, "document_id", 128))
@@ -287,6 +288,11 @@ class NfseCanonicalDocument:
             raise FiscalValidationError("schema_version must be an integer")
         if self.schema_version < 1:
             raise FiscalValidationError("schema_version must be >= 1")
+        if self.special_tax_regime is not None and (
+            not isinstance(self.special_tax_regime, str)
+            or self.special_tax_regime not in {"0", "1", "2", "4", "5", "6", "9"}
+        ):
+            raise FiscalValidationError("special_tax_regime must be a reviewed BH regime code")
 
     @property
     def totals(self) -> NfseDocumentTotals:
@@ -367,6 +373,8 @@ def build_nfse_request_fingerprint(document: NfseCanonicalDocument) -> str:
     # Preserve the historical hash for all service lines that do not carry
     # municipal detail; changing it would invalidate existing durable requests.
     service_payloads = cast(list[dict[str, object]], payload["services"])
+    if document.special_tax_regime is not None:
+        payload["special_tax_regime"] = document.special_tax_regime
     for line_payload, line in zip(service_payloads, document.services, strict=True):
         if line.municipal_taxation_detail is not None:
             line_payload["municipal_taxation_detail"] = line.municipal_taxation_detail
