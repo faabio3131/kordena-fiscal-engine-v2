@@ -41,6 +41,7 @@ def build_osasco_cancel_request(
         or issued.issuer_cnpj != source.issuer_cnpj
         or issued.rps_number != source.rps_number
         or issued.rps_series != source.rps_series
+        or issued.competence_date != source.competence_date
         or issued.gross_amount != source.gross_amount
         or cancel_type not in ("N", "S")
         or human_approved is not True
