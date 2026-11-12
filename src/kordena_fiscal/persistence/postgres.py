@@ -101,6 +101,7 @@ from .sqlite_core import (
 )
 from .sqlite_delivery import SqliteFiscalDeliveryAuditStore, SqliteFiscalOutboxOrderingStore
 from .sqlite_idempotency import SqliteIdempotencyStore
+from .sqlite_national_dps import SqliteNationalDpsSequenceStore
 from .sqlite_inbox import SqliteFiscalInboxStore
 from .sqlite_outbox_archive import SqliteFiscalArchiveStore, SqliteFiscalOutboxStore
 from .sqlite_reconciliation import SqliteReconciliationRepository
@@ -192,6 +193,17 @@ class PostgresFiscalSequenceStore(SqliteFiscalSequenceStore):
         return super().reserve_next(key, policy)
 
 
+class PostgresNationalDpsSequenceStore(SqliteNationalDpsSequenceStore):
+    """Lock the LEGAL issuer key, not tenant/unit, for global DPS uniqueness."""
+
+    def reserve_next(
+        self, key: FiscalSequenceKey, policy: FiscalSequencePolicy,
+    ) -> FiscalNumberReservation:
+        identity = self.identity(key)
+        _advisory_lock(self._connection, "national-dps:" + "|".join(map(str, identity)))
+        return super().reserve_next(key, policy)
+
+
 class PostgresFiscalInboxStore(SqliteFiscalInboxStore):
     """Inbox store that turns concurrent duplicate receives into deterministic replay."""
 
@@ -220,6 +232,7 @@ class PostgresFiscalUnitOfWork:
         self._committed = False
         self._idempotency: PostgresIdempotencyStore | None = None
         self._sequences: PostgresFiscalSequenceStore | None = None
+        self._dps_sequences: PostgresNationalDpsSequenceStore | None = None
         self._inbox: PostgresFiscalInboxStore | None = None
         self._outbox: PostgresFiscalOutboxStore | None = None
         self._outbox_ordering: SqliteFiscalOutboxOrderingStore | None = None
@@ -244,6 +257,7 @@ class PostgresFiscalUnitOfWork:
         self._committed = False
         self._idempotency = PostgresIdempotencyStore(sqlite_compat)
         self._sequences = PostgresFiscalSequenceStore(sqlite_compat)
+        self._dps_sequences = PostgresNationalDpsSequenceStore(sqlite_compat)
         self._inbox = PostgresFiscalInboxStore(sqlite_compat)
         self._outbox = PostgresFiscalOutboxStore(sqlite_compat)
         self._outbox_ordering = SqliteFiscalOutboxOrderingStore(sqlite_compat)
@@ -288,6 +302,10 @@ class PostgresFiscalUnitOfWork:
     @property
     def sequences(self) -> PostgresFiscalSequenceStore:
         return self._require(self._sequences, "sequences")
+
+    @property
+    def dps_sequences(self) -> PostgresNationalDpsSequenceStore:
+        return self._require(self._dps_sequences, "dps_sequences")
 
     @property
     def inbox(self) -> PostgresFiscalInboxStore:
