@@ -200,7 +200,7 @@ def test_canonical_gateway_rejects_unapproved_provider_before_prepared_rps() -> 
     {"issuer_ibge": "3505708"},
     {"gross_amount": Decimal("150.01")},
     {"competence_date": date(2026, 10, 1)},
-    {"issuer_cnpj": Cnpj("00944029000100")},
+    {"issuer_cnpj": Cnpj("00944029000121")},
 ])
 def test_municipal_response_cannot_promote_an_unrelated_invoice(
     mutate: dict[str, object],
