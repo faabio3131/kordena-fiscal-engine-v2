@@ -22,6 +22,7 @@ from kordena_fiscal.gateway.jundiai_giss_request_builder import (
 )
 from kordena_fiscal.gateway.sp4_municipal_canonical import Sp4OriginalRps
 
+_R = "{http://www.giss.com.br/consultar-nfse-rps-envio-v2_04.xsd}"
 _T = "{http://www.giss.com.br/tipos-v2_04.xsd}"
 
 
@@ -44,13 +45,13 @@ def test_giss_current_query_contains_one_original_rps_and_prestador() -> None:
     )
     root = etree.fromstring(xml)
     assert etree.QName(root).localname == "ConsultarNfseRpsEnvio"
-    assert root.findtext(f".//{_T}IdentificacaoRps/{_T}Numero") == "42"
-    assert root.findtext(f".//{_T}IdentificacaoRps/{_T}Serie") == "NF"
-    assert root.findtext(f".//{_T}IdentificacaoRps/{_T}Tipo") == "1"
-    assert root.findtext(f".//{_T}Prestador/{_T}CpfCnpj/{_T}Cnpj") == (
+    assert root.findtext(f".//{_R}IdentificacaoRps/{_T}Numero") == "42"
+    assert root.findtext(f".//{_R}IdentificacaoRps/{_T}Serie") == "NF"
+    assert root.findtext(f".//{_R}IdentificacaoRps/{_T}Tipo") == "1"
+    assert root.findtext(f".//{_R}Prestador/{_T}CpfCnpj/{_T}Cnpj") == (
         "11222333000181"
     )
-    assert root.findtext(f".//{_T}Prestador/{_T}InscricaoMunicipal") == "1234567"
+    assert root.findtext(f".//{_R}Prestador/{_T}InscricaoMunicipal") == "1234567"
 
 
 def test_signed_giss_query_preserves_original_issuer_and_number() -> None:
