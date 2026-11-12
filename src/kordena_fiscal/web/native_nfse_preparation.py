@@ -33,6 +33,7 @@ from kordena_fiscal.domain import (
 from kordena_fiscal.gateway.nfse_nacional_homologation import (
     NACIONAL_HOMOLOGATION_PROVIDER_ID,
 )
+from kordena_fiscal.lifecycle.idempotency import IdempotencyConflictError
 from kordena_fiscal.issuance import (
     NfseAuthorizationRequest,
     NfseCanonicalDocument,
@@ -212,7 +213,7 @@ def prepare_native_nfse(
         raise _error(403, "NATIVE_NFSE_UNIT_FORBIDDEN") from exc
     except ControlPlaneNotFoundError as exc:
         raise _error(409, "NATIVE_NFSE_PROVIDER_NOT_CONFIGURED") from exc
-    except PersistenceConflictError as exc:
+    except (PersistenceConflictError, IdempotencyConflictError) as exc:
         raise _error(409, "NATIVE_NFSE_CONTENT_CONFLICT") from exc
     except PersistenceStateError as exc:
         raise _error(409, "NATIVE_NFSE_PREPARATION_STATE_CONFLICT") from exc

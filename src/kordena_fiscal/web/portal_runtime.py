@@ -890,9 +890,10 @@ class DurableHumanPortalExecutor:
         with self._unit_of_work_factory() as uow:
             entries = uow.archive.list_for_document(scope, document_reference)
         matches = [entry for entry in entries if entry.kind is kind]
-        if not matches and kind in {
-            FiscalArchiveKind.DANFE, FiscalArchiveKind.AUXILIARY_PDF,
-        }:
+        if not matches and (
+            kind is FiscalArchiveKind.AUXILIARY_PDF
+            or (kind is FiscalArchiveKind.DANFE and self._danfe_renderer is not None)
+        ):
             # Generate the printable PDF ONLY from an already archived, genuine
             # authorized XML. No synthetic fiscal authorization or XML is created.
             authorized = [

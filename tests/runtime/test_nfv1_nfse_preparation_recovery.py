@@ -337,7 +337,8 @@ def test_prepared_nfse_taker_survives_archiving_and_rejects_tamper() -> None:
     assert decode_prepared_nfse(encoded, scope=base.scope) == request
     changed = json.loads(encoded)
     changed["service_taker"]["legal_name"] = "Outra Empresa"
-    with pytest.raises(FiscalValidationError, match="fingerprint"):
+    # Decoder intentionally masks integrity details, without accepting tampered content.
+    with pytest.raises(FiscalValidationError, match="invalid prepared NFS-e artifact"):
         decode_prepared_nfse(json.dumps(changed).encode(), scope=base.scope)
 
 
