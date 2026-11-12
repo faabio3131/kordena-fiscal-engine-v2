@@ -362,7 +362,7 @@ def test_tomador_rejects_ambiguous_and_invalid_foreign_identification() -> None:
         )
     with pytest.raises(FiscalValidationError, match="two uppercase ISO letters"):
         NfseForeignAddress(
-            country_code="usa", postal_code="10001", city="New York",
+            country_code="us", postal_code="10001", city="New York",
             region="New York", street="Fifth Avenue", number="10",
             district="Manhattan",
         )
