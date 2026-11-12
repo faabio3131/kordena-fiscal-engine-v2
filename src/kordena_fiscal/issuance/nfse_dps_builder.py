@@ -78,6 +78,28 @@ def _derive_dps_numbering(request: NfseAuthorizationRequest) -> tuple[str, str]:
     return "1", n_dps
 
 
+def derive_national_dps_id(request: NfseAuthorizationRequest) -> str:
+    """Reconstruct the immutable official DPS identifier for read-only recovery.
+
+    No new sequence is allocated and no provider POST is performed. The exact
+    same identifier is used by build_signed_dps and GET /dps/{id}.
+    """
+    if not isinstance(request, NfseAuthorizationRequest):
+        raise FiscalValidationError("DPS recovery requires a canonical authorization request")
+    cnpj = request.document.issuer.cnpj.value
+    municipality = request.document.issuer.address.jurisdiction.municipality_ibge_code
+    if (
+        not isinstance(municipality, str) or len(municipality) != 7
+        or not municipality.isdecimal() or len(cnpj) != 14 or not cnpj.isdecimal()
+    ):
+        raise FiscalValidationError("National DPS recovery requires numeric CNPJ and IBGE")
+    serie, n_dps = _derive_dps_numbering(request)
+    return (
+        "DPS" + municipality + _FEDERAL_INSCRIPTION_TYPE_CNPJ
+        + cnpj + serie.zfill(5) + n_dps
+    )
+
+
 def build_signed_dps(
     request: NfseAuthorizationRequest, certificate: EphemeralCertificateMaterial
 ) -> bytes:
@@ -132,14 +154,7 @@ def build_signed_dps(
         )
 
     serie, n_dps = _derive_dps_numbering(request)
-    dps_id = (
-        "DPS"
-        + issuer_municipality
-        + _FEDERAL_INSCRIPTION_TYPE_CNPJ
-        + cnpj
-        + serie.zfill(5)
-        + n_dps
-    )
+    dps_id = derive_national_dps_id(request)
 
     root = etree.Element(f"{{{_NFSE_NS}}}DPS", nsmap={None: _NFSE_NS})  # type: ignore[dict-item]
     root.set("versao", _SCHEMA_VERSION)
