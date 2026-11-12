@@ -379,6 +379,16 @@ def test_bh_reserved_number_is_preserved_in_dps_identity() -> None:
     info = etree.fromstring(_signed_bh(request)).find(f"{{{_NFSE_NS}}}infDPS")
     assert info.findtext(f"{{{_NFSE_NS}}}nDPS") == "1"
     assert info.findtext(f"{{{_NFSE_NS}}}serie") == "1"
+    expected = (
+        "DPS"
+        + request.document.issuer.address.jurisdiction.municipality_ibge_code
+        + "1"
+        + request.document.issuer.cnpj.value
+        + "00001"
+        + "000000000000001"
+    )
+    assert info.get("Id") == expected
+    assert len(info.get("Id")) == 45
 
 
 def test_bh_national_dps_uses_current_official_xsd_version() -> None:
