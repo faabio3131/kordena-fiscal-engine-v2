@@ -501,3 +501,52 @@ def test_bh_nt009_deduction_uses_reviewed_adjustment_group_not_removed_vdedred()
     assert valores.findtext(
         f"{{{_NFSE_NS}}}vAjusteBC/{{{_NFSE_NS}}}vAjusteBCISSQN"
     ) == "10.00"
+
+
+def test_bh_substitution_dps_uses_official_nt009_schema_and_original_key() -> None:
+    original = _bh_request("001")
+    issuer_cnpj = original.document.issuer.cnpj.value
+    prior_key = "3106200" + "2" + "1" + issuer_cnpj + "1" * 27
+    replacement = NfseAuthorizationRequest.build(replace(
+        original.document,
+        substituted_invoice_access_key=prior_key,
+        substitution_reason_code="99",
+        substitution_reason_text="Substituicao revisada de nota original sintetica.",
+    ))
+    assert replacement.request_fingerprint != original.request_fingerprint
+    assert replacement.idempotency_key == original.idempotency_key
+    signed = _signed_bh(replacement)
+    national_dps_validator(
+        "1.01", profile=NT009_RESTRICTED_PROFILE,
+    ).validate_document(signed)
+    root = etree.fromstring(signed)
+    subst = root.find(f"{{{_NFSE_NS}}}infDPS/{{{_NFSE_NS}}}subst")
+    assert subst is not None
+    assert [etree.QName(child).localname for child in subst] == [
+        "chSubstda", "cMotivo", "xMotivo",
+    ]
+    assert subst.findtext(f"{{{_NFSE_NS}}}chSubstda") == prior_key
+    recovered = decode_prepared_nfse(
+        encode_prepared_nfse(replacement), scope=replacement.document.scope,
+    )
+    assert recovered.request_fingerprint == replacement.request_fingerprint
+    assert recovered.document.substituted_invoice_access_key == prior_key
+    assert recovered.document.substitution_reason_code == "99"
+
+
+@pytest.mark.parametrize(("key", "reason"), [
+    (None, "99"),
+    ("3106200" + "2" + "1" + "12345678000195" + "0" * 26, "99"),
+    ("3106200" + "2" + "1" + "11222333000181" + "0" * 27, "99"),
+    ("3106200" + "2" + "1" + "12345678000195" + "0" * 27, "10"),
+])
+def test_bh_substitution_rejects_missing_mismatched_or_unapproved_values(
+    key: str | None, reason: str,
+) -> None:
+    original = _bh_request("001")
+    with pytest.raises(FiscalValidationError, match="Substitution"):
+        replace(
+            original.document,
+            substituted_invoice_access_key=key,
+            substitution_reason_code=reason,
+        )
