@@ -152,6 +152,18 @@ def build_cajamar_reviewed_ports(
     def invoke(
         req: NfseAuthorizationRequest, original: Sp4OriginalRps, method: str,
     ) -> Sp4ProviderOutcome:
+        # GeisWeb20 accepts one service per RPS and one invoice per lot.
+        # Reject incompatible canonical documents before opening Vault/HTTP.
+        if (
+            len(req.document.services) != 1
+            or not original.rps_number.isascii()
+            or not original.rps_number.isdecimal()
+            or not 1 <= len(original.rps_number) <= 8
+            or int(original.rps_number) < 1
+        ):
+            raise Sp4CanonicalMunicipalError(
+                "Cajamar GeisWeb requires one service and 1-8 digit original RPS"
+            )
         operation = _validate_prepared_link(
             req, original, build_signed_operation(req, original, method),
             expected_type=CajamarPreparedNfse, expected_method=method,

@@ -8,12 +8,12 @@ import pytest
 
 from kordena_fiscal.domain import Cnpj, ExecutionScope, FiscalEnvironment, TaxRegimeCode
 from kordena_fiscal.gateway.jundiai_giss_homologation import (
+    _GISS_REQUEST_ROOTS,
     JUNDIAI_GISS_PROVIDER_ID,
     JundiaiGissContractError,
     JundiaiGissHomologationTransport,
     JundiaiGissWsdlContract,
     JundiaiSignedOperation,
-    _GISS_REQUEST_ROOTS,
     _parse_reply,
     _soap,
 )
