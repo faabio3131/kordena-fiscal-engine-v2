@@ -21,13 +21,13 @@ _NS = "http://www.sped.fazenda.gov.br/nfse"
 def _response(xml: bytes) -> bytes:
     return json.dumps(
         {"nfseXmlGZipB64": base64.b64encode(gzip.compress(xml)).decode("ascii")}
-    ).encode("utf-8")
+    ).encode()
 
 
 def _receipt(key: str = _KEY) -> bytes:
     return (
         f'<NFSe xmlns="{_NS}"><infNFSe Id="NFS{key}"/></NFSe>'
-    ).encode("utf-8")
+    ).encode()
 
 
 def test_query_preserves_original_authorized_receipt_bytes() -> None:
