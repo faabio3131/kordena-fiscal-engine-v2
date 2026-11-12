@@ -337,6 +337,37 @@ def build_jundiai_giss_issue_xml(
     return data
 
 
+_XMLDSIG = "http://www.w3.org/2000/09/xmldsig#"
+
+
+def _source_preserving_tree(node: etree._Element) -> tuple[object, ...]:
+    """Compare all original fields while allowing only XMLDSig additions.
+
+    The signer is not entitled to modify issuer, recipient, RPS, ISS, RTC,
+    service codes or amounts. Namespace prefixes and formatting whitespace
+    are non-fiscal; element namespaces, values, order and attributes are.
+    A separate signed XSD/XMLDSig verifier remains mandatory for authenticity.
+    """
+    if not isinstance(node.tag, str):
+        raise JundiaiGissIssueError("Signed GissOnline issue contains foreign markup")
+    if node.tag == f"{{{_XMLDSIG}}}Signature":
+        return ()
+    if node.tag.startswith(f"{{{_XMLDSIG}}}"):
+        raise JundiaiGissIssueError("Unexpected detached XMLDSig element")
+    text = node.text or ""
+    tail = node.tail or ""
+    return (
+        node.tag, tuple(sorted(node.attrib.items())),
+        text if text.strip() else "",
+        tail if tail.strip() else "",
+        tuple(
+            _source_preserving_tree(child)
+            for child in node
+            if child.tag != f"{{{_XMLDSIG}}}Signature"
+        ),
+    )
+
+
 def prepare_jundiai_giss_signed_issue(
     *, request: NfseAuthorizationRequest, original: Sp4OriginalRps,
     fields: JundiaiGissTaxFields,
@@ -380,6 +411,20 @@ def prepare_jundiai_giss_signed_issue(
             raise JundiaiGissIssueError(
                 "Signed GissOnline issue does not match persisted original RPS"
             )
+    # Verify the complete generated document after signing, not just four
+    # identity fields. An XML signer must never rewrite RTC/ISS, recipient,
+    # or service metadata while preserving original number and gross amount.
+    unsigned_root = etree.fromstring(
+        source,
+        parser=etree.XMLParser(
+            no_network=True, load_dtd=False, resolve_entities=False,
+            huge_tree=False,
+        ),
+    )
+    if _source_preserving_tree(root) != _source_preserving_tree(unsigned_root):
+        raise JundiaiGissIssueError(
+            "Signed GissOnline issue does not match persisted original RPS"
+        )
     validate_signed_xml(signed)
     return JundiaiSignedOperation(
         scope=original.scope, issuer_cnpj=original.issuer_cnpj,
