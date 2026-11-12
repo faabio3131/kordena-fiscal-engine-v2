@@ -275,3 +275,31 @@ def test_unproved_authorization_and_missing_official_validation_ports_rejected()
             submit_prepared_rps=Mock(), query_original_rps=Mock(),
             verify_official_invoice_xml=None,  # type: ignore[arg-type]
         )
+
+
+def test_new_query_correlation_may_reuse_original_rps_within_same_partition() -> None:
+    gateway, ports = _ports("osasco-rtc-homologation")
+    request = _request("3534401")
+    request.document.scope = ExecutionScope(
+        host_namespace="nfcore", tenant_id="sp4-pilot-tenant",
+        unit_id="accountant-unit", environment=FiscalEnvironment.HOMOLOGATION,
+        correlation_id="new-independent-query",
+    )
+    result = NfseQueryClient(gateway).query(request)
+    assert result.scope == request.document.scope
+    assert result.status is AuthorizationStatus.AUTHORIZED
+    ports["query"].assert_called_once()
+
+
+def test_other_tenant_cannot_recover_original_document_even_when_provider_is_same() -> None:
+    gateway, ports = _ports("jundiai-giss-v2-homologation")
+    request = _request("3525904")
+    request.document.scope = ExecutionScope(
+        host_namespace="nfcore", tenant_id="attacker-tenant",
+        unit_id="accountant-unit", environment=FiscalEnvironment.HOMOLOGATION,
+        correlation_id="cross-tenant-denied",
+    )
+    with pytest.raises(Sp4CanonicalMunicipalError, match="original RPS"):
+        gateway.query(request)
+    ports["query"].assert_not_called()
+    ports["verify"].assert_not_called()
