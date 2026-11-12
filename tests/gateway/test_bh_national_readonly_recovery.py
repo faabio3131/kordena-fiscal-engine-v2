@@ -12,18 +12,29 @@ from unittest.mock import Mock
 import pytest
 
 from kordena_fiscal.domain import (
-    BrazilianJurisdiction, CnaeCode, Cnpj, ExecutionScope, FiscalAddress,
-    FiscalEnvironment, FiscalProfile, Money, SourceReference,
-    StateRegistration, TaxRegimeCode,
+    BrazilianJurisdiction,
+    CnaeCode,
+    Cnpj,
+    ExecutionScope,
+    FiscalAddress,
+    FiscalEnvironment,
+    FiscalProfile,
+    Money,
+    SourceReference,
+    StateRegistration,
+    TaxRegimeCode,
 )
-from kordena_fiscal.gateway import AuthorizationStatus
-from kordena_fiscal.gateway import nfse_nacional_homologation as national
+from kordena_fiscal.gateway import AuthorizationStatus, nfse_nacional_homologation as national
 from kordena_fiscal.issuance.nfe_nfse import (
-    NfseAuthorizationRequest, NfseCanonicalDocument, NfseServiceLine,
+    NfseAuthorizationRequest,
+    NfseCanonicalDocument,
+    NfseServiceLine,
 )
 from kordena_fiscal.numbering import (
-    FiscalSequenceKey, FiscalSequencePolicy,
-    InMemoryFiscalSequenceStore, InternalFiscalSequenceStream,
+    FiscalSequenceKey,
+    FiscalSequencePolicy,
+    InMemoryFiscalSequenceStore,
+    InternalFiscalSequenceStream,
 )
 
 _NOW = datetime(2026, 11, 12, 12, 0, tzinfo=UTC)
