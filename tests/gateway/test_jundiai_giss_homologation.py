@@ -13,6 +13,7 @@ from kordena_fiscal.gateway.jundiai_giss_homologation import (
     JundiaiGissHomologationTransport,
     JundiaiGissWsdlContract,
     JundiaiSignedOperation,
+    _GISS_REQUEST_ROOTS,
     _parse_reply,
     _soap,
 )
@@ -24,15 +25,8 @@ def _request(
     competence: date = date(2026, 11, 13),
     approved: bool = False,
 ) -> JundiaiSignedOperation:
-    root = {
-        "RecepcionarLoteRps": "EnviarLoteRpsEnvio",
-        "ConsultarLoteRps": "ConsultarLoteRpsEnvio",
-        "CancelarNfse": "CancelarNfseEnvio",
-        "ConsultarNfsePorRps": "ConsultarNfseRpsEnvio",
-    }[method]
-    xml = (
-        f'<{root} xmlns="http://www.abrasf.org.br/nfse.xsd"></{root}>'
-    ).encode()
+    root, namespace = _GISS_REQUEST_ROOTS[method]
+    xml = f'<{root} xmlns="{namespace}"></{root}>'.encode()
     return JundiaiSignedOperation(
         scope=ExecutionScope(
             host_namespace="nfcore", tenant_id="tenant-j", unit_id="unit-j",
@@ -80,6 +74,8 @@ def test_contract_preserves_escaped_signed_abrasf_xml() -> None:
     assert b"nfseCabecMsg" in packed
     assert b"nfseDadosMsg" in packed
     assert b"&lt;EnviarLoteRpsEnvio" in packed
+    assert b"http://www.giss.com.br/enviar-lote-rps-envio-v2_04.xsd" in packed
+    assert b"http://www.giss.com.br/cabecalho-v2_04.xsd" in packed
     assert b"2.04" in packed
 
 
@@ -136,3 +132,18 @@ def test_approved_cancel_needs_separate_cancellation_binding() -> None:
     with pytest.raises(JundiaiGissContractError, match="durable binding missing"):
         adapter.invoke(_request(method="CancelarNfse", approved=True))
     assert resolver.resolve_provider_id.call_args.kwargs["operation"] == "cancel"
+
+
+@pytest.mark.parametrize("method", sorted(_GISS_REQUEST_ROOTS))
+def test_real_giss_204_root_namespaces_are_not_generic_abrasf(method: str) -> None:
+    from kordena_fiscal.gateway.jundiai_giss_homologation import _validate_xml_shape
+
+    request = _request(method=method, approved=method == "CancelarNfse")
+    parsed = _validate_xml_shape(request.signed_xml, method)
+    assert parsed.tag.startswith("{http://www.giss.com.br/")
+    legacy = request.signed_xml.replace(
+        _GISS_REQUEST_ROOTS[method][1].encode(),
+        b"http://www.abrasf.org.br/nfse.xsd",
+    )
+    with pytest.raises(JundiaiGissContractError, match="operation XML root"):
+        _validate_xml_shape(legacy, method)

@@ -38,7 +38,22 @@ JUNDIAI_IBGE = "3525904"
 JUNDIAI_GISS_PROVIDER_ID = "jundiai-giss-v2-homologation"
 JUNDIAI_GISS_TEST_URL = "https://v2-ws-homologacao.giss.com.br/service-ws/nf/nfse-ws"
 _SOAP = "http://schemas.xmlsoap.org/soap/envelope/"
-_NS_ABRASF = "http://www.abrasf.org.br/nfse.xsd"
+_GISS = "http://www.giss.com.br/"
+_GISS_HEADER = _GISS + "cabecalho-v2_04.xsd"
+_GISS_REQUEST_ROOTS = {
+    "RecepcionarLoteRps": (
+        "EnviarLoteRpsEnvio", _GISS + "enviar-lote-rps-envio-v2_04.xsd",
+    ),
+    "ConsultarLoteRps": (
+        "ConsultarLoteRpsEnvio", _GISS + "consultar-lote-rps-envio-v2_04.xsd",
+    ),
+    "ConsultarNfsePorRps": (
+        "ConsultarNfseRpsEnvio", _GISS + "consultar-nfse-rps-envio-v2_04.xsd",
+    ),
+    "CancelarNfse": (
+        "CancelarNfseEnvio", _GISS + "cancelar-nfse-envio-v2_04.xsd",
+    ),
+}
 _MAX = 2_097_152
 _OPERATION_MAP = {
     "RecepcionarLoteRps": "authorize",
@@ -139,13 +154,8 @@ def _validate_xml_shape(payload: bytes, method: str) -> etree._Element:
         raise JundiaiGissContractError("Invalid Giss XML") from None
     if bool(getattr(root.getroottree().docinfo, "doctype", "")):
         raise JundiaiGissContractError("Giss DTD is forbidden")
-    expected_root = {
-        "RecepcionarLoteRps": "EnviarLoteRpsEnvio",
-        "ConsultarLoteRps": "ConsultarLoteRpsEnvio",
-        "ConsultarNfsePorRps": "ConsultarNfseRpsEnvio",
-        "CancelarNfse": "CancelarNfseEnvio",
-    }[method]
-    if root.tag != f"{{{_NS_ABRASF}}}{expected_root}":
+    expected_root, namespace = _GISS_REQUEST_ROOTS[method]
+    if root.tag != f"{{{namespace}}}{expected_root}":
         raise JundiaiGissContractError("Giss NFS-e operation XML root mismatch")
     return root
 
@@ -159,7 +169,7 @@ def _soap(operation: JundiaiSignedOperation, contract: JundiaiGissWsdlContract) 
     header = etree.SubElement(method_node, "nfseCabecMsg")
     header.text = (
         '<?xml version="1.0" encoding="utf-8"?>'
-        '<cabecalho versao="2.04" xmlns="http://www.abrasf.org.br/nfse.xsd">'
+        '<cabecalho versao="2.04" xmlns="http://www.giss.com.br/cabecalho-v2_04.xsd">'
         '<versaoDados>2.04</versaoDados></cabecalho>'
     )
     message = etree.SubElement(method_node, "nfseDadosMsg")
