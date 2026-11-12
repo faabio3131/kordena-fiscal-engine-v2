@@ -47,7 +47,7 @@ def build_jundiai_rps_query(
         raise Sp4CanonicalMunicipalError("Invalid Jundiai RPS or municipal registration")
     root = etree.Element(
         f"{{{_DOCUMENT}}}ConsultarNfseRpsEnvio",
-        nsmap={None: _DOCUMENT, "t": _TYPES},
+        nsmap={"g": _DOCUMENT, "t": _TYPES},
     )
     identification = etree.SubElement(root, f"{{{_TYPES}}}IdentificacaoRps")
     for tag, value in (
