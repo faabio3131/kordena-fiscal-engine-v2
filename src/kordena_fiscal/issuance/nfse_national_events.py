@@ -32,7 +32,7 @@ class NationalEventType(str, Enum):
     CANCEL_BY_REPLACEMENT = "105102"
 
 
-def _valid_access_key(key: str, issuer_cnpj: str) -> bool:
+def _valid_access_key(key: str | None, issuer_cnpj: str) -> bool:
     return (
         isinstance(key, str)
         and len(key) == 50
