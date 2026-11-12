@@ -14,6 +14,9 @@ from kordena_fiscal.domain import (
     FiscalEnvironment,
     TaxRegimeCode,
 )
+from kordena_fiscal.gateway.cajamar_geisweb_request_builder import (
+    CajamarGeiswebBuilderError,
+)
 from kordena_fiscal.gateway.sp4_municipal_canonical import (
     Sp4CanonicalMunicipalError,
     Sp4OriginalRps,
@@ -100,7 +103,7 @@ def test_wrong_city_is_not_relabelled_as_cajamar() -> None:
         build_signed_issue=Mock(), sign_lot_query=lambda raw: raw,
         validate_signed_query=Mock(),
     )
-    with pytest.raises(Exception):
+    with pytest.raises(CajamarGeiswebBuilderError):
         factory(
             _request(),
             replace(_source("3509205"), issuer_ibge="3534401"),
