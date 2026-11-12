@@ -316,13 +316,13 @@ def test_bh_requires_reviewed_nbs_in_2026() -> None:
         build_signed_dps(_bh_request("001", nbs=None), _certificate())
 
 
-def test_bh_national_dps_contains_provided_nbs_after_description() -> None:
+def test_bh_national_dps_contains_provided_nbs_in_nt009_order() -> None:
     signed = _signed_bh(_bh_request("001", nbs="123456789"))
     national_dps_validator("1.01", profile=NT009_RESTRICTED_PROFILE).validate_document(signed)
     root = etree.fromstring(signed)
     c_serv = root.find(f".//{{{_NFSE_NS}}}cServ")
     assert [etree.QName(child).localname for child in c_serv] == [
-        "cTribNac", "cTribMun", "xDescServ", "cNBS",
+        "cTribNac", "cTribMun", "cNBS", "xDescServ",
     ]
 
 
