@@ -304,7 +304,9 @@ class NfseNacionalHomologationGateway:
                 raise ValueError("inconsistent DPS result")
             access_key = payload["chaveAcesso"]
         except (ValueError, UnicodeDecodeError, TypeError):
-            raise OfficialNfseTransportError("Consulta DPS retornou identificação divergente") from None
+            raise OfficialNfseTransportError(
+                "Consulta DPS retornou identificação divergente"
+            ) from None
         nfse_response = self._exchange_read(
             prefix + "/nfse/" + access_key, tls, self._timeout,
         )
