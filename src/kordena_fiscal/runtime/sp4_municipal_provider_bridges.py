@@ -410,6 +410,9 @@ def build_barueri_reviewed_ports(
     validate_return_file: Callable[
         [BarueriRpsBatch, BarueriReceipt], BarueriConvertedNfseEvidence
     ] = parse_barueri_official_return_file,
+    retrieve_official_invoice_xml: Callable[
+        [BarueriConvertedNfseEvidence], bytes
+    ] | None = None,
 ) -> Sp4ReviewedMunicipalPorts:
     if not isinstance(transport, BarueriPmb004HomologationTransport) or not all(
         callable(x) for x in (
@@ -520,8 +523,39 @@ def build_barueri_reviewed_ports(
             raise Sp4CanonicalMunicipalError(
                 "Barueri official return does not prove original RPS"
             )
-        # The TXT evidence is still NOT an official XML. The interpreter
-        # must retrieve and verify authentic provider/ADN NFS-e XML by key.
-        return _verified_outcome(interpret_official_result(receipt, req, original))
+        # TXT is never a fiscal XML. The original municipal XML must be
+        # downloaded independently using the authenticated NFS-e identifiers.
+        # A missing or unprovisioned XML channel remains PENDING and must
+        # never synthesize or authorize a document from the TXT export.
+        if retrieve_official_invoice_xml is None:
+            return Sp4ProviderOutcome(
+                status=AuthorizationStatus.PENDING,
+                provider_request_id=protocol,
+            )
+        raw = retrieve_official_invoice_xml(evidence)
+        if not isinstance(raw, bytes) or not 0 < len(raw) <= 2_097_152:
+            raise Sp4CanonicalMunicipalError(
+                "Barueri original official NFS-e XML is missing"
+            )
+        # This is only a candidate. The canonical gateway must independently
+        # validate the real municipal/ADN XSD, signature and all identifiers,
+        # including the 50-digit access key, against this same XML.
+        candidate = Sp4VerifiedInvoice(
+            issuer_cnpj=original.issuer_cnpj,
+            issuer_ibge=original.issuer_ibge,
+            competence_date=original.competence_date,
+            rps_number=original.rps_number,
+            rps_series=original.rps_series,
+            gross_amount=evidence.service_total,
+            invoice_number=evidence.note_number,
+            verification_code=evidence.verification_code,
+            invoice_reference=evidence.access_key,
+            authorized_xml=raw,
+        )
+        return Sp4ProviderOutcome(
+            status=AuthorizationStatus.AUTHORIZED,
+            provider_request_id=protocol,
+            official_invoice=candidate,
+        )
 
     return authority.wrap(authorize, query)
