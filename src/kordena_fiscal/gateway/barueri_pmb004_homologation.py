@@ -194,7 +194,7 @@ class BarueriRpsBatch:
                             "PMB004 cancellation/substitution RPS identity invalid"
                         )
                 elif int(rps_number) <= 0:
-                    raise BarueriContractError("PMB004 issuance/retry RPS number invalid")
+                    raise BarueriContractError("PMB004 invalid RPS identity or service value")
                 try:
                     datetime.strptime(
                         (record[25:33] + record[33:39]).decode("ascii"), "%Y%m%d%H%M%S",
