@@ -48,12 +48,14 @@ def _operation(
     root = "EnviarLoteRpsEnvio" if sending else "ConsultarNfseRpsEnvio"
     service = "enviar-lote-rps-envio" if sending else "consultar-nfse-rps-envio"
     lot_tag = f"<t:NumeroLote>{lot}</t:NumeroLote>" if sending else ""
+    identifier_prefix = "t" if sending else "g"
     signed = (
         f'<g:{root} xmlns:g="http://www.giss.com.br/{service}-v2_04.xsd" '
         'xmlns:t="http://www.giss.com.br/tipos-v2_04.xsd">'
         f"{lot_tag}"
-        f'<t:IdentificacaoRps><t:Numero>{number}</t:Numero>'
-        f'<t:Serie>{series}</t:Serie></t:IdentificacaoRps>'
+        f'<{identifier_prefix}:IdentificacaoRps><t:Numero>{number}</t:Numero>'
+        f'<t:Serie>{series}</t:Serie>'
+        f'</{identifier_prefix}:IdentificacaoRps>'
         f'</g:{root}>'
     ).encode()
     return JundiaiSignedOperation(
