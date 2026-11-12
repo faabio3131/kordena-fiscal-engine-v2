@@ -71,6 +71,14 @@ class OsascoRtcTaxFields:
     inss: Decimal = Decimal("0")
     other_taxes: Decimal = Decimal("0")
     additional_info: str = ""
+    # Official v2.1 conditional location/construction fields, provided by
+    # the issuer's reviewed municipality service context, never guessed.
+    service_district: str | None = None
+    service_postal_code: str | None = None
+    service_street: str | None = None
+    service_number: str | None = None
+    service_complement: str | None = None
+    construction_code: str | None = None
     # Separate municipal test-only flag from homologation endpoint selection.
     test_only: bool = False
 
@@ -164,6 +172,31 @@ def _validate_fields(fields: OsascoRtcTaxFields) -> None:
         ("neighborhood", 60), ("city", 100), ("country", 100),
     ):
         _str(getattr(p, name), name, maximum)
+    location_values = (
+        fields.service_district, fields.service_postal_code,
+        fields.service_street, fields.service_number,
+    )
+    if any(item is not None for item in location_values):
+        if any(item is None for item in location_values):
+            raise OsascoRtcIssueError("Partial Osasco service address")
+        assert fields.service_district is not None
+        assert fields.service_postal_code is not None
+        assert fields.service_street is not None
+        assert fields.service_number is not None
+        _str(fields.service_district, "service district", 60)
+        _str(fields.service_street, "service street", 200)
+        _str(fields.service_number, "service street number", 10)
+        postal = _str(
+            fields.service_postal_code, "service CEP", 8, numeric=True,
+        )
+        if len(postal) != 8:
+            raise OsascoRtcIssueError("Osasco service CEP requires eight digits")
+    if fields.service_complement is not None:
+        if not all(item is not None for item in location_values):
+            raise OsascoRtcIssueError("Osasco service complement without address")
+        _str(fields.service_complement, "service complement", 100)
+    if fields.construction_code is not None:
+        _str(fields.construction_code, "construction code", 64)
     if not isinstance(fields.test_only, bool):
         raise OsascoRtcIssueError("Osasco test-only selection must be explicit boolean")
     if not isinstance(fields.additional_info, str) or len(fields.additional_info) > 2000:
@@ -221,16 +254,27 @@ def build_osasco_rtc_issue_xml(
     # Official request layout, manual v2.1 pp.5-6: WCF field ordering.
     issue("Aliquota", _decimal(fields.iss_rate, "ISS rate"))
     issue("Atividade", fields.activity)
+    if fields.service_district is not None:
+        issue("BairroPrestacaoServico", fields.service_district)
+        issue("CEPPrestacaoServico", fields.service_postal_code or "")
     issue("ChaveAutenticacao", "")  # scoped credential inserted by transport
     issue("CidadePrestacaoServico", fields.service_city)
+    if fields.construction_code is not None:
+        issue("CodObra", fields.construction_code)
     issue("CodigoCidadeIBGEPrestacaoServico", fields.service_city_ibge)
+    if fields.service_complement is not None:
+        issue("ComplementoPrestacaoServico", fields.service_complement)
     issue("DataRecibo", doc.issued_at.date().isoformat())
     issue("DeduzirRepasse", "false")
+    if fields.service_street is not None:
+        issue("EnderecoPrestacaoServico", fields.service_street)
     issue("EstadoPrestacaoServico", fields.service_state)
     issue("Homologacao", "true" if fields.test_only else "false")
     if fields.additional_info:
         issue("InformacoesAdicionais", fields.additional_info)
     issue("NotificarTomadorPorEmail", "false")
+    if fields.service_number is not None:
+        issue("NumeroPrestacaoServico", fields.service_number)
     issue("NumeroRecibo", original.rps_number)
     issue("SemIncidenciaISS", "true" if fields.no_iss_incidence else "false")
     issue("SimplesNacional", "false")
