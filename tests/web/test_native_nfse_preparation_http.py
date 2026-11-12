@@ -6,7 +6,6 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-
 from fastapi.testclient import TestClient
 
 from kordena_fiscal.application.service import FiscalApplicationService
