@@ -349,6 +349,17 @@ class _GovernedNfseRouter:
             if issuer_ibge != _SP4_MUNICIPAL_PROVIDER_IBGE[provider]:
                 raise FiscalValidationError("SP4 read-only provider binding/city mismatch")
             _require_sp4_municipal_channel(request)
+            try:
+                query_provider = self._application.resolve_configured_provider_id(
+                    scope=request.document.scope,
+                    document_kind=FiscalDocumentKind.NFSE,
+                    jurisdiction=request.document.issuer.address.jurisdiction,
+                    operation=ConfiguredFiscalOperation.QUERY.value,
+                )
+            except ControlPlaneNotFoundError as exc:
+                raise FiscalValidationError("SP4 read-only provider binding unavailable") from exc
+            if query_provider != provider:
+                raise FiscalValidationError("SP4 read-only provider binding mismatch")
             return self._sp4_query[provider].query(request)
         if (
             provider == EXTREMA_WEBISS_PROVIDER_ID
