@@ -29,6 +29,8 @@ from kordena_fiscal.gateway.nfse_national_homologation import (
     build_nfse_dps_request,
     parse_nfse_homologation_response,
 )
+from kordena_fiscal.numbering import FiscalNumberReservation
+
 from kordena_fiscal.issuance.nfe_nfse import (
     NfseAuthorizationRequest,
     NfseAuthorizationResult,
@@ -85,7 +87,7 @@ class NfseNacionalHomologationGateway:
         self,
         *,
         resolve_certificate: Callable[[ExecutionScope, str], EphemeralCertificateMaterial],
-        build_signed_dps: Callable[[NfseAuthorizationRequest, EphemeralCertificateMaterial], bytes],
+        build_signed_dps: Callable[..., bytes],
         exchange: Callable[[bytes, ssl.SSLContext, float], bytes] | None = None,
         timeout_seconds: float = 15,
     ) -> None:
@@ -98,7 +100,10 @@ class NfseNacionalHomologationGateway:
         self._exchange = exchange or _exchange_http
         self._timeout = timeout_seconds
 
-    def authorize(self, request: NfseAuthorizationRequest) -> NfseAuthorizationResult:
+    def authorize(
+        self, request: NfseAuthorizationRequest, *,
+        dps_reservation: FiscalNumberReservation | None = None,
+    ) -> NfseAuthorizationResult:
         if not isinstance(request, NfseAuthorizationRequest):
             raise OfficialNfseTransportError("Solicitação NFS-e inválida")
         document = request.document
@@ -129,7 +134,20 @@ class NfseNacionalHomologationGateway:
             material.pkcs12_bytes, material.password, issuer_cnpj=Cnpj(issuer_cnpj),
             at=datetime.now(UTC),
         )
-        signed_dps = self._build_signed_dps(request, material)
+        if issuer_municipality == "3106200":
+            if dps_reservation is None:
+                raise OfficialNfseTransportError(
+                    "Belo Horizonte requires a durable DPS reservation"
+                )
+            signed_dps = self._build_signed_dps(
+                request, material, reservation=dps_reservation,
+            )
+        else:
+            if dps_reservation is not None:
+                raise OfficialNfseTransportError(
+                    "National DPS reservation belongs to another municipality"
+                )
+            signed_dps = self._build_signed_dps(request, material)
         payload = encode_signed_dps(
             signed_dps, issuer_cnpj=issuer_cnpj, issuer_municipality_ibge=issuer_municipality,
         )
