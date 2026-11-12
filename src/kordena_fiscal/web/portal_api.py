@@ -21,7 +21,6 @@ from fastapi.responses import Response
 
 from kordena_fiscal.archive import FiscalArchiveKind
 from kordena_fiscal.domain import ExecutionScope, FiscalEnvironment, FiscalValidationError
-from kordena_fiscal.signing.contracts import InvalidCertificateMaterialError
 from kordena_fiscal.security.human_identity import (
     AuthenticatedHuman,
     CsrfValidationError,
@@ -30,6 +29,7 @@ from kordena_fiscal.security.human_identity import (
     HumanIdentityService,
     PortalPermission,
 )
+from kordena_fiscal.signing.contracts import InvalidCertificateMaterialError
 from kordena_fiscal.vault.encrypted_a1 import A1VaultUnavailable, EncryptedA1Vault
 from kordena_fiscal.web.human_auth import CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE
 
