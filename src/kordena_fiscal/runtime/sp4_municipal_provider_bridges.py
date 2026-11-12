@@ -46,6 +46,9 @@ from kordena_fiscal.gateway.osasco_rtc_homologation import (
     OsascoPreparedOperation,
     OsascoRtcHomologationTransport,
 )
+from kordena_fiscal.gateway.osasco_rtc_request_builder import (
+    build_osasco_original_note_query,
+)
 from kordena_fiscal.gateway.sp4_municipal_canonical import (
     Sp4CanonicalMunicipalError,
     Sp4OriginalRps,
@@ -245,8 +248,14 @@ def build_osasco_reviewed_ports(
     def invoke(
         req: NfseAuthorizationRequest, original: Sp4OriginalRps, method: str,
     ) -> Sp4ProviderOutcome:
+        prepared = (
+            build_osasco_original_note_query(
+                original=original, regime=req.document.issuer.tax_regime,
+            ) if method == "ConsultarNotaCompleta"
+            else build_wcf_operation(req, original, method)
+        )
         operation = _validate_prepared_link(
-            req, original, build_wcf_operation(req, original, method),
+            req, original, prepared,
             expected_type=OsascoPreparedOperation, expected_method=method,
         )
         # The April 2026 municipal v2.1 manual includes RTC_ConsultarNFE
