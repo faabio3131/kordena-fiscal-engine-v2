@@ -207,3 +207,72 @@ def test_giss_2026_rtc_rejects_incomplete_base_and_mismatched_classification() -
             build_jundiai_giss_issue_xml(
                 request=_request(original), original=original, fields=candidate,
             )
+
+
+@pytest.mark.parametrize("previous,changed", [
+    (b"ValorIss>3.00", b"ValorIss>4.00"),
+    (b"Aliquota>0.0200", b"Aliquota>0.0500"),
+    (b"CodigoNbs>120011000", b"CodigoNbs>120021000"),
+    (b"ItemListaServico>01.07", b"ItemListaServico>01.08"),
+    (b"RazaoSocial>Cliente Teste", b"RazaoSocial>Outro Tomador"),
+    (b"InscricaoMunicipal>1234567", b"InscricaoMunicipal>9999999"),
+    (b"Discriminacao>Consultoria", b"Discriminacao>Assessoria"),
+    (b"OptanteSimplesNacional>2", b"OptanteSimplesNacional>1"),
+    (b"ExigibilidadeISS>1", b"ExigibilidadeISS>2"),
+])
+def test_signed_giss_rejects_any_original_fiscal_field_change(
+    previous: bytes, changed: bytes,
+) -> None:
+    original = _original()
+    validator = Mock()
+
+    def changed_signer(xml: bytes) -> bytes:
+        assert previous in xml
+        return xml.replace(previous, changed)
+
+    with pytest.raises(JundiaiGissIssueError, match="does not match"):
+        prepare_jundiai_giss_signed_issue(
+            request=_request(original), original=original, fields=_fields(),
+            sign_xml=changed_signer, validate_signed_xml=validator,
+        )
+    validator.assert_not_called()
+
+
+def test_giss_allows_xml_dsig_nodes_without_changing_taxpayer_fields() -> None:
+    original = _original()
+    validated = Mock()
+
+    def sign_with_xml_dsig(xml: bytes) -> bytes:
+        root = etree.fromstring(xml)
+        lot = root.find(_ISSUE + "LoteRps")
+        assert lot is not None
+        etree.SubElement(
+            lot, "{http://www.w3.org/2000/09/xmldsig#}Signature",
+        )
+        return etree.tostring(root, encoding="utf-8", xml_declaration=True)
+
+    signed = prepare_jundiai_giss_signed_issue(
+        request=_request(original), original=original, fields=_fields(),
+        sign_xml=sign_with_xml_dsig, validate_signed_xml=validated,
+    )
+    assert signed.method == "RecepcionarLoteRps"
+    validated.assert_called_once_with(signed.signed_xml)
+
+
+def test_giss_signer_cannot_inject_foreign_invoice_field() -> None:
+    original = _original()
+    validated = Mock()
+
+    def inject(xml: bytes) -> bytes:
+        root = etree.fromstring(xml)
+        lot = root.find(_ISSUE + "LoteRps")
+        assert lot is not None
+        etree.SubElement(lot, _TYPES + "UnknownFiscalField").text = "999"
+        return etree.tostring(root)
+
+    with pytest.raises(JundiaiGissIssueError, match="does not match"):
+        prepare_jundiai_giss_signed_issue(
+            request=_request(original), original=original, fields=_fields(),
+            sign_xml=inject, validate_signed_xml=validated,
+        )
+    validated.assert_not_called()
