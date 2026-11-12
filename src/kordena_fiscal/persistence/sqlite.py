@@ -54,6 +54,7 @@ from .sqlite_core import (
 )
 from .sqlite_delivery import SqliteFiscalDeliveryAuditStore, SqliteFiscalOutboxOrderingStore
 from .sqlite_idempotency import SqliteIdempotencyStore
+from .sqlite_national_dps import SqliteNationalDpsSequenceStore
 from .sqlite_inbox import SqliteFiscalInboxStore
 from .sqlite_outbox_archive import SqliteFiscalArchiveStore, SqliteFiscalOutboxStore
 from .sqlite_reconciliation import SqliteReconciliationRepository
@@ -556,6 +557,24 @@ _MIGRATIONS = (
             """,
         ),
     ),
+    _Migration(
+        version=6,
+        name="bh_national_dps_issuer_scoped_numbering",
+        statements=(
+            """
+            CREATE TABLE fm_nfse_dps_sequences (
+                host_namespace TEXT NOT NULL,
+                environment TEXT NOT NULL,
+                issuer_cnpj TEXT NOT NULL,
+                series INTEGER NOT NULL,
+                first_number INTEGER NOT NULL,
+                max_number INTEGER,
+                last_reserved INTEGER NOT NULL,
+                PRIMARY KEY (host_namespace, environment, issuer_cnpj, series)
+            )
+            """,
+        ),
+    ),
 )
 
 
@@ -568,6 +587,7 @@ class SqliteFiscalUnitOfWork:
         self._committed = False
         self._idempotency: SqliteIdempotencyStore | None = None
         self._sequences: SqliteFiscalSequenceStore | None = None
+        self._dps_sequences: SqliteNationalDpsSequenceStore | None = None
         self._inbox: SqliteFiscalInboxStore | None = None
         self._outbox: SqliteFiscalOutboxStore | None = None
         self._outbox_ordering: SqliteFiscalOutboxOrderingStore | None = None
@@ -589,6 +609,7 @@ class SqliteFiscalUnitOfWork:
         self._committed = False
         self._idempotency = SqliteIdempotencyStore(connection)
         self._sequences = SqliteFiscalSequenceStore(connection)
+        self._dps_sequences = SqliteNationalDpsSequenceStore(connection)
         self._inbox = SqliteFiscalInboxStore(connection)
         self._outbox = SqliteFiscalOutboxStore(connection)
         self._outbox_ordering = SqliteFiscalOutboxOrderingStore(connection)
@@ -630,6 +651,10 @@ class SqliteFiscalUnitOfWork:
     @property
     def sequences(self) -> SqliteFiscalSequenceStore:
         return self._require(self._sequences, "sequences")
+
+    @property
+    def dps_sequences(self) -> SqliteNationalDpsSequenceStore:
+        return self._require(self._dps_sequences, "dps_sequences")
 
     @property
     def inbox(self) -> SqliteFiscalInboxStore:
