@@ -26,6 +26,9 @@ from kordena_fiscal.gateway.cajamar_geisweb_homologation import (
     CajamarGeiswebResult,
     CajamarPreparedNfse,
 )
+from kordena_fiscal.gateway.cajamar_geisweb_invoice_interpreter import (
+    interpret_cajamar_geisweb_result,
+)
 from kordena_fiscal.gateway.jundiai_giss_homologation import (
     JundiaiGissHomologationTransport,
     JundiaiGissReceipt,
@@ -141,7 +144,7 @@ def build_cajamar_reviewed_ports(
     interpret_official_result: Callable[
         [CajamarGeiswebResult, NfseAuthorizationRequest, Sp4OriginalRps],
         Sp4ProviderOutcome,
-    ],
+    ] = interpret_cajamar_geisweb_result,
 ) -> Sp4ReviewedMunicipalPorts:
     if not isinstance(transport, CajamarGeiswebHomologationTransport) or not all(
         callable(x) for x in (
