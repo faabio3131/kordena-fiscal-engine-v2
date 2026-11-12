@@ -264,6 +264,7 @@ def _bh_request(detail: str | None, nbs: str | None = "123456789") -> NfseAuthor
 def _signed_bh(request: NfseAuthorizationRequest) -> bytes:
     key = FiscalSequenceKey.from_scope(
         request.document.scope, model=InternalFiscalSequenceStream.NFSE_DPS, series=1,
+        issuer_cnpj=request.document.issuer.cnpj.value,
     )
     reserved = InMemoryFiscalSequenceStore().reserve_next(
         key, FiscalSequencePolicy(),
@@ -369,6 +370,7 @@ def test_bh_rejects_sequence_reservation_from_other_tenant() -> None:
     other = replace(request.document.scope, tenant_id="another-tenant")
     key = FiscalSequenceKey.from_scope(
         other, model=InternalFiscalSequenceStream.NFSE_DPS, series=1,
+        issuer_cnpj=request.document.issuer.cnpj.value,
     )
     reserved = InMemoryFiscalSequenceStore().reserve_next(key, FiscalSequencePolicy())
     with pytest.raises(FiscalValidationError, match="violates fiscal scope"):
@@ -447,6 +449,7 @@ def test_bh_national_series_above_official_2026_limit_fails_schema() -> None:
     request = _bh_request("001")
     key = FiscalSequenceKey.from_scope(
         request.document.scope, model=InternalFiscalSequenceStream.NFSE_DPS, series=90000,
+        issuer_cnpj=request.document.issuer.cnpj.value,
     )
     reserved = InMemoryFiscalSequenceStore().reserve_next(
         key, FiscalSequencePolicy(),
