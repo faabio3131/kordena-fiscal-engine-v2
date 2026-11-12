@@ -21,6 +21,7 @@ from fastapi.responses import Response
 
 from kordena_fiscal.archive import FiscalArchiveKind
 from kordena_fiscal.domain import ExecutionScope, FiscalEnvironment, FiscalValidationError
+from kordena_fiscal.signing.contracts import InvalidCertificateMaterialError
 from kordena_fiscal.security.human_identity import (
     AuthenticatedHuman,
     CsrfValidationError,
@@ -304,7 +305,7 @@ def create_portal_router(
             evidence = certificate_vault.inspect(
                 scope=scope, issuer_cnpj=issuer_cnpj,
             )
-        except (A1VaultUnavailable, FiscalValidationError):
+        except (A1VaultUnavailable, FiscalValidationError, InvalidCertificateMaterialError):
             raise HTTPException(
                 status_code=503,
                 detail={"code": "A1_STATUS_UNVERIFIABLE",
@@ -370,7 +371,7 @@ def create_portal_router(
                 scope=scope, issuer_cnpj=issuer_cnpj,
                 pkcs12_bytes=certificate, password=password,
             )
-        except (A1VaultUnavailable, FiscalValidationError):
+        except (A1VaultUnavailable, FiscalValidationError, InvalidCertificateMaterialError):
             raise HTTPException(
                 422, detail={"code": "A1_VALIDATION_FAILED",
                              "message": "Certificado A1 inválido, vencido ou não pertence ao CNPJ"},
