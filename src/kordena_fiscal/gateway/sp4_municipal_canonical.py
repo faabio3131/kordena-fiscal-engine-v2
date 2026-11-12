@@ -80,7 +80,10 @@ class Sp4OriginalRps:
             or not isinstance(self.issuer_cnpj, Cnpj)
             or type(self.competence_date) is not date
             or type(self.gross_amount) is not Decimal
+            or not self.gross_amount.is_finite()
             or self.gross_amount < 0
+            or self.gross_amount * 100
+            != (self.gross_amount * 100).to_integral_value()
         ):
             raise Sp4CanonicalMunicipalError("Original municipal RPS is incomplete")
         _label(self.document_id, "document ID")
@@ -129,7 +132,10 @@ class Sp4VerifiedInvoice:
             or self.issuer_ibge not in SP4_MUNICIPAL_PROVIDERS.values()
             or type(self.competence_date) is not date
             or type(self.gross_amount) is not Decimal
+            or not self.gross_amount.is_finite()
             or self.gross_amount < 0
+            or self.gross_amount * 100
+            != (self.gross_amount * 100).to_integral_value()
             or type(self.authorized_xml) is not bytes
             or not 0 < len(self.authorized_xml) <= 2_097_152
         ):
