@@ -233,7 +233,10 @@ class NfseForeignAddress:
 
     def __post_init__(self) -> None:
         country = _required(self.country_code, "taker.country_code", 2)
-        if len(country) != 2 or not country.isascii() or not country.isalpha() or country != country.upper():
+        if (
+            len(country) != 2 or not country.isascii()
+            or not country.isalpha() or country != country.upper()
+        ):
             raise FiscalValidationError("Foreign country must use two uppercase ISO letters")
         if country == "BR":
             raise FiscalValidationError("Brazilian taker address requires FiscalAddress")
@@ -528,7 +531,9 @@ class NfseRejectionDetail:
             or not self.raw_message.strip()
             or len(self.raw_message) > 32768
         ):
-            raise FiscalValidationError("rejection.raw_message must be non-empty and at most 32768 characters")
+            raise FiscalValidationError(
+                "rejection.raw_message must be non-empty and at most 32768 characters"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -593,7 +598,11 @@ class NfseAuthorizationResult:
         if self.status is AuthorizationStatus.AUTHORIZED:
             if self.invoice_reference is None:
                 raise FiscalValidationError("authorized NFS-e requires invoice_reference")
-            if self.rejection_code is not None or self.rejection_message is not None or self.rejections:
+            if (
+                self.rejection_code is not None
+                or self.rejection_message is not None
+                or self.rejections
+            ):
                 raise FiscalValidationError("authorized NFS-e cannot contain rejection metadata")
         elif self.status is AuthorizationStatus.REJECTED:
             if (
@@ -616,7 +625,11 @@ class NfseAuthorizationResult:
                 or self.invoice_number is not None or self.authorized_xml is not None
             ):
                 raise FiscalValidationError("pending NFS-e cannot contain invoice metadata")
-            if self.rejection_code is not None or self.rejection_message is not None or self.rejections:
+            if (
+                self.rejection_code is not None
+                or self.rejection_message is not None
+                or self.rejections
+            ):
                 raise FiscalValidationError("pending NFS-e cannot contain rejection metadata")
 
     def normalized_rejections(self) -> tuple[NfseRejectionDetail, ...]:
