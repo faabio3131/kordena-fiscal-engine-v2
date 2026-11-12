@@ -116,8 +116,14 @@ class NfseNacionalHomologationGateway:
                 competence_date=document.competence_date,
             )
         except FiscalValidationError:
+            issuer_state = document.issuer.address.jurisdiction.state_code
+            city_label = (
+                "Contagem/MG"
+                if issuer_state == "MG" and issuer_municipality == "3118601"
+                else f"IBGE {issuer_municipality}/{issuer_state}"
+            )
             raise OfficialNfseTransportError(
-                "Emissor Nacional indisponível para regime/competência deste município"
+                f"{city_label}: Emissor Nacional indisponível para regime/competência"
             ) from None
         material = self._resolve_certificate(document.scope, issuer_cnpj)
         validate_a1_for_issuer(
