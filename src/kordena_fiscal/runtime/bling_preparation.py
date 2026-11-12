@@ -23,6 +23,7 @@ from kordena_fiscal.domain import (
     BrazilianJurisdiction,
     Cnpj,
     Cpf,
+    ExecutionScope,
     FiscalAddress,
     FiscalDocumentKind,
     FiscalValidationError,
@@ -305,13 +306,60 @@ class BlingSalePreparer:
         policy, digest, _raw = self._policy_artifact(orders)
         return policy, digest
 
+    @staticmethod
+    def policy_scope_digest(scope: ExecutionScope, company_id: str) -> str:
+        """Filename is derived only from canonical fiscal scope and provider company.
+
+        Neither an HTTP field nor a provider webhook can select another company's
+        policy. The digest also hides tenant identifiers from directory listings.
+        """
+        if scope.host_namespace != "bling":
+            raise FiscalValidationError("Bling fiscal policy requires canonical host scope")
+        if not isinstance(company_id, str) or not company_id.strip():
+            raise FiscalValidationError("Bling fiscal policy requires company identity")
+        material = [*scope.identity_material, company_id]
+        return hashlib.sha256(
+            json.dumps(material, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
+        ).hexdigest()
+
     def _policy_artifact(self, orders: BlingOrders) -> tuple[dict[str, Any], str, bytes]:
-        path = self.environ.get("NFCORE_BLING_FISCAL_POLICY_FILE", "")
-        expected = self.environ.get("NFCORE_BLING_FISCAL_POLICY_SHA256", "")
-        if not path or not re.fullmatch(r"[0-9a-f]{64}", expected):
-            raise FiscalValidationError("Bling fiscal policy is not configured")
+        if self.environ.get("NFCORE_BLING_INSTALLATIONS_ENABLED") == "true":
+            # Multi-company mode must never read the legacy global policy file.
+            # Resolve from the already authorized tenant/unit/environment/company.
+            if (
+                self.environ.get("NFCORE_BLING_FISCAL_POLICY_FILE")
+                or self.environ.get("NFCORE_BLING_FISCAL_POLICY_SHA256")
+            ):
+                raise FiscalValidationError("legacy global policy is forbidden in Bling multi mode")
+            root = Path(self.environ.get("NFCORE_BLING_FISCAL_POLICY_ROOT", ""))
+            if not root.is_absolute() or root.is_symlink() or not root.is_dir():
+                raise FiscalValidationError("Bling scoped fiscal policy directory unavailable")
+            digest = self.policy_scope_digest(orders.scope, orders.company_id)
+            policy_path = root / f"{digest}.json"
+            digest_path = root / f"{digest}.sha256"
+            if policy_path.is_symlink() or digest_path.is_symlink():
+                raise FiscalValidationError("Bling policy symlink is forbidden")
+            try:
+                # A manifest-sized pin, NOT arbitrary JSON from the HTTP request.
+                with digest_path.open("rb") as stream:
+                    signature = stream.read(66)
+                if not re.fullmatch(rb"[0-9a-f]{64}\n?", signature):
+                    raise FiscalValidationError("Bling fiscal policy digest invalid")
+                expected = signature.decode("ascii").strip()
+            except OSError:
+                raise FiscalValidationError("Bling fiscal policy digest unavailable") from None
+            path = policy_path
+        else:
+            if self.environ.get("NFCORE_BLING_FISCAL_POLICY_ROOT"):
+                raise FiscalValidationError("Bling scoped policy requires multi-installation mode")
+            path = Path(self.environ.get("NFCORE_BLING_FISCAL_POLICY_FILE", ""))
+            expected = self.environ.get("NFCORE_BLING_FISCAL_POLICY_SHA256", "")
+            if not path or not re.fullmatch(r"[0-9a-f]{64}", expected):
+                raise FiscalValidationError("Bling fiscal policy is not configured")
         try:
-            with Path(path).open("rb") as stream:
+            if path.is_symlink() or not path.is_file():
+                raise FiscalValidationError("Bling fiscal policy artifact unavailable")
+            with path.open("rb") as stream:
                 raw = stream.read(1_048_577)
             if len(raw) > 1_048_576 or hashlib.sha256(raw).hexdigest() != expected:
                 raise FiscalValidationError("Bling fiscal policy integrity mismatch")

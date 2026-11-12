@@ -29,3 +29,7 @@ jobs:
           bash deploy/contabo/test-bling-api-opt-in.sh
       - name: Certificar overrides do host db para GSM e Bling (sem start)
         run: bash deploy/contabo/test-worker-host-db-override.sh
+      - name: Certificar Bling Worker opt-in e auditoria de host (simulada)
+        run: |
+          bash deploy/contabo/test-bling-worker-opt-in.sh
+          bash deploy/contabo/test-bling-operational-host-audit.sh
