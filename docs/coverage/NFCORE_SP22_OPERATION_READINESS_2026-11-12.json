@@ -161,7 +161,7 @@
         "ginfes",
         "nfse-nacional"
       ],
-      "municipal_authoritative_url": null,
+      "municipal_authoritative_url": "https://www.guarulhos.sp.gov.br/",
       "municipal_contract_verified": false,
       "issuer_profile_specific_rules_verified": false,
       "municipal_layout_version": null,
@@ -182,8 +182,8 @@
       "official_taxpayer_homologation": false,
       "production_authorization": false,
       "status": "INTERNAL_INCOMPLETE",
-      "public_issuer_policy_reviewed_at": null,
-      "public_issuer_policy_summary": null,
+      "public_issuer_policy_reviewed_at": "2026-11-12",
+      "public_issuer_policy_summary": "Municipal homepage notices National NFS-e obligations; missing dedicated 2026 verified WebService contract, official endpoint or product choice.",
       "official_webservice_contract_reviewed": false
     },
     {
@@ -293,7 +293,7 @@
         "ginfes",
         "nfse-nacional"
       ],
-      "municipal_authoritative_url": null,
+      "municipal_authoritative_url": "https://suzano.sp.gov.br/servicos-e-informacoes-ao-cidadao/",
       "municipal_contract_verified": false,
       "issuer_profile_specific_rules_verified": false,
       "municipal_layout_version": null,
@@ -314,8 +314,8 @@
       "official_taxpayer_homologation": false,
       "production_authorization": false,
       "status": "INTERNAL_INCOMPLETE",
-      "public_issuer_policy_reviewed_at": null,
-      "public_issuer_policy_summary": null,
+      "public_issuer_policy_reviewed_at": "2026-11-12",
+      "public_issuer_policy_summary": "Municipal service list links note issuance and cancellation; technical contract and issuer qualification still unverified.",
       "official_webservice_contract_reviewed": false
     },
     {
@@ -326,7 +326,7 @@
         "smarapd",
         "municipal-proprio"
       ],
-      "municipal_authoritative_url": null,
+      "municipal_authoritative_url": "https://prefeitura.santanadeparnaiba.sp.gov.br/Plataforma/servicos/detalhes/kcBna5pzGtu-6E2qdbjUYP8DY-uRA9gqQdrr3yfoX74FwO0ljGbdCjCG0h12ve3XTk0RyA2",
       "municipal_contract_verified": false,
       "issuer_profile_specific_rules_verified": false,
       "municipal_layout_version": null,
@@ -347,8 +347,8 @@
       "official_taxpayer_homologation": false,
       "production_authorization": false,
       "status": "INTERNAL_INCOMPLETE",
-      "public_issuer_policy_reviewed_at": null,
-      "public_issuer_policy_summary": null,
+      "public_issuer_policy_reviewed_at": "2026-11-12",
+      "public_issuer_policy_summary": "Official municipal NFS-e service portal; advertised emitter does not prove a WebService contract or API authorization.",
       "official_webservice_contract_reviewed": false
     },
     {
@@ -431,7 +431,7 @@
         "e-receita",
         "nfse-nacional"
       ],
-      "municipal_authoritative_url": null,
+      "municipal_authoritative_url": "https://jandira.sp.gov.br/noticias/documentos/nfe-manual-integracao-jandira-r2.pdf",
       "municipal_contract_verified": false,
       "issuer_profile_specific_rules_verified": false,
       "municipal_layout_version": null,
@@ -452,8 +452,8 @@
       "official_taxpayer_homologation": false,
       "production_authorization": false,
       "status": "INTERNAL_INCOMPLETE",
-      "public_issuer_policy_reviewed_at": null,
-      "public_issuer_policy_summary": null,
+      "public_issuer_policy_reviewed_at": "2026-11-12",
+      "public_issuer_policy_summary": "Historical municipal SIL integration manual (old; current 2026 applicability UNVERIFIED) documents WSEntrada/NfdEntrada and SHA1 password; do NOT implement or transmit without current authoritative version and secure protocol review.",
       "official_webservice_contract_reviewed": false
     },
     {
@@ -466,7 +466,7 @@
         "e-receita",
         "nfse-nacional"
       ],
-      "municipal_authoritative_url": null,
+      "municipal_authoritative_url": "https://mairipora.sp.gov.br/secretarias/fazenda",
       "municipal_contract_verified": false,
       "issuer_profile_specific_rules_verified": false,
       "municipal_layout_version": null,
@@ -487,8 +487,8 @@
       "official_taxpayer_homologation": false,
       "production_authorization": false,
       "status": "INTERNAL_INCOMPLETE",
-      "public_issuer_policy_reviewed_at": null,
-      "public_issuer_policy_summary": null,
+      "public_issuer_policy_reviewed_at": "2026-11-12",
+      "public_issuer_policy_summary": "Municipal finance department directs local NFS-e to eTransparencia and requires IM/municipal contributor registration; current endpoint and WS contract unverified.",
       "official_webservice_contract_reviewed": false
     },
     {
@@ -501,7 +501,7 @@
         "e-receita",
         "nfse-nacional"
       ],
-      "municipal_authoritative_url": null,
+      "municipal_authoritative_url": "https://governoeletronico.aruja.sp.gov.br/issweb/MANUAL_ISSWEB_ARUJA.pdf",
       "municipal_contract_verified": false,
       "issuer_profile_specific_rules_verified": false,
       "municipal_layout_version": null,
@@ -522,8 +522,8 @@
       "official_taxpayer_homologation": false,
       "production_authorization": false,
       "status": "INTERNAL_INCOMPLETE",
-      "public_issuer_policy_reviewed_at": null,
-      "public_issuer_policy_summary": null,
+      "public_issuer_policy_reviewed_at": "2026-11-12",
+      "public_issuer_policy_summary": "Municipal ISS Web manual describes declaration and taxes; insufficient to infer webservice for issuing NFS-e, current date still unverified.",
       "official_webservice_contract_reviewed": false
     },
     {
@@ -536,7 +536,7 @@
         "e-receita",
         "nfse-nacional"
       ],
-      "municipal_authoritative_url": null,
+      "municipal_authoritative_url": "https://louveira.sp.gov.br/servico/nfse-gov",
       "municipal_contract_verified": false,
       "issuer_profile_specific_rules_verified": false,
       "municipal_layout_version": null,
@@ -557,8 +557,8 @@
       "official_taxpayer_homologation": false,
       "production_authorization": false,
       "status": "INTERNAL_INCOMPLETE",
-      "public_issuer_policy_reviewed_at": null,
-      "public_issuer_policy_summary": null,
+      "public_issuer_policy_reviewed_at": "2026-11-12",
+      "public_issuer_policy_summary": "City announces migration to Emissor Nacional and links national instructions; unclear eligible regimes and prior NFE-CIDADES contract, verify competence/product use.",
       "official_webservice_contract_reviewed": false
     },
     {
@@ -641,7 +641,7 @@
         "e-receita",
         "nfse-nacional"
       ],
-      "municipal_authoritative_url": null,
+      "municipal_authoritative_url": "https://www.salto.sp.gov.br/download/leis/Codigo_Tributario_Municipal-Lei_3.196_de_2013-Consolidada.pdf",
       "municipal_contract_verified": false,
       "issuer_profile_specific_rules_verified": false,
       "municipal_layout_version": null,
@@ -662,8 +662,8 @@
       "official_taxpayer_homologation": false,
       "production_authorization": false,
       "status": "INTERNAL_INCOMPLETE",
-      "public_issuer_policy_reviewed_at": null,
-      "public_issuer_policy_summary": null,
+      "public_issuer_policy_reviewed_at": "2026-11-12",
+      "public_issuer_policy_summary": "City code regulates issuance and cancellation/substitution; no current API, credential model or homologation endpoints proved.",
       "official_webservice_contract_reviewed": false
     },
     {
@@ -779,5 +779,5 @@
     "source_type": "PROVIDER_HOSTED_NOTICE_ONLY",
     "warning": "Publisher is the provider, not independently reviewed as a city authority; manual/schema hash and municipal contract remain unverified."
   },
-  "note": "13/22 city public issuer notices reviewed (including one portal notice); NONE constitutes a certified WebService, issuer credential, complete tax/RTC contract or legal authorization to emit. All 22 stay INTERNAL_INCOMPLETE."
+  "note": "21/22 city-level public municipal notices or laws located, including historical/indirect sources explicitly marked as NOT current technical contracts. Guarujá municipal issuer/API remains without verified current source. ALL 22 INTERNAL_INCOMPLETE: no operational certification from notices alone."
 }
