@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+import json
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
@@ -33,6 +34,7 @@ from kordena_fiscal.issuance.nfe_nfse import (
     NfseCanonicalDocument,
     NfseServiceLine,
 )
+from kordena_fiscal.issuance.nfse_archive import decode_prepared_nfse, encode_prepared_nfse
 from kordena_fiscal.issuance.nfse_dps_builder import build_signed_dps
 from kordena_fiscal.vault import EphemeralCertificateMaterial
 from kordena_fiscal.xml.nfse_nacional_schema import national_dps_validator
@@ -302,3 +304,34 @@ def test_bh_national_dps_contains_provided_nbs_after_description() -> None:
 def test_bh_rejects_noncanonical_nbs(value: str) -> None:
     with pytest.raises(FiscalValidationError, match="national_service_nbs"):
         _bh_request("001", nbs=value)
+
+
+def test_bh_prepared_archive_roundtrip_preserves_reviewed_tax_fields() -> None:
+    original = _bh_request("001", nbs="123456789")
+    encoded = encode_prepared_nfse(original)
+    recovered = decode_prepared_nfse(encoded, scope=original.document.scope)
+    assert recovered.request_fingerprint == original.request_fingerprint
+    assert recovered.document.services[0].municipal_taxation_detail == "001"
+    assert recovered.document.services[0].national_service_nbs == "123456789"
+
+
+@pytest.mark.parametrize("field,value", [
+    ("municipal_taxation_detail", "002"),
+    ("national_service_nbs", "987654321"),
+])
+def test_bh_archive_rejects_tampered_tax_fields(field: str, value: str) -> None:
+    original = _bh_request("001", nbs="123456789")
+    stored = json.loads(encode_prepared_nfse(original))
+    stored["services"][0][field] = value
+    altered = json.dumps(stored).encode()
+    with pytest.raises(FiscalValidationError, match="fingerprint"):
+        decode_prepared_nfse(altered, scope=original.document.scope)
+
+
+def test_legacy_prepared_archive_without_new_optional_fields_remains_readable() -> None:
+    original = _request()
+    stored = json.loads(encode_prepared_nfse(original))
+    del stored["services"][0]["municipal_taxation_detail"]
+    del stored["services"][0]["national_service_nbs"]
+    recovered = decode_prepared_nfse(json.dumps(stored).encode(), scope=original.document.scope)
+    assert recovered.request_fingerprint == original.request_fingerprint
