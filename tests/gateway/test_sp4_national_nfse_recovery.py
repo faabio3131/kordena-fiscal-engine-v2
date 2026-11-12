@@ -26,8 +26,8 @@ from kordena_fiscal.gateway.nfse_nacional_homologation import (
     OfficialNfseTransportError,
 )
 from kordena_fiscal.gateway.nfse_nacional_query import (
-    NfseNationalLookupMissing,
     NfseNacionalHomologationQueryGateway,
+    NfseNationalLookupMissing,
 )
 from kordena_fiscal.issuance.nfe_nfse import NfseAuthorizationRequest
 from kordena_fiscal.issuance.nfse_dps_builder import derive_national_dps_id
