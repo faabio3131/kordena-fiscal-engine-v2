@@ -114,7 +114,7 @@ def _setup() -> tuple[object, Mock, Mock, Mock, NfseAuthorizationRequest, Sp4Ori
             remittance="20261113001", note_number="0008765", note_series="NF",
             verification_code="VERIFIER", access_key="35" + "0" * 48,
             rps_number="0000000042", rps_series="NF",
-            service_total=Decimal("150.00"), return_file=b"synthetic-return",
+            service_total=Decimal("150.00"), return_file=b"municipal-return",
         )),
     )
     return ports, submit, status, download, request, original
@@ -175,5 +175,21 @@ def test_empty_return_file_never_promotes_fiscal_note() -> None:
         downloaded_file=None, return_file_name="result.txt",
     )
     with pytest.raises(Sp4CanonicalMunicipalError, match="cannot be correlated"):
+        ports.query_official_rps(request, original)
+    submit.assert_not_called()
+
+
+def test_unrelated_download_file_cannot_pass_current_layout_verifier() -> None:
+    ports, submit, status, download, request, original = _setup()
+    status.return_value = BarueriReceipt(
+        operation="NFeLoteStatusArquivo", code="OK200",
+        remittance_protocol="PROTOCOL42", return_file_name="result.txt",
+    )
+    download.return_value = BarueriReceipt(
+        operation="NFeLoteBaixarArquivo", code="OK200",
+        remittance_protocol="PROTOCOL42", return_file_name="result.txt",
+        downloaded_file=b"different-physical-return",
+    )
+    with pytest.raises(Sp4CanonicalMunicipalError, match="original RPS"):
         ports.query_official_rps(request, original)
     submit.assert_not_called()
