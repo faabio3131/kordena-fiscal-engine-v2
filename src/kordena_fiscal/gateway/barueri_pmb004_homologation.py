@@ -482,15 +482,17 @@ class BarueriPmb004HomologationTransport:
         )
 
     def list_on_date(
-        self, *, batch: BarueriRpsBatch, situation: str,
+        self, *, batch: BarueriRpsBatch, situation: str, submitted_on: date,
     ) -> BarueriReceipt:
         """Read-only duplicate detection after an ambiguous original POST.
 
         Official June/2021 WebService manual: list by submission date
         and five distinct queue states. No second RPS submission occurs.
         """
-        if not isinstance(batch, BarueriRpsBatch) or situation not in (
-            "-2", "-1", "0", "1", "2",
+        if (
+            not isinstance(batch, BarueriRpsBatch)
+            or type(submitted_on) is not date
+            or situation not in ("-2", "-1", "0", "1", "2")
         ):
             raise BarueriContractError("Invalid Barueri remittance listing filter")
         return self._send(
@@ -499,7 +501,8 @@ class BarueriPmb004HomologationTransport:
             fields=(
                 ("InscricaoMunicipal", batch.municipal_registration),
                 ("CPFCNPJContrib", batch.issuer_cnpj.value),
-                ("DataEnvioArq", batch.competence_date.isoformat()),
+                # Submission date is NOT the service competence date.
+                ("DataEnvioArq", submitted_on.isoformat()),
                 ("SituacaoArq", situation),
             ),
         )
