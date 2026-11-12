@@ -160,3 +160,11 @@ def test_municipal_query_needs_a_separate_durable_query_binding() -> None:
         router.query(req)
     authorization.authorize.assert_not_called()
     query.query.assert_not_called()
+
+
+@pytest.mark.parametrize("invalid", ["2026-11-13", None, 1234])
+def test_malformed_competence_cannot_bypass_federal_channel(invalid: object) -> None:
+    request = _request("3509205", TaxRegimeCode.SIMPLES_NACIONAL, date(2026, 11, 13))
+    request.document.competence_date = invalid
+    with pytest.raises(FiscalValidationError, match="reviewed issuer regime and competence"):
+        _require_sp4_municipal_channel(request)
