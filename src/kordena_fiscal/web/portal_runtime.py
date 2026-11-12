@@ -1015,8 +1015,17 @@ class DurableHumanPortalExecutor:
                 not Decimal("0") < amount <= Decimal("999999999")
                 or not Decimal("0") <= deductions < amount
                 or not Decimal("0") <= rate <= Decimal("1")
-                or any(value.as_tuple().exponent < -2 for value in (amount, deductions))
-                or rate.as_tuple().exponent < -4
+                or any(
+                    not isinstance(exponent, int) or exponent < -2
+                    for exponent in (
+                        amount.as_tuple().exponent, deductions.as_tuple().exponent,
+                    )
+                )
+                or not isinstance(rate.as_tuple().exponent, int)
+                or (
+                    isinstance(rate.as_tuple().exponent, int)
+                    and rate.as_tuple().exponent < -4
+                )
                 or not 0 <= payload["dps_series"] <= 99999
                 or not 1 <= payload["rule_version"] <= 99999
             ):
