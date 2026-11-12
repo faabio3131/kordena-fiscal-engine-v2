@@ -51,6 +51,7 @@ from kordena_fiscal.gateway.nfse_nacional_homologation import (
     NfseNacionalHomologationGateway,
 )
 from kordena_fiscal.gateway.nfse_nacional_query import NfseNacionalHomologationQueryGateway
+from kordena_fiscal.gateway.sp4_municipal_canonical import SP4_MUNICIPAL_PROVIDERS
 from kordena_fiscal.gateway.webiss_2026_schema import (
     load_pinned_extrema_webiss_rtc_schema,
 )
@@ -250,12 +251,7 @@ class _CanonicalWebissProviderResolver:
         )
 
 
-_SP4_MUNICIPAL_PROVIDER_IBGE = {
-    "cajamar-geisweb-homologation": "3509205",
-    "barueri-pmb004-homologation": "3505708",
-    "osasco-rtc-homologation": "3534401",
-    "jundiai-giss-v2-homologation": "3525904",
-}
+_SP4_MUNICIPAL_PROVIDER_IBGE = SP4_MUNICIPAL_PROVIDERS
 
 
 def _require_sp4_municipal_channel(request: NfseAuthorizationRequest) -> None:
