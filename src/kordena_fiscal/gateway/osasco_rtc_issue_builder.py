@@ -71,6 +71,8 @@ class OsascoRtcTaxFields:
     inss: Decimal = Decimal("0")
     other_taxes: Decimal = Decimal("0")
     additional_info: str = ""
+    # Separate municipal test-only flag from homologation endpoint selection.
+    test_only: bool = False
 
 
 def _str(value: str, field: str, max_len: int, *, numeric: bool = False) -> str:
@@ -144,6 +146,8 @@ def _validate_fields(fields: OsascoRtcTaxFields) -> None:
         ("neighborhood", 60), ("city", 100), ("country", 100),
     ):
         _str(getattr(p, name), name, maximum)
+    if not isinstance(fields.test_only, bool):
+        raise OsascoRtcIssueError("Osasco test-only selection must be explicit boolean")
     if not isinstance(fields.additional_info, str) or len(fields.additional_info) > 2000:
         raise OsascoRtcIssueError("Osasco additional information exceeds limit")
 
@@ -193,7 +197,8 @@ def build_osasco_rtc_issue_xml(
     root = etree.Element(f"{{{_WCF}}}RTC_EmitirNFE", nsmap=nss)
     wrapped = etree.SubElement(root, f"{{{_WCF}}}request")
     note = etree.SubElement(wrapped, f"{{{_MSG}}}NotaFiscal_RTC")
-    issue = lambda name, value: _append(note, _ISS, name, value)
+    def issue(name: str, value: str) -> None:
+        _append(note, _ISS, name, value)
 
     # Official request layout, manual v2.1 pp.5-6: WCF field ordering.
     issue("Aliquota", _decimal(fields.iss_rate, "ISS rate"))
@@ -204,7 +209,7 @@ def build_osasco_rtc_issue_xml(
     issue("DataRecibo", doc.issued_at.date().isoformat())
     issue("DeduzirRepasse", "false")
     issue("EstadoPrestacaoServico", fields.service_state)
-    issue("Homologacao", "true")  # synthetic/homologation-mode invoice only
+    issue("Homologacao", "true" if fields.test_only else "false")
     if fields.additional_info:
         issue("InformacoesAdicionais", fields.additional_info)
     issue("NotificarTomadorPorEmail", "false")
