@@ -343,6 +343,47 @@ def build_jundiai_reviewed_ports(
             req, original, build_signed_operation(req, original, method),
             expected_type=JundiaiSignedOperation, expected_method=method,
         )
+        try:
+            root = etree.fromstring(
+                operation.signed_xml,
+                parser=etree.XMLParser(
+                    no_network=True, resolve_entities=False, load_dtd=False,
+                ),
+            )
+        except etree.XMLSyntaxError:
+            raise Sp4CanonicalMunicipalError("Giss 2.04 prepared XML malformed") from None
+        expected_root = (
+            "EnviarLoteRpsEnvio" if method == "RecepcionarLoteRps"
+            else "ConsultarNfseRpsEnvio"
+        )
+        ns = "{http://www.giss.com.br/tipos-v2_04.xsd}"
+        rps_numbers = root.findall(f".//{ns}IdentificacaoRps/{ns}Numero")
+        rps_series = root.findall(f".//{ns}IdentificacaoRps/{ns}Serie")
+        if (
+            etree.QName(root).localname != expected_root
+            or bool(getattr(root.getroottree().docinfo, "doctype", ""))
+            or len(rps_numbers) != 1
+            or len(rps_series) != 1
+            or (rps_numbers[0].text or "").strip() != original.rps_number
+            or (rps_series[0].text or "").strip() != original.rps_series
+        ):
+            raise Sp4CanonicalMunicipalError(
+                "Jundiai signed Giss document differs from persisted original RPS"
+            )
+        if method == "RecepcionarLoteRps":
+            lot = [
+                child for child in root.iter()
+                if etree.QName(child).localname == "NumeroLote"
+            ]
+            if (
+                original.municipal_batch_id is None
+                or len(original.municipal_batch_id) > 15
+                or len(lot) != 1
+                or (lot[0].text or "").strip() != original.municipal_batch_id
+            ):
+                raise Sp4CanonicalMunicipalError(
+                    "Jundiai signed Giss batch differs from original persisted lot"
+                )
         verify_signed_rps_identity(original, operation.signed_xml)
         receipt = transport.invoke(operation)
         return _verified_outcome(interpret_official_result(receipt, req, original))
