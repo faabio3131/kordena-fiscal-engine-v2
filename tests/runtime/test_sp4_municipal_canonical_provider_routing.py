@@ -18,8 +18,8 @@ from kordena_fiscal.domain import (
 )
 from kordena_fiscal.issuance import NfseGatewayClient, NfseQueryClient
 from kordena_fiscal.runtime.canonical_fiscal_composition import (
-    _GovernedNfseRouter,
     _SP4_MUNICIPAL_PROVIDER_IBGE,
+    _GovernedNfseRouter,
     _require_sp4_municipal_channel,
 )
 
