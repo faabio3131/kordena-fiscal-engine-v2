@@ -67,6 +67,7 @@ def _setup(
     *,
     protocol: str | None = "PROTOCOL42",
     submitted_on: date | None = None,
+    rps_action: str = "E",
 ) -> tuple[object, Mock, Mock, Mock, NfseAuthorizationRequest, Sp4OriginalRps]:
     scope = _scope()
     original = Sp4OriginalRps(
@@ -80,12 +81,14 @@ def _setup(
     request.document.scope = scope
     request.document.document_id = "original"
     request.document.issuer.tax_regime = TaxRegimeCode.NORMAL
+    rps_content = bytearray(_rps())
+    rps_content[27 + 39] = ord(rps_action)
     batch = BarueriRpsBatch(
         scope=scope, issuer_cnpj=original.issuer_cnpj,
         municipal_registration="1234567", tax_regime=TaxRegimeCode.NORMAL,
         competence_date=original.competence_date,
         remittance="20261113001", file_name="20261113001.txt",
-        rps_bytes=_rps(),
+        rps_bytes=bytes(rps_content),
     )
     transport = BarueriPmb004HomologationTransport(
         provider_resolver=Mock(), resolve_certificate=Mock(),
@@ -289,3 +292,15 @@ def test_listing_parser_rejects_duplicate_fiscal_origin() -> None:
             situation="1", return_file_name="result.txt",
             validation_only=False,
         )
+
+
+@pytest.mark.parametrize("action", ["C", "R"])
+def test_issuance_bridge_never_sends_cancel_or_substitution_without_approval(
+    action: str,
+) -> None:
+    ports, submit, status, download, request, original = _setup(rps_action=action)
+    with pytest.raises(Sp4CanonicalMunicipalError, match="cancellation or substitution"):
+        ports.submit_official_rps(request, original)
+    submit.assert_not_called()
+    status.assert_not_called()
+    download.assert_not_called()
