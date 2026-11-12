@@ -55,6 +55,11 @@ from .sqlite_core import (
 from .sqlite_delivery import SqliteFiscalDeliveryAuditStore, SqliteFiscalOutboxOrderingStore
 from .sqlite_idempotency import SqliteIdempotencyStore
 from .sqlite_national_dps import SqliteNationalDpsSequenceStore
+from .national_dps_schema import (
+    NATIONAL_DPS_SEQUENCE_VERSION,
+    NATIONAL_DPS_SEQUENCE_NAME,
+    NATIONAL_DPS_SEQUENCE_SCHEMA,
+)
 from .sqlite_inbox import SqliteFiscalInboxStore
 from .sqlite_outbox_archive import SqliteFiscalArchiveStore, SqliteFiscalOutboxStore
 from .sqlite_reconciliation import SqliteReconciliationRepository
@@ -557,24 +562,6 @@ _MIGRATIONS = (
             """,
         ),
     ),
-    _Migration(
-        version=6,
-        name="bh_national_dps_issuer_scoped_numbering",
-        statements=(
-            """
-            CREATE TABLE fm_nfse_dps_sequences (
-                host_namespace TEXT NOT NULL,
-                environment TEXT NOT NULL,
-                issuer_cnpj TEXT NOT NULL,
-                series INTEGER NOT NULL,
-                first_number INTEGER NOT NULL,
-                max_number INTEGER,
-                last_reserved INTEGER NOT NULL,
-                PRIMARY KEY (host_namespace, environment, issuer_cnpj, series)
-            )
-            """,
-        ),
-    ),
 )
 
 
@@ -869,6 +856,19 @@ class SqliteFiscalDatabase:
                     ),
                 )
                 new_versions.append(BLING_WORKER_POLICY_VERSION)
+            if NATIONAL_DPS_SEQUENCE_VERSION not in applied:
+                for statement in NATIONAL_DPS_SEQUENCE_SCHEMA:
+                    connection.execute(statement)
+                connection.execute(
+                    "INSERT INTO fm_schema_migrations (version, name, applied_at) "
+                    "VALUES (?, ?, ?)",
+                    (
+                        NATIONAL_DPS_SEQUENCE_VERSION,
+                        NATIONAL_DPS_SEQUENCE_NAME,
+                        datetime.now().astimezone().isoformat(),
+                    ),
+                )
+                new_versions.append(NATIONAL_DPS_SEQUENCE_VERSION)
             connection.commit()
             return tuple(new_versions)
         except Exception:
