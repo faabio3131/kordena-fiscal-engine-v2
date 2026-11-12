@@ -83,6 +83,7 @@ def _reservation(request: NfseAuthorizationRequest):
     return InMemoryFiscalSequenceStore().reserve_next(
         FiscalSequenceKey.from_scope(
             scope, model=InternalFiscalSequenceStream.NFSE_DPS, series=1,
+            issuer_cnpj=request.document.issuer.cnpj.value,
         ), FiscalSequencePolicy(),
     )
 
@@ -163,6 +164,7 @@ def test_bh_recovery_rejects_other_tenant_before_opening_vault(monkeypatch) -> N
     foreign = InMemoryFiscalSequenceStore().reserve_next(
         FiscalSequenceKey.from_scope(
             wrong, model=InternalFiscalSequenceStream.NFSE_DPS, series=1,
+            issuer_cnpj=request.document.issuer.cnpj.value,
         ), FiscalSequencePolicy(),
     )
     gateway, urls, vault, send = _gateway(monkeypatch, lambda url: _receipt())
