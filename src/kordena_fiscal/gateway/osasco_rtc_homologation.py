@@ -125,6 +125,7 @@ class OsascoOperationReceipt:
     # Results are not converted to AUTHORIZED before a canonical taxpayer
     # identity, official invoice reference, XML and durable audit are verified.
     confirmed_authorization: bool = False
+    response_xml: bytes = field(default=b"", repr=False)
 
 
 def _canonical_request(body: bytes, method: str) -> etree._Element:
@@ -226,6 +227,7 @@ def _parse_reply(raw: bytes, method: str) -> OsascoOperationReceipt:
         raise OsascoRtcContractError("Osasco response lacks canonical fiscal status")
     return OsascoOperationReceipt(
         method=method, fiscal_error=errors[0].text == "true",
+        response_xml=raw,
     )
 
 

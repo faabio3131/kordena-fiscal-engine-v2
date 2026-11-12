@@ -13,6 +13,7 @@ from datetime import date
 from typing import Protocol, TypeVar
 
 from kordena_fiscal.domain import Cnpj, ExecutionScope, TaxRegimeCode
+from kordena_fiscal.gateway.authorization import AuthorizationStatus
 from kordena_fiscal.gateway.barueri_pmb004_homologation import (
     BarueriPmb004HomologationTransport,
     BarueriReceipt,
@@ -288,10 +289,7 @@ def build_barueri_reviewed_ports(
         )
         if protocol is None:
             # No protocol is not evidence that an ambiguous POST failed.
-            return Sp4ProviderOutcome(status=__import__(
-                "kordena_fiscal.gateway.authorization",
-                fromlist=["AuthorizationStatus"],
-            ).AuthorizationStatus.PENDING)
+            return Sp4ProviderOutcome(status=AuthorizationStatus.PENDING)
         if (
             not isinstance(protocol, str)
             or not 1 <= len(protocol) <= 128

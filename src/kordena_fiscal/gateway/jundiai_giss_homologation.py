@@ -125,6 +125,7 @@ class JundiaiGissReceipt:
     # Canonical authorization requires invoice identity correlation, XML
     # archive and audited lifecycle separately.
     confirmed_document_authorization: bool = False
+    response_xml: bytes = field(default=b"", repr=False)
 
 
 def _validate_xml_shape(payload: bytes, method: str) -> etree._Element:
@@ -219,6 +220,7 @@ def _parse_reply(raw: bytes, method: str) -> JundiaiGissReceipt:
     return JundiaiGissReceipt(
         method=method, batch_protocol=protocols[0][:128] if protocols else None,
         batch_state=state, authorized=state == 4,
+        response_xml=raw,
     )
 
 

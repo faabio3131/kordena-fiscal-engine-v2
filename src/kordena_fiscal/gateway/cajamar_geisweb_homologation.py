@@ -134,6 +134,7 @@ class CajamarGeiswebResult:
     # XML response requires independent correlation of original issuer, RPS
     # and official note reference before the canonical lifecycle is updated.
     confirmed_authorization: bool = False
+    response_xml: bytes = field(default=b"", repr=False)
 
 
 def _soap(req: CajamarPreparedNfse, contract: CajamarGeiswebWsdl) -> bytes:
@@ -220,6 +221,8 @@ class CajamarGeiswebHomologationTransport:
             self._contract.endpoint, self._contract.method_actions[req.method],
             _soap(req, self._contract), build_fiscal_tls_context(a1), 15,
         )
+        if not isinstance(raw, bytes) or not 0 < len(raw) <= _LIMIT:
+            raise CajamarGeiswebContractError("Invalid bounded Cajamar SOAP result")
         try:
             node = etree.fromstring(
                 raw, parser=etree.XMLParser(resolve_entities=False, no_network=True),
@@ -233,4 +236,4 @@ class CajamarGeiswebHomologationTransport:
         body = node.find(f"{{{_SOAP}}}Body")
         if body is None or body.find(f"{{{_SOAP}}}Fault") is not None:
             raise CajamarGeiswebContractError("Cajamar SOAP rejected operation")
-        return CajamarGeiswebResult(method=req.method)
+        return CajamarGeiswebResult(method=req.method, response_xml=raw)
