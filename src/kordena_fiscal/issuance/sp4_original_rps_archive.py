@@ -46,6 +46,44 @@ def expected_sp4_batch(ibge: str, number: int) -> str | None:
     return str(number)
 
 
+
+def build_sp4_original_from_reservation(
+    request: NfseAuthorizationRequest,
+    reservation: FiscalNumberReservation,
+    *,
+    rps_series: str,
+) -> Sp4OriginalRps:
+    """Create one source-bound RPS from the already reserved fiscal stream.
+
+    The reviewed municipality-specific series must be provided by trusted
+    composition. Do not allocate another number or infer it from a browser.
+    """
+    if not isinstance(request, NfseAuthorizationRequest):
+        raise FiscalValidationError("SP4 requires canonical NFS-e request")
+    doc = request.document
+    ibge = doc.issuer.address.jurisdiction.municipality_ibge_code
+    if ibge not in SP4_MUNICIPAL_PROVIDERS.values():
+        raise FiscalValidationError("SP4 requires registered issuer municipality")
+    if not isinstance(rps_series, str) or len(rps_series) > 16:
+        raise FiscalValidationError("SP4 reviewed RPS series is invalid")
+    if rps_series == "" and ibge != "3505708":
+        raise FiscalValidationError("SP4 RPS series is required")
+    original = Sp4OriginalRps(
+        scope=doc.scope,
+        document_id=doc.document_id,
+        request_fingerprint=request.request_fingerprint,
+        issuer_cnpj=doc.issuer.cnpj,
+        issuer_ibge=ibge,
+        competence_date=doc.competence_date,
+        rps_number=str(reservation.number),
+        rps_series=rps_series,
+        gross_amount=doc.totals.gross_amount.amount,
+        municipal_batch_id=expected_sp4_batch(ibge, reservation.number),
+    )
+    validate_sp4_original(request, original, reservation)
+    return original
+
+
 def validate_sp4_original(
     request: NfseAuthorizationRequest,
     original: Sp4OriginalRps,
