@@ -41,6 +41,7 @@ _SOAP = "http://schemas.xmlsoap.org/soap/envelope/"
 _WCF = "http://tempuri.org/"
 _DTO = "http://schemas.datacontract.org/2004/07/Eissnfe.Negocio.WebServices.Mensagem"
 _MAX = 2_097_152
+_PRESTADOR = "http://schemas.datacontract.org/2004/07/Eissnfe.Dominio.DataTransferObject.Prestador"
 _OPERATIONS = {
     "RTC_EmitirNFE": "authorize",
     "RTC_EmitirNFELote": "authorize",
@@ -119,12 +120,36 @@ class OsascoPreparedOperation:
 
 
 @dataclass(frozen=True, slots=True)
+class OsascoNoteReference:
+    """Municipal note identifiers, not independent tax authorization or XML."""
+
+    number: str
+    authenticator: str
+    identifier: str
+
+    def __post_init__(self) -> None:
+        if (
+            not self.number.isascii() or not self.number.isdecimal()
+            or not 1 <= len(self.number) <= 20
+            or not self.authenticator.isascii()
+            or not 1 <= len(self.authenticator) <= 64
+            or not self.authenticator.isalnum()
+            or not self.identifier.isascii()
+            or not 1 <= len(self.identifier) <= 64
+            or not self.identifier.isalnum()
+        ):
+            raise OsascoRtcContractError("Invalid municipal note identity")
+
+
+@dataclass(frozen=True, slots=True)
 class OsascoOperationReceipt:
     method: str
     fiscal_error: bool
-    # Results are not converted to AUTHORIZED before a canonical taxpayer
-    # identity, official invoice reference, XML and durable audit are verified.
+    # SOAP true/false and municipal number cannot independently authorize
+    # the immutable original NFS-e without official document proof.
     confirmed_authorization: bool = False
+    status_available: bool = True
+    note_reference: OsascoNoteReference | None = None
     response_xml: bytes = field(default=b"", repr=False)
 
 
@@ -223,10 +248,39 @@ def _parse_reply(raw: bytes, method: str) -> OsascoOperationReceipt:
     if len(results) != 1:
         raise OsascoRtcContractError("Osasco response result mismatch")
     errors = results[0].findall(f".//{{{_DTO}}}Erro")
-    if len(errors) != 1 or (errors[0].text or "").lower() not in ("true", "false"):
+    if not errors and method == "ConsultarNotaCompleta":
+        # Municipal v2.1 returns complete XML rather than Erro boolean.
+        # Preserve evidence but keep official authorization unconfirmed.
+        return OsascoOperationReceipt(
+            method=method, fiscal_error=False, status_available=False,
+            response_xml=raw,
+        )
+    if len(errors) != 1 or (errors[0].text or "").strip().lower() not in (
+        "true", "false",
+    ):
         raise OsascoRtcContractError("Osasco response lacks canonical fiscal status")
+    failed = (errors[0].text or "").strip().lower() == "true"
+    note: OsascoNoteReference | None = None
+    references = results[0].findall(f"{{{_DTO}}}NotaFiscalGerada")
+    if len(references) > 1:
+        raise OsascoRtcContractError("Ambiguous municipal note references")
+    if references and failed:
+        raise OsascoRtcContractError("Osasco response carries contradictory note and error")
+    if references:
+        candidate = references[0]
+        def one(name: str) -> str:
+            nodes = candidate.findall(f"{{{_PRESTADOR}}}{name}")
+            if len(nodes) != 1 or not nodes[0].text:
+                raise OsascoRtcContractError("Osasco note identity incomplete")
+            return nodes[0].text.strip()
+        note = OsascoNoteReference(
+            number=one("Numero"),
+            authenticator=one("Autenticador"),
+            identifier=one("Identificador"),
+        )
     return OsascoOperationReceipt(
-        method=method, fiscal_error=errors[0].text == "true",
+        method=method, fiscal_error=failed,
+        note_reference=note,
         response_xml=raw,
     )
 

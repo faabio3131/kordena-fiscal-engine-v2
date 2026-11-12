@@ -138,3 +138,56 @@ def test_rtc_soap_verified_binding_and_key_offline() -> None:
     assert res.resolve_provider_id.call_args.kwargs["operation"] == "authorize"
     key.assert_called_once()
     exchange.assert_called_once()
+
+
+def test_osasco_official_sync_note_reference_is_preserved_but_not_authorized() -> None:
+    from kordena_fiscal.gateway.osasco_rtc_homologation import OsascoNoteReference
+
+    raw = (
+        b'<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" '
+        b'xmlns:t="http://tempuri.org/" '
+        b'xmlns:a="http://schemas.datacontract.org/2004/07/'
+        b'Eissnfe.Negocio.WebServices.Mensagem" '
+        b'xmlns:b="http://schemas.datacontract.org/2004/07/'
+        b'Eissnfe.Dominio.DataTransferObject.Prestador">'
+        b'<s:Body><t:RTC_EmitirNFEResponse><t:RTC_EmitirNFEResult>'
+        b'<a:Erro>false</a:Erro><a:NotaFiscalGerada>'
+        b'<b:Numero>99999</b:Numero><b:Autenticador>EMOLQEHA</b:Autenticador>'
+        b'<b:Identificador>000000</b:Identificador>'
+        b'</a:NotaFiscalGerada></t:RTC_EmitirNFEResult>'
+        b'</t:RTC_EmitirNFEResponse></s:Body></s:Envelope>'
+    )
+    receipt = _parse_reply(raw, "RTC_EmitirNFE")
+    assert receipt.note_reference == OsascoNoteReference(
+        number="99999", authenticator="EMOLQEHA", identifier="000000",
+    )
+    assert receipt.confirmed_authorization is False
+    assert receipt.response_xml == raw
+
+
+@pytest.mark.parametrize("alter", [
+    ("<b:Numero>99999</b:Numero>", "<b:Numero>-1</b:Numero>"),
+    ("<b:Autenticador>EMOLQEHA</b:Autenticador>",
+     "<b:Autenticador>admin token</b:Autenticador>"),
+    ("<b:Identificador>000000</b:Identificador>", ""),
+])
+def test_osasco_malformed_note_reference_is_not_fiscal_proof(
+    alter: tuple[str, str],
+) -> None:
+    original = (
+        '<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" '
+        'xmlns:t="http://tempuri.org/" '
+        'xmlns:a="http://schemas.datacontract.org/2004/07/'
+        'Eissnfe.Negocio.WebServices.Mensagem" '
+        'xmlns:b="http://schemas.datacontract.org/2004/07/'
+        'Eissnfe.Dominio.DataTransferObject.Prestador">'
+        '<s:Body><t:RTC_EmitirNFEResponse><t:RTC_EmitirNFEResult>'
+        '<a:Erro>false</a:Erro><a:NotaFiscalGerada>'
+        '<b:Numero>99999</b:Numero><b:Autenticador>EMOLQEHA</b:Autenticador>'
+        '<b:Identificador>000000</b:Identificador>'
+        '</a:NotaFiscalGerada></t:RTC_EmitirNFEResult>'
+        '</t:RTC_EmitirNFEResponse></s:Body></s:Envelope>'
+    )
+    raw = original.replace(*alter).encode()
+    with pytest.raises(OsascoRtcContractError, match="note identity"):
+        _parse_reply(raw, "RTC_EmitirNFE")

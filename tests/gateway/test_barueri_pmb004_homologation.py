@@ -25,9 +25,16 @@ from kordena_fiscal.gateway.barueri_pmb004_homologation import (
 def _synthetic_pmb004() -> bytes:
     """Physical record widths only: full fiscal values need official validator."""
     header = b"11234567PMB00420261113001"
-    record2 = b"2RPS  " + b" " * (1970 - 6)
+    record2_fields = bytearray(b"2RPS  " + b" " * (1970 - 6))
+    record2_fields[15:25] = b"0000000042"
+    record2_fields[25:33] = b"20261113"
+    record2_fields[33:39] = b"120000"
+    record2_fields[39:40] = b"E"
+    record2_fields[457:463] = b"000001"
+    record2_fields[463:478] = b"000000000015000"
+    record2 = bytes(record2_fields)
     record4 = b"41" + b" " * (531 - 2)
-    trailer = b"9" + b"0000004" + b"0" * 30
+    trailer = b"9" + b"0000004" + b"000000000015000" + b"0" * 15
     assert list(map(len, (header, record2, record4, trailer))) == [25, 1970, 531, 38]
     return b"\r\n".join((header, record2, record4, trailer)) + b"\r\n"
 
@@ -173,3 +180,63 @@ def test_signed_remittance_dispatch_stays_pending(monkeypatch: pytest.MonkeyPatc
     result2 = adapter.status(batch=batch, protocol="1234567")
     assert result2.document_authorized is False
     assert resolver.resolve_provider_id.call_args.kwargs["operation"] == "query"
+
+
+def test_pmb004_rps_identity_and_footer_amount_are_canonical() -> None:
+    good = _synthetic_pmb004()
+    _batch(data=good)
+    with pytest.raises(BarueriContractError, match="monetary checksum"):
+        _batch(data=good.replace(b"000000000015000", b"000000000015001", 1))
+    with pytest.raises(BarueriContractError, match="RPS identity or service value"):
+        _batch(data=good.replace(b"0000000042", b"0000000000", 1))
+    with pytest.raises(BarueriContractError, match="issuance date/time"):
+        _batch(data=good.replace(b"000000004220261113", b"000000004220261131", 1))
+    with pytest.raises(BarueriContractError, match="monetary checksum"):
+        _batch(data=good[:-32] + b"000000000015001" + good[-17:])
+
+
+def test_official_list_files_parses_original_remittance_without_fake_protocol() -> None:
+    raw = (
+        b'<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" '
+        b'xmlns:b="http://www.barueri.sp.gov.br/nfe"><soap:Body>'
+        b'<b:NFeLoteListarArquivosResponse><b:NFeLoteListarArquivosResult>'
+        b'<b:ListaMensagemRetorno><b:Codigo>OK200</b:Codigo></b:ListaMensagemRetorno>'
+        b'<b:ListaNfeArquivosRPS>'
+        b'<b:NomeArquivoOrginal>20261113001.txt</b:NomeArquivoOrginal>'
+        b'<b:CodigoRemessa>20261113001</b:CodigoRemessa>'
+        b'<b:ApenasValidaArq>false</b:ApenasValidaArq>'
+        b'<b:SituacaoArq>1</b:SituacaoArq>'
+        b'<b:NomeArqRetorno>return.txt</b:NomeArqRetorno>'
+        b'</b:ListaNfeArquivosRPS>'
+        b'</b:NFeLoteListarArquivosResult></b:NFeLoteListarArquivosResponse>'
+        b'</soap:Body></soap:Envelope>'
+    )
+    parsed = _parse_reply(raw, "NFeLoteListarArquivos")
+    assert parsed.document_authorized is False
+    assert len(parsed.listed_files) == 1
+    item = parsed.listed_files[0]
+    assert item.original_file_name == "20261113001.txt"
+    assert item.remittance == "20261113001"
+    assert item.situation == "1"
+    assert item.return_file_name == "return.txt"
+    assert item.validation_only is False
+
+
+def test_barueri_listing_uses_actual_submission_day_not_service_competence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gateway = BarueriPmb004HomologationTransport(
+        provider_resolver=Mock(), resolve_certificate=Mock(),
+        validate_pmb004=Mock(), exchange=Mock(),
+    )
+    send = Mock(return_value=Mock())
+    monkeypatch.setattr(gateway, "_send", send)
+    gateway.list_on_date(
+        batch=_batch(competence=date(2026, 10, 31)),
+        situation="1", submitted_on=date(2026, 11, 13),
+    )
+    assert send.call_args.kwargs["operation"] == "query"
+    fields = dict(send.call_args.kwargs["fields"])
+    assert fields["DataEnvioArq"] == "2026-11-13"
+    assert fields["SituacaoArq"] == "1"
+    assert send.call_args.kwargs["method"] == "NFeLoteListarArquivos"

@@ -50,7 +50,7 @@ def _request(
 
 @pytest.mark.parametrize("regime,competence", [
     (TaxRegimeCode.MEI, date(2023, 9, 1)),
-    (TaxRegimeCode.SIMPLES_NACIONAL, date(2026, 11, 1)),
+    (TaxRegimeCode.SIMPLES_NACIONAL, date(2026, 9, 1)),
     (TaxRegimeCode.SIMPLES_NACIONAL_EXCESS_SUBLIMIT, date(2026, 11, 13)),
 ])
 def test_national_issuer_never_routes_to_geisweb(
@@ -58,6 +58,25 @@ def test_national_issuer_never_routes_to_geisweb(
 ) -> None:
     with pytest.raises(CajamarGeiswebContractError, match="National NFS-e"):
         _request(regime=regime, competence=competence)
+
+
+@pytest.mark.parametrize("day", [
+    date(2026, 8, 31), date(2026, 1, 1),
+])
+def test_cajamar_simples_municipal_pre_cutover_date_preserved(day: date) -> None:
+    # City published July 15, 2026 that the national switchover starts
+    # September 1, not November 1.
+    assert _request(
+        regime=TaxRegimeCode.SIMPLES_NACIONAL, competence=day,
+    ).method == "EnviaLoteRps"
+
+
+@pytest.mark.parametrize("day", [date(2026, 9, 1), date(2026, 10, 1)])
+def test_cajamar_simples_after_official_september_2026_switch(day: date) -> None:
+    with pytest.raises(CajamarGeiswebContractError, match="National NFS-e"):
+        _request(
+            regime=TaxRegimeCode.SIMPLES_NACIONAL, competence=day,
+        )
 
 
 def test_cancellation_requires_operator_approval() -> None:

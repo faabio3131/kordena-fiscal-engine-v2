@@ -303,3 +303,33 @@ def test_other_tenant_cannot_recover_original_document_even_when_provider_is_sam
         gateway.query(request)
     ports["query"].assert_not_called()
     ports["verify"].assert_not_called()
+
+
+def test_only_barueri_may_use_official_blank_rps_series() -> None:
+    from dataclasses import replace
+
+    original = _original("3505708")
+    blank = replace(original, rps_series="")
+    assert blank.issuer_ibge == "3505708"
+    invoice = _invoice("3505708", rps_series="")
+    assert invoice.rps_series == ""
+    for city in ("3509205", "3534401", "3525904"):
+        with pytest.raises(Sp4CanonicalMunicipalError, match="RPS series"):
+            replace(_original(city), rps_series="")
+        with pytest.raises(Sp4CanonicalMunicipalError, match="RPS series"):
+            _invoice(city, rps_series="")
+
+
+@pytest.mark.parametrize("unsafe_total", [
+    Decimal("NaN"), Decimal("Infinity"), Decimal("-Infinity"),
+    Decimal("150.001"), Decimal("-1.00"),
+])
+def test_municipal_source_and_invoice_proof_reject_unsafe_money(
+    unsafe_total: Decimal,
+) -> None:
+    from dataclasses import replace
+
+    with pytest.raises(Sp4CanonicalMunicipalError):
+        replace(_original("3505708"), gross_amount=unsafe_total)
+    with pytest.raises(Sp4CanonicalMunicipalError):
+        replace(_invoice("3505708"), gross_amount=unsafe_total)

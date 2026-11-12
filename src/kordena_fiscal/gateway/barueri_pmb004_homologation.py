@@ -147,9 +147,118 @@ class BarueriRpsBatch:
             or int(footer[1:8]) != len(records)
         ):
             raise BarueriContractError("PMB004 trailer count or monetary totals are invalid")
-        # Header and trailer controls are structural. They are NOT a substitute
-        # for validation of the complete tax and RPS content by validate_pmb004.
+        # Official RPS_Layout-v4.2, Jan/2026: record 2 positions 16-25
+        # identify RPS, 26-39 date/time, 458-463 quantity, 464-478 unit
+        # service value in centavos. Type 3 positions 4-18 carry retained
+        # amounts. Type 9 positions 9-23 and 24-38 are monetary checksums.
+        # These checks bind the remittance to its own physical records. They
+        # do NOT replace the pinned field-by-field municipal/RTC validator.
+        service_total = 0
+        retained_total = 0
+        rps_identifiers: set[tuple[bytes, bytes]] = set()
+        for record in records[1:-1]:
+            if record[:1] == b"2":
+                rps_number = record[15:25]
+                series = record[6:10]
+                quantity = record[457:463]
+                value = record[463:478]
+                if (
+                    record[1:6] != b"RPS  "
+                    or not rps_number.isdigit()
+                    or not rps_number.startswith(b"000")
+                    or not quantity.isdigit()
+                    or int(quantity) == 0
+                    or not value.isdigit()
+                    or int(value) == 0
+                    or record[39:40] not in (b"E", b"C", b"R")
+                ):
+                    raise BarueriContractError("PMB004 invalid RPS identity or service value")
+                situation = record[39:40]
+                reason = record[40:42]
+                target_note = record[42:49]
+                # RPS_Layout-v4.2 (06/01/2026), page 2:
+                # cancel 01/02 MUST carry zero RPS; substitute 03 MUST
+                # carry newly allocated RPS; normal E/R requires an RPS.
+                if situation == b"C":
+                    if (
+                        reason not in (b"01", b"02", b"03")
+                        or not target_note.isdigit()
+                        or int(target_note) <= 0
+                        or (reason == b"03") != (int(rps_number) > 0)
+                        or (reason != b"03" and int(rps_number) != 0)
+                        or not record[54:62].isdigit()
+                        or not record[62:242].strip()
+                    ):
+                        raise BarueriContractError(
+                            "PMB004 cancellation/substitution RPS identity invalid"
+                        )
+                elif int(rps_number) <= 0:
+                    raise BarueriContractError("PMB004 invalid RPS identity or service value")
+                # The official Jan/2026 layout sets RPS=0000000000 for
+                # every ordinary cancellation. Multiple distinct cancelled
+                # invoices in ONE legitimate batch must not collide on 0;
+                # use the original NFS-e number as uniqueness identity.
+                key = (
+                    (b"NFSE", target_note)
+                    if situation == b"C" and reason in (b"01", b"02")
+                    else (series, rps_number)
+                )
+                if key in rps_identifiers:
+                    raise BarueriContractError("Duplicate PMB004 fiscal RPS event")
+                try:
+                    datetime.strptime(
+                        (record[25:33] + record[33:39]).decode("ascii"), "%Y%m%d%H%M%S",
+                    )
+                except (ValueError, UnicodeDecodeError):
+                    raise BarueriContractError("PMB004 invalid RPS issuance date/time") from None
+                rps_identifiers.add(key)
+                service_total += int(quantity) * int(value)
+            elif record[:1] == b"3":
+                if not record[3:18].isdigit():
+                    raise BarueriContractError("PMB004 invalid retention amount")
+                retained_total += int(record[3:18])
+        if (
+            int(footer[8:23]) != service_total
+            or int(footer[23:38]) != retained_total
+        ):
+            raise BarueriContractError("PMB004 fiscal monetary checksum mismatch")
+        # A trusted external validator must still verify ALL fiscal positions,
+        # regime, ISS/RTC, withholding and the taxpayer's municipal profile.
 
+
+
+@dataclass(frozen=True, slots=True)
+class BarueriListedFile:
+    """Taxpayer-scoped official read-only remittance entry."""
+
+    original_file_name: str
+    remittance: str
+    situation: str
+    return_file_name: str | None
+    validation_only: bool
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.original_file_name, str)
+            or not 1 <= len(self.original_file_name) <= 64
+            or not self.original_file_name.endswith(".txt")
+            or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-."
+                   for c in self.original_file_name)
+            or not isinstance(self.remittance, str)
+            or len(self.remittance) != 11
+            or not self.remittance.isascii()
+            or not self.remittance.isdecimal()
+            or self.situation not in ("-2", "-1", "0", "1", "2")
+            or type(self.validation_only) is not bool
+        ):
+            raise BarueriContractError("Invalid listed municipal remittance identity")
+        if self.return_file_name is not None and (
+            not isinstance(self.return_file_name, str)
+            or not 1 <= len(self.return_file_name) <= 128
+            or any(c not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-"
+                   for c in self.return_file_name)
+        ):
+            raise BarueriContractError("Unsafe Barueri return file identity")
 
 
 @dataclass(frozen=True, slots=True)
@@ -160,6 +269,7 @@ class BarueriReceipt:
     situation: str | None = None
     return_file_name: str | None = None
     downloaded_file: bytes | None = field(default=None, repr=False)
+    listed_files: tuple[BarueriListedFile, ...] = ()
 
     @property
     def document_authorized(self) -> bool:
@@ -252,6 +362,50 @@ def _parse_reply(raw: bytes, method: str) -> BarueriReceipt:
     code = official_text("Codigo", required=True)
     if code != "OK200":
         raise BarueriContractError("Barueri rejected the request (consult structured audit)")
+    if method == "NFeLoteListarArquivos":
+        records = result.findall(f".//{{{_NS}}}ListaNfeArquivosRPS")
+        if len(records) > 500:
+            raise BarueriContractError("Barueri file listing exceeded safe bound")
+        listed: list[BarueriListedFile] = []
+        for record in records:
+            def one(
+                name: str, *, required: bool = True, item: etree._Element = record,
+            ) -> str | None:
+                elements = item.findall(f"{{{_NS}}}{name}")
+                if len(elements) > 1 or (required and len(elements) != 1):
+                    raise BarueriContractError("Ambiguous Barueri listed file attribute")
+                if not elements or not elements[0].text:
+                    if required:
+                        raise BarueriContractError("Missing Barueri listed file attribute")
+                    return None
+                value = elements[0].text.strip()
+                if len(value) > 128:
+                    raise BarueriContractError("Oversized Barueri listed file attribute")
+                return value
+            original = one("NomeArquivoOriginal", required=False)
+            if original is None:
+                original = one("NomeArquivoOrginal")
+            remittance = one("CodigoRemessa")
+            situation = one("SituacaoArq")
+            validation = one("ApenasValidaArq")
+            filename = one("NomeArqRetorno", required=False)
+            if (
+                not isinstance(original, str)
+                or not isinstance(remittance, str)
+                or not isinstance(situation, str)
+                or validation not in ("true", "false", "0", "1")
+            ):
+                raise BarueriContractError("Incomplete Barueri remittance listing")
+            listed.append(BarueriListedFile(
+                original_file_name=original,
+                remittance=remittance,
+                situation=situation,
+                return_file_name=filename,
+                validation_only=validation in ("true", "1"),
+            ))
+        return BarueriReceipt(
+            operation=method, code=code, listed_files=tuple(listed),
+        )
     protocol = official_text("ProtocoloRemessa")
     situation = official_text("SituacaoArq")
     return_file = official_text("NomeArqRetorno")
@@ -356,6 +510,32 @@ class BarueriPmb004HomologationTransport:
                 ("InscricaoMunicipal", batch.municipal_registration),
                 ("CPFCNPJContrib", batch.issuer_cnpj.value),
                 ("ProtocoloRemessa", protocol),
+            ),
+        )
+
+    def list_on_date(
+        self, *, batch: BarueriRpsBatch, situation: str, submitted_on: date,
+    ) -> BarueriReceipt:
+        """Read-only duplicate detection after an ambiguous original POST.
+
+        Official June/2021 WebService manual: list by submission date
+        and five distinct queue states. No second RPS submission occurs.
+        """
+        if (
+            not isinstance(batch, BarueriRpsBatch)
+            or type(submitted_on) is not date
+            or situation not in ("-2", "-1", "0", "1", "2")
+        ):
+            raise BarueriContractError("Invalid Barueri remittance listing filter")
+        return self._send(
+            scope=batch.scope, cnpj=batch.issuer_cnpj,
+            method="NFeLoteListarArquivos", operation="query",
+            fields=(
+                ("InscricaoMunicipal", batch.municipal_registration),
+                ("CPFCNPJContrib", batch.issuer_cnpj.value),
+                # Submission date is NOT the service competence date.
+                ("DataEnvioArq", submitted_on.isoformat()),
+                ("SituacaoArq", situation),
             ),
         )
 

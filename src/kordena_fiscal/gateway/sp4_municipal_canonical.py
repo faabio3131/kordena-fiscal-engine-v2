@@ -69,6 +69,10 @@ class Sp4OriginalRps:
     rps_number: str
     rps_series: str
     gross_amount: Decimal
+    # Immutable, issuer-scoped lot/remittance identifier allocated and
+    # persisted BEFORE POST. GeisWeb needs it for read-only lot recovery;
+    # Barueri must reuse the same remittance for status/download.
+    municipal_batch_id: str | None = None
 
     def __post_init__(self) -> None:
         if (
@@ -76,7 +80,10 @@ class Sp4OriginalRps:
             or not isinstance(self.issuer_cnpj, Cnpj)
             or type(self.competence_date) is not date
             or type(self.gross_amount) is not Decimal
+            or not self.gross_amount.is_finite()
             or self.gross_amount < 0
+            or self.gross_amount * 100
+            != (self.gross_amount * 100).to_integral_value()
         ):
             raise Sp4CanonicalMunicipalError("Original municipal RPS is incomplete")
         _label(self.document_id, "document ID")
@@ -88,7 +95,20 @@ class Sp4OriginalRps:
         if self.issuer_ibge not in SP4_MUNICIPAL_PROVIDERS.values():
             raise Sp4CanonicalMunicipalError("Unknown SP4 RPS issuer")
         _label(self.rps_number, "RPS number", 32)
-        _label(self.rps_series, "RPS series", 16)
+        # Barueri PMB004 permits a blank original RPS series (PDF field
+        # optional); all other municipal adapters require an explicit series.
+        if self.rps_series == "" and self.issuer_ibge == "3505708":
+            pass
+        else:
+            _label(self.rps_series, "RPS series", 16)
+        if self.municipal_batch_id is not None:
+            _label(self.municipal_batch_id, "municipal batch ID", 32)
+            if (
+                not self.municipal_batch_id.isascii()
+                or not self.municipal_batch_id.isdecimal()
+                or int(self.municipal_batch_id) < 1
+            ):
+                raise Sp4CanonicalMunicipalError("Invalid durable municipal batch ID")
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,19 +132,23 @@ class Sp4VerifiedInvoice:
             or self.issuer_ibge not in SP4_MUNICIPAL_PROVIDERS.values()
             or type(self.competence_date) is not date
             or type(self.gross_amount) is not Decimal
+            or not self.gross_amount.is_finite()
             or self.gross_amount < 0
+            or self.gross_amount * 100
+            != (self.gross_amount * 100).to_integral_value()
             or type(self.authorized_xml) is not bytes
             or not 0 < len(self.authorized_xml) <= 2_097_152
         ):
             raise Sp4CanonicalMunicipalError("Official NFS-e proof is malformed")
         for value, name in (
             (self.rps_number, "RPS number"),
-            (self.rps_series, "RPS series"),
             (self.invoice_number, "invoice number"),
             (self.verification_code, "verification code"),
             (self.invoice_reference, "invoice reference"),
         ):
             _label(value, name, 128)
+        if self.rps_series != "" or self.issuer_ibge != "3505708":
+            _label(self.rps_series, "RPS series", 16)
 
 
 @dataclass(frozen=True, slots=True)
