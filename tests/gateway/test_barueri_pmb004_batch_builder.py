@@ -129,3 +129,33 @@ def test_vn_is_not_federal_withholding_but_counts_in_trailer() -> None:
     assert parts[-2] == (
         b"90000005" + b"000000000015000" + b"000000000001000"
     )
+
+
+def test_type2_withheld_without_type3_cannot_be_silently_accepted() -> None:
+    detail = bytearray(_detail())
+    detail[483:498] = b"000000000001000"
+    with pytest.raises(BarueriBatchBuilderError, match="Type 2 withheld"):
+        _build(rps_detail=bytes(detail))
+
+
+def test_type2_withholding_requires_exact_federal_reconciliation_even_with_vn() -> None:
+    detail = bytearray(_detail())
+    detail[483:498] = b"000000000000000"
+    with pytest.raises(BarueriBatchBuilderError, match="Type 2 withheld"):
+        _build(
+            rps_detail=bytes(detail),
+            retained_tax_records=(
+                b"301000000000001000",
+                b"3VN000000000000500",
+            ),
+        )
+
+
+def test_federal_withholding_cannot_exceed_original_gross_amount() -> None:
+    detail = bytearray(_detail())
+    detail[483:498] = b"000000000020000"
+    with pytest.raises(BarueriBatchBuilderError, match="exceeds"):
+        _build(
+            rps_detail=bytes(detail),
+            retained_tax_records=(b"301000000000020000",),
+        )
