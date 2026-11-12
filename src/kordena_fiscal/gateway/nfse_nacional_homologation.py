@@ -260,6 +260,7 @@ class NfseNacionalHomologationGateway:
             or key.environment != scope.environment
             or key.host_namespace != scope.host_namespace
             or key.model is not InternalFiscalSequenceStream.NFSE_DPS
+            or key.issuer_cnpj != issuer.cnpj.value
             or not 0 <= key.series <= 99999
             or not 1 <= dps_reservation.number <= 999_999_999_999_999
             or dps_reservation.reservation_token != hashlib.sha256(
