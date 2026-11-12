@@ -276,7 +276,7 @@ def test_bh_requires_reviewed_municipal_taxation_detail() -> None:
 
 def test_bh_pins_municipal_taxation_detail_in_schema_valid_signed_dps() -> None:
     signed = _signed_bh(_bh_request("001"))
-    national_dps_validator("1.00").validate_document(signed)
+    national_dps_validator("1.01").validate_document(signed)
     assert etree.fromstring(signed).findtext(
         f".//{{{_NFSE_NS}}}cServ/{{{_NFSE_NS}}}cTribMun"
     ) == "001"
@@ -308,7 +308,7 @@ def test_bh_requires_reviewed_nbs_in_2026() -> None:
 
 def test_bh_national_dps_contains_provided_nbs_after_description() -> None:
     signed = _signed_bh(_bh_request("001", nbs="123456789"))
-    national_dps_validator("1.00").validate_document(signed)
+    national_dps_validator("1.01").validate_document(signed)
     root = etree.fromstring(signed)
     c_serv = root.find(f".//{{{_NFSE_NS}}}cServ")
     assert [etree.QName(child).localname for child in c_serv] == [
@@ -374,3 +374,10 @@ def test_bh_reserved_number_is_preserved_in_dps_identity() -> None:
     info = etree.fromstring(_signed_bh(request)).find(f"{{{_NFSE_NS}}}infDPS")
     assert info.findtext(f"{{{_NFSE_NS}}}nDPS") == "1"
     assert info.findtext(f"{{{_NFSE_NS}}}serie") == "1"
+
+
+def test_bh_national_dps_uses_current_official_xsd_version() -> None:
+    signed = _signed_bh(_bh_request("001"))
+    root = etree.fromstring(signed)
+    assert root.get("versao") == "1.01"
+    national_dps_validator("1.01").validate_document(signed)
