@@ -251,7 +251,7 @@ def prepare_native_nfse(
             sp4_intent_builder=sp4_intent_builder,
             sp4_rps_series=sp4_series[0] if sp4_series is not None else None,
         )
-        source = (
+        municipal_source = (
             app.load_sp4_original_rps(scope, result.attempt.document_id)
             if sp4_series is not None else None
         )
@@ -264,15 +264,15 @@ def prepare_native_nfse(
             "fiscal_authorization": "not_inferred_from_preparation",
             "dps_numbering": (
                 "not_applicable_municipal"
-                if source is not None else "pending_durable_authority"
+                if municipal_source is not None else "pending_durable_authority"
             ),
             **(
                 {
-                    "rps_number": source.rps_number,
-                    "rps_series": source.rps_series,
-                    "municipal_batch_id": source.municipal_batch_id,
+                    "rps_number": municipal_source.rps_number,
+                    "rps_series": municipal_source.rps_series,
+                    "municipal_batch_id": municipal_source.municipal_batch_id,
                 }
-                if source is not None else {}
+                if municipal_source is not None else {}
             ),
         }
     except HumanAuthorizationError as exc:
