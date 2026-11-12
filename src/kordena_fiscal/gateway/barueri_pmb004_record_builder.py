@@ -84,6 +84,9 @@ class BarueriPmb004IssueFields:
     street_complement: str = ""
     # Reviewed retained taxes: IRRF, PIS, COFINS, CSLL, INSS.
     federal_retentions: tuple[tuple[str, Decimal], ...] = ()
+    # PMB004 Type 3 "VN" is a reviewed non-tax-base amount, not a tax.
+    # Must match the already-calculated canonical service deduction exactly.
+    non_base_amount: Decimal | None = None
     special_rtc: BarueriPmb004Type5Data | None = None
     # Type 5 is created by the separate fiscal-special-cases rule component.
 
@@ -247,10 +250,18 @@ def _source(
         raise BarueriPmb004RecordError("Barueri withholding total overflow")
     if Decimal(total) / 100 > original.gross_amount:
         raise BarueriPmb004RecordError("Barueri withholdings exceed service value")
-    if doc.services[0].deduction_amount.amount != Decimal("0"):
-        # Existing municipal special tax rules must supply Type 3/VN to
-        # represent deductions, not silently omit them from the remittance.
-        raise BarueriPmb004RecordError("Barueri deduction needs reviewed VN record")
+    deduction = doc.services[0].deduction_amount.amount
+    if fields.non_base_amount is not None:
+        _cents(fields.non_base_amount, "VN non-base amount")
+    if deduction != Decimal("0"):
+        if fields.non_base_amount != deduction:
+            raise BarueriPmb004RecordError(
+                "Barueri deduction needs matching reviewed VN amount"
+            )
+    elif fields.non_base_amount not in (None, Decimal("0")):
+        raise BarueriPmb004RecordError(
+            "Barueri VN amount has no canonical service deduction"
+        )
 
 
 def build_barueri_rps_type2(
@@ -337,10 +348,18 @@ def build_barueri_federal_retention_type3(
     VN (other values outside the service base) is separate, not a retention.
     """
     _source(request, original, fields)
-    return tuple(
+    federal_rows = tuple(
         b"3" + code.encode("ascii")
         + f"{_cents(amount, 'withheld tax'):015d}".encode("ascii")
         for code, amount in fields.federal_retentions
+    )
+    # VN enters the Type 9 total but never the Type 2 federal withholding.
+    # It is the canonical deduction only when the reviewed municipal policy
+    # has independently classified that exact amount as non-base.
+    if fields.non_base_amount is None or fields.non_base_amount == Decimal("0"):
+        return federal_rows
+    return federal_rows + (
+        b"3VN" + f"{_cents(fields.non_base_amount, 'VN'):015d}".encode("ascii"),
     )
 
 
