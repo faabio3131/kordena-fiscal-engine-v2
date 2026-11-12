@@ -341,8 +341,12 @@ def test_bh_archive_rejects_tampered_tax_fields(field: str, value: str) -> None:
     stored = json.loads(encode_prepared_nfse(original))
     stored["services"][0][field] = value
     altered = json.dumps(stored).encode()
-    with pytest.raises(FiscalValidationError, match="archived NFS-e fingerprint does not match"):
+    # The durable archive intentionally wraps invalid/tampered content in a
+    # stable public error; the original fingerprint failure is its cause.
+    with pytest.raises(FiscalValidationError, match="invalid prepared NFS-e artifact") as exc:
         decode_prepared_nfse(altered, scope=original.document.scope)
+    assert exc.value.__cause__ is not None
+    assert "fingerprint" in str(exc.value.__cause__)
 
 
 def test_legacy_prepared_archive_without_new_optional_fields_remains_readable() -> None:
@@ -406,3 +410,16 @@ def test_bh_special_regime_changes_fingerprint() -> None:
     ))
     assert first.request_fingerprint != second.request_fingerprint
     assert first.idempotency_key == second.idempotency_key
+
+
+def test_bh_schema_101_requires_canonical_domestic_issuer_address() -> None:
+    signed = _signed_bh(_bh_request("001"))
+    root = etree.fromstring(signed)
+    end = root.find(f"{{{_NFSE_NS}}}infDPS/{{{_NFSE_NS}}}prest/{{{_NFSE_NS}}}end")
+    assert end is not None
+    address = end.find(f"{{{_NFSE_NS}}}endNac")
+    assert address is not None
+    assert address.findtext(f"{{{_NFSE_NS}}}cMun") is not None
+    assert address.findtext(f"{{{_NFSE_NS}}}CEP") is not None
+    assert etree.QName(end[0]).localname == "endNac"
+    national_dps_validator("1.01").validate_document(signed)
