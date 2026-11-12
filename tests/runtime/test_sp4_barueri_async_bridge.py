@@ -67,6 +67,7 @@ def _setup() -> tuple[object, Mock, Mock, Mock, NfseAuthorizationRequest, Sp4Ori
         issuer_cnpj=Cnpj("11222333000181"), issuer_ibge="3505708",
         competence_date=date(2026, 11, 13), rps_number="42",
         rps_series="NF", gross_amount=Decimal("150.00"),
+        municipal_batch_id="20261113001",
     )
     request = Mock(spec=NfseAuthorizationRequest)
     request.document.scope = scope
@@ -193,3 +194,16 @@ def test_unrelated_download_file_cannot_pass_current_layout_verifier() -> None:
     with pytest.raises(Sp4CanonicalMunicipalError, match="original RPS"):
         ports.query_official_rps(request, original)
     submit.assert_not_called()
+
+
+def test_unpersisted_remittance_prevents_mutating_barueri_http() -> None:
+    from dataclasses import replace
+
+    ports, submit, status, download, request, original = _setup()
+    with pytest.raises(Sp4CanonicalMunicipalError, match="remittance conflicts"):
+        ports.submit_official_rps(
+            request, replace(original, municipal_batch_id="20261113002"),
+        )
+    submit.assert_not_called()
+    status.assert_not_called()
+    download.assert_not_called()
