@@ -242,11 +242,11 @@ def test_build_signed_dps_rejects_municipal_registration_over_limit() -> None:
         build_signed_dps(_request(document), _certificate())
 
 
-def _bh_request(detail: str | None) -> NfseAuthorizationRequest:
+def _bh_request(detail: str | None, nbs: str | None = "123456789") -> NfseAuthorizationRequest:
     document = replace(
         _document(),
         service_jurisdiction=BrazilianJurisdiction("MG", "3106200"),
-        services=(_service(municipal_taxation_detail=detail),),
+        services=(_service(municipal_taxation_detail=detail, national_service_nbs=nbs),),
     )
     return _request(document)
 
@@ -281,3 +281,24 @@ def test_non_bh_existing_builder_output_has_no_invented_c_trib_mun() -> None:
     assert etree.fromstring(signed).find(
         f".//{{{_NFSE_NS}}}cServ/{{{_NFSE_NS}}}cTribMun"
     ) is None
+
+
+def test_bh_requires_reviewed_nbs_in_2026() -> None:
+    with pytest.raises(FiscalValidationError, match="nine-digit cNBS"):
+        build_signed_dps(_bh_request("001", nbs=None), _certificate())
+
+
+def test_bh_national_dps_contains_provided_nbs_after_description() -> None:
+    signed = build_signed_dps(_bh_request("001", nbs="123456789"), _certificate())
+    national_dps_validator("1.00").validate_document(signed)
+    root = etree.fromstring(signed)
+    c_serv = root.find(f".//{{{_NFSE_NS}}}cServ")
+    assert [etree.QName(child).localname for child in c_serv] == [
+        "cTribNac", "cTribMun", "xDescServ", "cNBS",
+    ]
+
+
+@pytest.mark.parametrize("value", ["ABC", "1234", "1234567890", "１２３４５６７８９"])
+def test_bh_rejects_noncanonical_nbs(value: str) -> None:
+    with pytest.raises(FiscalValidationError, match="national_service_nbs"):
+        _bh_request("001", nbs=value)
