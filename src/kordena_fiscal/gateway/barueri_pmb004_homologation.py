@@ -166,7 +166,6 @@ class BarueriRpsBatch:
                     record[1:6] != b"RPS  "
                     or not rps_number.isdigit()
                     or not rps_number.startswith(b"000")
-                    or (series, rps_number) in rps_identifiers
                     or not quantity.isdigit()
                     or int(quantity) == 0
                     or not value.isdigit()
@@ -195,13 +194,24 @@ class BarueriRpsBatch:
                         )
                 elif int(rps_number) <= 0:
                     raise BarueriContractError("PMB004 invalid RPS identity or service value")
+                # The official Jan/2026 layout sets RPS=0000000000 for
+                # every ordinary cancellation. Multiple distinct cancelled
+                # invoices in ONE legitimate batch must not collide on 0;
+                # use the original NFS-e number as uniqueness identity.
+                key = (
+                    (b"NFSE", target_note)
+                    if situation == b"C" and reason in (b"01", b"02")
+                    else (series, rps_number)
+                )
+                if key in rps_identifiers:
+                    raise BarueriContractError("Duplicate PMB004 fiscal RPS event")
                 try:
                     datetime.strptime(
                         (record[25:33] + record[33:39]).decode("ascii"), "%Y%m%d%H%M%S",
                     )
                 except (ValueError, UnicodeDecodeError):
                     raise BarueriContractError("PMB004 invalid RPS issuance date/time") from None
-                rps_identifiers.add((series, rps_number))
+                rps_identifiers.add(key)
                 service_total += int(quantity) * int(value)
             elif record[:1] == b"3":
                 if not record[3:18].isdigit():
