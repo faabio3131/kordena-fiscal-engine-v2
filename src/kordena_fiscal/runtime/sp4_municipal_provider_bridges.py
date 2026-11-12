@@ -11,7 +11,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TypeVar
 
-from kordena_fiscal.domain import ExecutionScope, FiscalValidationError
+from kordena_fiscal.domain import ExecutionScope
 from kordena_fiscal.gateway.barueri_pmb004_homologation import (
     BarueriPmb004HomologationTransport,
     BarueriReceipt,
