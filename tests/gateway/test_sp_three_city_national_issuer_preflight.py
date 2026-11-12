@@ -172,3 +172,12 @@ def test_official_national_authorization_keeps_the_xml_for_auditable_archival(
     assert result.invoice_reference == key
     assert result.authorized_xml == xml
     exchange.assert_called_once()
+
+
+def test_osasco_catalog_does_not_invent_sigiss_or_betha_contracts() -> None:
+    from kordena_fiscal.gateway.municipal_sp_routing import SP_MUNICIPAL_CANDIDATES
+
+    assert SP_MUNICIPAL_CANDIDATES["3534401"] == (
+        "Osasco", ("osasco-proprio-rtc", "nfse-nacional")
+    )
+    assert SP_MUNICIPAL_CANDIDATES["3505708"][1] == ("barueri-proprio",)
