@@ -127,3 +127,44 @@ def test_recovery_commits_xml_and_terminal_state_together_without_second_post(tm
     )
     assert replay.replay
     assert query.calls == 1 and transport.calls == 1
+
+
+class _AuthorizedTransport:
+    calls = 0
+
+    def authorize(self, request: NfseAuthorizationRequest) -> NfseAuthorizationResult:
+        self.calls += 1
+        return _result(request, status=AuthorizationStatus.AUTHORIZED)
+
+
+def test_direct_issuance_archives_received_xml_in_same_finalization(tmp_path) -> None:
+    database = SqliteFiscalDatabase(tmp_path / "direct-nfse-receipt.sqlite")
+    database.initialize()
+    app = FiscalApplicationService(database)
+    document = _document()
+    prepared = app.prepare_nfse_authorization(
+        document, occurred_at=_NOW, retention=_RETENTION,
+    )
+    transport = _AuthorizedTransport()
+    outcome = app.authorize_prepared_document(
+        document_id=document.document_id,
+        request=prepared.request, gateway=NfseGatewayClient(transport),
+        occurred_at=_NOW,
+    )
+    assert outcome.lifecycle.state is FiscalDocumentState.AUTHORIZED
+    assert not outcome.recovery_required
+    assert transport.calls == 1
+
+    with database() as uow:
+        entries = uow.archive.list_for_document(document.scope, document.document_id)
+        official = [e for e in entries if e.kind is FiscalArchiveKind.AUTHORIZED_XML]
+        assert len(official) == 1
+        assert official[0].content == _RECEIPT
+
+    replay = app.authorize_prepared_document(
+        document_id=document.document_id,
+        request=prepared.request, gateway=NfseGatewayClient(transport),
+        occurred_at=_NOW,
+    )
+    assert replay.replay
+    assert transport.calls == 1
