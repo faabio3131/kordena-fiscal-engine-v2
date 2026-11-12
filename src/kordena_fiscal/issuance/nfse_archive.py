@@ -102,6 +102,9 @@ def encode_prepared_nfse(request: NfseAuthorizationRequest) -> bytes:
         "service_taker_reference": document.service_taker_reference,
         "schema_version": document.schema_version,
         "special_tax_regime": document.special_tax_regime,
+        "substituted_invoice_access_key": document.substituted_invoice_access_key,
+        "substitution_reason_code": document.substitution_reason_code,
+        "substitution_reason_text": document.substitution_reason_text,
         "idempotency_key": request.idempotency_key.value,
         "request_fingerprint": request.request_fingerprint,
     }
@@ -240,6 +243,15 @@ def decode_prepared_nfse(content: bytes, *, scope: ExecutionScope) -> NfseAuthor
             schema_version=root["schema_version"],
             special_tax_regime=_optional_text(
                 root.get("special_tax_regime"), "special_tax_regime",
+            ),
+            substituted_invoice_access_key=_optional_text(
+                root.get("substituted_invoice_access_key"), "substituted_invoice_access_key",
+            ),
+            substitution_reason_code=_optional_text(
+                root.get("substitution_reason_code"), "substitution_reason_code",
+            ),
+            substitution_reason_text=_optional_text(
+                root.get("substitution_reason_text"), "substitution_reason_text",
             ),
         )
         request = NfseAuthorizationRequest.build(document)
