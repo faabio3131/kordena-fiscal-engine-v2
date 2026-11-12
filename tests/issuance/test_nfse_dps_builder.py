@@ -262,3 +262,23 @@ def test_build_signed_dps_rejects_municipal_registration_over_limit() -> None:
     document = _document(issuer=issuer)
     with pytest.raises(FiscalValidationError, match="15-character"):
         build_signed_dps(_request(document), _certificate())
+
+
+def test_reserved_dps_id_is_exactly_the_read_only_recovery_identifier() -> None:
+    """National GET and XMLDSig must use the same UoW-reserved legal series/number."""
+    from kordena_fiscal.gateway.nfse_national_query import (
+        OfficialNfseTransportError,
+        _dps_id,
+    )
+
+    document = replace(_document(), dps_series=17, dps_number=2345)
+    request = _request(document)
+    signed = build_signed_dps(request, _certificate())
+    info = etree.fromstring(signed).find(f"{{{_NFSE_NS}}}infDPS")
+    assert info is not None
+    assert info.get("Id") == _dps_id(request)
+    assert _dps_id(request).endswith("00017" + "000000000002345")
+
+    no_reservation = _request(replace(_document(), dps_number=None))
+    with pytest.raises(OfficialNfseTransportError, match="durably reserved"):
+        _dps_id(no_reservation)
