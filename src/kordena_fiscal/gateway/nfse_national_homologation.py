@@ -20,7 +20,10 @@ from kordena_fiscal.domain import FiscalValidationError
 from kordena_fiscal.gateway.fiscal_tls import RejectFiscalRedirects, build_fiscal_tls_context
 from kordena_fiscal.signing.nfse_xmldsig import sign_nfse_dps_xml
 from kordena_fiscal.vault import EphemeralCertificateMaterial
-from kordena_fiscal.xml.nfse_nacional_schema import national_dps_validator
+from kordena_fiscal.xml.nfse_nacional_schema import (
+    NT009_RESTRICTED_PROFILE,
+    national_dps_validator,
+)
 
 SEFIN_HOMOLOGATION_NFSE_URL = (
     "https://sefin.producaorestrita.nfse.gov.br/API/SefinNacional/nfse"
@@ -81,7 +84,19 @@ def build_nfse_dps_request(
         if info.findtext(f"{{{_NFSE}}}prest/{{{_NFSE}}}CNPJ") != issuer_cnpj:
             raise OfficialNfseTransportError("DPS issuer disagrees with the scoped A1")
         version = info.getroottree().getroot().get("versao", "")
-        national_dps_validator(version).validate_document(signed_dps_xml)
+        if (
+            version == "1.01"
+            and issuer_municipality_ibge == "3106200"
+            and info.findtext(f"{{{_NFSE}}}tpAmb") == "2"
+        ):
+            # BH homologation uses the October NT009 XSD, never the
+            # incompatible February production XSD. The issuer municipality
+            # was already checked against the scoped profile above.
+            national_dps_validator(
+                version, profile=NT009_RESTRICTED_PROFILE,
+            ).validate_document(signed_dps_xml)
+        else:
+            national_dps_validator(version).validate_document(signed_dps_xml)
     return json.dumps(
         {"dpsXmlGZipB64": base64.b64encode(gzip.compress(signed_dps_xml, mtime=0)).decode("ascii")},
         separators=(",", ":"),
