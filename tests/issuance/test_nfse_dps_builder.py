@@ -282,3 +282,99 @@ def test_reserved_dps_id_is_exactly_the_read_only_recovery_identifier() -> None:
     no_reservation = _request(replace(_document(), dps_number=None))
     with pytest.raises(OfficialNfseTransportError, match="durably reserved"):
         _dps_id(no_reservation)
+
+
+@pytest.mark.parametrize(
+    ("identity", "expected_xml_field"),
+    [("cpf", "CPF"), ("cnpj", "CNPJ"), ("nif", "NIF"), ("none", "cNaoNIF")],
+)
+def test_tomador_identification_and_address_match_xsd101(
+    identity: str, expected_xml_field: str,
+) -> None:
+    from kordena_fiscal.domain import Cpf
+    from kordena_fiscal.issuance.nfe_nfse import (
+        NfseForeignAddress, NfseServiceTaker,
+    )
+
+    foreign = NfseForeignAddress(
+        country_code="US", postal_code="10001", city="New York",
+        region="New York", street="Fifth Avenue", number="10",
+        district="Manhattan",
+    )
+    national = FiscalAddress(
+        street="Rua Central", number="10", district="Centro",
+        municipality_name="Sao Paulo",
+        jurisdiction=BrazilianJurisdiction("SP", "3550308"),
+        postal_code="01001000",
+    )
+    if identity == "nif":
+        taker = NfseServiceTaker(
+            tax_id=None, legal_name="Foreign Company", nif="US-TAX-1299",
+            address=foreign,
+        )
+    elif identity == "none":
+        taker = NfseServiceTaker(
+            tax_id=None, legal_name="Foreign Company", no_nif_reason="2",
+            address=foreign,
+        )
+    else:
+        identifier = (
+            Cnpj("12345678000195") if identity == "cnpj" else Cpf("52998224725")
+        )
+        taker = NfseServiceTaker(
+            tax_id=identifier, legal_name="Tomador Nacional", address=national,
+        )
+    document = replace(_document(), service_taker=taker, dps_number=321)
+    request = _request(document)
+    signed = build_signed_dps(request, _certificate())
+    national_dps_validator("1.01").validate_document(signed)
+    root = etree.fromstring(signed)
+    toma = root.find(f"{{{_NFSE_NS}}}infDPS/{{{_NFSE_NS}}}toma")
+    assert toma is not None
+    value = toma.findtext(f"{{{_NFSE_NS}}}{expected_xml_field}")
+    assert value is not None
+    assert toma.find(f"{{{_NFSE_NS}}}xNome") is not None
+    if identity in {"nif", "none"}:
+        assert toma.find(f"{{{_NFSE_NS}}}end/{{{_NFSE_NS}}}endExt") is not None
+    else:
+        assert toma.find(f"{{{_NFSE_NS}}}end/{{{_NFSE_NS}}}endNac") is not None
+
+    from kordena_fiscal.issuance.nfse_archive import encode_prepared_nfse, decode_prepared_nfse
+
+    recovered = decode_prepared_nfse(
+        encode_prepared_nfse(request), scope=document.scope,
+    )
+    assert recovered.document.service_taker == taker
+    assert recovered.request_fingerprint == request.request_fingerprint
+
+
+def test_tomador_rejects_ambiguous_and_invalid_foreign_identification() -> None:
+    from kordena_fiscal.domain import Cpf
+    from kordena_fiscal.issuance.nfe_nfse import NfseForeignAddress, NfseServiceTaker
+
+    with pytest.raises(FiscalValidationError, match="exactly one"):
+        NfseServiceTaker(
+            tax_id=Cpf("52998224725"), legal_name="Invalid", nif="US-9999",
+        )
+    with pytest.raises(FiscalValidationError, match="cNaoNIF"):
+        NfseServiceTaker(
+            tax_id=None, legal_name="Invalid", no_nif_reason="3",
+        )
+    with pytest.raises(FiscalValidationError, match="two uppercase ISO letters"):
+        NfseForeignAddress(
+            country_code="usa", postal_code="10001", city="New York",
+            region="New York", street="Fifth Avenue", number="10",
+            district="Manhattan",
+        )
+
+
+def test_tomador_changes_request_fingerprint_and_protects_idempotency() -> None:
+    from kordena_fiscal.issuance.nfe_nfse import NfseServiceTaker
+
+    original = _document()
+    amended = replace(
+        original, service_taker=NfseServiceTaker(
+            tax_id=Cnpj("12345678000195"), legal_name="Tomador Novo",
+        ),
+    )
+    assert _request(original).request_fingerprint != _request(amended).request_fingerprint
