@@ -227,7 +227,7 @@ def build_signed_dps(
         raise FiscalValidationError(
             "Belo Horizonte requires reviewed special tax regime classification"
         )
-    _child(reg_trib, "regEspTrib", document.special_tax_regime or "0")  # Nenhum; FiscalProfile models no special regime today
+    _child(reg_trib, "regEspTrib", document.special_tax_regime or "0")
 
     serv = etree.SubElement(info, f"{{{_NFSE_NS}}}serv")
     loc_prest = etree.SubElement(serv, f"{{{_NFSE_NS}}}locPrest")
