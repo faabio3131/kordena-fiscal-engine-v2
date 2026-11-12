@@ -1460,7 +1460,47 @@ function appendA1UploadForm(article) {
   submit.textContent = "Armazenar A1 com segurança";
   const status = document.createElement("p");
   status.setAttribute("role", "status");
-  form.append(submit, status);
+  const check = document.createElement("button");
+  check.type = "button";
+  check.className = "secondary";
+  check.textContent = "Verificar A1 armazenado";
+  const statusUrl = () => (
+    "/v1/portal/certificates/a1/status"
+    + "?unit_id=" + encodeURIComponent(selectedFiscalUnit)
+    + "&environment=homologation"
+    + "&issuer_cnpj=" + encodeURIComponent(cnpj.value)
+  );
+  check.addEventListener("click", async () => {
+    if (!cnpj.checkValidity()) {
+      status.textContent = "Informe o CNPJ do emitente com 14 dígitos para consultar o cofre.";
+      return;
+    }
+    if (!selectedFiscalUnit || selectedFiscalEnvironment !== "homologation") {
+      status.textContent = "Selecione a unidade e Homologação para consultar o cofre A1.";
+      return;
+    }
+    check.disabled = true;
+    status.textContent = "Consultando o A1 no cofre da unidade...";
+    try {
+      const evidence = await api(statusUrl());
+      if (evidence.status === "stored") {
+        status.textContent = "A1 recuperável no cofre desta unidade. Validade: "
+          + evidence.expires_at + ". SHA-256: " + evidence.fingerprint_sha256
+          + ". Persistência após reinício e backup ainda exigem comprovação.";
+      } else if (evidence.status === "absent") {
+        status.textContent = "Não há A1 cadastrado neste escopo de empresa/unidade e ambiente."
+          + " Confira o escopo antes de qualquer novo envio.";
+      } else {
+        status.textContent = "O cofre não apresentou uma confirmação verificável.";
+      }
+    } catch (_) {
+      status.textContent = "Não foi possível confirmar o A1 no cofre."
+        + " Não reenvie o certificado antes de investigar o erro.";
+    } finally {
+      check.disabled = false;
+    }
+  });
+  form.append(submit, check, status);
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!form.reportValidity()) return;
@@ -1493,7 +1533,23 @@ function appendA1UploadForm(article) {
           password: password.value,
         }),
       });
-      status.textContent = `Certificado A1 armazenado com segurança. Validade: ${result.expires_at}. Identificador de verificação: ${result.fingerprint_sha256}.`;
+      // HTTP 200 is only the write acknowledgement. Confirm separate
+      // scope-bound decryption/readback before claiming the A1 is usable.
+      let readback = null;
+      try {
+        readback = await api(statusUrl());
+      } catch (_) {
+        // The write may have succeeded; never encourage a blind second POST.
+      }
+      if (result.status === "stored" && readback?.status === "stored"
+          && readback.fingerprint_sha256 === result.fingerprint_sha256) {
+        status.textContent = "A1 gravado e recuperado nesta unidade. Validade: "
+          + readback.expires_at + ". SHA-256: " + readback.fingerprint_sha256
+          + ". Persistência após reinício e backup ainda não comprovados.";
+      } else {
+        status.textContent = "O envio foi aceito, mas a leitura posterior do A1 não foi comprovada."
+          + " Não repita o envio até verificar o cofre.";
+      }
       file.value = "";
       password.value = "";
     } catch (error) {
