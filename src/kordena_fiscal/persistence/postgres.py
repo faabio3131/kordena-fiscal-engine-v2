@@ -652,7 +652,9 @@ class PostgresFiscalDatabase:
         with self._pool.connection() as raw:
             yield _PostgresCompatConnection(raw)
 
-    def initialize(self, *, enable_bling: bool = False) -> tuple[int, ...]:
+    def initialize(
+        self, *, enable_bling: bool = False, enable_national_dps: bool = False,
+    ) -> tuple[int, ...]:
         with self._pool.connection() as raw:
             try:
                 raw.execute(
@@ -912,7 +914,7 @@ class PostgresFiscalDatabase:
                         ),
                     )
                     new_versions.append(BLING_WORKER_POLICY_VERSION)
-                if NATIONAL_DPS_SEQUENCE_VERSION not in applied:
+                if enable_national_dps and NATIONAL_DPS_SEQUENCE_VERSION not in applied:
                     for statement in NATIONAL_DPS_SEQUENCE_SCHEMA:
                         raw.execute(_translate_ddl(statement))
                     raw.execute(
