@@ -202,6 +202,13 @@ class _GovernedNationalNfseGateway:
         if provider_id != NACIONAL_HOMOLOGATION_PROVIDER_ID:
             raise FiscalValidationError("Provedor do vinculo NFS-e Nacional incompativel")
         self._preaudit(request)
+        if jurisdiction.municipality_ibge_code == "3106200":
+            reservation = self._application.load_national_dps_reservation(
+                scope, document.document_id,
+            )
+            return self._gateway.authorize(
+                request, dps_reservation=reservation,
+            )
         return self._gateway.authorize(request)
 
 
