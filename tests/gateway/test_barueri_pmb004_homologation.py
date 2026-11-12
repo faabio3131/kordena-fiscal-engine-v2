@@ -190,6 +190,6 @@ def test_pmb004_rps_identity_and_footer_amount_are_canonical() -> None:
     with pytest.raises(BarueriContractError, match="RPS identity or service value"):
         _batch(data=good.replace(b"0000000042", b"0000000000", 1))
     with pytest.raises(BarueriContractError, match="issuance date/time"):
-        _batch(data=good.replace(b"20261113", b"20261131", 1))
+        _batch(data=good.replace(b"000000004220261113", b"000000004220261131", 1))
     with pytest.raises(BarueriContractError, match="monetary checksum"):
-        _batch(data=good[:-19] + b"000000000015001" + good[-4:])
+        _batch(data=good[:-32] + b"000000000015001" + good[-17:])
