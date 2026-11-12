@@ -335,7 +335,22 @@ def build_barueri_reviewed_ports(
     ) -> Sp4ProviderOutcome:
         batch = original_batch(req, original)
         receipt = transport.submit(batch)
-        return _verified_outcome(interpret_official_result(receipt, req, original))
+        if (
+            not isinstance(receipt, BarueriReceipt)
+            or receipt.operation != "NFeLoteEnviarArquivo"
+            or receipt.code != "OK200"
+        ):
+            raise Sp4CanonicalMunicipalError("Barueri returned unverified remittance receipt")
+        # Barueri PMB004 is asynchronous. Its initial OK200 can NEVER
+        # authorize a note, even if a caller supplies a faulty interpreter.
+        if not receipt.remittance_protocol:
+            raise Sp4CanonicalMunicipalError(
+                "Barueri did not provide a recoverable remittance protocol"
+            )
+        return Sp4ProviderOutcome(
+            status=AuthorizationStatus.PENDING,
+            provider_request_id=receipt.remittance_protocol,
+        )
 
     def query(
         req: NfseAuthorizationRequest, original: Sp4OriginalRps,
@@ -355,11 +370,33 @@ def build_barueri_reviewed_ports(
         ):
             raise Sp4CanonicalMunicipalError("Invalid original Barueri protocol")
         status = transport.status(batch=batch, protocol=protocol)
-        receipt = status
-        if status.return_file_name:
-            # Read-only download; never repeat the RPS submission.
-            receipt = transport.download(
-                batch=batch, file_name=status.return_file_name,
+        if (
+            not isinstance(status, BarueriReceipt)
+            or status.operation != "NFeLoteStatusArquivo"
+            or status.code != "OK200"
+            or status.remittance_protocol not in (None, protocol)
+        ):
+            raise Sp4CanonicalMunicipalError(
+                "Barueri status does not match original remittance"
+            )
+        if not status.return_file_name:
+            return Sp4ProviderOutcome(
+                status=AuthorizationStatus.PENDING,
+                provider_request_id=protocol,
+            )
+        # Only the provider-issued downloaded return file can contain an
+        # invoice candidate. A status-only result is never authorization.
+        receipt = transport.download(batch=batch, file_name=status.return_file_name)
+        if (
+            not isinstance(receipt, BarueriReceipt)
+            or receipt.operation != "NFeLoteBaixarArquivo"
+            or receipt.code != "OK200"
+            or not receipt.downloaded_file
+            or receipt.return_file_name not in (None, status.return_file_name)
+            or receipt.remittance_protocol not in (None, protocol)
+        ):
+            raise Sp4CanonicalMunicipalError(
+                "Barueri downloaded return file cannot be correlated"
             )
         return _verified_outcome(interpret_official_result(receipt, req, original))
 
