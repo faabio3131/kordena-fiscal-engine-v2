@@ -103,6 +103,7 @@ def _validate_fields(fields: CajamarGeiswebIssueData) -> None:
         or not fields.iss_rate.is_finite()
         or fields.iss_rate < 0
         or fields.iss_rate > 100
+        or not isinstance(fields.iss_rate.as_tuple().exponent, int)
         or fields.iss_rate.as_tuple().exponent < -5
     ):
         raise CajamarGeiswebIssueError("Invalid reviewed GeisWeb ISS rate")
@@ -165,7 +166,8 @@ def build_cajamar_issue_xml(
     base = _money(service.taxable_amount.amount, "ISS base")
     if service.taxable_amount.amount <= 0:
         raise CajamarGeiswebIssueError("Cajamar ISS base is missing")
-    root = etree.Element(f"{{{_NS}}}EnviaLoteRps", nsmap={None: _NS})
+    namespaces: dict[str | None, str] = {None: _NS}
+    root = etree.Element(f"{{{_NS}}}EnviaLoteRps", nsmap=namespaces)
     _add(root, "CnpjCpf", original.issuer_cnpj.value)
     _add(root, "NumeroLote", original.municipal_batch_id)
     rps = _node(root, "Rps")
