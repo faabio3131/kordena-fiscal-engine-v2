@@ -7,7 +7,7 @@ import json
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Protocol
+from typing import Any, Protocol
 
 from kordena_fiscal.documents import CanonicalFiscalDocument
 from kordena_fiscal.domain import (
@@ -344,7 +344,7 @@ def build_nfse_request_fingerprint(document: NfseCanonicalDocument) -> str:
     }
     if document.scope.host_namespace is not None:
         scope_payload["host_namespace"] = document.scope.host_namespace
-    payload = {
+    payload: dict[str, Any] = {
         "scope": scope_payload,
         "source": document.source.canonical_tuple,
         "issued_at": document.issued_at.isoformat(),
