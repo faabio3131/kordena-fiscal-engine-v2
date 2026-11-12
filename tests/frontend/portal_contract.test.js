@@ -232,3 +232,19 @@ test("A1 portal displays real scoped vault readback without sending certificate 
   assert.match(script, /Persistência após reinício e backup ainda/);
   assert.match(script, /Não reenvie o certificado antes de investigar o erro/);
 });
+
+
+test("A1 file validator accepts exported .pfx/.p12 instead of requiring a backslash", () => {
+  const start = script.indexOf("function appendA1UploadForm(");
+  const form = script.slice(start, script.indexOf("article.append(form);", start));
+  // Regression: the old /\\.(pfx|p12)$/i incorrectly required a literal slash.
+  assert.ok(form.includes(String.raw`!/\.(pfx|p12)$/i.test(chosen.name)`));
+  assert.ok(!form.includes(String.raw`!/\\.(pfx|p12)$/i.test(chosen.name)`));
+  const acceptsA1File = (name, size) =>
+    size > 0 && size <= 2 * 1024 * 1024 && /\.(pfx|p12)$/i.test(name);
+  assert.equal(acceptsA1File("SISTEM_A1_2026.pfx", 9554), true);
+  assert.equal(acceptsA1File("certificado.P12", 1024), true);
+  assert.equal(acceptsA1File("certificado.pfx.txt", 1024), false);
+  assert.equal(acceptsA1File("certificado.pfx", 0), false);
+  assert.equal(acceptsA1File("certificado.p12", 2 * 1024 * 1024 + 1), false);
+});
