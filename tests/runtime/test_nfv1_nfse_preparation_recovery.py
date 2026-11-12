@@ -330,7 +330,7 @@ def _bh_document() -> NfseCanonicalDocument:
         ),
     )
     return replace(
-        original, issuer=issuer, service_jurisdiction=bh,
+        original, issuer=issuer, service_jurisdiction=bh, special_tax_regime="0",
         services=(replace(
             original.services[0],
             municipal_taxation_detail="001", national_service_nbs="123456789",
