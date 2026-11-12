@@ -19,6 +19,7 @@ from kordena_fiscal.domain import ExecutionScope, FiscalValidationError
 from kordena_fiscal.gateway import AuthorizationRequest, FiscalGatewayClient
 from kordena_fiscal.issuance.nfe_nfse import (
     NfseAuthorizationRequest,
+    NfseAuthorizationResult,
     NfseGatewayClient,
     NfseQueryClient,
 )
