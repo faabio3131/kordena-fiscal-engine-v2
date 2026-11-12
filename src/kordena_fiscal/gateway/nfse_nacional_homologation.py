@@ -28,6 +28,7 @@ from kordena_fiscal.gateway.nfse_national_homologation import (
 from kordena_fiscal.issuance.nfe_nfse import (
     NfseAuthorizationRequest,
     NfseAuthorizationResult,
+    NfseRejectionDetail,
 )
 from kordena_fiscal.vault import EphemeralCertificateMaterial
 from kordena_fiscal.vault.a1_preflight import validate_a1_for_issuer
@@ -142,7 +143,7 @@ class NfseNacionalHomologationGateway:
         authorized_xml: bytes | None = None
         rejection_code: str | None = None
         rejection_message: str | None = None
-        rejections = ()
+        rejections: tuple[NfseRejectionDetail, ...] = ()
         if isinstance(key, str) and key:
             # The National access key alone is NOT proof. Require the exact
             # official XML, bounded and bound to infNFSe/@Id in the parser.
