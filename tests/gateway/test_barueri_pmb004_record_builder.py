@@ -159,4 +159,4 @@ def test_pmb004_canonical_remittance_port_uses_reviewed_source() -> None:
     batch = factory(_request(original), original)
     assert batch.remittance == original.municipal_batch_id
     assert batch.issuer_cnpj == original.issuer_cnpj
-    assert batch.rps_bytes.split(b"\\r\\n")[1][15:25] == b"0000000042"
+    assert batch.rps_bytes.split(b"\r\n")[1][15:25] == b"0000000042"
