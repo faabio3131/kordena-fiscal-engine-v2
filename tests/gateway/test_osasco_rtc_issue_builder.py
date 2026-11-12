@@ -151,3 +151,38 @@ def test_osasco_rtc_test_only_flag_is_configurable_not_fixed() -> None:
         f".//{{{_ISS}}}Homologacao"
     )
     assert node is not None and node.text == "true"
+
+
+@pytest.mark.parametrize("rtc_overrides", [
+    {"class_trib": "00001"},
+    {"class_trib": "00000A"},
+    {"class_trib": "0000001"},
+    {"nbs_code": "120011000"},
+    {"nbs_code": "1.2001.1.00"},
+    {"nbs_code": "1.2001.A0.00"},
+    {"incidence_location": "12"},
+    {"operation_indicator": "50101"},
+    {"operation_indicator": "05010X"},
+    {"operation_indicator": "0050101"},
+])
+def test_osasco_municipal_manual_v21_exact_rtc_code_shapes(
+    rtc_overrides: dict[str, str],
+) -> None:
+    original = _original()
+    with pytest.raises(OsascoRtcIssueError):
+        build_osasco_rtc_issue_xml(
+            request=_request(original), original=original,
+            fields=replace(_fields(), **rtc_overrides),
+        )
+
+
+def test_osasco_municipal_manual_v21_preserves_rtc_leading_zeroes() -> None:
+    original = _original()
+    xml = build_osasco_rtc_issue_xml(
+        request=_request(original), original=original, fields=_fields(),
+    )
+    root = etree.fromstring(xml)
+    assert root.findtext(f".//{{{_ISS}}}ClassTrib") == "000001"
+    assert root.findtext(f".//{{{_ISS}}}CodigoNBS") == "1.2001.10.00"
+    assert root.findtext(f".//{{{_ISS}}}IdLocalIncidencia") == "3"
+    assert root.findtext(f".//{{{_ISS}}}IndOperacao") == "050101"
