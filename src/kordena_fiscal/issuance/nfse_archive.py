@@ -85,6 +85,8 @@ def encode_prepared_nfse(request: NfseAuthorizationRequest) -> bytes:
                 "iss_amount": str(line.iss_amount.amount),
                 "iss_withheld": line.iss_withheld,
                 "national_taxation_code": line.national_taxation_code,
+                "municipal_taxation_detail": line.municipal_taxation_detail,
+                "national_service_nbs": line.national_service_nbs,
                 "rule_version": line.rule_version,
                 "source_normative": line.source_normative,
             }
@@ -196,6 +198,12 @@ def decode_prepared_nfse(content: bytes, *, scope: ExecutionScope) -> NfseAuthor
                 iss_withheld=item["iss_withheld"],
                 national_taxation_code=_optional_text(
                     item.get("national_taxation_code"), "national_taxation_code"
+                ),
+                municipal_taxation_detail=_optional_text(
+                    item.get("municipal_taxation_detail"), "municipal_taxation_detail"
+                ),
+                national_service_nbs=_optional_text(
+                    item.get("national_service_nbs"), "national_service_nbs"
                 ),
                 rule_version=item["rule_version"],
                 source_normative=_text(item["source_normative"], "source_normative"),
