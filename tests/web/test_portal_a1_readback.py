@@ -182,3 +182,23 @@ def test_readback_requires_login_and_certificate_manage_permission(tmp_path) -> 
     assert guest.get(_url()).status_code == 404  # portal is not installed without identity
     operator = _client(vault, role=PortalRole.OPERATOR)
     assert operator.get(_url()).status_code == 403
+
+
+def test_invalid_pkcs12_returns_controlled_error_without_storing_file(tmp_path) -> None:
+    root = tmp_path / "vault"
+    client = _client(EncryptedA1Vault(directory=root, master_key=b"m" * 32))
+    csrf = client.cookies.get(CSRF_COOKIE)
+    assert csrf
+    result = client.post(
+        "/v1/portal/certificates/a1",
+        headers={CSRF_HEADER: csrf},
+        json={
+            "unit_id": "unit-a", "environment": "homologation",
+            "issuer_cnpj": _ISSUER,
+            "pfx_base64": base64.b64encode(b"invalid-pkcs12").decode("ascii"),
+            "password": _PASSWORD.decode("ascii"),
+        },
+    )
+    assert result.status_code == 422
+    assert result.json()["detail"]["code"] == "A1_VALIDATION_FAILED"
+    assert not list(root.glob("*.a1.enc"))
