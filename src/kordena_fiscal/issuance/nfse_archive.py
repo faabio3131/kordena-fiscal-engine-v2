@@ -258,7 +258,7 @@ def decode_prepared_nfse(content: bytes, *, scope: ExecutionScope) -> NfseAuthor
         if root.get("service_taker") is not None:
             raw_taker = _mapping(root["service_taker"], "service_taker")
             kind = _text(raw_taker["tax_id_type"], "service_taker.tax_id_type")
-            tax_id = None
+            tax_id: Cnpj | Cpf | None = None
             nif = None
             no_nif_reason = None
             if kind == "cnpj":
@@ -271,7 +271,7 @@ def decode_prepared_nfse(content: bytes, *, scope: ExecutionScope) -> NfseAuthor
                 no_nif_reason = _text(raw_taker["no_nif_reason"], "service_taker.no_nif_reason")
             else:
                 raise FiscalValidationError("Unsupported NFS-e taker tax identity")
-            taker_address = None
+            taker_address: FiscalAddress | NfseForeignAddress | None = None
             if raw_taker.get("address") is not None:
                 ta = _mapping(raw_taker["address"], "service_taker.address")
                 address_type = _text(ta["type"], "taker.address.type")
