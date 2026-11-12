@@ -12,6 +12,7 @@ caller must hold the fiscal idempotency/sequence authority.
 from __future__ import annotations
 
 import base64
+import binascii
 import ssl
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -191,7 +192,8 @@ def _parse_reply(raw: bytes, method: str) -> BarueriReceipt:
         )
     except etree.XMLSyntaxError:
         raise BarueriContractError("Invalid Barueri SOAP XML") from None
-    if node.tag != f"{{{_SOAP}}}Envelope" or bool(node.getroottree().docinfo.doctype):
+    if node.tag != f"{{{_SOAP}}}Envelope" or bool(getattr(node.getroottree().docinfo, "doctype", "")):
+
         raise BarueriContractError("Barueri SOAP root mismatch")
     body = node.find(f"{{{_SOAP}}}Body")
     if body is None or body.find(f"{{{_SOAP}}}Fault") is not None:
@@ -213,7 +215,7 @@ def _parse_reply(raw: bytes, method: str) -> BarueriReceipt:
     if encoded:
         try:
             decoded = base64.b64decode(encoded, validate=True)
-        except ValueError:
+        except (ValueError, binascii.Error):
             raise BarueriContractError("Invalid Barueri return file Base64") from None
         if len(decoded) > _LIMIT:
             raise BarueriContractError("Barueri return file exceeds limit")
