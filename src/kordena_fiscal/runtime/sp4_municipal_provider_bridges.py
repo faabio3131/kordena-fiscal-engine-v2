@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Protocol, TypeVar
 
+from lxml import etree
+
 from kordena_fiscal.domain import Cnpj, ExecutionScope, TaxRegimeCode
 from kordena_fiscal.gateway.authorization import AuthorizationStatus
 from kordena_fiscal.gateway.barueri_pmb004_homologation import (
@@ -205,13 +207,53 @@ def build_osasco_reviewed_ports(
             req, original, build_wcf_operation(req, original, method),
             expected_type=OsascoPreparedOperation, expected_method=method,
         )
+        # Municipal v2.1 provides ConsultarNotaCompleta by NumeroReciboUnico;
+        # RTC_ConsultarNFE was not present in the official published method list.
+        if (
+            not original.rps_number.isascii()
+            or not original.rps_number.isdecimal()
+            or not 1 <= len(original.rps_number) <= 20
+        ):
+            raise Sp4CanonicalMunicipalError("Osasco original receipt number invalid")
+        field_name = (
+            "NumeroRecibo" if method == "RTC_EmitirNFE"
+            else "NumeroReciboUnico"
+        )
+        namespace = (
+            "http://schemas.datacontract.org/2004/07/"
+            + "Eissnfe.Dominio.DataTransferObject.Prestador"
+            if method == "RTC_EmitirNFE"
+            else "http://schemas.datacontract.org/2004/07/"
+            + "Eissnfe.Negocio.WebServices.Mensagem"
+        )
+        try:
+            root = etree.fromstring(
+                operation.request_xml,
+                parser=etree.XMLParser(
+                    no_network=True, resolve_entities=False, load_dtd=False,
+                ),
+            )
+        except etree.XMLSyntaxError:
+            raise Sp4CanonicalMunicipalError("Osasco fiscal request is malformed") from None
+        found = root.findall(f".//{{{namespace}}}{field_name}")
+        if (
+            len(found) != 1
+            or not found[0].text
+            or not found[0].text.isascii()
+            or not found[0].text.isdecimal()
+            or int(found[0].text) != int(original.rps_number)
+            or bool(getattr(root.getroottree().docinfo, "doctype", ""))
+        ):
+            raise Sp4CanonicalMunicipalError(
+                "Osasco requested receipt differs from durable original RPS"
+            )
         verify_wcf_rps_identity(original, operation.request_xml)
         receipt = transport.invoke(operation)
         return _verified_outcome(interpret_official_result(receipt, req, original))
 
     return authority.wrap(
         lambda req, original: invoke(req, original, "RTC_EmitirNFE"),
-        lambda req, original: invoke(req, original, "RTC_ConsultarNFE"),
+        lambda req, original: invoke(req, original, "ConsultarNotaCompleta"),
     )
 
 
