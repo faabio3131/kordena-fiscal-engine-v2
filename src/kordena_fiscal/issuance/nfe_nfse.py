@@ -411,6 +411,7 @@ class NfseAuthorizationResult:
     provider_request_id: str | None = None
     invoice_reference: str | None = None
     verification_code: str | None = None
+    authorized_xml: bytes | None = None
     rejection_code: str | None = None
     rejection_message: str | None = None
 
@@ -441,20 +442,31 @@ class NfseAuthorizationResult:
                 field_name,
                 _optional(getattr(self, field_name), field_name, 512),
             )
+        if self.authorized_xml is not None and (
+            not isinstance(self.authorized_xml, bytes)
+            or not 0 < len(self.authorized_xml) <= 2 * 1024 * 1024
+        ):
+            raise FiscalValidationError("Invalid authorized NFS-e XML evidence")
         if self.status is AuthorizationStatus.AUTHORIZED:
             if self.invoice_reference is None:
                 raise FiscalValidationError("authorized NFS-e requires invoice_reference")
             if self.rejection_code is not None or self.rejection_message is not None:
                 raise FiscalValidationError("authorized NFS-e cannot contain rejection metadata")
         elif self.status is AuthorizationStatus.REJECTED:
-            if self.invoice_reference is not None or self.verification_code is not None:
+            if (
+                self.invoice_reference is not None or self.verification_code is not None
+                or self.authorized_xml is not None
+            ):
                 raise FiscalValidationError("rejected NFS-e cannot contain invoice metadata")
             if self.rejection_code is None or self.rejection_message is None:
                 raise FiscalValidationError(
                     "rejected NFS-e requires rejection_code and rejection_message"
                 )
         else:
-            if self.invoice_reference is not None or self.verification_code is not None:
+            if (
+                self.invoice_reference is not None or self.verification_code is not None
+                or self.authorized_xml is not None
+            ):
                 raise FiscalValidationError("pending NFS-e cannot contain invoice metadata")
             if self.rejection_code is not None or self.rejection_message is not None:
                 raise FiscalValidationError("pending NFS-e cannot contain rejection metadata")
