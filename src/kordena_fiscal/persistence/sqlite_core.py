@@ -25,6 +25,7 @@ from kordena_fiscal.numbering import (
     FiscalNumberReservation,
     FiscalSequenceKey,
     FiscalSequencePolicy,
+    InternalFiscalSequenceStream,
     SequenceExhaustedError,
     SequenceStateError,
 )
@@ -59,6 +60,8 @@ class SqliteFiscalSequenceStore:
     ) -> FiscalNumberReservation:
         if not isinstance(key, FiscalSequenceKey):
             raise FiscalValidationError("key must be FiscalSequenceKey")
+        if key.model is InternalFiscalSequenceStream.NFSE_DPS:
+            raise FiscalValidationError("National DPS must use dedicated CNPJ sequence store")
         if not isinstance(policy, FiscalSequencePolicy):
             raise FiscalValidationError("policy must be FiscalSequencePolicy")
         identity = self._identity(key)

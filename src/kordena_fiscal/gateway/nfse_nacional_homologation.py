@@ -5,6 +5,7 @@ preparation authority. Never builds a DPS from untrusted browser JSON.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import ssl
 from collections.abc import Callable
@@ -33,6 +34,7 @@ from kordena_fiscal.issuance.nfe_nfse import (
     NfseAuthorizationRequest,
     NfseAuthorizationResult,
 )
+from kordena_fiscal.numbering import FiscalNumberReservation, InternalFiscalSequenceStream
 from kordena_fiscal.vault import EphemeralCertificateMaterial
 from kordena_fiscal.vault.a1_preflight import validate_a1_for_issuer
 
@@ -44,6 +46,36 @@ _PROVIDER = GatewayProviderMetadata(NACIONAL_HOMOLOGATION_PROVIDER_ID, "1.0")
 
 class OfficialNfseTransportError(FiscalValidationError):
     """Transport failure with secrets and upstream response stripped."""
+
+
+def _read_national_homologation(
+    url: str, context: ssl.SSLContext, timeout: float,
+) -> bytes | None:
+    """Read-only SEFIN retrieval. 404 is unconfirmed, never a rejection."""
+    endpoint_prefix = NACIONAL_HOMOLOGATION_NFSE_URL.rsplit("/nfse", 1)[0]
+    if not url.startswith(endpoint_prefix + "/") or not (
+        url.startswith(endpoint_prefix + "/dps/")
+        or url.startswith(endpoint_prefix + "/nfse/")
+    ):
+        raise OfficialNfseTransportError("Unapproved SEFIN recovery endpoint")
+    req = Request(url, method="GET", headers={"Accept": "application/json"})
+    try:
+        opener = build_opener(HTTPSHandler(context=context), RejectFiscalRedirects())
+        with opener.open(req, timeout=timeout) as response:
+            data = response.read(_MAX_RESPONSE + 1)
+    except HTTPError as exc:
+        if exc.code == 404:
+            return None
+        raise OfficialNfseTransportError(
+            "Consulta nacional não confirmada; preservar estado pendente"
+        ) from None
+    except (URLError, TimeoutError, OSError, ssl.SSLError):
+        raise OfficialNfseTransportError(
+            "Consulta nacional indisponível; preservar estado pendente"
+        ) from None
+    if len(data) > _MAX_RESPONSE:
+        raise OfficialNfseTransportError("Resposta de consulta nacional excede limite")
+    return bytes(data)
 
 
 def encode_signed_dps(
@@ -85,8 +117,9 @@ class NfseNacionalHomologationGateway:
         self,
         *,
         resolve_certificate: Callable[[ExecutionScope, str], EphemeralCertificateMaterial],
-        build_signed_dps: Callable[[NfseAuthorizationRequest, EphemeralCertificateMaterial], bytes],
+        build_signed_dps: Callable[..., bytes],
         exchange: Callable[[bytes, ssl.SSLContext, float], bytes] | None = None,
+        exchange_read: Callable[[str, ssl.SSLContext, float], bytes | None] | None = None,
         timeout_seconds: float = 15,
     ) -> None:
         if not callable(resolve_certificate) or not callable(build_signed_dps):
@@ -96,9 +129,13 @@ class NfseNacionalHomologationGateway:
         self._resolve_certificate = resolve_certificate
         self._build_signed_dps = build_signed_dps
         self._exchange = exchange or _exchange_http
+        self._exchange_read = exchange_read or _read_national_homologation
         self._timeout = timeout_seconds
 
-    def authorize(self, request: NfseAuthorizationRequest) -> NfseAuthorizationResult:
+    def authorize(
+        self, request: NfseAuthorizationRequest, *,
+        dps_reservation: FiscalNumberReservation | None = None,
+    ) -> NfseAuthorizationResult:
         if not isinstance(request, NfseAuthorizationRequest):
             raise OfficialNfseTransportError("Solicitação NFS-e inválida")
         document = request.document
@@ -129,7 +166,20 @@ class NfseNacionalHomologationGateway:
             material.pkcs12_bytes, material.password, issuer_cnpj=Cnpj(issuer_cnpj),
             at=datetime.now(UTC),
         )
-        signed_dps = self._build_signed_dps(request, material)
+        if issuer_municipality == "3106200":
+            if dps_reservation is None:
+                raise OfficialNfseTransportError(
+                    "Belo Horizonte requires a durable DPS reservation"
+                )
+            signed_dps = self._build_signed_dps(
+                request, material, reservation=dps_reservation,
+            )
+        else:
+            if dps_reservation is not None:
+                raise OfficialNfseTransportError(
+                    "National DPS reservation belongs to another municipality"
+                )
+            signed_dps = self._build_signed_dps(request, material)
         payload = encode_signed_dps(
             signed_dps, issuer_cnpj=issuer_cnpj, issuer_municipality_ibge=issuer_municipality,
         )
@@ -144,6 +194,7 @@ class NfseNacionalHomologationGateway:
             raise OfficialNfseTransportError("Resposta SEFIN sem homologação válida") from None
 
         key = result.get("chaveAcesso")
+        authorized_xml: bytes | None = None
         if isinstance(key, str) and key:
             # The access key alone is not proof of an authorized invoice.
             # The SEFIN must provide the corresponding decompressible XML.
@@ -151,6 +202,9 @@ class NfseNacionalHomologationGateway:
             parsed = parse_nfse_homologation_response(response)
             if parsed.get("chaveAcesso") != key:
                 raise OfficialNfseTransportError("NFS-e autorizada com chave divergente")
+            authorized_xml = parsed["xml"].encode("utf-8")
+            if not authorized_xml or len(authorized_xml) > _MAX_RESPONSE:
+                raise OfficialNfseTransportError("XML fiscal autorizado ausente ou excessivo")
             status = AuthorizationStatus.AUTHORIZED
             kwargs = {"invoice_reference": key[:512]}
         else:
@@ -177,6 +231,110 @@ class NfseNacionalHomologationGateway:
             provider_request_id=str(result["idDps"])[:512]
             if isinstance(result.get("idDps"), str) else None,
             invoice_reference=kwargs.get("invoice_reference"),
+            authorized_xml=authorized_xml,
             rejection_code=kwargs.get("rejection_code"),
             rejection_message=kwargs.get("rejection_message"),
+        )
+
+
+    def query(
+        self, request: NfseAuthorizationRequest, *,
+        dps_reservation: FiscalNumberReservation,
+    ) -> NfseAuthorizationResult:
+        """Recover BH status via SEFIN GET /dps/id then GET /nfse/key.
+
+        A missing DPS or unavailable response never authorizes and never
+        triggers a new POST. Identity and A1 binding are checked first.
+        """
+        if not isinstance(request, NfseAuthorizationRequest):
+            raise OfficialNfseTransportError("Consulta requer solicitação fiscal preparada")
+        document = request.document
+        scope = document.scope
+        issuer = document.issuer
+        municipal = issuer.address.jurisdiction.municipality_ibge_code
+        if (
+            scope.environment is not FiscalEnvironment.HOMOLOGATION
+            or municipal != "3106200"
+            or not isinstance(dps_reservation, FiscalNumberReservation)
+        ):
+            raise OfficialNfseTransportError("Consulta DPS não pertence a BH homologação")
+        key = dps_reservation.key
+        if (
+            key.tenant_id != scope.tenant_id
+            or key.unit_id != scope.unit_id
+            or key.environment != scope.environment
+            or key.host_namespace != scope.host_namespace
+            or key.model is not InternalFiscalSequenceStream.NFSE_DPS
+            or key.issuer_cnpj != issuer.cnpj.value
+            or not 0 <= key.series <= 99999
+            or not 1 <= dps_reservation.number <= 999_999_999_999_999
+            or dps_reservation.reservation_token != hashlib.sha256(
+                f"{key.canonical_material}|{dps_reservation.number}".encode()
+            ).hexdigest()
+        ):
+            raise OfficialNfseTransportError("Reserva DPS pertence a outro escopo")
+        cnpj = issuer.cnpj.value
+        if len(cnpj) != 14 or not cnpj.isascii() or not cnpj.isdecimal():
+            raise OfficialNfseTransportError("Inscrição federal DPS inválida")
+        id_dps = (
+            "DPS" + municipal + "1" + cnpj
+            + str(key.series).zfill(5) + str(dps_reservation.number).zfill(15)
+        )
+        try:
+            require_mg_national_channel_eligibility(
+                jurisdiction=issuer.address.jurisdiction,
+                tax_regime=issuer.tax_regime, competence_date=document.competence_date,
+            )
+        except FiscalValidationError:
+            raise OfficialNfseTransportError("Emissor Nacional BH não elegível") from None
+        certificate = self._resolve_certificate(scope, cnpj)
+        validate_a1_for_issuer(
+            certificate.pkcs12_bytes, certificate.password,
+            issuer_cnpj=Cnpj(cnpj), at=datetime.now(UTC),
+        )
+        tls = build_fiscal_tls_context(certificate)
+        prefix = NACIONAL_HOMOLOGATION_NFSE_URL.rsplit("/nfse", 1)[0]
+        dps_response = self._exchange_read(prefix + "/dps/" + id_dps, tls, self._timeout)
+        if dps_response is None:
+            return NfseAuthorizationResult(
+                status=AuthorizationStatus.PENDING, scope=scope,
+                document_id=document.document_id,
+                idempotency_key=request.idempotency_key,
+                request_fingerprint=request.request_fingerprint, provider=_PROVIDER,
+            )
+        try:
+            payload = json.loads(dps_response)
+            if (
+                not isinstance(payload, dict)
+                or payload.get("tipoAmbiente") != 2
+                or payload.get("idDps") != id_dps
+                or not isinstance(payload.get("chaveAcesso"), str)
+                or len(payload["chaveAcesso"]) != 50
+                or not payload["chaveAcesso"].isascii()
+                or not payload["chaveAcesso"].isdecimal()
+            ):
+                raise ValueError("inconsistent DPS result")
+            access_key = payload["chaveAcesso"]
+        except (ValueError, UnicodeDecodeError, TypeError):
+            raise OfficialNfseTransportError(
+                "Consulta DPS retornou identificação divergente"
+            ) from None
+        nfse_response = self._exchange_read(
+            prefix + "/nfse/" + access_key, tls, self._timeout,
+        )
+        if nfse_response is None:
+            raise OfficialNfseTransportError(
+                "DPS identificado sem XML NFS-e verificável; preservar pendência"
+            )
+        parsed = parse_nfse_homologation_response(nfse_response)
+        if parsed["chaveAcesso"] != access_key:
+            raise OfficialNfseTransportError("Consulta NFS-e retornou chave divergente")
+        return NfseAuthorizationResult(
+            status=AuthorizationStatus.AUTHORIZED, scope=scope,
+            document_id=document.document_id,
+            idempotency_key=request.idempotency_key,
+            request_fingerprint=request.request_fingerprint,
+            provider=_PROVIDER, provider_request_id=id_dps,
+            invoice_reference=access_key,
+            authorized_xml=parsed["xml"].encode("utf-8"),
         )

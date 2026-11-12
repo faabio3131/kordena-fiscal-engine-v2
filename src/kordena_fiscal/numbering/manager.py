@@ -21,12 +21,13 @@ from kordena_fiscal.domain.primitives import _normalize_host_namespace
 class InternalFiscalSequenceStream(IntEnum):
     """Private numbering namespace; never an official invoice model code.
 
-    Value 90 is reserved only in the NFCore fm_fiscal_sequences persistence
-    partition for municipal RPS. It MUST NOT be serialized as a fiscal
+    Value 90 is reserved for municipal RPS; 91 is reserved for National DPS
+    in the NFCore fm_fiscal_sequences persistence partition. It MUST NOT be serialized as a fiscal
     document model, access-key model, or NFS-e XML value.
     """
 
     NFSE_RPS = 90
+    NFSE_DPS = 91  # National DPS; independent from municipal RPS
 
 
 class SequenceExhaustedError(FiscalDomainError):
@@ -47,6 +48,7 @@ class FiscalSequenceKey:
     model: ElectronicInvoiceModel | InternalFiscalSequenceStream
     series: int
     host_namespace: str | None = None
+    issuer_cnpj: str | None = None  # National DPS issuer; never used by 55/65/RPS
 
     def __post_init__(self) -> None:
         tenant_id = self.tenant_id.strip()
@@ -63,6 +65,21 @@ class FiscalSequenceKey:
             raise FiscalValidationError("series must be an integer")
         if self.series < 0:
             raise FiscalValidationError("series must be non-negative")
+        is_dps = self.model is InternalFiscalSequenceStream.NFSE_DPS
+        if is_dps:
+            cnpj = self.issuer_cnpj
+            if (
+                not isinstance(cnpj, str)
+                or len(cnpj) != 14
+                or not cnpj.isascii()
+                or not cnpj.isdecimal()
+                or not self.host_namespace
+            ):
+                raise FiscalValidationError(
+                    "National DPS sequence requires numeric issuer CNPJ and host authority"
+                )
+        elif self.issuer_cnpj is not None:
+            raise FiscalValidationError("Issuer CNPJ is only allowed for National DPS sequences")
         object.__setattr__(self, "tenant_id", tenant_id)
         object.__setattr__(self, "unit_id", unit_id)
         if self.host_namespace is not None:
@@ -79,6 +96,7 @@ class FiscalSequenceKey:
         *,
         model: ElectronicInvoiceModel | InternalFiscalSequenceStream,
         series: int,
+        issuer_cnpj: str | None = None,
     ) -> FiscalSequenceKey:
         if not isinstance(scope, ExecutionScope):
             raise FiscalValidationError("scope must be ExecutionScope")
@@ -89,6 +107,7 @@ class FiscalSequenceKey:
             model=model,
             series=series,
             host_namespace=scope.host_namespace,
+            issuer_cnpj=issuer_cnpj,
         )
 
     @property
@@ -100,6 +119,8 @@ class FiscalSequenceKey:
             str(self.model.value),
             str(self.series),
         )
+        if self.issuer_cnpj is not None:
+            return "|".join((self.host_namespace or "", *legacy, self.issuer_cnpj))
         if self.host_namespace is None:
             return "|".join(legacy)
         return "|".join((self.host_namespace, *legacy))

@@ -48,6 +48,11 @@ from kordena_fiscal.persistence.fiscal_scope_schema import (
     FISCAL_SCOPE_SCHEMA,
     FISCAL_SCOPE_VERSION,
 )
+from kordena_fiscal.persistence.national_dps_schema import (
+    NATIONAL_DPS_SEQUENCE_NAME,
+    NATIONAL_DPS_SEQUENCE_SCHEMA,
+    NATIONAL_DPS_SEQUENCE_VERSION,
+)
 from kordena_fiscal.persistence.postgres import (
     _COMMERCIAL_ACQUISITION_SCHEMA,
     _COMMERCIAL_CLAIM_SCHEMA,
@@ -120,6 +125,7 @@ def validate_policy() -> tuple[int, ...]:
         COGNITIVE_QUOTA_VERSION,
         BLING_INSTALLATION_VERSION,
         BLING_WORKER_POLICY_VERSION,
+        NATIONAL_DPS_SEQUENCE_VERSION,
     )
     if versions != tuple(range(1, max(versions) + 1)):
         raise RuntimeError(f"migration versions must be contiguous from 1: {versions!r}")
@@ -204,6 +210,11 @@ def validate_policy() -> tuple[int, ...]:
         version=BLING_WORKER_POLICY_VERSION,
         name=BLING_WORKER_POLICY_NAME,
         statements=BLING_WORKER_POLICY_SCHEMA,
+    )
+    _reject_unapproved_destructive(
+        version=NATIONAL_DPS_SEQUENCE_VERSION,
+        name=NATIONAL_DPS_SEQUENCE_NAME,
+        statements=NATIONAL_DPS_SEQUENCE_SCHEMA,
     )
     print(
         "migration policy: PASS "

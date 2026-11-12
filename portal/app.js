@@ -358,6 +358,149 @@ function appendExtremaNfsePreparation(article) {
 }
 
 /** @param {HTMLElement} article */
+function appendBhNfsePreparation(article) {
+  if (!bootstrapState?.permissions.includes("configuration.write")
+    || !bootstrapState.permissions.includes("document.issue")) return;
+
+  const info = document.createElement("p");
+  info.textContent = "Belo Horizonte/MG · NFS-e Nacional. Prepare uma DPS revisada em homologação. Esta ação não transmite nem autoriza uma nota; CTISS, NBS e regime especial exigem classificação humana comprovada.";
+  article.append(info);
+  const form = document.createElement("form");
+  form.id = "bh-nfse-preparation";
+  form.className = "panel-form";
+  const heading = document.createElement("h3");
+  heading.textContent = "Preparar DPS fiscal revisada — Belo Horizonte";
+  form.append(heading);
+  /** @type {Record<string, HTMLInputElement>} */
+  const inputs = {};
+  /** @type {Array<[string,string,string,string,boolean]>} */
+  const fields = [
+    ["source_id", "Referência única da prestação aprovada", "text", "", true],
+    ["competence_date", "Competência do serviço", "date", "", true],
+    ["service_code", "Código de serviço municipal", "text", "", true],
+    ["national_taxation_code", "cTribNac nacional validado (6 dígitos)", "text", "[0-9]{6}", true],
+    ["municipal_taxation_detail", "Desdobramento CTISS cTribMun validado (3 dígitos)", "text", "[0-9]{3}", true],
+    ["nbs_code", "Código NBS validado (9 dígitos)", "text", "[0-9]{9}", true],
+    ["description", "Descrição completa do serviço", "text", "", true],
+    ["gross_amount", "Valor bruto (R$, duas casas decimais)", "text", "[0-9]+\\.[0-9]{2}", true],
+    ["deduction_amount", "Deduções (R$, duas casas decimais)", "text", "[0-9]+\\.[0-9]{2}", true],
+    ["iss_rate_fraction", "Alíquota ISS em fração (0.0300 = 3%)", "text", "0(\\.[0-9]{1,4})?|1(\\.0{1,4})?", true],
+    ["rule_reference", "Regra fiscal publicada e fonte normativa", "text", "", true],
+    ["rule_version", "Versão da regra revisada", "number", "", true],
+    ["dps_series", "Série DPS Nacional", "number", "", true],
+  ];
+  for (const [name, title, type, pattern, required] of fields) {
+    const label = document.createElement("label");
+    label.textContent = title;
+    const field = document.createElement("input");
+    field.name = name;
+    field.id = "bh-" + name.replaceAll("_", "-");
+    field.type = type;
+    field.required = required;
+    if (pattern && type === "text") field.pattern = pattern;
+    if (name === "dps_series") {field.min = "0"; field.max = "99999"; field.step = "1";}
+    if (name === "rule_version") {field.min = "1"; field.max = "99999"; field.step = "1";}
+    if (["source_id", "description", "rule_reference"].includes(name)) {
+      field.maxLength = name === "description" ? 1000 : 256;
+    }
+    field.autocomplete = "off";
+    inputs[name] = field;
+    label.append(field); form.append(label);
+  }
+  const withholdingLabel = document.createElement("label");
+  withholdingLabel.textContent = "ISS retido pelo tomador (conforme parecer)";
+  const withheld = document.createElement("select");
+  withheld.required = true;
+  for (const [value, title] of [["", "Selecione após revisão"], ["false", "Não"], ["true", "Sim"]]) {
+    const option = document.createElement("option"); option.value = value;
+    option.textContent = title; withheld.append(option);
+  }
+  withholdingLabel.append(withheld);
+  form.append(withholdingLabel);
+  const regimeLabel = document.createElement("label");
+  regimeLabel.textContent = "Regime especial municipal revisado";
+  const specialRegime = document.createElement("select");
+  specialRegime.required = true;
+  for (const [value, title] of [
+    ["", "Selecione a situação fiscal real"],
+    ["0", "0 — Nenhum regime especial"],
+    ["1", "1 — Ato cooperado"],
+    ["2", "2 — Estimativa"],
+    ["4", "4 — Notário ou registrador"],
+    ["5", "5 — Autônomo"],
+    ["6", "6 — Sociedade de profissionais"],
+    ["9", "9 — Outros (com base legal comprovada)"],
+  ]) {
+    const option = document.createElement("option"); option.value = value;
+    option.textContent = title; specialRegime.append(option);
+  }
+  regimeLabel.append(specialRegime); form.append(regimeLabel);
+  const approvalLabel = document.createElement("label");
+  const approval = document.createElement("input");
+  approval.type = "checkbox"; approval.required = true;
+  approvalLabel.append(
+    approval, document.createTextNode(
+      " Confirmei CTISS, NBS, regime especial, competência e cálculo de ISS com uma regra aprovada. Nenhum código foi inferido pela aplicação.",
+    ),
+  );
+  const result = document.createElement("p");
+  result.id = "bh-preparation-result";
+  result.setAttribute("role", "status");
+  result.setAttribute("aria-live", "polite");
+  const submit = document.createElement("button");
+  submit.type = "submit"; submit.className = "primary";
+  submit.textContent = "Preparar DPS em homologação";
+  form.append(approvalLabel, submit, result); article.append(form);
+  /** @type {{fingerprint:string,key:string}|null} */
+  let attempt = null;
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    if (!selectedFiscalUnit || selectedFiscalEnvironment !== "homologation") {
+      result.textContent = "Selecione uma unidade habilitada em homologação."; return;
+    }
+    const payload = {
+      unit_id: selectedFiscalUnit, environment: "homologation",
+      ...Object.fromEntries(Object.entries(inputs).map(([key, field]) => [key, field.value.trim()])),
+      iss_withheld: withheld.value === "true",
+      special_tax_regime: specialRegime.value,
+      dps_series: Number(inputs.dps_series.value),
+      rule_version: Number(inputs.rule_version.value),
+      fiscal_review_approved: approval.checked,
+    };
+    if (![payload.dps_series, payload.rule_version].every(Number.isSafeInteger)) {
+      result.textContent = "Série e versão fiscal inválidas."; return;
+    }
+    const fingerprint = JSON.stringify(payload);
+    if (attempt && attempt.fingerprint !== fingerprint) {
+      result.textContent = "O conteúdo foi alterado. Consulte a DPS anterior antes de nova tentativa.";
+      return;
+    }
+    attempt ||= {fingerprint, key: crypto.randomUUID()};
+    submit.disabled = true;
+    result.textContent = "Reservando o número da DPS e arquivando o pedido imutável...";
+    try {
+      const output = await api("/v1/portal/operations/prepareBhNfse", {
+        method: "POST",
+        headers: {"X-CSRF-Token": csrfToken(), "Idempotency-Key": attempt.key},
+        body: JSON.stringify(payload),
+      });
+      result.textContent = "DPS preparada: " + String(output.document_id)
+        + ". Série " + String(output.dps_series) + ", número " + String(output.dps_number)
+        + ". Estado: " + String(output.status)
+        + ". NÃO é autorização fiscal. Utilize emissão e consulta governadas.";
+      attempt = null;
+      form.reset();
+    } catch (error) {
+      result.textContent = (error instanceof Error ? error.message : "Falha ao preparar DPS")
+        + " Preserve a referência e consulte a situação antes de outra tentativa.";
+    } finally {
+      submit.disabled = false;
+    }
+  });
+}
+
+/** @param {HTMLElement} article */
 function appendExtremaCancellation(article) {
   const operations = bootstrapState?.projection.configured_fiscal_operations;
   if (!bootstrapState?.permissions.includes("document.cancel")
@@ -2197,6 +2340,7 @@ async function renderSurface(viewId) {
     if (viewId === "errors" || viewId === "reconciliation") appendCognitiveAdvisor(article, viewId);
     if (["inutilizations", "documents", "issuances", "reconciliation"].includes(viewId)) await appendFiscalRecovery(article);
     if (viewId === "issuances") appendExtremaNfsePreparation(article);
+    if (viewId === "issuances") appendBhNfsePreparation(article);
     if (viewId === "issuances") appendExtremaCancellation(article);
     if (viewId === "issuances") appendExtremaSubstitution(article);
     if (viewId === "inutilizations") appendInutilizationForm(article);

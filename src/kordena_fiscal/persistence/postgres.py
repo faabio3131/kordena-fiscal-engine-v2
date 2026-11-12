@@ -79,6 +79,11 @@ from .customer_configuration_schema import (
     CUSTOMER_CONFIGURATION_VERSION,
 )
 from .fiscal_scope_schema import FISCAL_SCOPE_NAME, FISCAL_SCOPE_SCHEMA, FISCAL_SCOPE_VERSION
+from .national_dps_schema import (
+    NATIONAL_DPS_SEQUENCE_NAME,
+    NATIONAL_DPS_SEQUENCE_SCHEMA,
+    NATIONAL_DPS_SEQUENCE_VERSION,
+)
 from .ports import PersistenceStateError
 from .pricing_catalog import PostgresPricingCatalogRepository
 from .public_trial_rate_schema import (
@@ -102,6 +107,7 @@ from .sqlite_core import (
 from .sqlite_delivery import SqliteFiscalDeliveryAuditStore, SqliteFiscalOutboxOrderingStore
 from .sqlite_idempotency import SqliteIdempotencyStore
 from .sqlite_inbox import SqliteFiscalInboxStore
+from .sqlite_national_dps import SqliteNationalDpsSequenceStore
 from .sqlite_outbox_archive import SqliteFiscalArchiveStore, SqliteFiscalOutboxStore
 from .sqlite_reconciliation import SqliteReconciliationRepository
 from .sqlite_secret_binding import SqliteSecretBindingStore
@@ -192,6 +198,17 @@ class PostgresFiscalSequenceStore(SqliteFiscalSequenceStore):
         return super().reserve_next(key, policy)
 
 
+class PostgresNationalDpsSequenceStore(SqliteNationalDpsSequenceStore):
+    """Lock the LEGAL issuer key, not tenant/unit, for global DPS uniqueness."""
+
+    def reserve_next(
+        self, key: FiscalSequenceKey, policy: FiscalSequencePolicy,
+    ) -> FiscalNumberReservation:
+        identity = self.identity(key)
+        _advisory_lock(self._connection, "national-dps:" + "|".join(map(str, identity)))
+        return super().reserve_next(key, policy)
+
+
 class PostgresFiscalInboxStore(SqliteFiscalInboxStore):
     """Inbox store that turns concurrent duplicate receives into deterministic replay."""
 
@@ -220,6 +237,7 @@ class PostgresFiscalUnitOfWork:
         self._committed = False
         self._idempotency: PostgresIdempotencyStore | None = None
         self._sequences: PostgresFiscalSequenceStore | None = None
+        self._dps_sequences: PostgresNationalDpsSequenceStore | None = None
         self._inbox: PostgresFiscalInboxStore | None = None
         self._outbox: PostgresFiscalOutboxStore | None = None
         self._outbox_ordering: SqliteFiscalOutboxOrderingStore | None = None
@@ -244,6 +262,7 @@ class PostgresFiscalUnitOfWork:
         self._committed = False
         self._idempotency = PostgresIdempotencyStore(sqlite_compat)
         self._sequences = PostgresFiscalSequenceStore(sqlite_compat)
+        self._dps_sequences = PostgresNationalDpsSequenceStore(sqlite_compat)
         self._inbox = PostgresFiscalInboxStore(sqlite_compat)
         self._outbox = PostgresFiscalOutboxStore(sqlite_compat)
         self._outbox_ordering = SqliteFiscalOutboxOrderingStore(sqlite_compat)
@@ -288,6 +307,10 @@ class PostgresFiscalUnitOfWork:
     @property
     def sequences(self) -> PostgresFiscalSequenceStore:
         return self._require(self._sequences, "sequences")
+
+    @property
+    def dps_sequences(self) -> PostgresNationalDpsSequenceStore:
+        return self._require(self._dps_sequences, "dps_sequences")
 
     @property
     def inbox(self) -> PostgresFiscalInboxStore:
@@ -629,7 +652,9 @@ class PostgresFiscalDatabase:
         with self._pool.connection() as raw:
             yield _PostgresCompatConnection(raw)
 
-    def initialize(self, *, enable_bling: bool = False) -> tuple[int, ...]:
+    def initialize(
+        self, *, enable_bling: bool = False, enable_national_dps: bool = False,
+    ) -> tuple[int, ...]:
         with self._pool.connection() as raw:
             try:
                 raw.execute(
@@ -889,6 +914,19 @@ class PostgresFiscalDatabase:
                         ),
                     )
                     new_versions.append(BLING_WORKER_POLICY_VERSION)
+                if enable_national_dps and NATIONAL_DPS_SEQUENCE_VERSION not in applied:
+                    for statement in NATIONAL_DPS_SEQUENCE_SCHEMA:
+                        raw.execute(_translate_ddl(statement))
+                    raw.execute(
+                        "INSERT INTO fm_schema_migrations (version, name, applied_at) "
+                        "VALUES (%s, %s, %s)",
+                        (
+                            NATIONAL_DPS_SEQUENCE_VERSION,
+                            NATIONAL_DPS_SEQUENCE_NAME,
+                            datetime.now().astimezone().isoformat(),
+                        ),
+                    )
+                    new_versions.append(NATIONAL_DPS_SEQUENCE_VERSION)
                 raw.commit()
                 return tuple(new_versions)
             except Exception:
@@ -916,10 +954,15 @@ class PostgresFiscalDatabase:
         applied = self.applied_migrations()
         baseline = tuple(range(1, COGNITIVE_QUOTA_VERSION + 1))
         bling_ready = tuple(range(1, BLING_WORKER_POLICY_VERSION + 1))
-        # A code-only release accepts either original production baseline or
-        # the fully installed optional Bling schema. Partial v20 is NOT ready.
-        if (require_bling and applied != bling_ready) or (
-            not require_bling and applied not in (baseline, bling_ready)
+        dps_baseline = (*baseline, NATIONAL_DPS_SEQUENCE_VERSION)
+        dps_bling = (*bling_ready, NATIONAL_DPS_SEQUENCE_VERSION)
+        # This version accepts legacy hosts during code-only rollout and
+        # the new additive DPS table where the controlled migration ran.
+        # Partial Bling installation remains forbidden.
+        if (require_bling and applied not in (bling_ready, dps_bling)) or (
+            not require_bling and applied not in (
+                baseline, bling_ready, dps_baseline, dps_bling,
+            )
         ):
             raise PersistenceStateError(
                 "PostgreSQL schema is not at the certified migration version"

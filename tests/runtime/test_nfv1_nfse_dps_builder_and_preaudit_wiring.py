@@ -57,7 +57,10 @@ from kordena_fiscal.issuance.nfe_nfse import (
 from kordena_fiscal.issuance.nfse_dps_builder import build_signed_dps
 from kordena_fiscal.runtime.canonical_fiscal_composition import _GovernedNationalNfseGateway
 from kordena_fiscal.vault import EphemeralCertificateMaterial
-from kordena_fiscal.xml.nfse_nacional_schema import national_dps_validator
+from kordena_fiscal.xml.nfse_nacional_schema import (
+    NT009_RESTRICTED_PROFILE,
+    national_dps_validator,
+)
 
 _NOW = datetime(2026, 11, 6, 12, 0, tzinfo=UTC)
 _ISSUER_CNPJ = Cnpj("11222333000181")
@@ -185,6 +188,8 @@ def test_real_builder_and_preaudit_authorize_a_valid_document_end_to_end() -> No
     gateway = _governed_gateway()
     result = gateway.authorize(_request())
     assert result.status is AuthorizationStatus.AUTHORIZED
+    assert result.authorized_xml is not None
+    assert b"<NFSe" in result.authorized_xml
     assert result.invoice_reference == "35" + "0" * 48
 
 
@@ -227,6 +232,12 @@ def _mg_request(
         issuer=issuer,
         service_jurisdiction=municipality,
         competence_date=competence_date or base.document.competence_date,
+        special_tax_regime="0" if municipality_ibge == "3106200" else None,
+        services=(replace(
+            base.document.services[0],
+            municipal_taxation_detail="001",
+            national_service_nbs="123456789",
+        ),) if municipality_ibge == "3106200" else base.document.services,
     )
     return NfseAuthorizationRequest.build(document)
 
@@ -244,8 +255,29 @@ def test_mg_national_channel_generates_signed_schema_valid_dps_envelope(
 ) -> None:
     """Offline synthetic DPS envelope tests: no official transmission claimed."""
     request = _mg_request(ibge, municipality)
-    signed = build_signed_dps(request, _certificate())
-    national_dps_validator("1.00").validate_document(signed)
+    if ibge == "3106200":
+        from kordena_fiscal.numbering import (
+            FiscalSequenceKey,
+            FiscalSequencePolicy,
+            InMemoryFiscalSequenceStore,
+            InternalFiscalSequenceStream,
+        )
+        reservation = InMemoryFiscalSequenceStore().reserve_next(
+            FiscalSequenceKey.from_scope(
+                request.document.scope,
+                model=InternalFiscalSequenceStream.NFSE_DPS, series=1,
+                issuer_cnpj=request.document.issuer.cnpj.value,
+            ), FiscalSequencePolicy(),
+        )
+        signed = build_signed_dps(request, _certificate(), reservation=reservation)
+    else:
+        signed = build_signed_dps(request, _certificate())
+    if ibge == "3106200":
+        national_dps_validator(
+            "1.01", profile=NT009_RESTRICTED_PROFILE,
+        ).validate_document(signed)
+    else:
+        national_dps_validator("1.00").validate_document(signed)
     payload = encode_signed_dps(
         signed,
         issuer_cnpj=request.document.issuer.cnpj.value,
@@ -347,3 +379,5 @@ def test_contagem_requires_federal_national_channel_for_eligible_simples(
     )
     result = gateway.authorize(request)
     assert result.status is AuthorizationStatus.AUTHORIZED
+    assert result.authorized_xml is not None
+    assert b"<NFSe" in result.authorized_xml

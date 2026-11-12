@@ -202,7 +202,41 @@ class _GovernedNationalNfseGateway:
         if provider_id != NACIONAL_HOMOLOGATION_PROVIDER_ID:
             raise FiscalValidationError("Provedor do vinculo NFS-e Nacional incompativel")
         self._preaudit(request)
+        if jurisdiction.municipality_ibge_code == "3106200":
+            reservation = self._application.load_national_dps_reservation(
+                scope, document.document_id,
+            )
+            return self._gateway.authorize(
+                request, dps_reservation=reservation,
+            )
         return self._gateway.authorize(request)
+
+
+    def query(self, request: NfseAuthorizationRequest) -> NfseAuthorizationResult:
+        """Recover BH's signed NFS-e with read-only SEFIN endpoints."""
+        document = request.document
+        scope = document.scope
+        jurisdiction = document.issuer.address.jurisdiction
+        if (
+            scope.environment is not FiscalEnvironment.HOMOLOGATION
+            or scope.host_namespace is None
+            or jurisdiction.municipality_ibge_code != "3106200"
+        ):
+            raise FiscalValidationError("Consulta Nacional BH exige escopo fiscal explícito")
+        try:
+            provider_id = self._application.resolve_configured_provider_id(
+                scope=scope, document_kind=FiscalDocumentKind.NFSE,
+                jurisdiction=jurisdiction, operation=ConfiguredFiscalOperation.AUTHORIZE.value,
+            )
+        except ControlPlaneNotFoundError as exc:
+            raise FiscalValidationError("Vínculo de consulta Nacional indisponível") from exc
+        if provider_id != NACIONAL_HOMOLOGATION_PROVIDER_ID:
+            raise FiscalValidationError("Provedor de consulta Nacional incompatível")
+        self._preaudit(request)
+        reservation = self._application.load_national_dps_reservation(
+            scope, document.document_id,
+        )
+        return self._gateway.query(request, dps_reservation=reservation)
 
 
 class _CanonicalWebissProviderResolver:
@@ -262,6 +296,8 @@ class _GovernedNfseRouter:
 
     def query(self, request: NfseAuthorizationRequest) -> NfseAuthorizationResult:
         provider = self._provider(request)
+        if provider == NACIONAL_HOMOLOGATION_PROVIDER_ID and self._national is not None:
+            return self._national.query(request)
         if (
             provider != EXTREMA_WEBISS_PROVIDER_ID
             or self._extrema is None

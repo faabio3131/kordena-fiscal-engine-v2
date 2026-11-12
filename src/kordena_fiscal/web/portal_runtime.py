@@ -52,7 +52,7 @@ from kordena_fiscal.domain import (
     FiscalEnvironment,
     FiscalValidationError,
 )
-from kordena_fiscal.lifecycle import FiscalDocumentState
+from kordena_fiscal.lifecycle import FiscalDocumentState, IdempotencyConflictError
 from kordena_fiscal.persistence.ports import (
     FiscalUnitOfWorkFactory,
     PersistenceConflictError,
@@ -780,6 +780,10 @@ class DurableHumanPortalExecutor:
             return self._prepare_extrema_nfse(
                 authority=authority, payload=payload, idempotency_key=idempotency_key,
             )
+        if operation_id == "prepareBhNfse":
+            return self._prepare_bh_nfse(
+                authority=authority, payload=payload, idempotency_key=idempotency_key,
+            )
         if operation_id == "registerFiscalProfile":
             return self._register_fiscal_profile(
                 authority=authority, payload=payload, idempotency_key=idempotency_key
@@ -929,6 +933,209 @@ class DurableHumanPortalExecutor:
                 409, "FISCAL_ARTIFACT_MEDIA_INVALID", "Archived DANFE is not a PDF"
             )
         return entry.content, entry.media_type
+
+    def _prepare_bh_nfse(
+        self, *, authority: AuthenticatedHuman,
+        payload: Mapping[str, Any], idempotency_key: str | None,
+    ) -> Mapping[str, Any]:
+        """Prepare BH National DPS with scoped reviewed facts, never POST.
+
+        Browser input cannot choose issuer, tenant, fiscal provider, certificate,
+        sequence number, official status or endpoint. The fiscal application
+        owns atomic sequence reservation and immutable prepared evidence.
+        """
+        from datetime import date
+        from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+
+        from kordena_fiscal.application.service import FiscalApplicationService
+        from kordena_fiscal.archive import RetentionPolicyMetadata
+        from kordena_fiscal.compliance.nfse_preaudit import nfse_preaudit
+        from kordena_fiscal.control_plane.commercial import ConfiguredFiscalOperation
+        from kordena_fiscal.domain import Money, SourceReference
+        from kordena_fiscal.gateway.mg_nfse_channel_guard import (
+            require_mg_national_channel_eligibility,
+        )
+        from kordena_fiscal.gateway.nfse_nacional_homologation import (
+            NACIONAL_HOMOLOGATION_PROVIDER_ID,
+        )
+        from kordena_fiscal.issuance import (
+            NfseAuthorizationRequest,
+            NfseCanonicalDocument,
+            NfseServiceLine,
+        )
+        from kordena_fiscal.security.human_identity import PortalRole
+
+        fields = {
+            "unit_id", "environment", "source_id", "competence_date",
+            "service_code", "national_taxation_code", "municipal_taxation_detail",
+            "nbs_code", "description", "gross_amount", "deduction_amount",
+            "iss_rate_fraction", "iss_withheld", "special_tax_regime",
+            "rule_reference", "rule_version", "dps_series",
+            "fiscal_review_approved",
+        }
+        key = (idempotency_key or "").strip()
+        if not key or len(key) > 256 or set(payload) != fields:
+            raise _portal_error(400, "INVALID_BH_PREPARATION", "Complete fiscal review required")
+        if (
+            authority.account.role not in {PortalRole.OWNER, PortalRole.ADMIN}
+            or PortalPermission.DOCUMENT_ISSUE not in authority.permissions
+            or PortalPermission.CONFIGURATION_WRITE not in authority.permissions
+            or payload.get("fiscal_review_approved") is not True
+            or any(not isinstance(payload[name], str) for name in (
+                "unit_id", "environment", "source_id", "competence_date",
+                "service_code", "national_taxation_code", "municipal_taxation_detail",
+                "nbs_code", "description", "gross_amount", "deduction_amount",
+                "iss_rate_fraction", "special_tax_regime", "rule_reference",
+            ))
+            or type(payload.get("dps_series")) is not int
+            or type(payload.get("rule_version")) is not int
+            or type(payload.get("iss_withheld")) is not bool
+        ):
+            raise _portal_error(
+                403, "BH_FISCAL_REVIEW_REQUIRED", "Authorized fiscal review required",
+            )
+        unit = str(payload["unit_id"]).strip()
+        try:
+            authority.assert_permission(PortalPermission.CONFIGURATION_WRITE, unit_id=unit)
+            authority.assert_permission(PortalPermission.DOCUMENT_ISSUE, unit_id=unit)
+            if payload["environment"] != FiscalEnvironment.HOMOLOGATION.value:
+                raise FiscalValidationError("Only national homologation preparation is allowed")
+            competence = date.fromisoformat(str(payload["competence_date"]))
+            if competence.isoformat() != payload["competence_date"]:
+                raise FiscalValidationError("Invalid fiscal competence")
+            source_id = str(payload["source_id"]).strip()
+            if not source_id or len(source_id) > 120:
+                raise FiscalValidationError("Stable service reference is required")
+            amount = Decimal(str(payload["gross_amount"]))
+            deductions = Decimal(str(payload["deduction_amount"]))
+            rate = Decimal(str(payload["iss_rate_fraction"]))
+            if any(not value.is_finite() for value in (amount, deductions, rate)):
+                raise FiscalValidationError("Fiscal amounts must be finite")
+            rate_exponent = rate.as_tuple().exponent
+            if (
+                not Decimal("0") < amount <= Decimal("999999999")
+                or not Decimal("0") <= deductions < amount
+                or not Decimal("0") <= rate <= Decimal("1")
+                or any(
+                    not isinstance(exponent, int) or exponent < -2
+                    for exponent in (
+                        amount.as_tuple().exponent, deductions.as_tuple().exponent,
+                    )
+                )
+                or not isinstance(rate_exponent, int)
+                or (isinstance(rate_exponent, int) and rate_exponent < -4)
+                or not 0 <= payload["dps_series"] <= 99999
+                or not 1 <= payload["rule_version"] <= 99999
+            ):
+                raise FiscalValidationError("Reviewed fiscal values are out of bounds")
+            rule_reference = str(payload["rule_reference"]).strip()
+            if not rule_reference or len(rule_reference) > 512:
+                raise FiscalValidationError("Versioned fiscal rule reference is required")
+            scope = ExecutionScope(
+                tenant_id=authority.tenant_id,
+                unit_id=unit, environment=FiscalEnvironment.HOMOLOGATION,
+                host_namespace="fm-nfcore",
+                correlation_id="bh-" + hashlib.sha256(
+                    (authority.tenant_id + ":" + unit + ":" + source_id).encode()
+                ).hexdigest()[:24],
+            )
+            source = SourceReference("portal-reviewed-service", source_id)
+            document_id = "bh-" + hashlib.sha256(
+                (repr(scope.identity_partition_key) + ":" + source_id).encode()
+            ).hexdigest()[:40]
+            with self._unit_of_work_factory() as uow:
+                registration = uow.control_plane.get_unit(authority.tenant_id, unit)
+                if (
+                    registration is None
+                    or scope.environment not in registration.enabled_environments
+                ):
+                    raise FiscalValidationError("Unit is not enabled for national homologation")
+                profile = uow.control_plane.resolve_profile(
+                    host_namespace="fm-nfcore", tenant_id=authority.tenant_id,
+                    unit_id=unit, environment=scope.environment, instant=datetime.now(UTC),
+                )
+            if profile is None:
+                raise FiscalValidationError("Approved BH fiscal profile is missing")
+            issuer_jurisdiction = profile.address.jurisdiction
+            if (
+                issuer_jurisdiction.state_code != "MG"
+                or issuer_jurisdiction.municipality_ibge_code != "3106200"
+            ):
+                raise FiscalValidationError("Scoped issuer does not belong to Belo Horizonte")
+            require_mg_national_channel_eligibility(
+                jurisdiction=issuer_jurisdiction,
+                tax_regime=profile.tax_regime, competence_date=competence,
+            )
+            app = FiscalApplicationService(self._unit_of_work_factory)
+            provider_id = app.resolve_configured_provider_id(
+                scope=scope, document_kind=FiscalDocumentKind.NFSE,
+                jurisdiction=issuer_jurisdiction,
+                operation=ConfiguredFiscalOperation.AUTHORIZE.value,
+            )
+            if provider_id != NACIONAL_HOMOLOGATION_PROVIDER_ID:
+                raise FiscalValidationError("BH fiscal provider binding is not approved")
+            try:
+                previous = app.load_prepared_nfse_authorization(scope, document_id)
+            except (PersistenceStateError, PersistenceConflictError):
+                previous = None
+            issued_at = previous.document.issued_at if previous is not None else datetime.now(UTC)
+            profile = previous.document.issuer if previous is not None else profile
+            service = NfseServiceLine(
+                line_number=1,
+                municipal_service_code=str(payload["service_code"]).strip(),
+                national_taxation_code=str(payload["national_taxation_code"]).strip(),
+                municipal_taxation_detail=str(payload["municipal_taxation_detail"]).strip(),
+                national_service_nbs=str(payload["nbs_code"]).strip(),
+                description=str(payload["description"]).strip(),
+                gross_amount=Money(amount), deduction_amount=Money(deductions),
+                iss_amount=Money(
+                    ((amount - deductions) * rate).quantize(
+                        Decimal("0.01"), rounding=ROUND_HALF_UP,
+                    ),
+                ),
+                iss_withheld=payload["iss_withheld"],
+                source_normative=rule_reference,
+                rule_version=payload["rule_version"],
+            )
+            document = NfseCanonicalDocument(
+                document_id=document_id, scope=scope, source=source,
+                issued_at=issued_at, competence_date=competence,
+                issuer=profile, service_jurisdiction=issuer_jurisdiction,
+                services=(service,),
+                special_tax_regime=str(payload["special_tax_regime"]).strip(),
+            )
+            nfse_preaudit(NfseAuthorizationRequest.build(document))
+            prepared = app.prepare_nfse_authorization(
+                document, occurred_at=datetime.now(UTC),
+                retention=RetentionPolicyMetadata(
+                    policy_id="nfcore-fiscal-archive", policy_version=1,
+                ),
+                national_dps_series=payload["dps_series"],
+            )
+            reserved = app.load_national_dps_reservation(scope, document_id)
+            if reserved.key.series != payload["dps_series"]:
+                raise PersistenceConflictError("DPS series differs from reviewed intent")
+            return {
+                "document_id": prepared.attempt.document_id,
+                "status": prepared.lifecycle.state.value,
+                "replay": prepared.replay,
+                "dps_number": reserved.number,
+                "dps_series": reserved.key.series,
+                "municipality_ibge": "3106200",
+                "environment": "homologation",
+                "transmitted": False,
+                "fiscal_authorization": "not_inferred_from_preparation",
+            }
+        except HumanAuthorizationError as exc:
+            raise _portal_error(403, "BH_UNIT_FORBIDDEN", "Unit is not permitted") from exc
+        except (PersistenceConflictError, IdempotencyConflictError) as exc:
+            raise _portal_error(
+                409, "BH_PREPARATION_CONFLICT", "Original fiscal facts must be preserved",
+            ) from exc
+        except (FiscalValidationError, ValueError, InvalidOperation, OverflowError) as exc:
+            raise _portal_error(
+                400, "INVALID_BH_PREPARATION", "Reviewed fiscal facts invalid",
+            ) from exc
 
     def _prepare_extrema_nfse(
         self, *,

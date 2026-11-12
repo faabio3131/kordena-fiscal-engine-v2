@@ -1,6 +1,8 @@
 """Unit tests for the National NFS-e DPS builder (build_signed_dps)."""
 from __future__ import annotations
 
+import json
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
@@ -32,9 +34,20 @@ from kordena_fiscal.issuance.nfe_nfse import (
     NfseCanonicalDocument,
     NfseServiceLine,
 )
+from kordena_fiscal.issuance.nfse_archive import decode_prepared_nfse, encode_prepared_nfse
 from kordena_fiscal.issuance.nfse_dps_builder import build_signed_dps
+from kordena_fiscal.numbering import (
+    FiscalSequenceKey,
+    FiscalSequencePolicy,
+    InMemoryFiscalSequenceStore,
+    InternalFiscalSequenceStream,
+)
 from kordena_fiscal.vault import EphemeralCertificateMaterial
-from kordena_fiscal.xml.nfse_nacional_schema import national_dps_validator
+from kordena_fiscal.xml.nfse_nacional_schema import (
+    NT009_RESTRICTED_PROFILE,
+    national_dps_validator,
+)
+from kordena_fiscal.xml.schema import XmlSchemaValidationError
 
 _NFSE_NS = "http://www.sped.fazenda.gov.br/nfse"
 _INSTANT = datetime(2026, 11, 6, 12, 0, tzinfo=UTC)
@@ -239,3 +252,301 @@ def test_build_signed_dps_rejects_municipal_registration_over_limit() -> None:
     document = _document(issuer=issuer)
     with pytest.raises(FiscalValidationError, match="15-character"):
         build_signed_dps(_request(document), _certificate())
+
+
+def _bh_request(detail: str | None, nbs: str | None = "123456789") -> NfseAuthorizationRequest:
+    original = _document()
+    scoped = replace(original.scope, host_namespace="nfcore-bh-synthetic")
+    document = replace(
+        original,
+        scope=scoped,
+        issuer=replace(original.issuer, scope=scoped),
+        service_jurisdiction=BrazilianJurisdiction("MG", "3106200"),
+        services=(_service(municipal_taxation_detail=detail, national_service_nbs=nbs),),
+        special_tax_regime="0",
+    )
+    return _request(document)
+
+
+def _signed_bh(request: NfseAuthorizationRequest) -> bytes:
+    key = FiscalSequenceKey.from_scope(
+        request.document.scope, model=InternalFiscalSequenceStream.NFSE_DPS, series=1,
+        issuer_cnpj=request.document.issuer.cnpj.value,
+    )
+    reserved = InMemoryFiscalSequenceStore().reserve_next(
+        key, FiscalSequencePolicy(),
+    )
+    return build_signed_dps(request, _certificate(), reservation=reserved)
+
+
+def test_bh_requires_reviewed_municipal_taxation_detail() -> None:
+    with pytest.raises(FiscalValidationError, match="Belo Horizonte requires"):
+        build_signed_dps(_bh_request(None), _certificate())
+
+
+def test_bh_pins_municipal_taxation_detail_in_schema_valid_signed_dps() -> None:
+    signed = _signed_bh(_bh_request("001"))
+    national_dps_validator("1.01", profile=NT009_RESTRICTED_PROFILE).validate_document(signed)
+    assert etree.fromstring(signed).findtext(
+        f".//{{{_NFSE_NS}}}cServ/{{{_NFSE_NS}}}cTribMun"
+    ) == "001"
+
+
+@pytest.mark.parametrize("value", ["1", "0107", "ABC", "１２３"])
+def test_bh_rejects_invalid_municipal_detail(value: str) -> None:
+    with pytest.raises(FiscalValidationError, match="municipal_taxation_detail"):
+        _bh_request(value)
+
+
+def test_bh_municipal_detail_changes_fingerprint_not_idempotency_identity() -> None:
+    original, modified = _bh_request("001"), _bh_request("002")
+    assert original.request_fingerprint != modified.request_fingerprint
+    assert original.idempotency_key == modified.idempotency_key
+
+
+def test_non_bh_existing_builder_output_has_no_invented_c_trib_mun() -> None:
+    signed = build_signed_dps(_request(), _certificate())
+    assert etree.fromstring(signed).find(
+        f".//{{{_NFSE_NS}}}cServ/{{{_NFSE_NS}}}cTribMun"
+    ) is None
+
+
+def test_bh_requires_reviewed_nbs_in_2026() -> None:
+    with pytest.raises(FiscalValidationError, match="nine-digit cNBS"):
+        build_signed_dps(_bh_request("001", nbs=None), _certificate())
+
+
+def test_bh_national_dps_contains_provided_nbs_in_nt009_order() -> None:
+    signed = _signed_bh(_bh_request("001", nbs="123456789"))
+    national_dps_validator("1.01", profile=NT009_RESTRICTED_PROFILE).validate_document(signed)
+    root = etree.fromstring(signed)
+    c_serv = root.find(f".//{{{_NFSE_NS}}}cServ")
+    assert [etree.QName(child).localname for child in c_serv] == [
+        "cTribNac", "cTribMun", "cNBS", "xDescServ",
+    ]
+
+
+@pytest.mark.parametrize("value", ["ABC", "1234", "1234567890", "１２３４５６７８９"])
+def test_bh_rejects_noncanonical_nbs(value: str) -> None:
+    with pytest.raises(FiscalValidationError, match="national_service_nbs"):
+        _bh_request("001", nbs=value)
+
+
+def test_bh_prepared_archive_roundtrip_preserves_reviewed_tax_fields() -> None:
+    original = _bh_request("001", nbs="123456789")
+    encoded = encode_prepared_nfse(original)
+    recovered = decode_prepared_nfse(encoded, scope=original.document.scope)
+    assert recovered.request_fingerprint == original.request_fingerprint
+    assert recovered.document.services[0].municipal_taxation_detail == "001"
+    assert recovered.document.services[0].national_service_nbs == "123456789"
+
+
+@pytest.mark.parametrize("field,value", [
+    ("municipal_taxation_detail", "002"),
+    ("national_service_nbs", "987654321"),
+])
+def test_bh_archive_rejects_tampered_tax_fields(field: str, value: str) -> None:
+    original = _bh_request("001", nbs="123456789")
+    stored = json.loads(encode_prepared_nfse(original))
+    stored["services"][0][field] = value
+    altered = json.dumps(stored).encode()
+    # The durable archive intentionally wraps invalid/tampered content in a
+    # stable public error; the original fingerprint failure is its cause.
+    with pytest.raises(FiscalValidationError, match="invalid prepared NFS-e artifact") as exc:
+        decode_prepared_nfse(altered, scope=original.document.scope)
+    assert exc.value.__cause__ is not None
+    assert "fingerprint" in str(exc.value.__cause__)
+
+
+def test_legacy_prepared_archive_without_new_optional_fields_remains_readable() -> None:
+    original = _request()
+    stored = json.loads(encode_prepared_nfse(original))
+    del stored["services"][0]["municipal_taxation_detail"]
+    del stored["services"][0]["national_service_nbs"]
+    recovered = decode_prepared_nfse(json.dumps(stored).encode(), scope=original.document.scope)
+    assert recovered.request_fingerprint == original.request_fingerprint
+
+
+def test_bh_rejects_hash_derived_number_without_durable_reservation() -> None:
+    with pytest.raises(FiscalValidationError, match="atomic durable DPS"):
+        build_signed_dps(_bh_request("001"), _certificate())
+
+
+def test_bh_rejects_sequence_reservation_from_other_tenant() -> None:
+    request = _bh_request("001")
+    other = replace(request.document.scope, tenant_id="another-tenant")
+    key = FiscalSequenceKey.from_scope(
+        other, model=InternalFiscalSequenceStream.NFSE_DPS, series=1,
+        issuer_cnpj=request.document.issuer.cnpj.value,
+    )
+    reserved = InMemoryFiscalSequenceStore().reserve_next(key, FiscalSequencePolicy())
+    with pytest.raises(FiscalValidationError, match="violates fiscal scope"):
+        build_signed_dps(request, _certificate(), reservation=reserved)
+
+
+def test_bh_reserved_number_is_preserved_in_dps_identity() -> None:
+    request = _bh_request("001")
+    info = etree.fromstring(_signed_bh(request)).find(f"{{{_NFSE_NS}}}infDPS")
+    assert info.findtext(f"{{{_NFSE_NS}}}nDPS") == "1"
+    assert info.findtext(f"{{{_NFSE_NS}}}serie") == "1"
+    expected = (
+        "DPS"
+        + request.document.issuer.address.jurisdiction.municipality_ibge_code
+        + "1"
+        + request.document.issuer.cnpj.value
+        + "00001"
+        + "000000000000001"
+    )
+    assert info.get("Id") == expected
+    assert len(info.get("Id")) == 45
+
+
+def test_bh_national_dps_uses_current_official_xsd_version() -> None:
+    signed = _signed_bh(_bh_request("001"))
+    root = etree.fromstring(signed)
+    assert root.get("versao") == "1.01"
+    national_dps_validator("1.01", profile=NT009_RESTRICTED_PROFILE).validate_document(signed)
+
+
+def test_bh_requires_explicit_regime_attestation() -> None:
+    original = _bh_request("001")
+    unreviewed = NfseAuthorizationRequest.build(replace(
+        original.document, special_tax_regime=None,
+    ))
+    with pytest.raises(FiscalValidationError, match="reviewed special tax regime"):
+        _signed_bh(unreviewed)
+
+
+@pytest.mark.parametrize("value", ["3", "8", "", "99"])
+def test_bh_rejects_unsupported_special_regime(value: str) -> None:
+    with pytest.raises(FiscalValidationError, match="special_tax_regime"):
+        replace(_bh_request("001").document, special_tax_regime=value)
+
+
+def test_bh_special_regime_changes_fingerprint() -> None:
+    first = _bh_request("001")
+    second = NfseAuthorizationRequest.build(replace(
+        first.document, special_tax_regime="6",
+    ))
+    assert first.request_fingerprint != second.request_fingerprint
+    assert first.idempotency_key == second.idempotency_key
+
+
+def test_bh_schema_101_requires_canonical_domestic_issuer_address() -> None:
+    signed = _signed_bh(_bh_request("001"))
+    root = etree.fromstring(signed)
+    end = root.find(f"{{{_NFSE_NS}}}infDPS/{{{_NFSE_NS}}}prest/{{{_NFSE_NS}}}end")
+    assert end is not None
+    address = end.find(f"{{{_NFSE_NS}}}endNac")
+    assert address is not None
+    assert address.findtext(f"{{{_NFSE_NS}}}cMun") is not None
+    assert address.findtext(f"{{{_NFSE_NS}}}CEP") is not None
+    assert etree.QName(end[0]).localname == "endNac"
+    trib_mun = root.find(
+        f".//{{{_NFSE_NS}}}valores/{{{_NFSE_NS}}}trib/{{{_NFSE_NS}}}tribMun"
+    )
+    assert trib_mun is not None
+    assert [etree.QName(child).localname for child in trib_mun] == [
+        "tribISSQN", "tpRetISSQN", "pAliq",
+    ]
+    national_dps_validator("1.01", profile=NT009_RESTRICTED_PROFILE).validate_document(signed)
+
+
+def test_bh_national_series_above_official_2026_limit_fails_schema() -> None:
+    request = _bh_request("001")
+    key = FiscalSequenceKey.from_scope(
+        request.document.scope, model=InternalFiscalSequenceStream.NFSE_DPS, series=90000,
+        issuer_cnpj=request.document.issuer.cnpj.value,
+    )
+    reserved = InMemoryFiscalSequenceStore().reserve_next(
+        key, FiscalSequencePolicy(),
+    )
+    with pytest.raises(XmlSchemaValidationError, match="serie"):
+        build_signed_dps(request, _certificate(), reservation=reserved)
+
+
+def test_bh_nt009_mandatory_purpose_and_cserv_sequence() -> None:
+    signed = _signed_bh(_bh_request("001"))
+    root = etree.fromstring(signed)
+    info = root.find(f"{{{_NFSE_NS}}}infDPS")
+    assert info is not None
+    children = [etree.QName(child).localname for child in info]
+    assert children.index("tpEmit") < children.index("finNFSe") < children.index("cLocEmi")
+    assert info.findtext(f"{{{_NFSE_NS}}}finNFSe") == "0"
+    c_serv = info.find(f"{{{_NFSE_NS}}}serv/{{{_NFSE_NS}}}cServ")
+    assert c_serv is not None
+    assert [etree.QName(child).localname for child in c_serv] == [
+        "cTribNac", "cTribMun", "cNBS", "xDescServ",
+    ]
+    national_dps_validator("1.01", profile=NT009_RESTRICTED_PROFILE).validate_document(signed)
+
+
+def test_bh_nt009_deduction_uses_reviewed_adjustment_group_not_removed_vdedred() -> None:
+    request = _bh_request("001")
+    service = replace(
+        request.document.services[0],
+        deduction_amount=Money(Decimal("10.00")),
+        iss_amount=Money(Decimal("2.70")),
+        source_normative="urn:nfcore:synthetic-reviewed-iss-adjustment-2026",
+    )
+    updated = NfseAuthorizationRequest.build(replace(
+        request.document, services=(service,),
+    ))
+    signed = _signed_bh(updated)
+    national_dps_validator("1.01", profile=NT009_RESTRICTED_PROFILE).validate_document(signed)
+    root = etree.fromstring(signed)
+    valores = root.find(f".//{{{_NFSE_NS}}}valores")
+    assert valores is not None
+    assert valores.find(f"{{{_NFSE_NS}}}vDedRed") is None
+    assert valores.findtext(
+        f"{{{_NFSE_NS}}}vAjusteBC/{{{_NFSE_NS}}}vAjusteBCISSQN"
+    ) == "10.00"
+
+
+def test_bh_substitution_dps_uses_official_nt009_schema_and_original_key() -> None:
+    original = _bh_request("001")
+    issuer_cnpj = original.document.issuer.cnpj.value
+    prior_key = "3106200" + "2" + "1" + issuer_cnpj + "1" * 27
+    replacement = NfseAuthorizationRequest.build(replace(
+        original.document,
+        substituted_invoice_access_key=prior_key,
+        substitution_reason_code="99",
+        substitution_reason_text="Substituicao revisada de nota original sintetica.",
+    ))
+    assert replacement.request_fingerprint != original.request_fingerprint
+    assert replacement.idempotency_key == original.idempotency_key
+    signed = _signed_bh(replacement)
+    national_dps_validator(
+        "1.01", profile=NT009_RESTRICTED_PROFILE,
+    ).validate_document(signed)
+    root = etree.fromstring(signed)
+    subst = root.find(f"{{{_NFSE_NS}}}infDPS/{{{_NFSE_NS}}}subst")
+    assert subst is not None
+    assert [etree.QName(child).localname for child in subst] == [
+        "chSubstda", "cMotivo", "xMotivo",
+    ]
+    assert subst.findtext(f"{{{_NFSE_NS}}}chSubstda") == prior_key
+    recovered = decode_prepared_nfse(
+        encode_prepared_nfse(replacement), scope=replacement.document.scope,
+    )
+    assert recovered.request_fingerprint == replacement.request_fingerprint
+    assert recovered.document.substituted_invoice_access_key == prior_key
+    assert recovered.document.substitution_reason_code == "99"
+
+
+@pytest.mark.parametrize(("key", "reason"), [
+    (None, "99"),
+    ("3106200" + "2" + "1" + "12345678000195" + "0" * 26, "99"),
+    ("3106200" + "2" + "1" + "11222333000181" + "0" * 27, "99"),
+    ("3106200" + "2" + "1" + "12345678000195" + "0" * 27, "10"),
+])
+def test_bh_substitution_rejects_missing_mismatched_or_unapproved_values(
+    key: str | None, reason: str,
+) -> None:
+    original = _bh_request("001")
+    with pytest.raises(FiscalValidationError, match="Substitution"):
+        replace(
+            original.document,
+            substituted_invoice_access_key=key,
+            substitution_reason_code=reason,
+        )

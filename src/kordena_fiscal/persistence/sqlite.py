@@ -34,6 +34,11 @@ from .customer_configuration_schema import (
     CUSTOMER_CONFIGURATION_VERSION,
 )
 from .fiscal_scope_schema import FISCAL_SCOPE_NAME, FISCAL_SCOPE_SCHEMA, FISCAL_SCOPE_VERSION
+from .national_dps_schema import (
+    NATIONAL_DPS_SEQUENCE_NAME,
+    NATIONAL_DPS_SEQUENCE_SCHEMA,
+    NATIONAL_DPS_SEQUENCE_VERSION,
+)
 from .ports import PersistenceStateError
 from .public_trial_rate_schema import (
     PUBLIC_TRIAL_RATE_NAME,
@@ -55,6 +60,7 @@ from .sqlite_core import (
 from .sqlite_delivery import SqliteFiscalDeliveryAuditStore, SqliteFiscalOutboxOrderingStore
 from .sqlite_idempotency import SqliteIdempotencyStore
 from .sqlite_inbox import SqliteFiscalInboxStore
+from .sqlite_national_dps import SqliteNationalDpsSequenceStore
 from .sqlite_outbox_archive import SqliteFiscalArchiveStore, SqliteFiscalOutboxStore
 from .sqlite_reconciliation import SqliteReconciliationRepository
 from .sqlite_secret_binding import SqliteSecretBindingStore
@@ -568,6 +574,7 @@ class SqliteFiscalUnitOfWork:
         self._committed = False
         self._idempotency: SqliteIdempotencyStore | None = None
         self._sequences: SqliteFiscalSequenceStore | None = None
+        self._dps_sequences: SqliteNationalDpsSequenceStore | None = None
         self._inbox: SqliteFiscalInboxStore | None = None
         self._outbox: SqliteFiscalOutboxStore | None = None
         self._outbox_ordering: SqliteFiscalOutboxOrderingStore | None = None
@@ -589,6 +596,7 @@ class SqliteFiscalUnitOfWork:
         self._committed = False
         self._idempotency = SqliteIdempotencyStore(connection)
         self._sequences = SqliteFiscalSequenceStore(connection)
+        self._dps_sequences = SqliteNationalDpsSequenceStore(connection)
         self._inbox = SqliteFiscalInboxStore(connection)
         self._outbox = SqliteFiscalOutboxStore(connection)
         self._outbox_ordering = SqliteFiscalOutboxOrderingStore(connection)
@@ -630,6 +638,10 @@ class SqliteFiscalUnitOfWork:
     @property
     def sequences(self) -> SqliteFiscalSequenceStore:
         return self._require(self._sequences, "sequences")
+
+    @property
+    def dps_sequences(self) -> SqliteNationalDpsSequenceStore:
+        return self._require(self._dps_sequences, "dps_sequences")
 
     @property
     def inbox(self) -> SqliteFiscalInboxStore:
@@ -719,7 +731,9 @@ class SqliteFiscalDatabase:
         finally:
             connection.close()
 
-    def initialize(self, *, enable_bling: bool = False) -> tuple[int, ...]:
+    def initialize(
+        self, *, enable_bling: bool = False, enable_national_dps: bool = False,
+    ) -> tuple[int, ...]:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         connection = self._connect()
         try:
@@ -844,6 +858,19 @@ class SqliteFiscalDatabase:
                     ),
                 )
                 new_versions.append(BLING_WORKER_POLICY_VERSION)
+            if enable_national_dps and NATIONAL_DPS_SEQUENCE_VERSION not in applied:
+                for statement in NATIONAL_DPS_SEQUENCE_SCHEMA:
+                    connection.execute(statement)
+                connection.execute(
+                    "INSERT INTO fm_schema_migrations (version, name, applied_at) "
+                    "VALUES (?, ?, ?)",
+                    (
+                        NATIONAL_DPS_SEQUENCE_VERSION,
+                        NATIONAL_DPS_SEQUENCE_NAME,
+                        datetime.now().astimezone().isoformat(),
+                    ),
+                )
+                new_versions.append(NATIONAL_DPS_SEQUENCE_VERSION)
             connection.commit()
             return tuple(new_versions)
         except Exception:

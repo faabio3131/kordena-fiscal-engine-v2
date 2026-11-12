@@ -23,11 +23,15 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from lxml import etree
 
-from kordena_fiscal.domain import FiscalValidationError, TaxRegimeCode
+from kordena_fiscal.domain import FiscalEnvironment, FiscalValidationError, TaxRegimeCode
 from kordena_fiscal.issuance.nfe_nfse import NfseAuthorizationRequest
+from kordena_fiscal.numbering import FiscalNumberReservation, InternalFiscalSequenceStream
 from kordena_fiscal.signing.nfse_xmldsig import sign_nfse_dps_xml
 from kordena_fiscal.vault import EphemeralCertificateMaterial
-from kordena_fiscal.xml.nfse_nacional_schema import national_dps_validator
+from kordena_fiscal.xml.nfse_nacional_schema import (
+    NT009_RESTRICTED_PROFILE,
+    national_dps_validator,
+)
 
 _NFSE_NS = "http://www.sped.fazenda.gov.br/nfse"
 _SCHEMA_VERSION = "1.00"
@@ -79,7 +83,10 @@ def _derive_dps_numbering(request: NfseAuthorizationRequest) -> tuple[str, str]:
 
 
 def build_signed_dps(
-    request: NfseAuthorizationRequest, certificate: EphemeralCertificateMaterial
+    request: NfseAuthorizationRequest,
+    certificate: EphemeralCertificateMaterial,
+    *,
+    reservation: FiscalNumberReservation | None = None,
 ) -> bytes:
     """Build, schema-validate and sign the national DPS for ``request``.
 
@@ -125,24 +132,64 @@ def build_signed_dps(
         raise FiscalValidationError("DPS requires a numeric service jurisdiction IBGE code")
     service_municipality = service_municipality.zfill(7)
 
+    is_bh = service_municipality == "3106200"
+    is_nt009 = is_bh and document.scope.environment is FiscalEnvironment.HOMOLOGATION
+    if is_bh:
+        if service.municipal_taxation_detail is None:
+            raise FiscalValidationError(
+                "Belo Horizonte requires reviewed three-digit cTribMun for national DPS"
+            )
+        if document.competence_date.year >= 2026 and service.national_service_nbs is None:
+            raise FiscalValidationError(
+                "Belo Horizonte requires reviewed nine-digit cNBS for 2026 competence"
+            )
+
     op_simp_nac = _OP_SIMP_NAC.get(issuer.tax_regime)
     if op_simp_nac is None:
         raise FiscalValidationError(
             f"unsupported tax regime for NFS-e Nacional: {issuer.tax_regime!r}"
         )
 
-    serie, n_dps = _derive_dps_numbering(request)
+    if is_bh:
+        if not isinstance(reservation, FiscalNumberReservation):
+            raise FiscalValidationError(
+                "Belo Horizonte requires an atomic durable DPS sequence reservation"
+            )
+        key = reservation.key
+        scope = document.scope
+        if (
+            key.model is not InternalFiscalSequenceStream.NFSE_DPS
+            or key.tenant_id != scope.tenant_id
+            or key.unit_id != scope.unit_id
+            or key.environment != scope.environment
+            or key.host_namespace != scope.host_namespace
+            or key.issuer_cnpj != issuer.cnpj.value
+            or not 0 <= key.series <= 99999
+            or not 1 <= reservation.number <= 999_999_999_999_999
+        ):
+            raise FiscalValidationError("National DPS sequence violates fiscal scope")
+        expected_token = hashlib.sha256(
+            f"{key.canonical_material}|{reservation.number}".encode()
+        ).hexdigest()
+        if reservation.reservation_token != expected_token:
+            raise FiscalValidationError("National DPS reservation token is invalid")
+        serie, n_dps = str(key.series), str(reservation.number)
+    else:
+        if reservation is not None:
+            raise FiscalValidationError("National DPS numbering is not bound to this municipality")
+        serie, n_dps = _derive_dps_numbering(request)
     dps_id = (
         "DPS"
         + issuer_municipality
         + _FEDERAL_INSCRIPTION_TYPE_CNPJ
         + cnpj
         + serie.zfill(5)
-        + n_dps
+        + n_dps.zfill(15)  # TSIdDPS: fixed 45-char Id; nDPS element stays unpadded
     )
 
+    schema_version = "1.01" if is_bh else _SCHEMA_VERSION
     root = etree.Element(f"{{{_NFSE_NS}}}DPS", nsmap={None: _NFSE_NS})  # type: ignore[dict-item]
-    root.set("versao", _SCHEMA_VERSION)
+    root.set("versao", schema_version)
     info = etree.SubElement(root, f"{{{_NFSE_NS}}}infDPS", Id=dps_id)
 
     _child(info, "tpAmb", "2")  # governed gateway only authorizes FiscalEnvironment.HOMOLOGATION
@@ -156,7 +203,22 @@ def build_signed_dps(
     _child(info, "nDPS", n_dps)
     _child(info, "dCompet", document.competence_date.strftime("%Y-%m-%d"))
     _child(info, "tpEmit", "1")  # Prestador -- this flow always submits on the issuer's own behalf
+    if is_nt009:
+        # NT009 Release 1 moved the mandatory regular-purpose flag from
+        # the optional IBSCBS group into infDPS, before cLocEmi.
+        _child(info, "finNFSe", "0")
     _child(info, "cLocEmi", issuer_municipality)
+    if document.substituted_invoice_access_key is not None:
+        if not is_nt009:
+            raise FiscalValidationError(
+                "Substitution DPS is enabled only for reviewed BH restricted layout"
+            )
+        subst = etree.SubElement(info, f"{{{_NFSE_NS}}}subst")
+        _child(subst, "chSubstda", document.substituted_invoice_access_key)
+        assert document.substitution_reason_code is not None
+        _child(subst, "cMotivo", document.substitution_reason_code)
+        if document.substitution_reason_text is not None:
+            _child(subst, "xMotivo", document.substitution_reason_text.strip())
 
     prest = etree.SubElement(info, f"{{{_NFSE_NS}}}prest")
     _child(prest, "CNPJ", cnpj)
@@ -167,6 +229,12 @@ def build_signed_dps(
         _child(prest, "IM", im)
     _child(prest, "xNome", issuer.legal_name.strip())
     end = etree.SubElement(prest, f"{{{_NFSE_NS}}}end")
+    if schema_version == "1.01":
+        # Official DPS 1.01 requires the domestic address group before xLgr.
+        # v1.00 permitted omission; retain that legacy layout unchanged.
+        end_nac = etree.SubElement(end, f"{{{_NFSE_NS}}}endNac")
+        _child(end_nac, "cMun", issuer_municipality)
+        _child(end_nac, "CEP", issuer.address.postal_code)
     _child(end, "xLgr", issuer.address.street.strip())
     _child(end, "nro", issuer.address.number.strip())
     if issuer.address.complement:
@@ -181,33 +249,68 @@ def build_signed_dps(
         # carry an explicit regApTribSN signal to pick 1/2/3 with certainty;
         # revisit with the owner before relying on this for real submission.
         _child(reg_trib, "regApTribSN", "3")
-    _child(reg_trib, "regEspTrib", "0")  # Nenhum; FiscalProfile models no special regime today
+    if is_bh and document.special_tax_regime is None:
+        raise FiscalValidationError(
+            "Belo Horizonte requires reviewed special tax regime classification"
+        )
+    _child(reg_trib, "regEspTrib", document.special_tax_regime or "0")
 
     serv = etree.SubElement(info, f"{{{_NFSE_NS}}}serv")
     loc_prest = etree.SubElement(serv, f"{{{_NFSE_NS}}}locPrest")
     _child(loc_prest, "cLocPrestacao", service_municipality)
     c_serv = etree.SubElement(serv, f"{{{_NFSE_NS}}}cServ")
     _child(c_serv, "cTribNac", service.national_taxation_code)
-    _child(c_serv, "xDescServ", service.description.strip())
+    # BHISS requires a three-digit municipal tax detail for ISS due to BH.
+    # It must be reviewed, not guessed from the generic LC 116 service code.
+    if service.municipal_taxation_detail is not None:
+        _child(c_serv, "cTribMun", service.municipal_taxation_detail)
+    # NT009 reordered xDescServ to the end of cServ, AFTER cNBS.
+    # Production retains the February 2026 layout until official cutover.
+    if not is_nt009:
+        _child(c_serv, "xDescServ", service.description.strip())
+    if service.national_service_nbs is not None:
+        _child(c_serv, "cNBS", service.national_service_nbs)
+    if is_nt009:
+        _child(c_serv, "xDescServ", service.description.strip())
 
     valores = etree.SubElement(info, f"{{{_NFSE_NS}}}valores")
     v_serv_prest = etree.SubElement(valores, f"{{{_NFSE_NS}}}vServPrest")
     _child(v_serv_prest, "vServ", _money(service.gross_amount.amount))
     if service.deduction_amount.amount > 0:
-        ded_red = etree.SubElement(valores, f"{{{_NFSE_NS}}}vDedRed")
-        _child(ded_red, "vDR", _money(service.deduction_amount.amount))
+        if is_nt009:
+            # NT009 merged vDedRed/gReeRepRes into the reviewed vAjusteBC
+            # group. Use only the explicitly supplied ISS adjustment, never
+            # infer an IBS/CBS deduction or generate unsupported documents.
+            if not service.source_normative:
+                raise FiscalValidationError(
+                    "National DPS NT009 adjustment requires reviewed normative source"
+                )
+            ajuste = etree.SubElement(valores, f"{{{_NFSE_NS}}}vAjusteBC")
+            _child(ajuste, "vAjusteBCISSQN", _money(service.deduction_amount.amount))
+        else:
+            ded_red = etree.SubElement(valores, f"{{{_NFSE_NS}}}vDedRed")
+            _child(ded_red, "vDR", _money(service.deduction_amount.amount))
     trib = etree.SubElement(valores, f"{{{_NFSE_NS}}}trib")
     trib_mun = etree.SubElement(trib, f"{{{_NFSE_NS}}}tribMun")
     _child(trib_mun, "tribISSQN", "1")  # Operacao tributavel; domain models no exemption flag yet
     taxable = service.taxable_amount.amount
     iss_amount = service.iss_amount.amount
-    if taxable > 0 and iss_amount > 0:
+    if schema_version == "1.00" and taxable > 0 and iss_amount > 0:
         rate = (iss_amount / taxable * 100).quantize(_CENT, rounding=ROUND_HALF_UP)
         _child(trib_mun, "pAliq", _money(rate))
     _child(trib_mun, "tpRetISSQN", "2" if service.iss_withheld else "1")
+    if schema_version == "1.01" and taxable > 0 and iss_amount > 0:
+        # The official v1.01 sequence moved pAliq AFTER tpRetISSQN.
+        rate = (iss_amount / taxable * 100).quantize(_CENT, rounding=ROUND_HALF_UP)
+        _child(trib_mun, "pAliq", _money(rate))
     tot_trib = etree.SubElement(trib, f"{{{_NFSE_NS}}}totTrib")
     _child(tot_trib, "indTotTrib", "0")  # Decreto 8.264/2014: no tax-total estimate declared
 
     unsigned_xml = etree.tostring(root, encoding="utf-8", xml_declaration=False)
-    national_dps_validator(_SCHEMA_VERSION).validate_document(unsigned_xml)
+    if is_nt009:
+        national_dps_validator(
+            schema_version, profile=NT009_RESTRICTED_PROFILE,
+        ).validate_document(unsigned_xml)
+    else:
+        national_dps_validator(schema_version).validate_document(unsigned_xml)
     return sign_nfse_dps_xml(unsigned_xml, certificate)

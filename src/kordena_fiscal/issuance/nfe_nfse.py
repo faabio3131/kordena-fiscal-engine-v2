@@ -7,7 +7,7 @@ import json
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Protocol
+from typing import Protocol, cast
 
 from kordena_fiscal.documents import CanonicalFiscalDocument
 from kordena_fiscal.domain import (
@@ -158,6 +158,8 @@ class NfseServiceLine:
     iss_amount: Money = Money.zero()
     iss_withheld: bool = False
     national_taxation_code: str | None = None
+    municipal_taxation_detail: str | None = None
+    national_service_nbs: str | None = None
     rule_version: int = 1
     source_normative: str = "external-rule-set"
 
@@ -192,6 +194,26 @@ class NfseServiceLine:
             "national_taxation_code",
             _optional(self.national_taxation_code, "national_taxation_code", 64),
         )
+        object.__setattr__(
+            self, "municipal_taxation_detail",
+            _optional(self.municipal_taxation_detail, "municipal_taxation_detail", 3),
+        )
+        if self.municipal_taxation_detail is not None and (
+            len(self.municipal_taxation_detail) != 3
+            or not self.municipal_taxation_detail.isascii()
+            or not self.municipal_taxation_detail.isdecimal()
+        ):
+            raise FiscalValidationError("municipal_taxation_detail must be three ASCII digits")
+        object.__setattr__(
+            self, "national_service_nbs",
+            _optional(self.national_service_nbs, "national_service_nbs", 9),
+        )
+        if self.national_service_nbs is not None and (
+            len(self.national_service_nbs) != 9
+            or not self.national_service_nbs.isascii()
+            or not self.national_service_nbs.isdecimal()
+        ):
+            raise FiscalValidationError("national_service_nbs must be nine ASCII digits")
         if not isinstance(self.rule_version, int) or isinstance(self.rule_version, bool):
             raise FiscalValidationError("rule_version must be an integer")
         if self.rule_version < 1:
@@ -229,6 +251,10 @@ class NfseCanonicalDocument:
     services: tuple[NfseServiceLine, ...]
     service_taker_reference: str | None = None
     schema_version: int = 1
+    special_tax_regime: str | None = None
+    substituted_invoice_access_key: str | None = None
+    substitution_reason_code: str | None = None
+    substitution_reason_text: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "document_id", _required(self.document_id, "document_id", 128))
@@ -265,6 +291,36 @@ class NfseCanonicalDocument:
             raise FiscalValidationError("schema_version must be an integer")
         if self.schema_version < 1:
             raise FiscalValidationError("schema_version must be >= 1")
+        if self.special_tax_regime is not None and (
+            not isinstance(self.special_tax_regime, str)
+            or self.special_tax_regime not in {"0", "1", "2", "4", "5", "6", "9"}
+        ):
+            raise FiscalValidationError("special_tax_regime must be a reviewed BH regime code")
+        if self.substituted_invoice_access_key is None:
+            if (
+                self.substitution_reason_code is not None
+                or self.substitution_reason_text is not None
+            ):
+                raise FiscalValidationError("Substitution requires a reviewed original invoice key")
+        else:
+            key = self.substituted_invoice_access_key
+            if (
+                not isinstance(key, str)
+                or len(key) != 50
+                or not key.isascii()
+                or not key.isdecimal()
+                or key[9:23] != self.issuer.cnpj.value
+                or self.substitution_reason_code
+                not in {"01", "02", "03", "04", "05", "99"}
+            ):
+                raise FiscalValidationError(
+                    "Substitution requires same-issuer invoice key and approved reason"
+                )
+            if self.substitution_reason_text is not None and (
+                not isinstance(self.substitution_reason_text, str)
+                or not 15 <= len(self.substitution_reason_text.strip()) <= 255
+            ):
+                raise FiscalValidationError("Substitution reason text must be 15-255 chars")
 
     @property
     def totals(self) -> NfseDocumentTotals:
@@ -342,6 +398,22 @@ def build_nfse_request_fingerprint(document: NfseCanonicalDocument) -> str:
             for line in document.services
         ],
     }
+    # Preserve the historical hash for all service lines that do not carry
+    # municipal detail; changing it would invalidate existing durable requests.
+    service_payloads = cast(list[dict[str, object]], payload["services"])
+    if document.special_tax_regime is not None:
+        payload["special_tax_regime"] = document.special_tax_regime
+    if document.substituted_invoice_access_key is not None:
+        payload["substitution"] = {
+            "access_key": document.substituted_invoice_access_key,
+            "reason_code": document.substitution_reason_code,
+            "reason_text": document.substitution_reason_text,
+        }
+    for line_payload, line in zip(service_payloads, document.services, strict=True):
+        if line.municipal_taxation_detail is not None:
+            line_payload["municipal_taxation_detail"] = line.municipal_taxation_detail
+        if line.national_service_nbs is not None:
+            line_payload["national_service_nbs"] = line.national_service_nbs
     encoded = json.dumps(
         payload,
         ensure_ascii=False,
