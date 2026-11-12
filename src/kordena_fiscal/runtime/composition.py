@@ -28,6 +28,7 @@ from kordena_fiscal.application.commercial_trial import GovernedTrialService
 from kordena_fiscal.application.service import FiscalApplicationService
 from kordena_fiscal.archive.danfe_pdf import render_authorized_nfe_danfe
 from kordena_fiscal.archive.danfse_pdf import render_authorized_national_danfse
+from kordena_fiscal.domain import ExecutionScope
 from kordena_fiscal.compliance import CapabilityReadinessService
 from kordena_fiscal.control_plane.cakto_checkout import (
     CaktoCheckoutAdministrationService,
@@ -112,6 +113,9 @@ def build_postgres_runtime_composition(
     metrics: MetricsRegistry | None = None,
     password_reset_ttl: timedelta = timedelta(minutes=10),
     cakto_claim_delivery: CaktoClaimDelivery | None = None,
+    resolve_sp4_numbering: Callable[
+        [ExecutionScope, str, str], tuple[int, str]
+    ] | None = None,
 ) -> RuntimeComposition:
     """Compose commercial, human and fiscal ingress over the same PostgreSQL lifecycle."""
 
@@ -239,6 +243,7 @@ def build_postgres_runtime_composition(
         commercial_reader=commercial_portal_read,
         danfe_renderer=render_authorized_nfe_danfe,
         danfse_renderer=render_authorized_national_danfse,
+        resolve_sp4_numbering=resolve_sp4_numbering,
     )
     return RuntimeComposition(
         human_identity=identity,
