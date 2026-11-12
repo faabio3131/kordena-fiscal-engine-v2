@@ -16,20 +16,34 @@ import pytest
 from kordena_fiscal.application.service import FiscalApplicationService
 from kordena_fiscal.archive import RetentionPolicyMetadata
 from kordena_fiscal.domain import (
-    BrazilianJurisdiction, CnaeCode, Cnpj, ExecutionScope, FiscalAddress,
-    FiscalEnvironment, FiscalProfile, FiscalValidationError, Money,
-    SourceReference, StateRegistration, TaxRegimeCode,
+    BrazilianJurisdiction,
+    CnaeCode,
+    Cnpj,
+    ExecutionScope,
+    FiscalAddress,
+    FiscalEnvironment,
+    FiscalProfile,
+    FiscalValidationError,
+    Money,
+    SourceReference,
+    StateRegistration,
+    TaxRegimeCode,
 )
 from kordena_fiscal.gateway.sp4_municipal_canonical import SP4_MUNICIPAL_PROVIDERS
 from kordena_fiscal.issuance.nfe_nfse import (
-    NfseAuthorizationRequest, NfseCanonicalDocument, NfseServiceLine,
+    NfseAuthorizationRequest,
+    NfseCanonicalDocument,
+    NfseServiceLine,
 )
 from kordena_fiscal.issuance.sp4_original_rps_archive import (
-    build_sp4_original_from_reservation, decode_sp4_original,
-    encode_sp4_original, expected_sp4_batch,
+    build_sp4_original_from_reservation,
+    decode_sp4_original,
+    encode_sp4_original,
+    expected_sp4_batch,
 )
 from kordena_fiscal.persistence.ports import (
-    PersistenceConflictError, PersistenceStateError,
+    PersistenceConflictError,
+    PersistenceStateError,
 )
 from kordena_fiscal.persistence.sqlite import SqliteFiscalDatabase
 
@@ -163,7 +177,9 @@ def test_original_archive_token_and_amount_tampering_rejected(tmp_path: Path) ->
     request = _request("3525904")
     _, original = _prepare(app, request)
     from kordena_fiscal.numbering import (
-        FiscalSequenceKey, FiscalNumberReservation, InternalFiscalSequenceStream,
+        FiscalNumberReservation,
+        FiscalSequenceKey,
+        InternalFiscalSequenceStream,
     )
     key = FiscalSequenceKey.from_scope(
         request.document.scope,
