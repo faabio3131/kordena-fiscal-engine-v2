@@ -8,8 +8,8 @@ import pytest
 
 from kordena_fiscal.domain import FiscalValidationError
 from kordena_fiscal.xml.nfse_nacional_schema import (
-    NT009_RESTRICTED_PROFILE,
     _NT009_HASHES,
+    NT009_RESTRICTED_PROFILE,
     national_dps_validator,
     national_event_validator,
     national_restricted_validator,
