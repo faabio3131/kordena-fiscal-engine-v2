@@ -34,25 +34,7 @@ _HASHES = {
 
 # Regulatory compatibility exception: the *unmodified* official 2026-02-09
 # NFS-e 1.01 package includes PCRE-style anchors in the TSSerieDPS xs:pattern.
-# XSD regex syntax implicitly anchors the whole value; '^' and '
-    if version not in _HASHES:
-        raise FiscalValidationError("Unsupported National DPS schema version")
-    directory = files("kordena_fiscal.xml").joinpath("official", f"NFSE_NACIONAL_{version}")
-    return XmlSchemaValidator(SchemaSet(
-        version=version,
-        root_schema=f"DPS_v{version}.xsd",
-        resources=tuple(
-            _pinned_schema_resource(
-                version=version,
-                name=name,
-                official_bytes=directory.joinpath(name).read_bytes(),
-                official_sha256=digest,
-            )
-            for name, digest in _HASHES[version].items()
-        ),
-        source_uri=_SOURCE,
-    ))
- are literal.
+# XSD regex syntax implicitly anchors the whole value; '^' and '$' are literal.
 # Do not edit official XML files or accept an arbitrary unverified replacement.
 # Source and derived digests are independently pinned and documented.
 _XSD101_SERIE_NAME = "tiposSimples_v1.01.xsd"
@@ -91,7 +73,12 @@ def national_dps_validator(version: str) -> XmlSchemaValidator:
         version=version,
         root_schema=f"DPS_v{version}.xsd",
         resources=tuple(
-            SchemaResource(name, directory.joinpath(name).read_bytes(), digest)
+            _pinned_schema_resource(
+                version=version,
+                name=name,
+                official_bytes=directory.joinpath(name).read_bytes(),
+                official_sha256=digest,
+            )
             for name, digest in _HASHES[version].items()
         ),
         source_uri=_SOURCE,
