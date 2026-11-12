@@ -41,12 +41,12 @@ for worker in gsm bling; do
   if [[ "$worker" == gsm ]]; then
     original="$HERE/compose.worker.opt-in.yml"
     override="$HERE/compose.worker.host-db.override.yml"
-    profile=worker-authorized
+    profile="worker-authorized"
     service=nfcore-worker
   else
     original="$HERE/compose.bling.worker.opt-in.yml"
     override="$HERE/compose.bling.worker.host-db.override.yml"
-    profile=bling-worker-authorized
+    profile="bling-worker-authorized"
     service=nfcore-bling-worker
   fi
 
