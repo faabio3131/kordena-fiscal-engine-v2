@@ -60,7 +60,9 @@ def _rps() -> bytes:
     )) + b"\r\n"
 
 
-def _setup() -> tuple[object, Mock, Mock, Mock, NfseAuthorizationRequest, Sp4OriginalRps]:
+def _setup(
+    retrieve_xml: Mock | None = None,
+) -> tuple[object, Mock, Mock, Mock, NfseAuthorizationRequest, Sp4OriginalRps]:
     scope = _scope()
     original = Sp4OriginalRps(
         scope=scope, document_id="original", request_fingerprint="a" * 64,
@@ -111,6 +113,7 @@ def _setup() -> tuple[object, Mock, Mock, Mock, NfseAuthorizationRequest, Sp4Ori
         verify_fixed_width_rps_identity=Mock(),
         load_approved_remittance_protocol=Mock(return_value="PROTOCOL42"),
         interpret_official_result=interpreter,
+        retrieve_official_invoice_xml=retrieve_xml,
         validate_return_file=Mock(return_value=BarueriConvertedNfseEvidence(
             remittance="20261113001", note_number="0008765", note_series="NF",
             verification_code="VERIFIER", access_key="35" + "0" * 48,
@@ -207,3 +210,31 @@ def test_unpersisted_remittance_prevents_mutating_barueri_http() -> None:
     submit.assert_not_called()
     status.assert_not_called()
     download.assert_not_called()
+
+
+def test_barueri_invoice_requires_downloaded_original_xml_and_approved_validator() -> None:
+    retrieve = Mock(return_value=b"<CompNfse>OFFLINE-UNVERIFIED</CompNfse>")
+    ports, submit, status, download, request, original = _setup(retrieve)
+    status.return_value = BarueriReceipt(
+        operation="NFeLoteStatusArquivo", code="OK200",
+        remittance_protocol="PROTOCOL42", return_file_name="result.txt",
+    )
+    candidate = ports.query_official_rps(request, original)
+    assert candidate.status is AuthorizationStatus.AUTHORIZED
+    assert candidate.official_invoice is not None
+    assert candidate.official_invoice.invoice_reference == "35" + "0" * 48
+    assert candidate.official_invoice.authorized_xml == retrieve.return_value
+    retrieve.assert_called_once()
+    submit.assert_not_called()
+
+
+def test_barueri_xml_unavailable_keeps_previous_remittance_unresolved() -> None:
+    retrieve = Mock(return_value=b"")
+    ports, submit, status, download, request, original = _setup(retrieve)
+    status.return_value = BarueriReceipt(
+        operation="NFeLoteStatusArquivo", code="OK200",
+        remittance_protocol="PROTOCOL42", return_file_name="result.txt",
+    )
+    with pytest.raises(Sp4CanonicalMunicipalError, match="XML is missing"):
+        ports.query_official_rps(request, original)
+    submit.assert_not_called()
