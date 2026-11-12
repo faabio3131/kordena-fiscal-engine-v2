@@ -19,6 +19,7 @@ import json
 import ssl
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from urllib.error import HTTPError, URLError
 from urllib.request import HTTPSHandler, Request, build_opener
 
@@ -223,6 +224,7 @@ class NationalNfseCancellationHomologationTransport:
         resolve_certificate: Callable[[ExecutionScope, str], EphemeralCertificateMaterial],
         validate_signed_event: Callable[[bytes], None],
         approve_cancellation: Callable[[NationalNfseCancellationIntent], None],
+        validate_official_event: Callable[[bytes], None],
         exchange: Callable[[str, bytes, ssl.SSLContext, float], bytes] | None = None,
         timeout_seconds: float = 15,
     ) -> None:
@@ -231,6 +233,7 @@ class NationalNfseCancellationHomologationTransport:
             or not callable(resolve_certificate)
             or not callable(validate_signed_event)
             or not callable(approve_cancellation)
+            or not callable(validate_official_event)
             or not 0 < timeout_seconds <= 30
         ):
             raise NationalNfseEventError("Incomplete national cancellation authority")
@@ -238,6 +241,7 @@ class NationalNfseCancellationHomologationTransport:
         self._certificate = resolve_certificate
         self._validate = validate_signed_event
         self._approve = approve_cancellation
+        self._validate_response = validate_official_event
         self._exchange = exchange or _exchange
         self._timeout = timeout_seconds
 
@@ -260,7 +264,7 @@ class NationalNfseCancellationHomologationTransport:
         material = self._certificate(intent.scope, intent.issuer.value)
         validate_a1_for_issuer(
             material.pkcs12_bytes, material.password, issuer_cnpj=intent.issuer,
-            at=__import__("datetime").datetime.now(__import__("datetime").UTC),
+            at=datetime.now(UTC),
         )
         payload = json.dumps(
             {
@@ -276,6 +280,9 @@ class NationalNfseCancellationHomologationTransport:
             self._timeout,
         )
         event_xml = _validated_response(reply, intent)
+        # A structurally correlated XML is not proof it was signed by SEFIN.
+        # Require separately pinned official event schema and signature checks.
+        self._validate_response(event_xml)
         return NationalNfseCancellationReceipt(
             invoice_reference=intent.invoice_reference,
             event_xml=event_xml,
