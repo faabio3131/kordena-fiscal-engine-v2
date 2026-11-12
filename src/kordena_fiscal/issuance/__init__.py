@@ -21,6 +21,7 @@ from .nfe_nfse import (
     NfseAuthorizationResult,
     NfseCanonicalDocument,
     NfseDocumentTotals,
+    NfseForeignAddress,
     NfseGateway,
     NfseGatewayClient,
     NfseGatewayContractError,
@@ -29,7 +30,6 @@ from .nfe_nfse import (
     NfseRejectionDetail,
     NfseServiceLine,
     NfseServiceTaker,
-    NfseForeignAddress,
     build_nfse_issuance_key,
     build_nfse_request_fingerprint,
 )
