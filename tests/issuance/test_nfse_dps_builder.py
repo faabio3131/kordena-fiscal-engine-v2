@@ -341,7 +341,7 @@ def test_bh_archive_rejects_tampered_tax_fields(field: str, value: str) -> None:
     stored = json.loads(encode_prepared_nfse(original))
     stored["services"][0][field] = value
     altered = json.dumps(stored).encode()
-    with pytest.raises(FiscalValidationError, match="fingerprint"):
+    with pytest.raises(FiscalValidationError, match="invalid prepared NFS-e artifact"):
         decode_prepared_nfse(altered, scope=original.document.scope)
 
 
