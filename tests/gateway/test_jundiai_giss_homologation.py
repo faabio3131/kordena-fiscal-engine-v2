@@ -85,10 +85,10 @@ def test_contract_preserves_escaped_signed_abrasf_xml() -> None:
 
 def test_processed_batch_not_equivalent_to_correlated_authorization() -> None:
     body = (
-        '<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">'
-        '<s:Body><response><Protocolo>1234567890</Protocolo>'
-        '<Situacao>4</Situacao></response></s:Body></s:Envelope>'
-    ).encode()
+        b'<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">'
+        b'<s:Body><response><Protocolo>1234567890</Protocolo>'
+        b'<Situacao>4</Situacao></response></s:Body></s:Envelope>'
+    )
     result = _parse_reply(body, "ConsultarLoteRps")
     assert result.batch_protocol == "1234567890"
     assert result.batch_state == 4
