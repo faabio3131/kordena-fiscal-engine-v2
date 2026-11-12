@@ -7,7 +7,7 @@ import json
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Protocol
+from typing import Protocol, cast
 
 from kordena_fiscal.documents import CanonicalFiscalDocument
 from kordena_fiscal.domain import (
@@ -355,7 +355,8 @@ def build_nfse_request_fingerprint(document: NfseCanonicalDocument) -> str:
     }
     # Preserve the historical hash for all service lines that do not carry
     # municipal detail; changing it would invalidate existing durable requests.
-    for line_payload, line in zip(payload["services"], document.services, strict=True):
+    service_payloads = cast(list[dict[str, object]], payload["services"])
+    for line_payload, line in zip(service_payloads, document.services, strict=True):
         if line.municipal_taxation_detail is not None:
             line_payload["municipal_taxation_detail"] = line.municipal_taxation_detail
     encoded = json.dumps(
