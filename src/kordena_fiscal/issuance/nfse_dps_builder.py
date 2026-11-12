@@ -25,6 +25,7 @@ from lxml import etree
 
 from kordena_fiscal.domain import FiscalValidationError, TaxRegimeCode
 from kordena_fiscal.issuance.nfe_nfse import NfseAuthorizationRequest
+from kordena_fiscal.numbering import FiscalNumberReservation, InternalFiscalSequenceStream
 from kordena_fiscal.signing.nfse_xmldsig import sign_nfse_dps_xml
 from kordena_fiscal.vault import EphemeralCertificateMaterial
 from kordena_fiscal.xml.nfse_nacional_schema import national_dps_validator
@@ -79,7 +80,10 @@ def _derive_dps_numbering(request: NfseAuthorizationRequest) -> tuple[str, str]:
 
 
 def build_signed_dps(
-    request: NfseAuthorizationRequest, certificate: EphemeralCertificateMaterial
+    request: NfseAuthorizationRequest,
+    certificate: EphemeralCertificateMaterial,
+    *,
+    reservation: FiscalNumberReservation | None = None,
 ) -> bytes:
     """Build, schema-validate and sign the national DPS for ``request``.
 
@@ -125,13 +129,50 @@ def build_signed_dps(
         raise FiscalValidationError("DPS requires a numeric service jurisdiction IBGE code")
     service_municipality = service_municipality.zfill(7)
 
+    is_bh = service_municipality == "3106200"
+    if is_bh:
+        if service.municipal_taxation_detail is None:
+            raise FiscalValidationError(
+                "Belo Horizonte requires reviewed three-digit cTribMun for national DPS"
+            )
+        if document.competence_date.year >= 2026 and service.national_service_nbs is None:
+            raise FiscalValidationError(
+                "Belo Horizonte requires reviewed nine-digit cNBS for 2026 competence"
+            )
+
     op_simp_nac = _OP_SIMP_NAC.get(issuer.tax_regime)
     if op_simp_nac is None:
         raise FiscalValidationError(
             f"unsupported tax regime for NFS-e Nacional: {issuer.tax_regime!r}"
         )
 
-    serie, n_dps = _derive_dps_numbering(request)
+    if is_bh:
+        if not isinstance(reservation, FiscalNumberReservation):
+            raise FiscalValidationError(
+                "Belo Horizonte requires an atomic durable DPS sequence reservation"
+            )
+        key = reservation.key
+        scope = document.scope
+        if (
+            key.model is not InternalFiscalSequenceStream.NFSE_DPS
+            or key.tenant_id != scope.tenant_id
+            or key.unit_id != scope.unit_id
+            or key.environment != scope.environment
+            or key.host_namespace != scope.host_namespace
+            or not 0 <= key.series <= 99999
+            or not 1 <= reservation.number <= 999_999_999_999_999
+        ):
+            raise FiscalValidationError("National DPS sequence violates fiscal scope")
+        expected_token = hashlib.sha256(
+            f"{key.canonical_material}|{reservation.number}".encode()
+        ).hexdigest()
+        if reservation.reservation_token != expected_token:
+            raise FiscalValidationError("National DPS reservation token is invalid")
+        serie, n_dps = str(key.series), str(reservation.number)
+    else:
+        if reservation is not None:
+            raise FiscalValidationError("National DPS numbering is not bound to this municipality")
+        serie, n_dps = _derive_dps_numbering(request)
     dps_id = (
         "DPS"
         + issuer_municipality
@@ -190,20 +231,11 @@ def build_signed_dps(
     _child(c_serv, "cTribNac", service.national_taxation_code)
     # BHISS requires a three-digit municipal tax detail for ISS due to BH.
     # It must be reviewed, not guessed from the generic LC 116 service code.
-    if service_municipality == "3106200" and service.municipal_taxation_detail is None:
-        raise FiscalValidationError(
-            "Belo Horizonte requires reviewed three-digit cTribMun for national DPS"
-        )
     if service.municipal_taxation_detail is not None:
         _child(c_serv, "cTribMun", service.municipal_taxation_detail)
     _child(c_serv, "xDescServ", service.description.strip())
     # BHISS requires the official NBS classification for 2026 service
     # competencies. Never infer NBS from cTribNac or service description.
-    if service_municipality == "3106200" and document.competence_date.year >= 2026:
-        if service.national_service_nbs is None:
-            raise FiscalValidationError(
-                "Belo Horizonte requires reviewed nine-digit cNBS for 2026 competence"
-            )
     if service.national_service_nbs is not None:
         _child(c_serv, "cNBS", service.national_service_nbs)
 
