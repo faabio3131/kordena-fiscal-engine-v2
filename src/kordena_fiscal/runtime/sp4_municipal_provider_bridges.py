@@ -367,8 +367,15 @@ def build_jundiai_reviewed_ports(
             else "ConsultarNfseRpsEnvio"
         )
         ns = "{http://www.giss.com.br/tipos-v2_04.xsd}"
-        rps_numbers = root.findall(f".//{ns}IdentificacaoRps/{ns}Numero")
-        rps_series = root.findall(f".//{ns}IdentificacaoRps/{ns}Serie")
+        source_ns = (
+            "{http://www.giss.com.br/enviar-lote-rps-envio-v2_04.xsd}"
+            if method == "RecepcionarLoteRps"
+            else "{http://www.giss.com.br/consultar-nfse-rps-envio-v2_04.xsd}"
+        )
+        # Giss uses the METHOD namespace for request-level IdentificacaoRps,
+        # and the separate tipos-v2_04.xsd namespace for Numero and Serie.
+        rps_numbers = root.findall(f".//{source_ns}IdentificacaoRps/{ns}Numero")
+        rps_series = root.findall(f".//{source_ns}IdentificacaoRps/{ns}Serie")
         if (
             etree.QName(root).localname != expected_root
             or bool(getattr(root.getroottree().docinfo, "doctype", ""))
