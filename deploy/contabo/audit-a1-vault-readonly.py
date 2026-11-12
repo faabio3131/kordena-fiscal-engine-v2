@@ -84,13 +84,15 @@ def main() -> int:
         root = env.get("NFCORE_A1_VAULT_DIR")
         key_is_valid = _key_format_is_valid(env.get("NFCORE_A1_VAULT_KEY_BASE64"))
         mounts = info.get("Mounts") or []
-        persistent = bool(root) and any(
-            mount.get("Type") in ("bind", "volume")
-            and mount.get("RW") is True
-            and isinstance(mount.get("Destination"), str)
-            and _path_under(root, mount["Destination"])
-            for mount in mounts
-        )
+        persistent = False
+        if isinstance(root, str) and root:
+            persistent = any(
+                mount.get("Type") in ("bind", "volume")
+                and mount.get("RW") is True
+                and isinstance(mount.get("Destination"), str)
+                and _path_under(root, mount["Destination"])
+                for mount in mounts
+            )
         running = info.get("State", {}).get("Running") is True
         raw_probe = _docker(["exec", CONTAINER, "python", "-c", _CONTAINER_PROBE])
         probe = json.loads(raw_probe) if raw_probe is not None else None
