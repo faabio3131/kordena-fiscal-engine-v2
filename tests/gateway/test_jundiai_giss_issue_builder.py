@@ -165,3 +165,45 @@ def test_2026_optional_rtc_requires_complete_reviewed_classification() -> None:
             request=_request(original), original=original,
             fields=replace(_fields(), rtc_cst="000"),
         )
+
+
+def test_giss_2026_reviewed_ibs_cbs_group_is_not_silently_dropped() -> None:
+    original = _original()
+    fields = replace(
+        _fields(),
+        operation_indicator="050101", rtc_cst="000",
+        rtc_classification="000001", rtc_fin_nfse="0",
+        rtc_ind_dest="0", rtc_incidence_ibge="3525904",
+        rtc_taxable_base=Decimal("145.00"), rtc_ind_final="0",
+    )
+    xml = build_jundiai_giss_issue_xml(
+        request=_request(original), original=original, fields=fields,
+    )
+    root = etree.fromstring(xml)
+    rtc = root.find(".//" + _TYPES + "Valores/" + _TYPES + "IBSCBS")
+    assert rtc is not None
+    assert rtc.findtext(_TYPES + "cIndOp") == "050101"
+    assert rtc.findtext(".//" + _TYPES + "gIBSCBS/" + _TYPES + "CST") == "000"
+    assert rtc.findtext(
+        ".//" + _TYPES + "gIBSCBS/" + _TYPES + "cClassTrib"
+    ) == "000001"
+    assert rtc.findtext(".//" + _TYPES + "vBC") == "145.00"
+
+
+def test_giss_2026_rtc_rejects_incomplete_base_and_mismatched_classification() -> None:
+    original = _original()
+    fields = replace(
+        _fields(),
+        operation_indicator="050101", rtc_cst="000",
+        rtc_classification="000001", rtc_fin_nfse="0",
+        rtc_ind_dest="0", rtc_incidence_ibge="3525904",
+        rtc_taxable_base=Decimal("145.00"),
+    )
+    for candidate in (
+        replace(fields, rtc_taxable_base=None),
+        replace(fields, rtc_classification="200001"),
+    ):
+        with pytest.raises(JundiaiGissIssueError):
+            build_jundiai_giss_issue_xml(
+                request=_request(original), original=original, fields=candidate,
+            )
