@@ -422,4 +422,11 @@ def test_bh_schema_101_requires_canonical_domestic_issuer_address() -> None:
     assert address.findtext(f"{{{_NFSE_NS}}}cMun") is not None
     assert address.findtext(f"{{{_NFSE_NS}}}CEP") is not None
     assert etree.QName(end[0]).localname == "endNac"
+    trib_mun = root.find(
+        f".//{{{_NFSE_NS}}}valores/{{{_NFSE_NS}}}trib/{{{_NFSE_NS}}}tribMun"
+    )
+    assert trib_mun is not None
+    assert [etree.QName(child).localname for child in trib_mun] == [
+        "tribISSQN", "tpRetISSQN", "pAliq",
+    ]
     national_dps_validator("1.01").validate_document(signed)
