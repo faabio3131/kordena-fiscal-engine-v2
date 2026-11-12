@@ -581,6 +581,13 @@ class FiscalApplicationService:
             raise FiscalValidationError("document must be NfseCanonicalDocument")
         if not isinstance(retention, RetentionPolicyMetadata):
             raise FiscalValidationError("retention must be RetentionPolicyMetadata")
+        if (
+            document.issuer.address.jurisdiction.municipality_ibge_code == "3106200"
+            and national_dps_series is None
+        ):
+            raise FiscalValidationError(
+                "Belo Horizonte requires atomic DPS numbering during fiscal preparation"
+            )
         request = NfseAuthorizationRequest.build(document)
         if national_dps_series is not None and extrema_intent_builder is not None:
             raise FiscalValidationError("National DPS and municipal RPS cannot share numbering")
