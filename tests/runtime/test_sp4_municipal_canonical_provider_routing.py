@@ -45,6 +45,7 @@ def _router(provider_id: str) -> tuple[_GovernedNfseRouter, Mock, Mock, Mock]:
         extrema=None,
         sp4_municipal_gateways={provider_id: authorization},
         sp4_municipal_query={provider_id: query},
+        sp4_preaudit=Mock(),
     )
     return router, application, authorization, query
 
@@ -116,6 +117,7 @@ def test_unknown_municipal_provider_is_not_implicitly_registered() -> None:
         _GovernedNfseRouter(
             application=Mock(), national=None, extrema=None,
             sp4_municipal_gateways={"unapproved": Mock(spec=NfseGatewayClient)},
+            sp4_preaudit=Mock(),
         )
 
 
@@ -126,6 +128,7 @@ def test_sp4_query_without_matching_issuance_port_is_invalid() -> None:
             sp4_municipal_query={
                 "jundiai-giss-v2-homologation": Mock(spec=NfseQueryClient)
             },
+            sp4_preaudit=Mock(),
         )
 
 
@@ -134,6 +137,7 @@ def test_sp4_untrusted_gateway_types_are_rejected() -> None:
         _GovernedNfseRouter(
             application=Mock(), national=None, extrema=None,
             sp4_municipal_gateways={"barueri-pmb004-homologation": object()},
+            sp4_preaudit=Mock(),
         )
 
 
@@ -168,3 +172,13 @@ def test_malformed_competence_cannot_bypass_federal_channel(invalid: object) -> 
     request.document.competence_date = invalid
     with pytest.raises(FiscalValidationError, match="reviewed issuer regime and competence"):
         _require_sp4_municipal_channel(request)
+
+
+def test_municipal_gateways_cannot_be_installed_without_canonical_preaudit() -> None:
+    with pytest.raises(ValueError, match="canonical fiscal pre-audit"):
+        _GovernedNfseRouter(
+            application=Mock(), national=None, extrema=None,
+            sp4_municipal_gateways={
+                "cajamar-geisweb-homologation": Mock(spec=NfseGatewayClient),
+            },
+        )
