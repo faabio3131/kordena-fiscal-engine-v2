@@ -1,9 +1,9 @@
 """Native National NFS-e preparation without ERP, A1, external transport or mock issuance."""
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from collections.abc import Callable
 
 import pytest
 
@@ -233,7 +233,9 @@ def test_native_portal_persists_exact_original_rps_for_four_sp_cities(
         tmp_path / (ibge + ".sqlite"), ibge=ibge,
         tax_regime=TaxRegimeCode.NORMAL, provider_id=provider_id,
     )
-    approved = lambda scope, issuer, provider: (1, "NF")
+    def approved(_scope: ExecutionScope, _issuer: str, _provider: str) -> tuple[int, str]:
+        return 1, "NF"
+
     portal = _client(db, resolve_sp4_numbering=approved)
     payload = _payload() | {
         "service_municipality_ibge": ibge,
