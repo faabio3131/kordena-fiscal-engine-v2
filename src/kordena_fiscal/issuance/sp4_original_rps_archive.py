@@ -62,7 +62,7 @@ def build_sp4_original_from_reservation(
         raise FiscalValidationError("SP4 requires canonical NFS-e request")
     doc = request.document
     ibge = doc.issuer.address.jurisdiction.municipality_ibge_code
-    if ibge not in SP4_MUNICIPAL_PROVIDERS.values():
+    if ibge is None or ibge not in SP4_MUNICIPAL_PROVIDERS.values():
         raise FiscalValidationError("SP4 requires registered issuer municipality")
     if not isinstance(rps_series, str) or len(rps_series) > 16:
         raise FiscalValidationError("SP4 reviewed RPS series is invalid")
