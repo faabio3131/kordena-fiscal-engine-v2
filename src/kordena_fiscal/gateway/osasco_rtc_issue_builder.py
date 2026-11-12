@@ -106,10 +106,28 @@ def _validate_fields(fields: OsascoRtcTaxFields) -> None:
     if not isinstance(fields, OsascoRtcTaxFields):
         raise OsascoRtcIssueError("Osasco fiscal RTC metadata unavailable")
     _str(fields.activity, "activity", 5)
-    _str(fields.class_trib, "RTC classification", 16)
-    _str(fields.nbs_code, "NBS", 20)
-    _str(fields.incidence_location, "incidence location", 12, numeric=True)
-    _str(fields.operation_indicator, "operation indicator", 12)
+    # Osasco manual v2.1 (Apr/2026), p.14: ClassTrib and IndOperacao
+    # retain all six digits including leading zeroes. CodigoNBS is the
+    # dotted 12-character classification (0.0000.00.00) and local incidence
+    # is an exact one-digit integer. Do not silently reformat fiscal codes.
+    class_trib = _str(fields.class_trib, "RTC classification", 6, numeric=True)
+    nbs = _str(fields.nbs_code, "NBS", 12)
+    incidence = _str(
+        fields.incidence_location, "incidence location", 1, numeric=True,
+    )
+    indicator = _str(
+        fields.operation_indicator, "operation indicator", 6, numeric=True,
+    )
+    if (
+        len(class_trib) != 6
+        or len(nbs) != 12
+        or nbs[1] != "." or nbs[6] != "." or nbs[9] != "."
+        or not nbs.replace(".", "").isascii()
+        or not nbs.replace(".", "").isdecimal()
+        or len(incidence) != 1
+        or len(indicator) != 6
+    ):
+        raise OsascoRtcIssueError("Invalid official Osasco RTC code format")
     _str(fields.service_city, "service city", 100)
     _str(fields.service_city_ibge, "service IBGE", 7, numeric=True)
     if len(fields.service_city_ibge) != 7:
