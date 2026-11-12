@@ -1,6 +1,9 @@
 """Offline National cancel/replacement event XML and signature regression."""
 from __future__ import annotations
 
+import base64
+import gzip
+import json
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
@@ -13,6 +16,7 @@ from cryptography.x509.oid import NameOID
 from lxml import etree
 
 from kordena_fiscal.domain import ExecutionScope, FiscalEnvironment, FiscalValidationError
+from kordena_fiscal.gateway.nfse_national_event_envelope import build_national_event_post_body
 from kordena_fiscal.issuance.nfse_national_events import (
     NationalEventIntent,
     NationalEventType,
@@ -144,3 +148,19 @@ def test_national_event_rejects_production_scope_and_naive_clock() -> None:
         ))
     with pytest.raises(FiscalValidationError, match="timezone aware"):
         replace(intent, occurred_at=datetime(2026, 11, 12, 12, 0))
+
+
+@pytest.mark.parametrize("kind", [
+    NationalEventType.CANCEL, NationalEventType.CANCEL_BY_REPLACEMENT,
+])
+def test_national_event_transport_message_is_signed_compressed_and_unsent(
+    kind: NationalEventType,
+) -> None:
+    intent = _intent(kind)
+    body = json.loads(build_national_event_post_body(intent, _material()))
+    assert set(body) == {"pedidoRegistroEventoXmlGZipB64"}
+    signed = gzip.decompress(base64.b64decode(body["pedidoRegistroEventoXmlGZipB64"]))
+    national_event_validator().validate_document(signed)
+    root = etree.fromstring(signed)
+    assert root.find(f"{{{_NS}}}infPedReg").get("Id") == intent.event_request_id
+    assert root.find(f"{{{_DS}}}Signature") is not None
