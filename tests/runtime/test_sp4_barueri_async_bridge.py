@@ -17,6 +17,9 @@ from kordena_fiscal.domain import (
     TaxRegimeCode,
 )
 from kordena_fiscal.gateway.authorization import AuthorizationStatus
+from kordena_fiscal.gateway.barueri_official_return_file import (
+    BarueriConvertedNfseEvidence,
+)
 from kordena_fiscal.gateway.barueri_pmb004_homologation import (
     BarueriPmb004HomologationTransport,
     BarueriReceipt,
@@ -107,6 +110,12 @@ def _setup() -> tuple[object, Mock, Mock, Mock, NfseAuthorizationRequest, Sp4Ori
         verify_fixed_width_rps_identity=Mock(),
         load_approved_remittance_protocol=Mock(return_value="PROTOCOL42"),
         interpret_official_result=interpreter,
+        validate_return_file=Mock(return_value=BarueriConvertedNfseEvidence(
+            remittance="20261113001", note_number="0008765", note_series="NF",
+            verification_code="VERIFIER", access_key="35" + "0" * 48,
+            rps_number="0000000042", rps_series="NF",
+            service_total=Decimal("150.00"), return_file=b"synthetic-return",
+        )),
     )
     return ports, submit, status, download, request, original
 
