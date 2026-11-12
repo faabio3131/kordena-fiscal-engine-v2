@@ -194,6 +194,7 @@ class NfseNacionalHomologationGateway:
             raise OfficialNfseTransportError("Resposta SEFIN sem homologação válida") from None
 
         key = result.get("chaveAcesso")
+        authorized_xml: bytes | None = None
         if isinstance(key, str) and key:
             # The access key alone is not proof of an authorized invoice.
             # The SEFIN must provide the corresponding decompressible XML.
@@ -201,6 +202,9 @@ class NfseNacionalHomologationGateway:
             parsed = parse_nfse_homologation_response(response)
             if parsed.get("chaveAcesso") != key:
                 raise OfficialNfseTransportError("NFS-e autorizada com chave divergente")
+            authorized_xml = parsed["xml"].encode("utf-8")
+            if not authorized_xml or len(authorized_xml) > _MAX_RESPONSE:
+                raise OfficialNfseTransportError("XML fiscal autorizado ausente ou excessivo")
             status = AuthorizationStatus.AUTHORIZED
             kwargs = {"invoice_reference": key[:512]}
         else:
@@ -227,6 +231,7 @@ class NfseNacionalHomologationGateway:
             provider_request_id=str(result["idDps"])[:512]
             if isinstance(result.get("idDps"), str) else None,
             invoice_reference=kwargs.get("invoice_reference"),
+            authorized_xml=authorized_xml,
             rejection_code=kwargs.get("rejection_code"),
             rejection_message=kwargs.get("rejection_message"),
         )
