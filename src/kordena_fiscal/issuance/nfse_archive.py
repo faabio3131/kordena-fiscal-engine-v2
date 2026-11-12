@@ -12,6 +12,7 @@ from kordena_fiscal.domain import (
     BrazilianJurisdiction,
     CnaeCode,
     Cnpj,
+    Cpf,
     ExecutionScope,
     FiscalAddress,
     FiscalProfile,
@@ -23,7 +24,10 @@ from kordena_fiscal.domain import (
     TaxRegimeCode,
 )
 
-from .nfe_nfse import NfseAuthorizationRequest, NfseCanonicalDocument, NfseServiceLine
+from .nfe_nfse import (
+    NfseAuthorizationRequest, NfseCanonicalDocument, NfseForeignAddress,
+    NfseServiceLine, NfseServiceTaker,
+)
 
 NFSE_PREPARED_MEDIA_TYPE = "application/vnd.nfcore.prepared-nfse.v1+json"
 
@@ -91,6 +95,48 @@ def encode_prepared_nfse(request: NfseAuthorizationRequest) -> bytes:
             for line in document.services
         ],
         "service_taker_reference": document.service_taker_reference,
+        "service_taker": None if document.service_taker is None else {
+            "tax_id_type": (
+                "cnpj" if isinstance(document.service_taker.tax_id, Cnpj)
+                else "cpf" if isinstance(document.service_taker.tax_id, Cpf)
+                else "nif" if document.service_taker.nif is not None else "cNaoNIF"
+            ),
+            "tax_id": (
+                document.service_taker.tax_id.value
+                if document.service_taker.tax_id is not None else None
+            ),
+            "nif": document.service_taker.nif,
+            "no_nif_reason": document.service_taker.no_nif_reason,
+            "legal_name": document.service_taker.legal_name,
+            "municipal_registration": document.service_taker.municipal_registration,
+            "address": (
+                None if document.service_taker.address is None else (
+                    {
+                        "type": "foreign",
+                        "country_code": document.service_taker.address.country_code,
+                        "postal_code": document.service_taker.address.postal_code,
+                        "city": document.service_taker.address.city,
+                        "region": document.service_taker.address.region,
+                        "street": document.service_taker.address.street,
+                        "number": document.service_taker.address.number,
+                        "district": document.service_taker.address.district,
+                        "complement": document.service_taker.address.complement,
+                    } if isinstance(document.service_taker.address, NfseForeignAddress) else {
+                        "type": "national",
+                        "street": document.service_taker.address.street,
+                        "number": document.service_taker.address.number,
+                        "district": document.service_taker.address.district,
+                        "municipality_name": document.service_taker.address.municipality_name,
+                        "state_code": document.service_taker.address.jurisdiction.state_code,
+                        "municipality_ibge_code": (
+                            document.service_taker.address.jurisdiction.municipality_ibge_code
+                        ),
+                        "postal_code": document.service_taker.address.postal_code,
+                        "complement": document.service_taker.address.complement,
+                    }
+                )
+            ),
+        },
         "schema_version": document.schema_version,
         "dps_series": document.dps_series,
         "dps_number": document.dps_number,
@@ -205,6 +251,63 @@ def decode_prepared_nfse(content: bytes, *, scope: ExecutionScope) -> NfseAuthor
             for raw in raw_services
             for item in (_mapping(raw, "service"),)
         )
+        taker = None
+        if root.get("service_taker") is not None:
+            raw_taker = _mapping(root["service_taker"], "service_taker")
+            kind = _text(raw_taker["tax_id_type"], "service_taker.tax_id_type")
+            tax_id = None
+            nif = None
+            no_nif_reason = None
+            if kind == "cnpj":
+                tax_id = Cnpj(_text(raw_taker["tax_id"], "service_taker.tax_id"))
+            elif kind == "cpf":
+                tax_id = Cpf(_text(raw_taker["tax_id"], "service_taker.tax_id"))
+            elif kind == "nif":
+                nif = _text(raw_taker["nif"], "service_taker.nif")
+            elif kind == "cNaoNIF":
+                no_nif_reason = _text(raw_taker["no_nif_reason"], "service_taker.no_nif_reason")
+            else:
+                raise FiscalValidationError("Unsupported NFS-e taker tax identity")
+            taker_address = None
+            if raw_taker.get("address") is not None:
+                ta = _mapping(raw_taker["address"], "service_taker.address")
+                address_type = _text(ta["type"], "taker.address.type")
+                if address_type == "foreign":
+                    taker_address = NfseForeignAddress(
+                        country_code=_text(ta["country_code"], "taker.country_code"),
+                        postal_code=_text(ta["postal_code"], "taker.postal_code"),
+                        city=_text(ta["city"], "taker.city"),
+                        region=_text(ta["region"], "taker.region"),
+                        street=_text(ta["street"], "taker.street"),
+                        number=_text(ta["number"], "taker.number"),
+                        district=_text(ta["district"], "taker.district"),
+                        complement=_optional_text(ta.get("complement"), "taker.complement"),
+                    )
+                elif address_type == "national":
+                    taker_address = FiscalAddress(
+                        street=_text(ta["street"], "taker.street"),
+                        number=_text(ta["number"], "taker.number"),
+                        district=_text(ta["district"], "taker.district"),
+                        municipality_name=_text(ta["municipality_name"], "taker.municipality"),
+                        jurisdiction=BrazilianJurisdiction(
+                            _text(ta["state_code"], "taker.state_code"),
+                            _text(ta["municipality_ibge_code"], "taker.municipality_ibge_code"),
+                        ),
+                        postal_code=_text(ta["postal_code"], "taker.postal_code"),
+                        complement=_optional_text(ta.get("complement"), "taker.complement"),
+                    )
+                else:
+                    raise FiscalValidationError("Unsupported NFS-e taker address type")
+            taker = NfseServiceTaker(
+                tax_id=tax_id,
+                legal_name=_text(raw_taker["legal_name"], "taker.legal_name"),
+                address=taker_address,
+                municipal_registration=_optional_text(
+                    raw_taker.get("municipal_registration"), "taker.municipal_registration"
+                ),
+                nif=nif,
+                no_nif_reason=no_nif_reason,
+            )
         document = NfseCanonicalDocument(
             document_id=_text(root["document_id"], "document_id"),
             scope=scope,
@@ -224,6 +327,7 @@ def decode_prepared_nfse(content: bytes, *, scope: ExecutionScope) -> NfseAuthor
                 root.get("service_taker_reference"), "service_taker_reference"
             ),
             schema_version=root["schema_version"],
+            service_taker=taker,
             dps_series=root.get("dps_series", 1),
             dps_number=root.get("dps_number"),
         )
