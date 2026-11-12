@@ -143,7 +143,7 @@ class BarueriRpsBatch:
             raise BarueriContractError("PMB004 requires each RPS and its RTC ADN record")
         footer = records[-1]
         if (
-            not footer[1:].isascii() or not footer[1:].isdecimal()
+            not footer[1:].isascii() or not footer[1:].isdigit()
             or int(footer[1:8]) != len(records)
         ):
             raise BarueriContractError("PMB004 trailer count or monetary totals are invalid")
