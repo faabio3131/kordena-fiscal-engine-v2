@@ -246,7 +246,7 @@ def test_mg_national_channel_generates_signed_schema_valid_dps_envelope(
     """Offline synthetic DPS envelope tests: no official transmission claimed."""
     request = _mg_request(ibge, municipality)
     signed = build_signed_dps(request, _certificate())
-    national_dps_validator("1.00").validate_document(signed)
+    national_dps_validator("1.01").validate_document(signed)
     payload = encode_signed_dps(
         signed,
         issuer_cnpj=request.document.issuer.cnpj.value,
