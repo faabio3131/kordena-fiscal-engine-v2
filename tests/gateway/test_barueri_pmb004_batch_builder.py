@@ -37,6 +37,7 @@ def _detail() -> bytes:
     data[39:40] = b"E"
     data[457:463] = b"000001"
     data[463:478] = b"000000000015000"
+    data[483:498] = b"000000000000000"
     assert len(data) == 1970
     return bytes(data)
 
