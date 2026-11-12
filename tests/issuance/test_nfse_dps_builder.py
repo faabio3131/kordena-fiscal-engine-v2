@@ -43,7 +43,10 @@ from kordena_fiscal.numbering import (
     InternalFiscalSequenceStream,
 )
 from kordena_fiscal.vault import EphemeralCertificateMaterial
-from kordena_fiscal.xml.nfse_nacional_schema import national_dps_validator
+from kordena_fiscal.xml.nfse_nacional_schema import (
+    NT009_RESTRICTED_PROFILE,
+    national_dps_validator,
+)
 from kordena_fiscal.xml.schema import XmlSchemaValidationError
 
 _NFSE_NS = "http://www.sped.fazenda.gov.br/nfse"
@@ -252,8 +255,12 @@ def test_build_signed_dps_rejects_municipal_registration_over_limit() -> None:
 
 
 def _bh_request(detail: str | None, nbs: str | None = "123456789") -> NfseAuthorizationRequest:
+    original = _document()
+    scoped = replace(original.scope, host_namespace="nfcore-bh-synthetic")
     document = replace(
-        _document(),
+        original,
+        scope=scoped,
+        issuer=replace(original.issuer, scope=scoped),
         service_jurisdiction=BrazilianJurisdiction("MG", "3106200"),
         services=(_service(municipal_taxation_detail=detail, national_service_nbs=nbs),),
         special_tax_regime="0",
@@ -279,7 +286,7 @@ def test_bh_requires_reviewed_municipal_taxation_detail() -> None:
 
 def test_bh_pins_municipal_taxation_detail_in_schema_valid_signed_dps() -> None:
     signed = _signed_bh(_bh_request("001"))
-    national_dps_validator("1.01").validate_document(signed)
+    national_dps_validator("1.01", profile=NT009_RESTRICTED_PROFILE).validate_document(signed)
     assert etree.fromstring(signed).findtext(
         f".//{{{_NFSE_NS}}}cServ/{{{_NFSE_NS}}}cTribMun"
     ) == "001"
@@ -311,7 +318,7 @@ def test_bh_requires_reviewed_nbs_in_2026() -> None:
 
 def test_bh_national_dps_contains_provided_nbs_after_description() -> None:
     signed = _signed_bh(_bh_request("001", nbs="123456789"))
-    national_dps_validator("1.01").validate_document(signed)
+    national_dps_validator("1.01", profile=NT009_RESTRICTED_PROFILE).validate_document(signed)
     root = etree.fromstring(signed)
     c_serv = root.find(f".//{{{_NFSE_NS}}}cServ")
     assert [etree.QName(child).localname for child in c_serv] == [
@@ -398,7 +405,7 @@ def test_bh_national_dps_uses_current_official_xsd_version() -> None:
     signed = _signed_bh(_bh_request("001"))
     root = etree.fromstring(signed)
     assert root.get("versao") == "1.01"
-    national_dps_validator("1.01").validate_document(signed)
+    national_dps_validator("1.01", profile=NT009_RESTRICTED_PROFILE).validate_document(signed)
 
 
 def test_bh_requires_explicit_regime_attestation() -> None:
@@ -442,7 +449,7 @@ def test_bh_schema_101_requires_canonical_domestic_issuer_address() -> None:
     assert [etree.QName(child).localname for child in trib_mun] == [
         "tribISSQN", "tpRetISSQN", "pAliq",
     ]
-    national_dps_validator("1.01").validate_document(signed)
+    national_dps_validator("1.01", profile=NT009_RESTRICTED_PROFILE).validate_document(signed)
 
 
 def test_bh_national_series_above_official_2026_limit_fails_schema() -> None:
