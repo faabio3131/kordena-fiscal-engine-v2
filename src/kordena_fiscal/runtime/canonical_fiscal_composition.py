@@ -612,6 +612,7 @@ def build_runtime_fiscal_handler_factory(
             configured_sp4_issuer, configured_sp4_query = build_sp4_canonical_clients(
                 canonical_resolver=_CanonicalWebissProviderResolver(application),
                 configured_municipalities=reviewed_sp4_municipal_ports,
+                canonical_rps_loader=application.load_sp4_original_rps,
             )
         if (
             national_adapter is not None or extrema_adapter is not None
