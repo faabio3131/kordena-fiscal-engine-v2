@@ -186,3 +186,51 @@ def test_osasco_municipal_manual_v21_preserves_rtc_leading_zeroes() -> None:
     assert root.findtext(f".//{{{_ISS}}}CodigoNBS") == "1.2001.10.00"
     assert root.findtext(f".//{{{_ISS}}}IdLocalIncidencia") == "3"
     assert root.findtext(f".//{{{_ISS}}}IndOperacao") == "050101"
+
+
+def test_osasco_2026_construction_service_address_preserves_official_order() -> None:
+    original = _original()
+    extra = replace(
+        _fields(), service_district="Centro",
+        service_postal_code="06018090", service_street="Rua das Obras",
+        service_number="250", service_complement="Bloco B",
+        construction_code="OBRA123",
+    )
+    xml = build_osasco_rtc_issue_xml(
+        request=_request(original), original=original, fields=extra,
+    )
+    root = etree.fromstring(xml)
+    note = root.find(f".//{{{_MSG}}}NotaFiscal_RTC")
+    assert note is not None
+    local = [(etree.QName(n).localname, n.text) for n in note
+             if n.tag.startswith("{" + _ISS + "}")]
+    keys = [name for name, _ in local]
+    assert keys.index("BairroPrestacaoServico") < keys.index("ChaveAutenticacao")
+    assert keys.index("CEPPrestacaoServico") < keys.index("ChaveAutenticacao")
+    assert keys.index("CidadePrestacaoServico") < keys.index("CodObra")
+    assert keys.index("CodObra") < keys.index("CodigoCidadeIBGEPrestacaoServico")
+    assert keys.index("ComplementoPrestacaoServico") < keys.index("DataRecibo")
+    assert keys.index("EnderecoPrestacaoServico") < keys.index("EstadoPrestacaoServico")
+    assert keys.index("NumeroPrestacaoServico") < keys.index("NumeroRecibo")
+    assert dict(local)["CodObra"] == "OBRA123"
+    assert dict(local)["CEPPrestacaoServico"] == "06018090"
+
+
+@pytest.mark.parametrize("change", [
+    {"service_district": "Centro"},
+    {"service_postal_code": "06018090"},
+    {"service_street": "Rua Nova"},
+    {"service_number": "250"},
+    {"service_complement": "Sala 2"},
+    {"service_district": "Centro", "service_postal_code": "0601809",
+     "service_street": "Rua Nova", "service_number": "250"},
+])
+def test_osasco_conditional_location_cannot_be_partially_prepared(
+    change: dict[str, str],
+) -> None:
+    original = _original()
+    with pytest.raises(OsascoRtcIssueError):
+        build_osasco_rtc_issue_xml(
+            request=_request(original), original=original,
+            fields=replace(_fields(), **change),
+        )
