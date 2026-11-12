@@ -39,6 +39,7 @@ def build_barueri_single_rps_batch(
     municipal_registration: str,
     rps_detail: bytes, rtc_adn_detail: bytes,
     retained_tax_record: bytes | None = None,
+    retained_tax_records: Sequence[bytes] = (),
     optional_record_5: Sequence[bytes] = (),
 ) -> BarueriRpsBatch:
     """Assemble one immutable, source-scoped PMB004 fiscal remittance.
@@ -60,10 +61,26 @@ def build_barueri_single_rps_batch(
         raise BarueriBatchBuilderError("Original Barueri municipal RPS authority unavailable")
     detail = _row(rps_detail, "RPS", b"2RPS  ", 1970)
     companion = _row(rtc_adn_detail, "RTC/ADN", b"4", 531)
-    if retained_tax_record is not None:
-        retention = _row(retained_tax_record, "retention", b"3", 18)
-    else:
-        retention = None
+    if retained_tax_record is not None and retained_tax_records:
+        raise BarueriBatchBuilderError("Ambiguous Barueri retention inputs")
+    supplied = (
+        (retained_tax_record,) if retained_tax_record is not None
+        else retained_tax_records
+    )
+    if not isinstance(supplied, (tuple, list)):
+        raise BarueriBatchBuilderError("Barueri retention entries must be a sequence")
+    retentions = [
+        _row(item, "retention", b"3", 18)
+        for item in supplied
+    ]
+    seen: set[bytes] = set()
+    for row in retentions:
+        code = row[1:3]
+        if code not in (b"01", b"02", b"03", b"04", b"05", b"VN"):
+            raise BarueriBatchBuilderError("Unrecognized Barueri Type 3 fiscal code")
+        if code in seen or not row[3:18].isdigit() or int(row[3:18]) <= 0:
+            raise BarueriBatchBuilderError("Invalid or duplicate Type 3 fiscal value")
+        seen.add(code)
     extra = [
         _row(item, "optional VAT", b"5", 697)
         for item in optional_record_5
@@ -86,19 +103,24 @@ def build_barueri_single_rps_batch(
     cents = quantity * unit_cents
     if Decimal(cents) / 100 != source.gross_amount or cents >= 10**15:
         raise BarueriBatchBuilderError("Official Barueri service total differs from source")
-    retained_cents = (
-        int(retention[3:18]) if retention is not None and retention[3:18].isdigit()
-        else 0
+    retained_cents = sum(int(row[3:18]) for row in retentions)
+    federal_cents = sum(
+        int(row[3:18]) for row in retentions if row[1:3] != b"VN"
     )
-    if retained_cents >= 10**15:
-        raise BarueriBatchBuilderError("Barueri retention total overflow")
+    if retained_cents >= 10**15 or federal_cents >= 10**15:
+        raise BarueriBatchBuilderError("Barueri Type 3 fiscal total overflow")
+    if retentions:
+        withheld = detail[483:498]
+        if not withheld.isdigit() or int(withheld) != federal_cents:
+            raise BarueriBatchBuilderError(
+                "Barueri Type 2 withheld tax conflicts with Type 3 details"
+            )
     header = (
         b"1" + municipal_registration.encode("ascii")
         + b"PMB004" + source.municipal_batch_id.encode("ascii")
     )
     rows = [header, detail]
-    if retention is not None:
-        rows.append(retention)
+    rows.extend(retentions)
     rows.append(companion)
     rows.extend(extra)
     line_count = len(rows) + 1
