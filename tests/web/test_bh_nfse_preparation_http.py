@@ -25,6 +25,7 @@ from kordena_fiscal.domain import (
 from kordena_fiscal.gateway.nfse_nacional_homologation import (
     NACIONAL_HOMOLOGATION_PROVIDER_ID,
 )
+from kordena_fiscal.numbering import FiscalSequenceKey, InternalFiscalSequenceStream
 from kordena_fiscal.persistence import SqliteFiscalDatabase
 from kordena_fiscal.security.human_identity import (
     HumanAccount,
@@ -177,14 +178,12 @@ def test_bh_http_fiscal_preflight_refuses_invalid_scope_or_review(
     assert result.status_code in {400, 403, 409}
     with db() as uow:
         assert uow.sequences.last_reserved(
-            __import__("kordena_fiscal.numbering", fromlist=["FiscalSequenceKey"]).FiscalSequenceKey.from_scope(
+            FiscalSequenceKey.from_scope(
                 ExecutionScope(
                     "tenant-bh", "unit-bh", FiscalEnvironment.HOMOLOGATION,
                     "test", "fm-nfcore",
                 ),
-                model=__import__(
-                    "kordena_fiscal.numbering", fromlist=["InternalFiscalSequenceStream"]
-                ).InternalFiscalSequenceStream.NFSE_DPS,
+                model=InternalFiscalSequenceStream.NFSE_DPS,
                 series=1,
             )
         ) is None
