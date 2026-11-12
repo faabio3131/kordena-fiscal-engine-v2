@@ -62,7 +62,7 @@ def test_municipal_normal_issuer_with_persisted_binding_can_reach_opt_in_port(
     assert router.query(request) is token
     assert authorization.authorize.call_count == 1
     assert query.query.call_count == 1
-    assert application.resolve_configured_provider_id.call_count == 2
+    assert application.resolve_configured_provider_id.call_count == 3
 
 
 @pytest.mark.parametrize("provider,ibge", sorted(_SP4_MUNICIPAL_PROVIDER_IBGE.items()))
@@ -142,3 +142,21 @@ def test_out_of_state_issuer_cannot_reach_sp4_municipal_channel() -> None:
     req.document.issuer.address.jurisdiction = BrazilianJurisdiction("MG", "3106200")
     with pytest.raises(FiscalValidationError, match="requires SP"):
         _require_sp4_municipal_channel(req)
+
+
+def test_municipal_query_needs_a_separate_durable_query_binding() -> None:
+    from kordena_fiscal.control_plane.commercial import ConfiguredFiscalOperation
+
+    router, application, authorization, query = _router(
+        "osasco-rtc-homologation"
+    )
+    application.resolve_configured_provider_id.side_effect = (
+        lambda **kw: "not-authorized-for-query"
+        if kw["operation"] == ConfiguredFiscalOperation.QUERY.value
+        else "osasco-rtc-homologation"
+    )
+    req = _request("3534401", TaxRegimeCode.NORMAL, date(2026, 11, 13))
+    with pytest.raises(FiscalValidationError, match="read-only provider binding mismatch"):
+        router.query(req)
+    authorization.authorize.assert_not_called()
+    query.query.assert_not_called()
