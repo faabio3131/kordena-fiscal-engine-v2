@@ -12,8 +12,11 @@ from typing import Protocol
 from kordena_fiscal.documents import CanonicalFiscalDocument
 from kordena_fiscal.domain import (
     BrazilianJurisdiction,
+    Cnpj,
+    Cpf,
     ElectronicInvoiceModel,
     ExecutionScope,
+    FiscalAddress,
     FiscalDocumentKind,
     FiscalDomainError,
     FiscalProfile,
@@ -216,6 +219,78 @@ class NfseDocumentTotals:
 
 
 @dataclass(frozen=True, slots=True)
+class NfseForeignAddress:
+    """National DPS endExt fields; no invented Brazilian municipality authority."""
+
+    country_code: str
+    postal_code: str
+    city: str
+    region: str
+    street: str
+    number: str
+    district: str
+    complement: str | None = None
+
+    def __post_init__(self) -> None:
+        country = _required(self.country_code, "taker.country_code", 2)
+        if len(country) != 2 or not country.isascii() or not country.isalpha() or country != country.upper():
+            raise FiscalValidationError("Foreign country must use two uppercase ISO letters")
+        if country == "BR":
+            raise FiscalValidationError("Brazilian taker address requires FiscalAddress")
+        object.__setattr__(self, "country_code", country)
+        for field_name, limit in (
+            ("postal_code", 11), ("city", 60), ("region", 60),
+            ("street", 255), ("number", 60), ("district", 60),
+        ):
+            object.__setattr__(
+                self, field_name,
+                _required(getattr(self, field_name), f"taker.{field_name}", limit),
+            )
+        object.__setattr__(
+            self, "complement", _optional(self.complement, "taker.complement", 156)
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class NfseServiceTaker:
+    """Single verified DPS toma identity: CPF/CNPJ, NIF or official cNaoNIF."""
+
+    tax_id: Cnpj | Cpf | None
+    legal_name: str
+    address: FiscalAddress | NfseForeignAddress | None = None
+    municipal_registration: str | None = None
+    nif: str | None = None
+    no_nif_reason: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.tax_id is not None and not isinstance(self.tax_id, (Cnpj, Cpf)):
+            raise FiscalValidationError("NFS-e taker requires a validated tax identity")
+        if sum((
+            self.tax_id is not None, self.nif is not None, self.no_nif_reason is not None,
+        )) != 1:
+            raise FiscalValidationError("NFS-e taker requires exactly one tax identity")
+        if self.nif is not None:
+            object.__setattr__(self, "nif", _required(self.nif, "taker.nif", 40))
+        if self.no_nif_reason is not None and self.no_nif_reason not in {"0", "1", "2"}:
+            raise FiscalValidationError("NFS-e cNaoNIF must be official code 0, 1 or 2")
+        if self.address is not None and not isinstance(
+            self.address, (FiscalAddress, NfseForeignAddress)
+        ):
+            raise FiscalValidationError("NFS-e taker address is invalid")
+        if isinstance(self.address, NfseForeignAddress) and self.tax_id is not None:
+            raise FiscalValidationError("Foreign taker address requires NIF or cNaoNIF")
+        if isinstance(self.address, FiscalAddress) and self.tax_id is None:
+            raise FiscalValidationError("NIF/cNaoNIF taker must use foreign address")
+        object.__setattr__(
+            self, "legal_name", _required(self.legal_name, "taker.legal_name", 300)
+        )
+        object.__setattr__(
+            self, "municipal_registration",
+            _optional(self.municipal_registration, "taker.municipal_registration", 15),
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class NfseCanonicalDocument:
     """Canonical NFS-e service snapshot kept separate from merchandise-line semantics."""
 
@@ -229,6 +304,7 @@ class NfseCanonicalDocument:
     services: tuple[NfseServiceLine, ...]
     service_taker_reference: str | None = None
     schema_version: int = 1
+    service_taker: NfseServiceTaker | None = None
     dps_series: int = 1
     dps_number: int | None = None
 
@@ -263,6 +339,8 @@ class NfseCanonicalDocument:
             "service_taker_reference",
             _optional(self.service_taker_reference, "service_taker_reference", 256),
         )
+        if self.service_taker is not None and not isinstance(self.service_taker, NfseServiceTaker):
+            raise FiscalValidationError("service_taker must be NfseServiceTaker")
         if not isinstance(self.schema_version, int) or isinstance(self.schema_version, bool):
             raise FiscalValidationError("schema_version must be an integer")
         if self.schema_version < 1:
@@ -356,6 +434,40 @@ def build_nfse_request_fingerprint(document: NfseCanonicalDocument) -> str:
             for line in document.services
         ],
     }
+    if document.service_taker is not None:
+        taker = document.service_taker
+        address = taker.address
+        taker_payload: dict[str, object] = {
+            "tax_id_type": (
+                "cnpj" if isinstance(taker.tax_id, Cnpj)
+                else "cpf" if isinstance(taker.tax_id, Cpf)
+                else "nif" if taker.nif is not None else "cNaoNIF"
+            ),
+            "tax_id": taker.tax_id.value if taker.tax_id is not None else None,
+            "nif": taker.nif,
+            "no_nif_reason": taker.no_nif_reason,
+            "legal_name": taker.legal_name,
+            "municipal_registration": taker.municipal_registration,
+        }
+        if isinstance(address, FiscalAddress):
+            taker_payload["address"] = {
+                "type": "national", "street": address.street, "number": address.number,
+                "district": address.district, "municipality_name": address.municipality_name,
+                "state_code": address.jurisdiction.state_code,
+                "municipality_ibge_code": address.jurisdiction.municipality_ibge_code,
+                "postal_code": address.postal_code, "complement": address.complement,
+            }
+        elif isinstance(address, NfseForeignAddress):
+            taker_payload["address"] = {
+                "type": "foreign", "country_code": address.country_code,
+                "postal_code": address.postal_code, "city": address.city,
+                "region": address.region, "street": address.street,
+                "number": address.number, "district": address.district,
+                "complement": address.complement,
+            }
+        else:
+            taker_payload["address"] = None
+        payload["service_taker"] = taker_payload
     # Preserve the historic fingerprint of unnumbered/archived requests.
     # On new preparations the UoW supplies a legally reserved DPS serial,
     # and this serial is bound to the immutable request fingerprint.
