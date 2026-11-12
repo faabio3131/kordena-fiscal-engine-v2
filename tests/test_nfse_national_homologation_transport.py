@@ -99,14 +99,50 @@ def test_nfse_rejects_missing_xml_signature() -> None:
 
 
 def test_nfse_parses_offline_authorization_receipt() -> None:
-    xml = b"<NFSe xmlns='http://www.sped.fazenda.gov.br/nfse'/>"
+    key = "35" + "0" * 48
+    xml = f'<NFSe xmlns="{_NS}"><infNFSe Id="NFS{key}"/></NFSe>'.encode()
     response = json.dumps({
-        "chaveAcesso": "35000000000000000000000000000000000000000000000000",
+        "chaveAcesso": key,
         "nfseXmlGZipB64": base64.b64encode(gzip.compress(xml)).decode("ascii"),
     }).encode("utf-8")
     parsed = parse_nfse_homologation_response(response)
     assert parsed["status"] == "authorized"
+    assert parsed["chaveAcesso"] == key
     assert parsed["xml"] == xml.decode()
+
+
+@pytest.mark.parametrize(
+    ("key", "xml_key"),
+    [
+        ("35" + "0" * 48, "35" + "1" * 48),
+        ("35" + "0" * 42, "35" + "0" * 42),
+        ("AA" + "0" * 48, "AA" + "0" * 48),
+    ],
+)
+def test_national_receipt_refuses_mismatched_key_or_invalid_key_format(
+    key: str, xml_key: str,
+) -> None:
+    xml = f'<NFSe xmlns="{_NS}"><infNFSe Id="NFS{xml_key}"/></NFSe>'.encode()
+    response = json.dumps({
+        "chaveAcesso": key,
+        "nfseXmlGZipB64": base64.b64encode(gzip.compress(xml)).decode("ascii"),
+    }).encode("utf-8")
+    with pytest.raises(OfficialNfseTransportError, match="XML retornado"):
+        parse_nfse_homologation_response(response)
+
+
+@pytest.mark.parametrize("xml", [
+    b"<other/>",
+    b'<NFSe xmlns="https://invalid.example"/>',
+    b'<!DOCTYPE NFSe><NFSe xmlns="http://www.sped.fazenda.gov.br/nfse"/>',
+])
+def test_national_receipt_refuses_unrelated_or_doctype_xml(xml: bytes) -> None:
+    response = json.dumps({
+        "chaveAcesso": "35" + "0" * 48,
+        "nfseXmlGZipB64": base64.b64encode(gzip.compress(xml)).decode("ascii"),
+    }).encode("utf-8")
+    with pytest.raises(OfficialNfseTransportError, match="XML retornado"):
+        parse_nfse_homologation_response(response)
 
 
 def test_nfse_rejects_invalid_response_without_secret_echo() -> None:
