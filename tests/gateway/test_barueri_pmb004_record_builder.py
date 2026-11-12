@@ -19,6 +19,9 @@ from kordena_fiscal.gateway.barueri_pmb004_record_builder import (
 )
 from kordena_fiscal.gateway.sp4_municipal_canonical import Sp4OriginalRps
 from kordena_fiscal.issuance.nfe_nfse import NfseAuthorizationRequest
+from kordena_fiscal.runtime.sp4_municipal_request_factories import (
+    build_barueri_pmb004_issue_remittance_factory,
+)
 
 
 def _original() -> Sp4OriginalRps:
@@ -145,3 +148,15 @@ def test_ibs_cbs_cst_and_classification_must_agree() -> None:
             build_barueri_rtc_type4(
                 request=_request(original), original=original, fields=fields,
             )
+
+
+def test_pmb004_canonical_remittance_port_uses_reviewed_source() -> None:
+    original = _original()
+    factory = build_barueri_pmb004_issue_remittance_factory(
+        resolve_issue_fields=lambda _req, _src: _fields(),
+        resolve_municipal_registration=lambda _scope, _cnpj: "1234567",
+    )
+    batch = factory(_request(original), original)
+    assert batch.remittance == original.municipal_batch_id
+    assert batch.issuer_cnpj == original.issuer_cnpj
+    assert batch.rps_bytes.split(b"\\r\\n")[1][15:25] == b"0000000042"
