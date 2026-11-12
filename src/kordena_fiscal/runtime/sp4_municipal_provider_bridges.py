@@ -367,15 +367,14 @@ def build_jundiai_reviewed_ports(
             else "ConsultarNfseRpsEnvio"
         )
         ns = "{http://www.giss.com.br/tipos-v2_04.xsd}"
-        source_ns = (
-            "{http://www.giss.com.br/enviar-lote-rps-envio-v2_04.xsd}"
-            if method == "RecepcionarLoteRps"
+        # The lot's nested Rps/IdentificacaoRps is a complex *type*.
+        # The direct query-level IdentificacaoRps is in the REQUEST namespace.
+        identifier_ns = (
+            ns if method == "RecepcionarLoteRps"
             else "{http://www.giss.com.br/consultar-nfse-rps-envio-v2_04.xsd}"
         )
-        # Giss uses the METHOD namespace for request-level IdentificacaoRps,
-        # and the separate tipos-v2_04.xsd namespace for Numero and Serie.
-        rps_numbers = root.findall(f".//{source_ns}IdentificacaoRps/{ns}Numero")
-        rps_series = root.findall(f".//{source_ns}IdentificacaoRps/{ns}Serie")
+        rps_numbers = root.findall(f".//{identifier_ns}IdentificacaoRps/{ns}Numero")
+        rps_series = root.findall(f".//{identifier_ns}IdentificacaoRps/{ns}Serie")
         if (
             etree.QName(root).localname != expected_root
             or bool(getattr(root.getroottree().docinfo, "doctype", ""))
