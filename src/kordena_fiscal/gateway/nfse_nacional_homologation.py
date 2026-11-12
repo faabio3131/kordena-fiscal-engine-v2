@@ -29,12 +29,11 @@ from kordena_fiscal.gateway.nfse_national_homologation import (
     build_nfse_dps_request,
     parse_nfse_homologation_response,
 )
-from kordena_fiscal.numbering import FiscalNumberReservation
-
 from kordena_fiscal.issuance.nfe_nfse import (
     NfseAuthorizationRequest,
     NfseAuthorizationResult,
 )
+from kordena_fiscal.numbering import FiscalNumberReservation
 from kordena_fiscal.vault import EphemeralCertificateMaterial
 from kordena_fiscal.vault.a1_preflight import validate_a1_for_issuer
 
