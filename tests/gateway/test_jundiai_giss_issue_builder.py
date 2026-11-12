@@ -276,3 +276,29 @@ def test_giss_signer_cannot_inject_foreign_invoice_field() -> None:
             sign_xml=inject, validate_signed_xml=validated,
         )
     validated.assert_not_called()
+
+
+def test_2026_municipal_guide_allows_invoice_without_optional_nbs() -> None:
+    original = _original()
+    xml = build_jundiai_giss_issue_xml(
+        request=_request(original), original=original,
+        fields=replace(_fields(), national_service_code=None),
+    )
+    root = etree.fromstring(xml)
+    assert root.find(".//" + _TYPES + "CodigoNbs") is None
+    assert root.find(".//" + _TYPES + "ValorServicos") is not None
+
+
+def test_2026_rtc_cannot_be_prepared_without_correlated_nbs() -> None:
+    original = _original()
+    fields = replace(
+        _fields(), national_service_code=None,
+        operation_indicator="050101", rtc_cst="000",
+        rtc_classification="000001", rtc_fin_nfse="0",
+        rtc_ind_dest="0", rtc_incidence_ibge="3525904",
+        rtc_taxable_base=Decimal("145.00"), rtc_ind_final="0",
+    )
+    with pytest.raises(JundiaiGissIssueError, match="requires NBS"):
+        build_jundiai_giss_issue_xml(
+            request=_request(original), original=original, fields=fields,
+        )
