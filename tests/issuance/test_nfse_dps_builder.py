@@ -44,6 +44,7 @@ from kordena_fiscal.numbering import (
 )
 from kordena_fiscal.vault import EphemeralCertificateMaterial
 from kordena_fiscal.xml.nfse_nacional_schema import national_dps_validator
+from kordena_fiscal.xml.schema import XmlSchemaValidationError
 
 _NFSE_NS = "http://www.sped.fazenda.gov.br/nfse"
 _INSTANT = datetime(2026, 11, 6, 12, 0, tzinfo=UTC)
@@ -440,3 +441,15 @@ def test_bh_schema_101_requires_canonical_domestic_issuer_address() -> None:
         "tribISSQN", "tpRetISSQN", "pAliq",
     ]
     national_dps_validator("1.01").validate_document(signed)
+
+
+def test_bh_national_series_above_official_2026_limit_fails_schema() -> None:
+    request = _bh_request("001")
+    key = FiscalSequenceKey.from_scope(
+        request.document.scope, model=InternalFiscalSequenceStream.NFSE_DPS, series=90000,
+    )
+    reserved = InMemoryFiscalSequenceStore().reserve_next(
+        key, FiscalSequencePolicy(),
+    )
+    with pytest.raises(XmlSchemaValidationError, match="serie"):
+        build_signed_dps(request, _certificate(), reservation=reserved)
