@@ -1,6 +1,7 @@
 """Unit tests for the National NFS-e DPS builder (build_signed_dps)."""
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
@@ -239,3 +240,44 @@ def test_build_signed_dps_rejects_municipal_registration_over_limit() -> None:
     document = _document(issuer=issuer)
     with pytest.raises(FiscalValidationError, match="15-character"):
         build_signed_dps(_request(document), _certificate())
+
+
+def _bh_request(detail: str | None) -> NfseAuthorizationRequest:
+    document = replace(
+        _document(),
+        service_jurisdiction=BrazilianJurisdiction("MG", "3106200"),
+        services=(_service(municipal_taxation_detail=detail),),
+    )
+    return _request(document)
+
+
+def test_bh_requires_reviewed_municipal_taxation_detail() -> None:
+    with pytest.raises(FiscalValidationError, match="Belo Horizonte requires"):
+        build_signed_dps(_bh_request(None), _certificate())
+
+
+def test_bh_pins_municipal_taxation_detail_in_schema_valid_signed_dps() -> None:
+    signed = build_signed_dps(_bh_request("001"), _certificate())
+    national_dps_validator("1.00").validate_document(signed)
+    assert etree.fromstring(signed).findtext(
+        f".//{{{_NFSE_NS}}}cServ/{{{_NFSE_NS}}}cTribMun"
+    ) == "001"
+
+
+@pytest.mark.parametrize("value", ["1", "0107", "ABC", "１２３"])
+def test_bh_rejects_invalid_municipal_detail(value: str) -> None:
+    with pytest.raises(FiscalValidationError, match="municipal_taxation_detail"):
+        _bh_request(value)
+
+
+def test_bh_municipal_detail_changes_fingerprint_not_idempotency_identity() -> None:
+    original, modified = _bh_request("001"), _bh_request("002")
+    assert original.request_fingerprint != modified.request_fingerprint
+    assert original.idempotency_key == modified.idempotency_key
+
+
+def test_non_bh_existing_builder_output_has_no_invented_c_trib_mun() -> None:
+    signed = build_signed_dps(_request(), _certificate())
+    assert etree.fromstring(signed).find(
+        f".//{{{_NFSE_NS}}}cServ/{{{_NFSE_NS}}}cTribMun"
+    ) is None
