@@ -176,7 +176,10 @@ def build_cajamar_reviewed_ports(
 
     return authority.wrap(
         lambda req, original: invoke(req, original, "EnviaLoteRps"),
-        lambda req, original: invoke(req, original, "ConsultaNfse"),
+        # A pending issuance has a durable original LOT/RPS, not yet an
+        # NFS-e number. ConsultaNfse requires an already assigned invoice
+        # identifier and cannot reconcile an ambiguous emission POST.
+        lambda req, original: invoke(req, original, "ConsultaLoteRps"),
     )
 
 
