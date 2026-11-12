@@ -356,6 +356,8 @@ def build_barueri_reviewed_ports(
             or batch.issuer_cnpj != original.issuer_cnpj
             or batch.tax_regime != req.document.issuer.tax_regime
             or batch.competence_date != original.competence_date
+            or original.municipal_batch_id is None
+            or batch.remittance != original.municipal_batch_id
         ):
             raise Sp4CanonicalMunicipalError("Barueri remittance conflicts with canonical RPS")
         verify_fixed_width_rps_identity(original, batch)
