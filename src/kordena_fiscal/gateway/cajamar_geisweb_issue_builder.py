@@ -98,13 +98,15 @@ def _validate_fields(fields: CajamarGeiswebIssueData) -> None:
         or fields.issuer_regime not in ("1", "2", "4", "6")
     ):
         raise CajamarGeiswebIssueError("Invalid reviewed GeisWeb tax classification")
+    exponent = fields.iss_rate.as_tuple().exponent if isinstance(fields.iss_rate, Decimal) else None
+    if exponent is not None and not isinstance(exponent, int):
+        raise CajamarGeiswebIssueError("Invalid reviewed GeisWeb ISS precision")
     if (
         not isinstance(fields.iss_rate, Decimal)
         or not fields.iss_rate.is_finite()
         or fields.iss_rate < 0
         or fields.iss_rate > 100
-        or not isinstance(fields.iss_rate.as_tuple().exponent, int)
-        or fields.iss_rate.as_tuple().exponent < -5
+        or (isinstance(exponent, int) and exponent < -5)
     ):
         raise CajamarGeiswebIssueError("Invalid reviewed GeisWeb ISS rate")
     _field(fields.service_city, "service city", 100)
@@ -166,8 +168,7 @@ def build_cajamar_issue_xml(
     base = _money(service.taxable_amount.amount, "ISS base")
     if service.taxable_amount.amount <= 0:
         raise CajamarGeiswebIssueError("Cajamar ISS base is missing")
-    namespaces: dict[str | None, str] = {None: _NS}
-    root = etree.Element(f"{{{_NS}}}EnviaLoteRps", nsmap=namespaces)
+    root = etree.Element(f"{{{_NS}}}EnviaLoteRps", nsmap={"geis": _NS})
     _add(root, "CnpjCpf", original.issuer_cnpj.value)
     _add(root, "NumeroLote", original.municipal_batch_id)
     rps = _node(root, "Rps")
