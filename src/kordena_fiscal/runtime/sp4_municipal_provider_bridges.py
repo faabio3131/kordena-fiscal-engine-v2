@@ -9,9 +9,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TypeVar
+from datetime import date
+from typing import Protocol, TypeVar
 
-from kordena_fiscal.domain import ExecutionScope
+from kordena_fiscal.domain import Cnpj, ExecutionScope, TaxRegimeCode
 from kordena_fiscal.gateway.barueri_pmb004_homologation import (
     BarueriPmb004HomologationTransport,
     BarueriReceipt,
@@ -42,7 +43,17 @@ from kordena_fiscal.issuance.nfe_nfse import NfseAuthorizationRequest
 
 from .sp4_municipal_canonical_composition import Sp4ReviewedMunicipalPorts
 
-P = TypeVar("P")
+class _PreparedSp4Operation(Protocol):
+    """Structural contract shared by the three distinct signed municipal DTOs."""
+
+    scope: ExecutionScope
+    issuer_cnpj: Cnpj
+    tax_regime: TaxRegimeCode
+    competence_date: date
+    method: str
+
+
+P = TypeVar("P", bound=_PreparedSp4Operation)
 
 
 @dataclass(frozen=True, slots=True)
