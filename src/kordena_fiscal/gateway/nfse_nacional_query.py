@@ -109,7 +109,9 @@ class NfseNacionalHomologationQueryGateway:
                 competence_date=doc.competence_date,
             )
         except FiscalValidationError:
-            raise OfficialNfseTransportError("National issuer regime/competence unavailable") from None
+            raise OfficialNfseTransportError(
+                "National issuer regime/competence unavailable"
+            ) from None
         dps_id = derive_national_dps_id(request)
         a1 = self._resolve_certificate(doc.scope, issuer.cnpj.value)
         validate_a1_for_issuer(
