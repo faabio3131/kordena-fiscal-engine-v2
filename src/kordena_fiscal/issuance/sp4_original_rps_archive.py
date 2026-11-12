@@ -35,7 +35,7 @@ _MAXIMUM = {
 
 def expected_sp4_batch(ibge: str, number: int) -> str | None:
     """Deterministic official-format lot/reference, never a random second ID."""
-    if ibge not in SP4_MUNICIPAL_PROVIDERS.values():
+    if ibge is None or ibge not in SP4_MUNICIPAL_PROVIDERS.values():
         raise FiscalValidationError("Unsupported SP4 original RPS issuer")
     if type(number) is not int or not 1 <= number <= _MAXIMUM[ibge]:
         raise FiscalValidationError("Original SP4 fiscal sequence exceeds city limit")
