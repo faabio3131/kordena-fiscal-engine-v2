@@ -255,6 +255,7 @@ def _bh_request(detail: str | None, nbs: str | None = "123456789") -> NfseAuthor
         _document(),
         service_jurisdiction=BrazilianJurisdiction("MG", "3106200"),
         services=(_service(municipal_taxation_detail=detail, national_service_nbs=nbs),),
+        special_tax_regime="0",
     )
     return _request(document)
 
@@ -381,3 +382,27 @@ def test_bh_national_dps_uses_current_official_xsd_version() -> None:
     root = etree.fromstring(signed)
     assert root.get("versao") == "1.01"
     national_dps_validator("1.01").validate_document(signed)
+
+
+def test_bh_requires_explicit_regime_attestation() -> None:
+    original = _bh_request("001")
+    unreviewed = NfseAuthorizationRequest.build(replace(
+        original.document, special_tax_regime=None,
+    ))
+    with pytest.raises(FiscalValidationError, match="reviewed special tax regime"):
+        _signed_bh(unreviewed)
+
+
+@pytest.mark.parametrize("value", ["3", "8", "", "99"])
+def test_bh_rejects_unsupported_special_regime(value: str) -> None:
+    with pytest.raises(FiscalValidationError, match="special_tax_regime"):
+        replace(_bh_request("001").document, special_tax_regime=value)
+
+
+def test_bh_special_regime_changes_fingerprint() -> None:
+    first = _bh_request("001")
+    second = NfseAuthorizationRequest.build(replace(
+        first.document, special_tax_regime="6",
+    ))
+    assert first.request_fingerprint != second.request_fingerprint
+    assert first.idempotency_key == second.idempotency_key
