@@ -10,6 +10,7 @@ from dataclasses import replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 
@@ -29,7 +30,11 @@ from kordena_fiscal.domain import (
     StateRegistration,
     TaxRegimeCode,
 )
-from kordena_fiscal.gateway.sp4_municipal_canonical import SP4_MUNICIPAL_PROVIDERS
+from kordena_fiscal.gateway.authorization import AuthorizationStatus
+from kordena_fiscal.gateway.sp4_municipal_canonical import (
+    SP4_MUNICIPAL_PROVIDERS,
+    Sp4ProviderOutcome,
+)
 from kordena_fiscal.issuance.nfe_nfse import (
     NfseAuthorizationRequest,
     NfseCanonicalDocument,
@@ -46,6 +51,10 @@ from kordena_fiscal.persistence.ports import (
     PersistenceStateError,
 )
 from kordena_fiscal.persistence.sqlite import SqliteFiscalDatabase
+from kordena_fiscal.runtime.sp4_municipal_canonical_composition import (
+    Sp4ReviewedMunicipalPorts,
+    build_sp4_canonical_clients,
+)
 
 _NOW = datetime(2026, 11, 12, 12, tzinfo=UTC)
 _POLICY = RetentionPolicyMetadata("nfcore-fiscal-archive", 1)
@@ -237,3 +246,39 @@ def test_bad_reviewed_source_rolls_back_rps_reservation(tmp_path: Path) -> None:
         )
     _, approved = _prepare(app, request)
     assert approved.rps_number == "1"
+
+
+@pytest.mark.parametrize("provider,ibge", sorted(SP4_MUNICIPAL_PROVIDERS.items()))
+def test_four_real_canonical_gateway_clients_load_original_from_same_app_uow(
+    tmp_path: Path, provider: str, ibge: str,
+) -> None:
+    db = SqliteFiscalDatabase(tmp_path / (ibge + "-gateway.sqlite"))
+    db.initialize()
+    app = FiscalApplicationService(db)
+    request = _request(ibge)
+    _, reserved_source = _prepare(app, request)
+    legacy_loader = Mock(side_effect=AssertionError("parallel RPS authority used"))
+    submit = Mock(return_value=Sp4ProviderOutcome(status=AuthorizationStatus.PENDING))
+    resolver = Mock()
+    resolver.resolve_provider_id.return_value = provider
+    ports = Sp4ReviewedMunicipalPorts(
+        load_original_rps=legacy_loader,
+        fiscal_issuer_policy=Mock(),
+        validate_prepared_rps=Mock(),
+        submit_official_rps=submit,
+        query_official_rps=Mock(
+            return_value=Sp4ProviderOutcome(status=AuthorizationStatus.PENDING),
+        ),
+        verify_official_invoice_xml=Mock(),
+    )
+    issue, query = build_sp4_canonical_clients(
+        canonical_resolver=resolver,
+        configured_municipalities={provider: ports},
+        canonical_rps_loader=app.load_sp4_original_rps,
+    )
+    result = issue[provider].authorize(request)
+    assert result.status is AuthorizationStatus.PENDING
+    submit.assert_called_once_with(request, reserved_source)
+    legacy_loader.assert_not_called()
+    assert query[provider].query(request).status is AuthorizationStatus.PENDING
+    legacy_loader.assert_not_called()
