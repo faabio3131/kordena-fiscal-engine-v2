@@ -10,8 +10,8 @@ from datetime import UTC, date, datetime
 import pytest
 
 from kordena_fiscal.gateway.municipal_sp_routing import (
-    MunicipalTransportNotPermittedError,
     SIMPLES_NACIONAL_EMISSOR_NACIONAL_MANDATORY_FROM,
+    MunicipalTransportNotPermittedError,
     ensure_municipal_sp_transport_permitted,
 )
 from kordena_fiscal.gateway.provider import UnsupportedProviderError
@@ -80,7 +80,10 @@ def test_city_specific_guard_does_not_claim_provider_approval_elsewhere() -> Non
     _guard(date(2027, 1, 1), issuer=_OTHER_SP_IBGE)
 
 
-@pytest.mark.parametrize("invalid_competence", [None, "2026-11-01", datetime(2026, 11, 1, tzinfo=UTC)])
+@pytest.mark.parametrize(
+    "invalid_competence",
+    [None, "2026-11-01", datetime(2026, 11, 1, tzinfo=UTC)],
+)
 def test_missing_or_unreviewed_competence_fails_closed(invalid_competence: object) -> None:
     with pytest.raises(UnsupportedProviderError, match="reviewed"):
         ensure_municipal_sp_transport_permitted(
