@@ -13,11 +13,11 @@ from urllib.error import HTTPError, URLError
 from urllib.request import HTTPSHandler, Request, build_opener
 
 from kordena_fiscal.domain import (
+    BrazilianJurisdiction,
     Cnpj,
     ExecutionScope,
     FiscalEnvironment,
     FiscalValidationError,
-    BrazilianJurisdiction,
     TaxRegimeCode,
 )
 from kordena_fiscal.gateway.authorization import (
