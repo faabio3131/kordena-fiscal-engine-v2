@@ -1,6 +1,7 @@
 """Durable provider-neutral NFS-e preparation and restart recovery."""
 
 import json
+from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -30,6 +31,7 @@ from kordena_fiscal.issuance import (
     NfseGatewayClient,
     NfseQueryClient,
     NfseServiceLine,
+    NfseServiceTaker,
 )
 from kordena_fiscal.issuance.nfse_archive import decode_prepared_nfse, encode_prepared_nfse
 from kordena_fiscal.lifecycle import FiscalDocumentState
@@ -316,3 +318,24 @@ def test_national_gateway_requires_binding_and_preaudit_before_dispatch(case):
         jurisdiction=request.document.issuer.address.jurisdiction,
         operation="authorize",
     )
+
+
+def test_prepared_nfse_taker_survives_archiving_and_rejects_tamper() -> None:
+    base = nfse_document()
+    taker = NfseServiceTaker(
+        tax_id=Cnpj("12345678000195"),
+        legal_name="Tomador Sintetico Ltda",
+        address=FiscalAddress(
+            street="Rua da Empresa", number="30", district="Centro",
+            municipality_name="Sao Paulo",
+            jurisdiction=BrazilianJurisdiction("SP", "3550308"),
+            postal_code="01001000",
+        ),
+    )
+    request = NfseAuthorizationRequest.build(replace(base, service_taker=taker))
+    encoded = encode_prepared_nfse(request)
+    assert decode_prepared_nfse(encoded, scope=base.scope) == request
+    changed = json.loads(encoded)
+    changed["service_taker"]["legal_name"] = "Outra Empresa"
+    with pytest.raises(FiscalValidationError, match="fingerprint"):
+        decode_prepared_nfse(json.dumps(changed).encode(), scope=base.scope)
