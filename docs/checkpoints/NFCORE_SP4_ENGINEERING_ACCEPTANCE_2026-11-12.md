@@ -173,3 +173,33 @@ A homologação real com A1/IM/credencial permanece em trilha externa.
 Pytest e governança integralmente verdes no HEAD final da PR #446.
 Não reutilizar a CI verde de um commit anterior como prova do novo código.
 Não houve merge, deploy, migration, envio fiscal real ou alteração do Agente B.
+
+
+### Complemento Barueri PMB004 — retenções e campos condicionais (12/11/2026)
+
+- `barueri_pmb004_record_builder.py` agora gera registros **2, 3, 4 e 5**
+  a partir de `Sp4OriginalRps` e `BarueriPmb004IssueFields` revisados.
+- Registro **3**: retenções federais com códigos 01 (IRRF), 02 (PIS),
+  03 (COFINS), 04 (CSLL), 05 (Previdência), repetíveis uma vez por código,
+  com valores positivos, somatório dos valores efetivamente retidos no campo
+  tipo 2 posições 484-498 e registro 9 posições 24-38.
+- O assembler aceita opcionalmente **VN**, com a ressalva de que é
+  `valor não incluso na base`, **não retenção**: participa do somatório
+  do rodapé, mas não do campo de retenções do registro 2. Uma entrada VN
+  tipada originada do motor fiscal/valor canônico ainda depende do contrato
+  do Agente B; não criar montante econômico novo neste adaptador.
+- Registro **5**: geração posicional de 697 bytes para os campos de
+  crédito presumido, governo, referência de NFS-e anterior, locação de
+  bens, doação e destinatário brasileiro diferente do tomador, inclusive
+  regras condicionais ativadas pelo registro 4.
+- Casos específicos de destinatário **estrangeiro**, classificação legal
+  externa de crédito presumido e correlações completas NBS/LC116/indOp
+  ainda exigem fontes e regras oficiais pinadas. Não marcar a cobertura
+  fiscal universal como concluída por haver serializer para o leiaute.
+- Testes dos lotes agora cobrem múltiplos registros tipo 3, duplicidades,
+  números inválidos, divergência tipo 2 × tipo 3 × tipo 9, `VN` e
+  condições de registro tipo 5 (Brasil).
+- A CI integral `#43285291355` foi **SUCCESS** para o commit
+  `d5b8e7203ad64f3895e2ff30cce6f295fb84cfa0`, **antes** destas
+  novas alterações. Esta etapa de retenções e tipo 5 exige nova
+  certificação do HEAD atualizado, sem reaproveitar o resultado anterior.
