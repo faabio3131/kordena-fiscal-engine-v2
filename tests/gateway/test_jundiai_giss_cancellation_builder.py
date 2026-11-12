@@ -25,6 +25,7 @@ from kordena_fiscal.gateway.sp4_municipal_canonical import (
     Sp4VerifiedInvoice,
 )
 
+_ROOT = "{http://www.giss.com.br/cancelar-nfse-envio-v2_04.xsd}"
 _T = "{http://www.giss.com.br/tipos-v2_04.xsd}"
 
 
@@ -67,7 +68,7 @@ def test_giss_cancel_xml_correlates_nota_and_issuer_with_unique_xml_id() -> None
     xml = build_jundiai_cancel_xml(**_fields())
     root = etree.fromstring(xml)
     assert etree.QName(root).localname == "CancelarNfseEnvio"
-    info = root.find(f"{_T}Pedido/{_T}InfPedidoCancelamento")
+    info = root.find(f"{_ROOT}Pedido/{_T}InfPedidoCancelamento")
     assert info is not None
     assert info.get("Id") == "IDCancel42"
     assert info.findtext(f"{_T}IdentificacaoNfse/{_T}Numero") == "8765"
