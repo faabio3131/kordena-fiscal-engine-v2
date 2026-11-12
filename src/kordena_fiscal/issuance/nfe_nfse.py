@@ -542,6 +542,7 @@ class NfseAuthorizationResult:
     provider_request_id: str | None = None
     invoice_reference: str | None = None
     verification_code: str | None = None
+    invoice_number: str | None = None
     authorized_xml: bytes | None = None
     rejection_code: str | None = None
     rejection_message: str | None = None
@@ -566,6 +567,7 @@ class NfseAuthorizationResult:
             "provider_request_id",
             "invoice_reference",
             "verification_code",
+            "invoice_number",
             "rejection_code",
             "rejection_message",
         ):
@@ -596,7 +598,7 @@ class NfseAuthorizationResult:
         elif self.status is AuthorizationStatus.REJECTED:
             if (
                 self.invoice_reference is not None or self.verification_code is not None
-                or self.authorized_xml is not None
+                or self.invoice_number is not None or self.authorized_xml is not None
             ):
                 raise FiscalValidationError("rejected NFS-e cannot contain invoice metadata")
             if self.rejection_code is None or self.rejection_message is None:
@@ -611,7 +613,7 @@ class NfseAuthorizationResult:
         else:
             if (
                 self.invoice_reference is not None or self.verification_code is not None
-                or self.authorized_xml is not None
+                or self.invoice_number is not None or self.authorized_xml is not None
             ):
                 raise FiscalValidationError("pending NFS-e cannot contain invoice metadata")
             if self.rejection_code is not None or self.rejection_message is not None or self.rejections:
