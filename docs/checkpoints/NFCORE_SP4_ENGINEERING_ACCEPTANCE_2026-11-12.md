@@ -94,3 +94,52 @@ simulação e permanece em coluna de certificação separada.
 `tests/runtime/test_nfv1_nfse_preparation_recovery.py`
 sem reconciliação específica. Não mesclar, publicar, migrar banco, transmitir
 documentos fiscais reais nem acionar credenciais do contribuinte sem autorização.
+
+
+## Bloco Agente A — engenharia dos quatro drivers / build interno
+
+A revisão da frente respeita o cronograma da PR #453 e o arquivo
+`instrucoes-agente-A-cobertura-municipal.md`: foco primeiro em construir
+um adaptador funcional com contratos próprios, provas de consulta e testes,
+sem reinventar o motor tributário do Agente B e sem interromper tarefas de
+programação por falta de A1 ou cadastro de contribuinte.
+
+| Município | Construído nesta frente | Ainda necessário para gate interno de ponta a ponta |
+|---|---|---|
+| Cajamar (3509205) | Consulta GeisWeb por lote original, XML determinístico com CNPJ do transmissor e prestador, número reservado, assinatura e XSD por port, interpretador de retorno por RPS/competência/valor, ponte canônica | Builder emissor integral e campos tributários/tomador, pacote de XSD do provedor aplicável a 2026, assinatura real por contrato pinado, arquivamento/DANFSe, cancelamento/substituição e E2E Portal |
+| Osasco (3534401) | Envelope oficial WCF `ConsultarNotaCompleta` por `NumeroReciboUnico`, autenticação externa por IM, RTC `EmitirNFE` e consulta em fronteira, teste para não confundir ACK com nota, roteamento canônico | Builder completo de `RTC_EmitirNFE` com IBSCBS/código de serviço e tomador, interpretador da NotaFiscalRelatorioDTO 2.1 e validação de XML, cancelamento/substituição, E2E Web |
+| Barueri (3505708) | RPS PMB004 v4.2: montagem do lote, CRC do total/retido, linha RTC/ADN, cabeçalho/rodapé, transporte SOAP assíncrono, status/download, recuperação sem protocolo por lista do envio original, parser do arquivo de retorno municipal v3, GET XML original por URL oficial e ponte canônica | Builder fiscal dos **campos internos** de RPS e RTC v4.2 (depende da política tributária canônica), verificação oficial de schema e notas XML/XMLDSig, cancelamento/substituição, PDF, E2E |
+| Jundiaí (3525904) | GissOnline 2.04, envelope SOAP/mTLS, consulta pelo RPS original com `Prestador`, `IdentificacaoRps`, série e IM, assinatura/XSD por port, reconciliação `CompNfse`, batch com protocolo e consulta, ponte canônica | Builder completo de `EnviarLoteRpsEnvio` e campos RTC com XSD vigente, assinatura e XSD hash do RAR atual, cancelamento/substituição, XML/DANFSe, E2E Web |
+
+**Fontes verificadas, não confundidas com homologação de contribuinte:**
+
+- GeisWeb 10.2, 13/11/2020, seção 13.3 (ConsultaLoteRps com
+  `CnpjCpf`, `Consulta/CnpjCpfPrestador`, `Consulta/NumeroLote`):
+  https://atendimento.tecnospeed.com.br/hc/pt-br/article_attachments/1500009353402/Manual_GeisWeb20.pdf
+  A documentação Tecnospeed atualizada em 23/12/2025 confirma características
+  do padrão Cajamar, mas **não fixa por si o WSDL/CNPJ vigente**.
+- Osasco, prefeitura, manual 2.1 de abril/2026, páginas 32–38, consulta
+  completa, cancelamento, campo `NumeroReciboUnico`, chave WCF própria:
+  https://nfe.osasco.sp.gov.br/EissnfeWebApp/Portal/Manual/Geracao%20de%20NFS-e%20Via%20Web%20Service%202.1.pdf
+- Barueri, prefeitura, `RPS_Layout-v4.2.pdf`, janeiro/2026 e guia
+  v1.07 de janeiro/2026 para remessa PMB004; retorno
+  `NFE_Layout-v3.pdf`, agosto/2025; WebService XML_RPS versão
+  disponibilizada em junho/2021 com `NFeLoteListarArquivos` e envio por data:
+  https://www.barueri.sp.gov.br/nfe/Manuais/XML_RPS_Versao_01.pdf
+- Jundiaí, portal GissOnline, `Manual Técnico - Serviços Prestados - V1.8`,
+  seção 7.1.5 com `ConsultarNfseRpsEnvio`, `IdentificacaoRps` e
+  `Prestador`, e pacote XSD vigente listado em
+  https://jundiai.giss.com.br/giss-ajuda/desenvolvedores.html
+
+**Integração compartilhada:** código `Sp4MunicipalCanonicalGateway`,
+`Sp4ReviewedMunicipalPorts`, `sp4_municipal_provider_bridges.py` e
+`sp4_municipal_request_factories.py` ligam os componentes na fronteira
+canônica, mas a composição final do Portal, a disponibilidade de dados
+tributários completos e os builders de emissão pertencem a contratos
+de outras frentes. O catálogo SP22 não ativa provedores sozinho.
+
+**Status real:** `IMPLEMENTED_NOT_CERTIFIED` para o conjunto; homologação
+municipal `EXTERNAL_BLOCKED` por contribuinte sem certificado/IM/credencial
+e, em alguns casos, por ausência de contrato e fixture final pinada.
+A inexistência desses insumos **não impede** a continuação da programação.
+O CI deve ser validado no commit final, nunca herdado de sha anterior.
