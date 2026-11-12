@@ -191,8 +191,8 @@ def prepare_native_nfse(
             issued_at=issued_at, competence_date=competence, issuer=profile,
             service_jurisdiction=service_jurisdiction, services=(line,),
             service_taker_reference=(
-                "cnpj:" if isinstance(taker.tax_id, Cnpj) else "cpf:"
-            ) + taker.tax_id.value,
+                "cnpj:" if isinstance(taker_id, Cnpj) else "cpf:"
+            ) + taker_id.value,
             service_taker=taker,
         )
         nfse_preaudit(NfseAuthorizationRequest.build(document))
