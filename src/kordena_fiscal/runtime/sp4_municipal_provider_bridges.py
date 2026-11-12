@@ -18,6 +18,7 @@ from kordena_fiscal.domain import Cnpj, ExecutionScope, TaxRegimeCode
 from kordena_fiscal.gateway.authorization import AuthorizationStatus
 from kordena_fiscal.gateway.barueri_official_return_file import (
     BarueriConvertedNfseEvidence,
+    parse_barueri_official_return_file,
 )
 from kordena_fiscal.gateway.barueri_pmb004_homologation import (
     BarueriPmb004HomologationTransport,
@@ -408,7 +409,7 @@ def build_barueri_reviewed_ports(
     ],
     validate_return_file: Callable[
         [BarueriRpsBatch, BarueriReceipt], BarueriConvertedNfseEvidence
-    ],
+    ] = parse_barueri_official_return_file,
 ) -> Sp4ReviewedMunicipalPorts:
     if not isinstance(transport, BarueriPmb004HomologationTransport) or not all(
         callable(x) for x in (
@@ -504,10 +505,9 @@ def build_barueri_reviewed_ports(
             raise Sp4CanonicalMunicipalError(
                 "Barueri downloaded return file cannot be correlated"
             )
-        # Dec/2025 municipality guide points to NFE_Layout-v53.pdf
-        # (return layout v5.3), not the older NFE_Layout.pdf v3.0.
-        # A reviewed CURRENT-layout verifier is mandatory. The legacy
-        # parser may remain for historical files but is NOT a 2026 gate.
+        # Municipal January/2026 guide v1.07 explicitly names official
+        # NFE_Layout-v3.pdf (Aug/2025) as the CURRENT return layout, even
+        # for January/2026 input PMB004 v4.2. This is not RPS error list v5.5.
         evidence = validate_return_file(batch, receipt)
         if (
             not isinstance(evidence, BarueriConvertedNfseEvidence)
