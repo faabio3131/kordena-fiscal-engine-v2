@@ -420,6 +420,9 @@ def build_barueri_reviewed_ports(
     retrieve_official_invoice_xml: Callable[
         [BarueriConvertedNfseEvidence], bytes
     ] | None = None,
+    load_original_submission_date: Callable[
+        [ExecutionScope, str], date | None
+    ] | None = None,
 ) -> Sp4ReviewedMunicipalPorts:
     if not isinstance(transport, BarueriPmb004HomologationTransport) or not all(
         callable(x) for x in (
@@ -476,41 +479,90 @@ def build_barueri_reviewed_ports(
         protocol = load_approved_remittance_protocol(
             req.document.scope, req.document.document_id,
         )
+        return_name: str | None = None
         if protocol is None:
-            # No protocol is not evidence that an ambiguous POST failed.
-            return Sp4ProviderOutcome(status=AuthorizationStatus.PENDING)
-        if (
-            not isinstance(protocol, str)
-            or not 1 <= len(protocol) <= 128
-            or not protocol.isascii()
-            or not protocol.isalnum()
-        ):
-            raise Sp4CanonicalMunicipalError("Invalid original Barueri protocol")
-        status = transport.status(batch=batch, protocol=protocol)
-        if (
-            not isinstance(status, BarueriReceipt)
-            or status.operation != "NFeLoteStatusArquivo"
-            or status.code != "OK200"
-            or status.remittance_protocol not in (None, protocol)
-        ):
-            raise Sp4CanonicalMunicipalError(
-                "Barueri status does not match original remittance"
+            # No POST protocol can mean a network timeout AFTER the municipality
+            # received the original file. Search by immutable original remittance
+            # AND the separate, durable transmission date before any retransmit.
+            if load_original_submission_date is None:
+                return Sp4ProviderOutcome(status=AuthorizationStatus.PENDING)
+            submitted_on = load_original_submission_date(
+                req.document.scope, req.document.document_id,
             )
-        if not status.return_file_name:
+            if submitted_on is None:
+                return Sp4ProviderOutcome(status=AuthorizationStatus.PENDING)
+            if type(submitted_on) is not date:
+                raise Sp4CanonicalMunicipalError(
+                    "Barueri original submission date is untrusted"
+                )
+            matches = []
+            for state in ("-2", "-1", "0", "1", "2"):
+                listing = transport.list_on_date(
+                    batch=batch, situation=state, submitted_on=submitted_on,
+                )
+                if (
+                    not isinstance(listing, BarueriReceipt)
+                    or listing.operation != "NFeLoteListarArquivos"
+                    or listing.code != "OK200"
+                ):
+                    raise Sp4CanonicalMunicipalError(
+                        "Barueri official remittance listing is invalid"
+                    )
+                for entry in listing.listed_files:
+                    if entry.original_file_name != batch.file_name:
+                        continue
+                    if (
+                        entry.remittance != original.municipal_batch_id
+                        or entry.situation != state
+                        or entry.validation_only
+                    ):
+                        raise Sp4CanonicalMunicipalError(
+                            "Ambiguous duplicate or validation-only Barueri remittance"
+                        )
+                    matches.append(entry)
+            if len(matches) > 1:
+                raise Sp4CanonicalMunicipalError(
+                    "Duplicate Barueri original RPS transmissions detected"
+                )
+            if not matches or matches[0].situation != "1":
+                return Sp4ProviderOutcome(status=AuthorizationStatus.PENDING)
+            return_name = matches[0].return_file_name
+        else:
+            if (
+                not isinstance(protocol, str)
+                or not 1 <= len(protocol) <= 128
+                or not protocol.isascii()
+                or not protocol.isalnum()
+            ):
+                raise Sp4CanonicalMunicipalError("Invalid original Barueri protocol")
+            status = transport.status(batch=batch, protocol=protocol)
+            if (
+                not isinstance(status, BarueriReceipt)
+                or status.operation != "NFeLoteStatusArquivo"
+                or status.code != "OK200"
+                or status.remittance_protocol not in (None, protocol)
+            ):
+                raise Sp4CanonicalMunicipalError(
+                    "Barueri status does not match original remittance"
+                )
+            return_name = status.return_file_name
+        if not return_name:
             return Sp4ProviderOutcome(
                 status=AuthorizationStatus.PENDING,
                 provider_request_id=protocol,
             )
-        # Only the provider-issued downloaded return file can contain an
-        # invoice candidate. A status-only result is never authorization.
-        receipt = transport.download(batch=batch, file_name=status.return_file_name)
+        # Only a source-matched final return can lead to invoice XML.
+        receipt = transport.download(batch=batch, file_name=return_name)
         if (
             not isinstance(receipt, BarueriReceipt)
             or receipt.operation != "NFeLoteBaixarArquivo"
             or receipt.code != "OK200"
             or not receipt.downloaded_file
-            or receipt.return_file_name not in (None, status.return_file_name)
-            or receipt.remittance_protocol not in (None, protocol)
+            or receipt.return_file_name not in (None, return_name)
+            or (
+                protocol is not None
+                and receipt.remittance_protocol not in (None, protocol)
+            )
         ):
             raise Sp4CanonicalMunicipalError(
                 "Barueri downloaded return file cannot be correlated"
