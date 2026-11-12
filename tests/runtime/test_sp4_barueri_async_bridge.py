@@ -83,6 +83,14 @@ def _setup(
     request.document.issuer.tax_regime = TaxRegimeCode.NORMAL
     rps_content = bytearray(_rps())
     rps_content[27 + 39] = ord(rps_action)
+    if rps_action == "C":
+        # Official Jan/2026 PMB004: cancellation uses ZERO RPS number,
+        # an explicit reason and the number/date of the original invoice.
+        rps_content[27 + 15:27 + 25] = b"0000000000"
+        rps_content[27 + 40:27 + 42] = b"01"
+        rps_content[27 + 42:27 + 49] = b"0008765"
+        rps_content[27 + 54:27 + 62] = b"20261113"
+        rps_content[27 + 62:27 + 242] = b"Cancelamento de teste".ljust(180)
     batch = BarueriRpsBatch(
         scope=scope, issuer_cnpj=original.issuer_cnpj,
         municipal_registration="1234567", tax_regime=TaxRegimeCode.NORMAL,
