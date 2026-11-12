@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from collections.abc import Mapping
 from datetime import date, datetime
@@ -23,9 +24,16 @@ from kordena_fiscal.domain import (
     TaxRegimeCode,
 )
 
+from kordena_fiscal.numbering import (
+    FiscalNumberReservation,
+    FiscalSequenceKey,
+    InternalFiscalSequenceStream,
+)
+
 from .nfe_nfse import NfseAuthorizationRequest, NfseCanonicalDocument, NfseServiceLine
 
 NFSE_PREPARED_MEDIA_TYPE = "application/vnd.nfcore.prepared-nfse.v1+json"
+NATIONAL_DPS_RESERVATION_MEDIA_TYPE = "application/vnd.nfcore.national-dps-reservation.v1+json"
 
 
 def encode_prepared_nfse(request: NfseAuthorizationRequest) -> bytes:
@@ -239,3 +247,68 @@ def decode_prepared_nfse(content: bytes, *, scope: ExecutionScope) -> NfseAuthor
         return request
     except (KeyError, TypeError, ValueError, ArithmeticError) as exc:
         raise FiscalValidationError("invalid prepared NFS-e artifact") from exc
+
+
+def encode_national_dps_reservation(
+    request: NfseAuthorizationRequest, reservation: FiscalNumberReservation,
+) -> bytes:
+    """Archive a number allocated by the transactional sequence repository."""
+    if not isinstance(request, NfseAuthorizationRequest):
+        raise FiscalValidationError("National DPS requires a canonical fiscal request")
+    if not isinstance(reservation, FiscalNumberReservation):
+        raise FiscalValidationError("National DPS requires a fiscal sequence reservation")
+    key = reservation.key
+    if (
+        key.model is not InternalFiscalSequenceStream.NFSE_DPS
+        or key.tenant_id != request.document.scope.tenant_id
+        or key.unit_id != request.document.scope.unit_id
+        or key.environment != request.document.scope.environment
+        or key.host_namespace != request.document.scope.host_namespace
+        or not 0 <= key.series <= 99999
+        or not 1 <= reservation.number <= 999999999999999
+    ):
+        raise FiscalValidationError("National DPS reservation does not match fiscal scope")
+    expected = hashlib.sha256(
+        f"{key.canonical_material}|{reservation.number}".encode()
+    ).hexdigest()
+    if reservation.reservation_token != expected:
+        raise FiscalValidationError("National DPS reservation token does not match")
+    return json.dumps({
+        "request_fingerprint": request.request_fingerprint,
+        "series": key.series,
+        "number": reservation.number,
+        "token": reservation.reservation_token,
+    }, sort_keys=True, separators=(",", ":")).encode()
+
+
+def decode_national_dps_reservation(
+    content: bytes, *, request: NfseAuthorizationRequest,
+) -> FiscalNumberReservation:
+    """Refuse changes of tenant, unit, series, sequence or prepared document."""
+    if not isinstance(content, bytes) or not content:
+        raise FiscalValidationError("National DPS archive is missing")
+    try:
+        data = json.loads(content)
+        if not isinstance(data, dict) or set(data) != {
+            "request_fingerprint", "series", "number", "token",
+        }:
+            raise ValueError("Unexpected National DPS fields")
+        if data["request_fingerprint"] != request.request_fingerprint:
+            raise ValueError("Fiscal fingerprint changed")
+        if type(data["series"]) is not int or type(data["number"]) is not int:
+            raise ValueError("Sequence fields must be integers")
+        key = FiscalSequenceKey.from_scope(
+            request.document.scope,
+            model=InternalFiscalSequenceStream.NFSE_DPS,
+            series=data["series"],
+        )
+        if not isinstance(data["token"], str):
+            raise ValueError("Token must be string")
+        number = FiscalNumberReservation(
+            key=key, number=data["number"], reservation_token=data["token"],
+        )
+        # This verifies the exact transaction-reserved sequence identity.
+        encode_national_dps_reservation(request, number)
+        return number
+    except (KeyError, TypeError, ValueError, OverflowError) as exc:
+        raise FiscalValidationError("Invalid National DPS archival evidence") from exc
