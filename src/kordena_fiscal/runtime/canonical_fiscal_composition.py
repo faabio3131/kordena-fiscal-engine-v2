@@ -81,6 +81,10 @@ from kordena_fiscal.xml import NfeAccessKey
 from .fiscal_runtime import FiscalOperationHandler, PreflightFiscalOperationHandler
 from .provider_issuance_handler import PreparedXmlGatewaySelector
 from .provider_operation_wiring import build_provider_operation_handlers
+from .sp4_municipal_canonical_composition import (
+    Sp4ReviewedMunicipalPorts,
+    build_sp4_canonical_clients,
+)
 
 
 def fiscal_external_dependency_snapshot(
@@ -437,6 +441,7 @@ def build_runtime_fiscal_handler_factory(
     nfse_preaudit: Callable[[NfseAuthorizationRequest], None] | None = None,
     sp4_municipal_gateways: Mapping[str, NfseGatewayClient] | None = None,
     sp4_municipal_query: Mapping[str, NfseQueryClient] | None = None,
+    reviewed_sp4_municipal_ports: Mapping[str, Sp4ReviewedMunicipalPorts] | None = None,
     webiss_extrema_exchange: Callable[
         [bytes, str, ssl.SSLContext, float], bytes
     ] | None = None,
@@ -449,6 +454,13 @@ def build_runtime_fiscal_handler_factory(
     Real official adapters can be supplied by the deployment composition.
     The default boundary is intentionally non-transmitting.
     """
+    # Accept one municipal authority: explicitly reviewed provider ports are
+    # composed into the canonical runtime using the same tenant/unit resolver.
+    # Never install both raw gateway clients and the reviewed port source.
+    if reviewed_sp4_municipal_ports is not None and (
+        sp4_municipal_gateways is not None or sp4_municipal_query is not None
+    ):
+        raise ValueError("SP4 municipal provider authority cannot be duplicated")
     selected_operations = operations_gateway
     if selected_operations is None and certificate_vault is not None:
         selected_operations = SefazSpHomologationOperationsGateway(
@@ -594,16 +606,23 @@ def build_runtime_fiscal_handler_factory(
                 cancellation_preaudit=extrema_cancellation_preaudit,
                 municipal_validator=validator,
             )
+        configured_sp4_issuer = sp4_municipal_gateways
+        configured_sp4_query = sp4_municipal_query
+        if reviewed_sp4_municipal_ports is not None:
+            configured_sp4_issuer, configured_sp4_query = build_sp4_canonical_clients(
+                canonical_resolver=_CanonicalWebissProviderResolver(application),
+                configured_municipalities=reviewed_sp4_municipal_ports,
+            )
         if (
             national_adapter is not None or extrema_adapter is not None
-            or sp4_municipal_gateways
+            or configured_sp4_issuer
         ):
             router = _GovernedNfseRouter(
                 application=application,
                 national=national_adapter,
                 extrema=extrema_adapter,
-                sp4_municipal_gateways=sp4_municipal_gateways,
-                sp4_municipal_query=sp4_municipal_query,
+                sp4_municipal_gateways=configured_sp4_issuer,
+                sp4_municipal_query=configured_sp4_query,
                 sp4_preaudit=nfse_preaudit,
             )
             selected_nfse = NfseGatewayClient(router)
