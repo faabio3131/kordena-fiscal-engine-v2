@@ -48,6 +48,7 @@ def build_sp4_canonical_clients(
     *,
     canonical_resolver: ProviderSelectionResolver,
     configured_municipalities: Mapping[str, Sp4ReviewedMunicipalPorts],
+    canonical_rps_loader: Callable[[ExecutionScope, str], Sp4OriginalRps] | None = None,
 ) -> tuple[Mapping[str, NfseGatewayClient], Mapping[str, NfseQueryClient]]:
     """Build separate issuance/recovery maps for opt-in canonical runtime.
 
@@ -58,6 +59,8 @@ def build_sp4_canonical_clients(
         raise Sp4CanonicalMunicipalError("SP4 requires canonical durable binding resolver")
     if not isinstance(configured_municipalities, Mapping):
         raise Sp4CanonicalMunicipalError("SP4 requires explicit reviewed provider map")
+    if canonical_rps_loader is not None and not callable(canonical_rps_loader):
+        raise Sp4CanonicalMunicipalError("SP4 original RPS loader must be canonical")
     authorization: dict[str, NfseGatewayClient] = {}
     recovery: dict[str, NfseQueryClient] = {}
     for provider_id, city in configured_municipalities.items():
@@ -68,7 +71,10 @@ def build_sp4_canonical_clients(
         adapter = Sp4MunicipalCanonicalGateway(
             provider_id=provider_id,
             resolver=canonical_resolver,
-            load_original_rps=city.load_original_rps,
+            load_original_rps=(
+                canonical_rps_loader if canonical_rps_loader is not None
+                else city.load_original_rps
+            ),
             municipal_issuer_policy=city.fiscal_issuer_policy,
             validate_prepared_rps=city.validate_prepared_rps,
             submit_prepared_rps=city.submit_official_rps,
