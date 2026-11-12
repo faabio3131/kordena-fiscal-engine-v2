@@ -11,7 +11,6 @@ from kordena_fiscal.domain import Cnpj, ExecutionScope, FiscalEnvironment, TaxRe
 from kordena_fiscal.gateway.cajamar_geisweb_lot_query_builder import (
     build_cajamar_lot_query,
 )
-from kordena_fiscal.gateway.cajamar_geisweb_homologation import _soap
 from kordena_fiscal.gateway.sp4_municipal_canonical import (
     Sp4CanonicalMunicipalError,
     Sp4OriginalRps,
