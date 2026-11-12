@@ -370,6 +370,9 @@ class FiscalUnitOfWork(Protocol):
     def sequences(self) -> FiscalSequenceStore: ...
 
     @property
+    def dps_sequences(self) -> FiscalSequenceStore: ...
+
+    @property
     def inbox(self) -> FiscalInboxStore: ...
 
     @property
