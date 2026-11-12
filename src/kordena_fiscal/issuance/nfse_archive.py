@@ -23,7 +23,6 @@ from kordena_fiscal.domain import (
     StateRegistration,
     TaxRegimeCode,
 )
-
 from kordena_fiscal.numbering import (
     FiscalNumberReservation,
     FiscalSequenceKey,
