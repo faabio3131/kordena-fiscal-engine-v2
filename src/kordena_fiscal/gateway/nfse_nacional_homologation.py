@@ -149,8 +149,13 @@ class NfseNacionalHomologationGateway:
         except FiscalValidationError:
             # Never open the A1 vault or contact SEFIN for an ineligible issuer.
             jurisdiction = document.issuer.address.jurisdiction
+            municipality_label = (
+                "Contagem" if jurisdiction.state_code == "MG"
+                and issuer_municipality == "3118601"
+                else f"IBGE {issuer_municipality}/{jurisdiction.state_code}"
+            )
             raise OfficialNfseTransportError(
-                f"IBGE {issuer_municipality}/{jurisdiction.state_code}: "
+                f"{municipality_label}: "
                 "Emissor Nacional nao autorizado para regime e competencia informados"
             ) from None
         material = self._resolve_certificate(document.scope, issuer_cnpj)
