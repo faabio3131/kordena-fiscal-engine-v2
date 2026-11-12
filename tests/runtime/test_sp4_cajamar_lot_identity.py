@@ -16,11 +16,14 @@ from kordena_fiscal.gateway.cajamar_geisweb_homologation import (
     CajamarPreparedNfse,
 )
 from kordena_fiscal.gateway.sp4_municipal_canonical import (
-    Sp4CanonicalMunicipalError, Sp4OriginalRps, Sp4ProviderOutcome,
+    Sp4CanonicalMunicipalError,
+    Sp4OriginalRps,
+    Sp4ProviderOutcome,
 )
 from kordena_fiscal.issuance.nfe_nfse import NfseAuthorizationRequest
 from kordena_fiscal.runtime.sp4_municipal_provider_bridges import (
-    Sp4BridgeAuthority, build_cajamar_reviewed_ports,
+    Sp4BridgeAuthority,
+    build_cajamar_reviewed_ports,
 )
 
 
