@@ -59,10 +59,7 @@ def test_url_validation_rejects_secret_and_unsafe_identifiers() -> None:
     from kordena_fiscal.gateway.barueri_official_return_file import BarueriReturnError
 
     for code in ("AA/BB", "ABC DEF", "ABC?key=leak"):
-        bad = replace(_source(), verification_code=code)
-        with pytest.raises(BarueriOfficialXmlError):
-            retrieve_barueri_original_invoice_xml(
-                evidence=bad, exchange=Mock(),
-            )
+        with pytest.raises(BarueriReturnError):
+            replace(_source(), verification_code=code)
     with pytest.raises(BarueriReturnError):
         replace(_source(), note_number="not-a-number")
