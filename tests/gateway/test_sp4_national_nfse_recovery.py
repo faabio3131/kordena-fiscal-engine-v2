@@ -46,6 +46,7 @@ def _request(
     competence: date = date(2026, 11, 13),
 ) -> Mock:
     req = Mock(spec=NfseAuthorizationRequest)
+    req.document = Mock()
     doc = req.document
     doc.scope = ExecutionScope(
         host_namespace="nfcore", tenant_id="tenant-sp4", unit_id="unit-a",
