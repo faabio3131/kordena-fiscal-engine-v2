@@ -144,19 +144,19 @@ def test_osasco_official_sync_note_reference_is_preserved_but_not_authorized() -
     from kordena_fiscal.gateway.osasco_rtc_homologation import OsascoNoteReference
 
     raw = (
-        '<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" '
-        'xmlns:t="http://tempuri.org/" '
-        'xmlns:a="http://schemas.datacontract.org/2004/07/'
-        'Eissnfe.Negocio.WebServices.Mensagem" '
-        'xmlns:b="http://schemas.datacontract.org/2004/07/'
-        'Eissnfe.Dominio.DataTransferObject.Prestador">'
-        '<s:Body><t:RTC_EmitirNFEResponse><t:RTC_EmitirNFEResult>'
-        '<a:Erro>false</a:Erro><a:NotaFiscalGerada>'
-        '<b:Numero>99999</b:Numero><b:Autenticador>EMOLQEHA</b:Autenticador>'
-        '<b:Identificador>000000</b:Identificador>'
-        '</a:NotaFiscalGerada></t:RTC_EmitirNFEResult>'
-        '</t:RTC_EmitirNFEResponse></s:Body></s:Envelope>'
-    ).encode()
+        b'<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" '
+        b'xmlns:t="http://tempuri.org/" '
+        b'xmlns:a="http://schemas.datacontract.org/2004/07/'
+        b'Eissnfe.Negocio.WebServices.Mensagem" '
+        b'xmlns:b="http://schemas.datacontract.org/2004/07/'
+        b'Eissnfe.Dominio.DataTransferObject.Prestador">'
+        b'<s:Body><t:RTC_EmitirNFEResponse><t:RTC_EmitirNFEResult>'
+        b'<a:Erro>false</a:Erro><a:NotaFiscalGerada>'
+        b'<b:Numero>99999</b:Numero><b:Autenticador>EMOLQEHA</b:Autenticador>'
+        b'<b:Identificador>000000</b:Identificador>'
+        b'</a:NotaFiscalGerada></t:RTC_EmitirNFEResult>'
+        b'</t:RTC_EmitirNFEResponse></s:Body></s:Envelope>'
+    )
     receipt = _parse_reply(raw, "RTC_EmitirNFE")
     assert receipt.note_reference == OsascoNoteReference(
         number="99999", authenticator="EMOLQEHA", identifier="000000",
