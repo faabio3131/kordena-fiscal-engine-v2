@@ -18,6 +18,7 @@ from kordena_fiscal.gateway.authorization import (
     GatewayProviderMetadata,
 )
 from kordena_fiscal.gateway.fiscal_tls import RejectFiscalRedirects, build_fiscal_tls_context
+from kordena_fiscal.gateway.mg_nfse_channel_guard import require_mg_national_channel_eligibility
 from kordena_fiscal.gateway.nfse_national_homologation import (
     SEFIN_HOMOLOGATION_NFSE_URL,
     build_nfse_dps_request,
@@ -107,6 +108,16 @@ class NfseNacionalHomologationGateway:
             raise OfficialNfseTransportError(
                 "DPS fiscal number not durably reserved; SEFIN dispatch denied"
             )
+        try:
+            require_mg_national_channel_eligibility(
+                jurisdiction=document.issuer.address.jurisdiction,
+                tax_regime=document.issuer.tax_regime,
+                competence_date=document.competence_date,
+            )
+        except FiscalValidationError:
+            raise OfficialNfseTransportError(
+                "Emissor Nacional indisponível para regime/competência deste município"
+            ) from None
         material = self._resolve_certificate(document.scope, issuer_cnpj)
         validate_a1_for_issuer(
             material.pkcs12_bytes, material.password, issuer_cnpj=Cnpj(issuer_cnpj),
