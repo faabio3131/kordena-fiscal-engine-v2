@@ -25,9 +25,16 @@ from kordena_fiscal.gateway.barueri_pmb004_homologation import (
 def _synthetic_pmb004() -> bytes:
     """Physical record widths only: full fiscal values need official validator."""
     header = b"11234567PMB00420261113001"
-    record2 = b"2RPS  " + b" " * (1970 - 6)
+    record2_fields = bytearray(b"2RPS  " + b" " * (1970 - 6))
+    record2_fields[15:25] = b"0000000042"
+    record2_fields[25:33] = b"20261113"
+    record2_fields[33:39] = b"120000"
+    record2_fields[39:40] = b"E"
+    record2_fields[457:463] = b"000001"
+    record2_fields[463:478] = b"000000000015000"
+    record2 = bytes(record2_fields)
     record4 = b"41" + b" " * (531 - 2)
-    trailer = b"9" + b"0000004" + b"0" * 30
+    trailer = b"9" + b"0000004" + b"000000000015000" + b"0" * 15
     assert list(map(len, (header, record2, record4, trailer))) == [25, 1970, 531, 38]
     return b"\r\n".join((header, record2, record4, trailer)) + b"\r\n"
 
@@ -173,3 +180,16 @@ def test_signed_remittance_dispatch_stays_pending(monkeypatch: pytest.MonkeyPatc
     result2 = adapter.status(batch=batch, protocol="1234567")
     assert result2.document_authorized is False
     assert resolver.resolve_provider_id.call_args.kwargs["operation"] == "query"
+
+
+def test_pmb004_rps_identity_and_footer_amount_are_canonical() -> None:
+    good = _synthetic_pmb004()
+    _batch(data=good)
+    with pytest.raises(BarueriContractError, match="monetary checksum"):
+        _batch(data=good.replace(b"000000000015000", b"000000000015001", 1))
+    with pytest.raises(BarueriContractError, match="RPS identity or service value"):
+        _batch(data=good.replace(b"0000000042", b"0000000000", 1))
+    with pytest.raises(BarueriContractError, match="issuance date/time"):
+        _batch(data=good.replace(b"20261113", b"20261131", 1))
+    with pytest.raises(BarueriContractError, match="monetary checksum"):
+        _batch(data=good[:-19] + b"000000000015001" + good[-4:])

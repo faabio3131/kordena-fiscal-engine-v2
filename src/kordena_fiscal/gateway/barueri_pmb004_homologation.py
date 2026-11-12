@@ -147,8 +147,53 @@ class BarueriRpsBatch:
             or int(footer[1:8]) != len(records)
         ):
             raise BarueriContractError("PMB004 trailer count or monetary totals are invalid")
-        # Header and trailer controls are structural. They are NOT a substitute
-        # for validation of the complete tax and RPS content by validate_pmb004.
+        # Official RPS_Layout-v4.2, Jan/2026: record 2 positions 16-25
+        # identify RPS, 26-39 date/time, 458-463 quantity, 464-478 unit
+        # service value in centavos. Type 3 positions 4-18 carry retained
+        # amounts. Type 9 positions 9-23 and 24-38 are monetary checksums.
+        # These checks bind the remittance to its own physical records. They
+        # do NOT replace the pinned field-by-field municipal/RTC validator.
+        service_total = 0
+        retained_total = 0
+        rps_identifiers: set[tuple[bytes, bytes]] = set()
+        for record in records[1:-1]:
+            if record[:1] == b"2":
+                rps_number = record[15:25]
+                series = record[6:10]
+                quantity = record[457:463]
+                value = record[463:478]
+                if (
+                    record[1:6] != b"RPS  "
+                    or not rps_number.isdigit()
+                    or not rps_number.startswith(b"000")
+                    or int(rps_number) == 0
+                    or (series, rps_number) in rps_identifiers
+                    or not quantity.isdigit()
+                    or int(quantity) == 0
+                    or not value.isdigit()
+                    or int(value) == 0
+                    or record[39:40] not in (b"E", b"C", b"R")
+                ):
+                    raise BarueriContractError("PMB004 invalid RPS identity or service value")
+                try:
+                    datetime.strptime(
+                        (record[25:33] + record[33:39]).decode("ascii"), "%Y%m%d%H%M%S",
+                    )
+                except (ValueError, UnicodeDecodeError):
+                    raise BarueriContractError("PMB004 invalid RPS issuance date/time") from None
+                rps_identifiers.add((series, rps_number))
+                service_total += int(quantity) * int(value)
+            elif record[:1] == b"3":
+                if not record[3:18].isdigit():
+                    raise BarueriContractError("PMB004 invalid retention amount")
+                retained_total += int(record[3:18])
+        if (
+            int(footer[8:23]) != service_total
+            or int(footer[23:38]) != retained_total
+        ):
+            raise BarueriContractError("PMB004 fiscal monetary checksum mismatch")
+        # A trusted external validator must still verify ALL fiscal positions,
+        # regime, ISS/RTC, withholding and the taxpayer's municipal profile.
 
 
 
