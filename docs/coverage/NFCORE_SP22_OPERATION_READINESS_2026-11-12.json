@@ -1,0 +1,709 @@
+{
+  "schema": "nfcore.sp22.coverage.v1",
+  "snapshot_main": "ef7ebe7e104f0e49897075cd961d51a052948b43",
+  "review_date": "2026-11-12",
+  "is_runtime_authority": false,
+  "nfse_policy": {
+    "me_epp_simples_competence_national_from": "2026-11-01",
+    "basis": [
+      "https://prefeitura.sp.gov.br/web/fazenda/w/usoemissornacional",
+      "https://www.gov.br/receitafederal/pt-br/assuntos/noticias/2026/agosto/simples-nacional-nfs-e-nacional-sera-obrigatoria-para-me-e-epp-a-partir-de-1o-de-novembro-de-2026"
+    ],
+    "capital_legacy_simples_issuance_from_date": "BLOCKED_BY_COMPETENCE",
+    "retroactive_competence_before_date": "REQUIRES_REVIEWED_MUNICIPAL_CONTRACT",
+    "mei_and_autonomous_classification": "SEPARATE_POLICY_REQUIRED"
+  },
+  "state_wide": {
+    "nfe55": "IMPLEMENTED_PARTIALLY_NOT_EXTERNAL_CERTIFIED",
+    "nfce65": "NOT_FULLY_IMPLEMENTED_OR_CERTIFIED",
+    "inutilization_from": "2026-11-01",
+    "inutilization": "PROHIBITED_BY_SEFAZ_SP",
+    "proof": "https://portal.fazenda.sp.gov.br/servicos/nfe/Paginas/Sobre.aspx"
+  },
+  "interpretation": "candidate labels are not providers selected or certified; no status may be promoted from this file alone. Requires actual per-issuer binding, schema/signature, operations and CI on exact SHA.",
+  "municipal_cells": [
+    {
+      "priority": 1,
+      "ibge": "3505708",
+      "municipality": "Barueri",
+      "candidate_provider_labels": [
+        "barueri-proprio"
+      ],
+      "municipal_authoritative_url": null,
+      "municipal_contract_verified": false,
+      "issuer_profile_specific_rules_verified": false,
+      "municipal_layout_version": null,
+      "municipal_xsd_sha256": null,
+      "signature_interoperability_verified": false,
+      "approved_transport_endpoint": null,
+      "tenant_unit_binding_proven": false,
+      "nfse_operations": {
+        "preparation": "NOT_CERTIFIED",
+        "authorization": "NOT_CERTIFIED",
+        "query": "NOT_CERTIFIED",
+        "cancel": "NOT_CERTIFIED",
+        "substitution": "NOT_CERTIFIED",
+        "recovery": "NOT_CERTIFIED",
+        "xml_pdf": "NOT_CERTIFIED"
+      },
+      "full_functional_e2e_ci_sha": null,
+      "official_taxpayer_homologation": false,
+      "production_authorization": false,
+      "status": "INTERNAL_INCOMPLETE"
+    },
+    {
+      "priority": 2,
+      "ibge": "3550308",
+      "municipality": "São Paulo",
+      "candidate_provider_labels": [
+        "nota-paulistana",
+        "nfse-nacional"
+      ],
+      "municipal_authoritative_url": "https://prefeitura.sp.gov.br/web/fazenda/w/usoemissornacional",
+      "municipal_contract_verified": false,
+      "issuer_profile_specific_rules_verified": false,
+      "municipal_layout_version": null,
+      "municipal_xsd_sha256": null,
+      "signature_interoperability_verified": false,
+      "approved_transport_endpoint": null,
+      "tenant_unit_binding_proven": false,
+      "nfse_operations": {
+        "preparation": "NOT_CERTIFIED",
+        "authorization": "NOT_CERTIFIED",
+        "query": "NOT_CERTIFIED",
+        "cancel": "NOT_CERTIFIED",
+        "substitution": "NOT_CERTIFIED",
+        "recovery": "NOT_CERTIFIED",
+        "xml_pdf": "NOT_CERTIFIED"
+      },
+      "full_functional_e2e_ci_sha": null,
+      "official_taxpayer_homologation": false,
+      "production_authorization": false,
+      "status": "INTERNAL_INCOMPLETE"
+    },
+    {
+      "priority": 3,
+      "ibge": "3509502",
+      "municipality": "Campinas",
+      "candidate_provider_labels": [
+        "dsf",
+        "nfse-nacional"
+      ],
+      "municipal_authoritative_url": null,
+      "municipal_contract_verified": false,
+      "issuer_profile_specific_rules_verified": false,
+      "municipal_layout_version": null,
+      "municipal_xsd_sha256": null,
+      "signature_interoperability_verified": false,
+      "approved_transport_endpoint": null,
+      "tenant_unit_binding_proven": false,
+      "nfse_operations": {
+        "preparation": "NOT_CERTIFIED",
+        "authorization": "NOT_CERTIFIED",
+        "query": "NOT_CERTIFIED",
+        "cancel": "NOT_CERTIFIED",
+        "substitution": "NOT_CERTIFIED",
+        "recovery": "NOT_CERTIFIED",
+        "xml_pdf": "NOT_CERTIFIED"
+      },
+      "full_functional_e2e_ci_sha": null,
+      "official_taxpayer_homologation": false,
+      "production_authorization": false,
+      "status": "INTERNAL_INCOMPLETE"
+    },
+    {
+      "priority": 4,
+      "ibge": "3552205",
+      "municipality": "Sorocaba",
+      "candidate_provider_labels": [
+        "dsf",
+        "nfse-nacional"
+      ],
+      "municipal_authoritative_url": null,
+      "municipal_contract_verified": false,
+      "issuer_profile_specific_rules_verified": false,
+      "municipal_layout_version": null,
+      "municipal_xsd_sha256": null,
+      "signature_interoperability_verified": false,
+      "approved_transport_endpoint": null,
+      "tenant_unit_binding_proven": false,
+      "nfse_operations": {
+        "preparation": "NOT_CERTIFIED",
+        "authorization": "NOT_CERTIFIED",
+        "query": "NOT_CERTIFIED",
+        "cancel": "NOT_CERTIFIED",
+        "substitution": "NOT_CERTIFIED",
+        "recovery": "NOT_CERTIFIED",
+        "xml_pdf": "NOT_CERTIFIED"
+      },
+      "full_functional_e2e_ci_sha": null,
+      "official_taxpayer_homologation": false,
+      "production_authorization": false,
+      "status": "INTERNAL_INCOMPLETE"
+    },
+    {
+      "priority": 5,
+      "ibge": "3518800",
+      "municipality": "Guarulhos",
+      "candidate_provider_labels": [
+        "ginfes",
+        "nfse-nacional"
+      ],
+      "municipal_authoritative_url": null,
+      "municipal_contract_verified": false,
+      "issuer_profile_specific_rules_verified": false,
+      "municipal_layout_version": null,
+      "municipal_xsd_sha256": null,
+      "signature_interoperability_verified": false,
+      "approved_transport_endpoint": null,
+      "tenant_unit_binding_proven": false,
+      "nfse_operations": {
+        "preparation": "NOT_CERTIFIED",
+        "authorization": "NOT_CERTIFIED",
+        "query": "NOT_CERTIFIED",
+        "cancel": "NOT_CERTIFIED",
+        "substitution": "NOT_CERTIFIED",
+        "recovery": "NOT_CERTIFIED",
+        "xml_pdf": "NOT_CERTIFIED"
+      },
+      "full_functional_e2e_ci_sha": null,
+      "official_taxpayer_homologation": false,
+      "production_authorization": false,
+      "status": "INTERNAL_INCOMPLETE"
+    },
+    {
+      "priority": 6,
+      "ibge": "3548500",
+      "municipality": "Santos",
+      "candidate_provider_labels": [
+        "ginfes",
+        "nfse-nacional"
+      ],
+      "municipal_authoritative_url": null,
+      "municipal_contract_verified": false,
+      "issuer_profile_specific_rules_verified": false,
+      "municipal_layout_version": null,
+      "municipal_xsd_sha256": null,
+      "signature_interoperability_verified": false,
+      "approved_transport_endpoint": null,
+      "tenant_unit_binding_proven": false,
+      "nfse_operations": {
+        "preparation": "NOT_CERTIFIED",
+        "authorization": "NOT_CERTIFIED",
+        "query": "NOT_CERTIFIED",
+        "cancel": "NOT_CERTIFIED",
+        "substitution": "NOT_CERTIFIED",
+        "recovery": "NOT_CERTIFIED",
+        "xml_pdf": "NOT_CERTIFIED"
+      },
+      "full_functional_e2e_ci_sha": null,
+      "official_taxpayer_homologation": false,
+      "production_authorization": false,
+      "status": "INTERNAL_INCOMPLETE"
+    },
+    {
+      "priority": 7,
+      "ibge": "3548807",
+      "municipality": "São Caetano do Sul",
+      "candidate_provider_labels": [
+        "ginfes",
+        "nfse-nacional"
+      ],
+      "municipal_authoritative_url": null,
+      "municipal_contract_verified": false,
+      "issuer_profile_specific_rules_verified": false,
+      "municipal_layout_version": null,
+      "municipal_xsd_sha256": null,
+      "signature_interoperability_verified": false,
+      "approved_transport_endpoint": null,
+      "tenant_unit_binding_proven": false,
+      "nfse_operations": {
+        "preparation": "NOT_CERTIFIED",
+        "authorization": "NOT_CERTIFIED",
+        "query": "NOT_CERTIFIED",
+        "cancel": "NOT_CERTIFIED",
+        "substitution": "NOT_CERTIFIED",
+        "recovery": "NOT_CERTIFIED",
+        "xml_pdf": "NOT_CERTIFIED"
+      },
+      "full_functional_e2e_ci_sha": null,
+      "official_taxpayer_homologation": false,
+      "production_authorization": false,
+      "status": "INTERNAL_INCOMPLETE"
+    },
+    {
+      "priority": 8,
+      "ibge": "3525904",
+      "municipality": "Jundiaí",
+      "candidate_provider_labels": [
+        "ginfes",
+        "nfse-nacional"
+      ],
+      "municipal_authoritative_url": null,
+      "municipal_contract_verified": false,
+      "issuer_profile_specific_rules_verified": false,
+      "municipal_layout_version": null,
+      "municipal_xsd_sha256": null,
+      "signature_interoperability_verified": false,
+      "approved_transport_endpoint": null,
+      "tenant_unit_binding_proven": false,
+      "nfse_operations": {
+        "preparation": "NOT_CERTIFIED",
+        "authorization": "NOT_CERTIFIED",
+        "query": "NOT_CERTIFIED",
+        "cancel": "NOT_CERTIFIED",
+        "substitution": "NOT_CERTIFIED",
+        "recovery": "NOT_CERTIFIED",
+        "xml_pdf": "NOT_CERTIFIED"
+      },
+      "full_functional_e2e_ci_sha": null,
+      "official_taxpayer_homologation": false,
+      "production_authorization": false,
+      "status": "INTERNAL_INCOMPLETE"
+    },
+    {
+      "priority": 9,
+      "ibge": "3552502",
+      "municipality": "Suzano",
+      "candidate_provider_labels": [
+        "ginfes",
+        "nfse-nacional"
+      ],
+      "municipal_authoritative_url": null,
+      "municipal_contract_verified": false,
+      "issuer_profile_specific_rules_verified": false,
+      "municipal_layout_version": null,
+      "municipal_xsd_sha256": null,
+      "signature_interoperability_verified": false,
+      "approved_transport_endpoint": null,
+      "tenant_unit_binding_proven": false,
+      "nfse_operations": {
+        "preparation": "NOT_CERTIFIED",
+        "authorization": "NOT_CERTIFIED",
+        "query": "NOT_CERTIFIED",
+        "cancel": "NOT_CERTIFIED",
+        "substitution": "NOT_CERTIFIED",
+        "recovery": "NOT_CERTIFIED",
+        "xml_pdf": "NOT_CERTIFIED"
+      },
+      "full_functional_e2e_ci_sha": null,
+      "official_taxpayer_homologation": false,
+      "production_authorization": false,
+      "status": "INTERNAL_INCOMPLETE"
+    },
+    {
+      "priority": 10,
+      "ibge": "3547304",
+      "municipality": "Santana de Parnaíba",
+      "candidate_provider_labels": [
+        "smarapd",
+        "municipal-proprio"
+      ],
+      "municipal_authoritative_url": null,
+      "municipal_contract_verified": false,
+      "issuer_profile_specific_rules_verified": false,
+      "municipal_layout_version": null,
+      "municipal_xsd_sha256": null,
+      "signature_interoperability_verified": false,
+      "approved_transport_endpoint": null,
+      "tenant_unit_binding_proven": false,
+      "nfse_operations": {
+        "preparation": "NOT_CERTIFIED",
+        "authorization": "NOT_CERTIFIED",
+        "query": "NOT_CERTIFIED",
+        "cancel": "NOT_CERTIFIED",
+        "substitution": "NOT_CERTIFIED",
+        "recovery": "NOT_CERTIFIED",
+        "xml_pdf": "NOT_CERTIFIED"
+      },
+      "full_functional_e2e_ci_sha": null,
+      "official_taxpayer_homologation": false,
+      "production_authorization": false,
+      "status": "INTERNAL_INCOMPLETE"
+    },
+    {
+      "priority": 11,
+      "ibge": "3534401",
+      "municipality": "Osasco",
+      "candidate_provider_labels": [
+        "sigiss",
+        "betha",
+        "e-receita",
+        "nfse-nacional"
+      ],
+      "municipal_authoritative_url": null,
+      "municipal_contract_verified": false,
+      "issuer_profile_specific_rules_verified": false,
+      "municipal_layout_version": null,
+      "municipal_xsd_sha256": null,
+      "signature_interoperability_verified": false,
+      "approved_transport_endpoint": null,
+      "tenant_unit_binding_proven": false,
+      "nfse_operations": {
+        "preparation": "NOT_CERTIFIED",
+        "authorization": "NOT_CERTIFIED",
+        "query": "NOT_CERTIFIED",
+        "cancel": "NOT_CERTIFIED",
+        "substitution": "NOT_CERTIFIED",
+        "recovery": "NOT_CERTIFIED",
+        "xml_pdf": "NOT_CERTIFIED"
+      },
+      "full_functional_e2e_ci_sha": null,
+      "official_taxpayer_homologation": false,
+      "production_authorization": false,
+      "status": "INTERNAL_INCOMPLETE"
+    },
+    {
+      "priority": 12,
+      "ibge": "3522505",
+      "municipality": "Itapevi",
+      "candidate_provider_labels": [
+        "sigiss",
+        "betha",
+        "e-receita",
+        "nfse-nacional"
+      ],
+      "municipal_authoritative_url": null,
+      "municipal_contract_verified": false,
+      "issuer_profile_specific_rules_verified": false,
+      "municipal_layout_version": null,
+      "municipal_xsd_sha256": null,
+      "signature_interoperability_verified": false,
+      "approved_transport_endpoint": null,
+      "tenant_unit_binding_proven": false,
+      "nfse_operations": {
+        "preparation": "NOT_CERTIFIED",
+        "authorization": "NOT_CERTIFIED",
+        "query": "NOT_CERTIFIED",
+        "cancel": "NOT_CERTIFIED",
+        "substitution": "NOT_CERTIFIED",
+        "recovery": "NOT_CERTIFIED",
+        "xml_pdf": "NOT_CERTIFIED"
+      },
+      "full_functional_e2e_ci_sha": null,
+      "official_taxpayer_homologation": false,
+      "production_authorization": false,
+      "status": "INTERNAL_INCOMPLETE"
+    },
+    {
+      "priority": 13,
+      "ibge": "3525003",
+      "municipality": "Jandira",
+      "candidate_provider_labels": [
+        "sigiss",
+        "betha",
+        "e-receita",
+        "nfse-nacional"
+      ],
+      "municipal_authoritative_url": null,
+      "municipal_contract_verified": false,
+      "issuer_profile_specific_rules_verified": false,
+      "municipal_layout_version": null,
+      "municipal_xsd_sha256": null,
+      "signature_interoperability_verified": false,
+      "approved_transport_endpoint": null,
+      "tenant_unit_binding_proven": false,
+      "nfse_operations": {
+        "preparation": "NOT_CERTIFIED",
+        "authorization": "NOT_CERTIFIED",
+        "query": "NOT_CERTIFIED",
+        "cancel": "NOT_CERTIFIED",
+        "substitution": "NOT_CERTIFIED",
+        "recovery": "NOT_CERTIFIED",
+        "xml_pdf": "NOT_CERTIFIED"
+      },
+      "full_functional_e2e_ci_sha": null,
+      "official_taxpayer_homologation": false,
+      "production_authorization": false,
+      "status": "INTERNAL_INCOMPLETE"
+    },
+    {
+      "priority": 14,
+      "ibge": "3528502",
+      "municipality": "Mairiporã",
+      "candidate_provider_labels": [
+        "sigiss",
+        "betha",
+        "e-receita",
+        "nfse-nacional"
+      ],
+      "municipal_authoritative_url": null,
+      "municipal_contract_verified": false,
+      "issuer_profile_specific_rules_verified": false,
+      "municipal_layout_version": null,
+      "municipal_xsd_sha256": null,
+      "signature_interoperability_verified": false,
+      "approved_transport_endpoint": null,
+      "tenant_unit_binding_proven": false,
+      "nfse_operations": {
+        "preparation": "NOT_CERTIFIED",
+        "authorization": "NOT_CERTIFIED",
+        "query": "NOT_CERTIFIED",
+        "cancel": "NOT_CERTIFIED",
+        "substitution": "NOT_CERTIFIED",
+        "recovery": "NOT_CERTIFIED",
+        "xml_pdf": "NOT_CERTIFIED"
+      },
+      "full_functional_e2e_ci_sha": null,
+      "official_taxpayer_homologation": false,
+      "production_authorization": false,
+      "status": "INTERNAL_INCOMPLETE"
+    },
+    {
+      "priority": 15,
+      "ibge": "3503901",
+      "municipality": "Arujá",
+      "candidate_provider_labels": [
+        "sigiss",
+        "betha",
+        "e-receita",
+        "nfse-nacional"
+      ],
+      "municipal_authoritative_url": null,
+      "municipal_contract_verified": false,
+      "issuer_profile_specific_rules_verified": false,
+      "municipal_layout_version": null,
+      "municipal_xsd_sha256": null,
+      "signature_interoperability_verified": false,
+      "approved_transport_endpoint": null,
+      "tenant_unit_binding_proven": false,
+      "nfse_operations": {
+        "preparation": "NOT_CERTIFIED",
+        "authorization": "NOT_CERTIFIED",
+        "query": "NOT_CERTIFIED",
+        "cancel": "NOT_CERTIFIED",
+        "substitution": "NOT_CERTIFIED",
+        "recovery": "NOT_CERTIFIED",
+        "xml_pdf": "NOT_CERTIFIED"
+      },
+      "full_functional_e2e_ci_sha": null,
+      "official_taxpayer_homologation": false,
+      "production_authorization": false,
+      "status": "INTERNAL_INCOMPLETE"
+    },
+    {
+      "priority": 16,
+      "ibge": "3527306",
+      "municipality": "Louveira",
+      "candidate_provider_labels": [
+        "sigiss",
+        "betha",
+        "e-receita",
+        "nfse-nacional"
+      ],
+      "municipal_authoritative_url": null,
+      "municipal_contract_verified": false,
+      "issuer_profile_specific_rules_verified": false,
+      "municipal_layout_version": null,
+      "municipal_xsd_sha256": null,
+      "signature_interoperability_verified": false,
+      "approved_transport_endpoint": null,
+      "tenant_unit_binding_proven": false,
+      "nfse_operations": {
+        "preparation": "NOT_CERTIFIED",
+        "authorization": "NOT_CERTIFIED",
+        "query": "NOT_CERTIFIED",
+        "cancel": "NOT_CERTIFIED",
+        "substitution": "NOT_CERTIFIED",
+        "recovery": "NOT_CERTIFIED",
+        "xml_pdf": "NOT_CERTIFIED"
+      },
+      "full_functional_e2e_ci_sha": null,
+      "official_taxpayer_homologation": false,
+      "production_authorization": false,
+      "status": "INTERNAL_INCOMPLETE"
+    },
+    {
+      "priority": 17,
+      "ibge": "3556206",
+      "municipality": "Valinhos",
+      "candidate_provider_labels": [
+        "sigiss",
+        "betha",
+        "e-receita",
+        "nfse-nacional"
+      ],
+      "municipal_authoritative_url": null,
+      "municipal_contract_verified": false,
+      "issuer_profile_specific_rules_verified": false,
+      "municipal_layout_version": null,
+      "municipal_xsd_sha256": null,
+      "signature_interoperability_verified": false,
+      "approved_transport_endpoint": null,
+      "tenant_unit_binding_proven": false,
+      "nfse_operations": {
+        "preparation": "NOT_CERTIFIED",
+        "authorization": "NOT_CERTIFIED",
+        "query": "NOT_CERTIFIED",
+        "cancel": "NOT_CERTIFIED",
+        "substitution": "NOT_CERTIFIED",
+        "recovery": "NOT_CERTIFIED",
+        "xml_pdf": "NOT_CERTIFIED"
+      },
+      "full_functional_e2e_ci_sha": null,
+      "official_taxpayer_homologation": false,
+      "production_authorization": false,
+      "status": "INTERNAL_INCOMPLETE"
+    },
+    {
+      "priority": 18,
+      "ibge": "3523909",
+      "municipality": "Itu",
+      "candidate_provider_labels": [
+        "sigiss",
+        "betha",
+        "e-receita",
+        "nfse-nacional"
+      ],
+      "municipal_authoritative_url": null,
+      "municipal_contract_verified": false,
+      "issuer_profile_specific_rules_verified": false,
+      "municipal_layout_version": null,
+      "municipal_xsd_sha256": null,
+      "signature_interoperability_verified": false,
+      "approved_transport_endpoint": null,
+      "tenant_unit_binding_proven": false,
+      "nfse_operations": {
+        "preparation": "NOT_CERTIFIED",
+        "authorization": "NOT_CERTIFIED",
+        "query": "NOT_CERTIFIED",
+        "cancel": "NOT_CERTIFIED",
+        "substitution": "NOT_CERTIFIED",
+        "recovery": "NOT_CERTIFIED",
+        "xml_pdf": "NOT_CERTIFIED"
+      },
+      "full_functional_e2e_ci_sha": null,
+      "official_taxpayer_homologation": false,
+      "production_authorization": false,
+      "status": "INTERNAL_INCOMPLETE"
+    },
+    {
+      "priority": 19,
+      "ibge": "3545209",
+      "municipality": "Salto",
+      "candidate_provider_labels": [
+        "sigiss",
+        "betha",
+        "e-receita",
+        "nfse-nacional"
+      ],
+      "municipal_authoritative_url": null,
+      "municipal_contract_verified": false,
+      "issuer_profile_specific_rules_verified": false,
+      "municipal_layout_version": null,
+      "municipal_xsd_sha256": null,
+      "signature_interoperability_verified": false,
+      "approved_transport_endpoint": null,
+      "tenant_unit_binding_proven": false,
+      "nfse_operations": {
+        "preparation": "NOT_CERTIFIED",
+        "authorization": "NOT_CERTIFIED",
+        "query": "NOT_CERTIFIED",
+        "cancel": "NOT_CERTIFIED",
+        "substitution": "NOT_CERTIFIED",
+        "recovery": "NOT_CERTIFIED",
+        "xml_pdf": "NOT_CERTIFIED"
+      },
+      "full_functional_e2e_ci_sha": null,
+      "official_taxpayer_homologation": false,
+      "production_authorization": false,
+      "status": "INTERNAL_INCOMPLETE"
+    },
+    {
+      "priority": 20,
+      "ibge": "3531803",
+      "municipality": "Monte Mor",
+      "candidate_provider_labels": [
+        "sigiss",
+        "betha",
+        "e-receita",
+        "nfse-nacional"
+      ],
+      "municipal_authoritative_url": null,
+      "municipal_contract_verified": false,
+      "issuer_profile_specific_rules_verified": false,
+      "municipal_layout_version": null,
+      "municipal_xsd_sha256": null,
+      "signature_interoperability_verified": false,
+      "approved_transport_endpoint": null,
+      "tenant_unit_binding_proven": false,
+      "nfse_operations": {
+        "preparation": "NOT_CERTIFIED",
+        "authorization": "NOT_CERTIFIED",
+        "query": "NOT_CERTIFIED",
+        "cancel": "NOT_CERTIFIED",
+        "substitution": "NOT_CERTIFIED",
+        "recovery": "NOT_CERTIFIED",
+        "xml_pdf": "NOT_CERTIFIED"
+      },
+      "full_functional_e2e_ci_sha": null,
+      "official_taxpayer_homologation": false,
+      "production_authorization": false,
+      "status": "INTERNAL_INCOMPLETE"
+    },
+    {
+      "priority": 21,
+      "ibge": "3518701",
+      "municipality": "Guarujá",
+      "candidate_provider_labels": [
+        "sigiss",
+        "betha",
+        "e-receita",
+        "nfse-nacional"
+      ],
+      "municipal_authoritative_url": null,
+      "municipal_contract_verified": false,
+      "issuer_profile_specific_rules_verified": false,
+      "municipal_layout_version": null,
+      "municipal_xsd_sha256": null,
+      "signature_interoperability_verified": false,
+      "approved_transport_endpoint": null,
+      "tenant_unit_binding_proven": false,
+      "nfse_operations": {
+        "preparation": "NOT_CERTIFIED",
+        "authorization": "NOT_CERTIFIED",
+        "query": "NOT_CERTIFIED",
+        "cancel": "NOT_CERTIFIED",
+        "substitution": "NOT_CERTIFIED",
+        "recovery": "NOT_CERTIFIED",
+        "xml_pdf": "NOT_CERTIFIED"
+      },
+      "full_functional_e2e_ci_sha": null,
+      "official_taxpayer_homologation": false,
+      "production_authorization": false,
+      "status": "INTERNAL_INCOMPLETE"
+    },
+    {
+      "priority": 22,
+      "ibge": "3551009",
+      "municipality": "São Vicente",
+      "candidate_provider_labels": [
+        "sigiss",
+        "betha",
+        "e-receita",
+        "nfse-nacional"
+      ],
+      "municipal_authoritative_url": null,
+      "municipal_contract_verified": false,
+      "issuer_profile_specific_rules_verified": false,
+      "municipal_layout_version": null,
+      "municipal_xsd_sha256": null,
+      "signature_interoperability_verified": false,
+      "approved_transport_endpoint": null,
+      "tenant_unit_binding_proven": false,
+      "nfse_operations": {
+        "preparation": "NOT_CERTIFIED",
+        "authorization": "NOT_CERTIFIED",
+        "query": "NOT_CERTIFIED",
+        "cancel": "NOT_CERTIFIED",
+        "substitution": "NOT_CERTIFIED",
+        "recovery": "NOT_CERTIFIED",
+        "xml_pdf": "NOT_CERTIFIED"
+      },
+      "full_functional_e2e_ci_sha": null,
+      "official_taxpayer_homologation": false,
+      "production_authorization": false,
+      "status": "INTERNAL_INCOMPLETE"
+    }
+  ]
+}
