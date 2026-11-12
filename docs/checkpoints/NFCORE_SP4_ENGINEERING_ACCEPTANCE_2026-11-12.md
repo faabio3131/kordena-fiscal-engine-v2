@@ -57,3 +57,40 @@ A auditoria inicial deste documento foi superada **apenas** nos pontos explicita
 **Pendência crítica de produto compartilhado:** a preparação direta no Portal está sendo trabalhada por outra frente (#447), e a numeração fiscal nacional durável não pode ser substituída pelo hash provisório. Para a homologação na contabilidade, não presumir que a tela final já está ligada aos gateways da branch.
 
 **Conclusão de engenharia ainda proibida:** faltam schemas completos, builders fiscais canônicos, normalização inequívoca das notas por RPS, XML/PDF, cancelamento/substituição integrado e provas fiscais externas por município. A primeira ocorrência de `OK200`, `Erro=false` ou `Situacao=4` **não** é evidência de documento autorizado.
+
+
+## Diretriz do proprietário — construção primeiro (12/11/2026)
+
+**Interpretação operacional obrigatória:** NFCore ainda está em construção e não possui
+clientes ativos para esta trilha municipal. Não transformar falta de certificado A1,
+credenciamento, WSDL do contribuinte ou resposta real da prefeitura em interrupção
+da engenharia interna: continuar implementando builders, drivers, validadores,
+contratos, adapters, operações, recuperação, arquivos, testes e integração, com
+fixtures sintéticas e parametrização por contribuinte.
+
+**Separar duas coisas:** (1) *software construído e testado internamente* e
+(2) *homologação externa/produção fiscal de contribuinte*. A ausência de (2)
+não proíbe desenvolver (1) nem exige adicionar travas redundantes no produto.
+Os controles fiscais essenciais e a precisão dos status permanecem para evitar
+atribuir autorização oficial a uma resposta sintética; não reescrever componentes
+existentes apenas para acrescentar bloqueios especulativos.
+
+**Cronograma atualizado aplicável:** documento
+`docs/NFCORE_FISCAL_ENGINE_EXECUTION_SCHEDULE_2026-11-12.md` na PR #453
+e instruções do Agente A fornecidas pelo proprietário em 12/11/2026.
+Ordem **Cajamar → Osasco → Barueri → Jundiaí**; depois os demais do SP-22,
+sujeitos à ordem escolhida pelo proprietário; MG-W1 preservada em checkpoint,
+DF/GO/MT/MS somente depois de SP-22 e do gate interno de MG-W1.
+Não começar B17a antes da reconciliação #450/#427/#446: primeira entrega
+de B17a será PR somente de especificação, revisada com o Agente B.
+A frente municipal não assume nem reimplementa o núcleo fiscal do Agente B.
+A integração externa depende de artefatos oficiais não substituíveis por
+simulação e permanece em coluna de certificação separada.
+
+**Fronteiras de código do Agente B a preservar:** não alterar
+`gateway/nfse_nacional_homologation.py`,
+`issuance/nfse_dps_builder.py`,
+`runtime/canonical_fiscal_composition.py` e
+`tests/runtime/test_nfv1_nfse_preparation_recovery.py`
+sem reconciliação específica. Não mesclar, publicar, migrar banco, transmitir
+documentos fiscais reais nem acionar credenciais do contribuinte sem autorização.
