@@ -267,6 +267,7 @@ def encode_national_dps_reservation(
         or key.unit_id != request.document.scope.unit_id
         or key.environment != request.document.scope.environment
         or key.host_namespace != request.document.scope.host_namespace
+        or key.issuer_cnpj != request.document.issuer.cnpj.value
         or not 0 <= key.series <= 99999
         or not 1 <= reservation.number <= 999999999999999
     ):
@@ -304,6 +305,7 @@ def decode_national_dps_reservation(
             request.document.scope,
             model=InternalFiscalSequenceStream.NFSE_DPS,
             series=data["series"],
+            issuer_cnpj=request.document.issuer.cnpj.value,
         )
         if not isinstance(data["token"], str):
             raise ValueError("Token must be string")
