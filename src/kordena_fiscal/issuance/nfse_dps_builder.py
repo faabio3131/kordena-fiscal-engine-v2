@@ -208,6 +208,17 @@ def build_signed_dps(
         # the optional IBSCBS group into infDPS, before cLocEmi.
         _child(info, "finNFSe", "0")
     _child(info, "cLocEmi", issuer_municipality)
+    if document.substituted_invoice_access_key is not None:
+        if not is_nt009:
+            raise FiscalValidationError(
+                "Substitution DPS is enabled only for reviewed BH restricted layout"
+            )
+        subst = etree.SubElement(info, f"{{{_NFSE_NS}}}subst")
+        _child(subst, "chSubstda", document.substituted_invoice_access_key)
+        assert document.substitution_reason_code is not None
+        _child(subst, "cMotivo", document.substitution_reason_code)
+        if document.substitution_reason_text is not None:
+            _child(subst, "xMotivo", document.substitution_reason_text.strip())
 
     prest = etree.SubElement(info, f"{{{_NFSE_NS}}}prest")
     _child(prest, "CNPJ", cnpj)
