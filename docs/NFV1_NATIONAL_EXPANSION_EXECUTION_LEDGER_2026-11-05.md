@@ -1,3 +1,19 @@
+## CURRENT documental — incidente de rastreabilidade e reconciliação pendente (10/11/2026)
+
+**Falha reconhecida:** os checkpoints de execução não foram reconciliados tempestivamente após as entregas de novembro e a comunicação técnica não distinguiu com clareza o cronograma publicado em 07/11 da cobertura efetivamente certificada. O proprietário foi levado a acreditar que estados e municípios solicitados haviam sido concluídos. Tratar como incidente de governança, não como erro do usuário.
+
+**GitHub consultado em 10/11:** `main@2d6ba3d1c32d70923a473b37950769b19511c52d`, `production@8f9c7038c3c668a2be5c5f859b288ab64e7b530e`. Nenhuma UF entre MG, SP, RJ, RS, PR, MT e MS possui, **nos checkpoints auditados**, certificação final `UF_100_COMPLETA`. Essa frase é sobre ausência de prova de fechamento no ledger, **não sobre ausência de código atual**. Os estados `NOT_STARTED` na tabela histórica de 05/11 devem ser tratados como fotografia antiga até reconciliação com commits, PRs, CI e runtime.
+
+**Pendência rastreável `NAT-GOV-2026-11-10-01`:** conciliar entregas reais de 05–10/11, registrar por UF/município/documento/serviço/operação o estado `CURRENT` com evidência de HEAD, PR, CI, teste XSD, integração Web, homologação externa e pendência; atualizar o plano de 07/11, preservando implementações certificadas. Nenhuma lacuna documental autoriza declarar regressão ou reiniciar módulos.
+
+**Dependência `NAT-GOV-2026-11-10-02`:** reconciliar a nova sequência DF → GO → MT → MS de `AGENTS.md` (09/11) com MG → SP → RJ → RS → PR → MT → MS (cronograma nacional de 07/11), antes da execução de uma nova UF. Nenhuma decisão de mudança de sequência foi inferida.
+
+**Prioridade operacional vigente:** Bling, PR #412, e teste contábil de 11/11/2026. Trabalho documental não deve retirar foco do Bling nem ser confundido com liberação operacional. Sem deploy, migração, segredo ou homologação decorrentes deste registro.
+
+**Critério permanente de atualização:** cada PR mergeada que altere cobertura atualiza imediatamente este ledger e o cronograma com SHA/PR/CI, `CURRENT → TARGET`, linha de cobertura e status da evidência. Se a auditoria ainda não foi feita, status explícito `AUDITORIA_PENDENTE`. Conclusão técnica e homologação externa são classificações distintas.
+
+---
+
 ## CURRENT reconciliado — continuidade 05/11/2026
 
 Este registro prevalece sobre o snapshot de planejamento abaixo, sem promover estados globais.
