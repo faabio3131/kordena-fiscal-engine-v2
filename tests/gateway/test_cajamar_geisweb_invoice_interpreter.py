@@ -112,7 +112,7 @@ def test_batch_receipt_cannot_promote_note_even_if_it_has_identifiers() -> None:
 
 def test_ambiguous_multi_rps_response_is_rejected() -> None:
     xml = _lot_xml().replace("</ConsultaLoteRpsResposta>", "") + (
-        _lot_xml().split("<Rps>", 1)[1].split("</Rps>", 1)[0]
+        "<Rps>" + _lot_xml().split("<Rps>", 1)[1].split("</Rps>", 1)[0]
     )
     xml = xml + "</Rps></ConsultaLoteRpsResposta>"
     with pytest.raises(Sp4CanonicalMunicipalError, match="multiple RPS"):
