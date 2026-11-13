@@ -42,3 +42,46 @@ Fontes oficiais:
 
 ## Critério de avanço
 Esta PR permanece **DRAFT** até testes/CI no HEAD final, revisão A/B dos contratos de integração e resolução de todas as pendências internas. Nenhum sucesso da #454, da #450 ou da #461 certifica automaticamente este recorte. A ordem posterior é Osasco → Barueri → Jundiaí somente após Cajamar internamente encerrada ou bloqueada externamente com evidência.
+
+
+## Execução integrada adicional — 13/11/2026 (candidato, não homologado)
+
+**CURRENT → TARGET:** A PR #463 passou do recorte de adaptadores para implementar o fluxo
+de preparação municipal no **mesmo** `FiscalApplicationService` e operação HTTP
+`prepareNativeNfse`, sem outra autoridade. O arquivo
+`src/kordena_fiscal/application/service.py` recebeu reserva `NFSE_RPS`, evidência
+`SP4_ORIGINAL_RPS_MEDIA_TYPE`, replay e loader tipado no mesmo commit UoW.
+A composição `runtime/canonical_fiscal_composition.py` recebeu port opt-in
+para emissão/consulta Cajamar usando binding persistido e loader canônico;
+a função HTTP de preparação e o formulário existente receberam ramo municipal
+sem escolha livre de provider no browser e campos completos de endereço do tomador.
+
+**Gates publicados:** testes de SQLite para transação/rollback/replay/tenant;
+preparação HTTP municipal com competência anterior à obrigação nacional;
+rejeição de competência Simples >= 01/11/2026; fluxo HTTP simulado de
+preparação → emissão pendente → consulta original → XML em arquivo → GET
+autenticado → replay sem segundo POST. São testes de arquitetura e payloads
+sintéticos, **não** respostas oficiais GeisWeb ou homologação fiscal.
+O nível de contrato dos providers revisados requer WSDL/XSD/XMLDSig oficiais
+versionados e credenciais aprovadas por contribuinte antes de execução real.
+
+**Código protegido/ownership:** a integração em arquivos do B está
+proposta na mesma árvore **Draft** para revisão de função e de contrato;
+não equivale a aprovação para merge/deploy nem substitui o pacto de ownership
+na issue #447 e seu pedido N2 específico. Não foi alterada a branch #454
+para incorporar código municipal; o bloco A/B deve ser reconciliado em um
+HEAD combinado antes de certificação comercial.
+
+**Download:** a PR nuclear #454 tem implementação do renderizador nacional
+DANFSe + GET HTTP com CI completa verde no SHA `d2a71c1250c01afcd38b0a422cd841e6a7ebfb02`,
+separado desta árvore. O XML municipal passa pela mesma camada de download
+protegida; a representação PDF oficial municipal ainda depende do layout,
+prova XML e/ou geração por provedor oficial: **não apresentar PDF inventado
+como DANFSe municipal**.
+
+**Certificação do HEAD:** as CI #2648/#2649/#2650 falharam em lint nas
+revisões intermediárias, e os ajustes foram aplicados no HEAD candidato.
+Não promover `INTERNAL_COMPLETE` nem `100%` sem CI completa do HEAD
+integrado e todas as jornadas web, cancellation e PDF/print em contrato
+do município. Não houve merge, deploy, A1 real, migration aplicada ou
+transmissão fiscal.
