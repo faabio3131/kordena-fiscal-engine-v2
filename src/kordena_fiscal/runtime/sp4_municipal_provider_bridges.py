@@ -14,14 +14,6 @@ from lxml import etree
 
 from kordena_fiscal.domain import Cnpj, ExecutionScope, TaxRegimeCode
 from kordena_fiscal.gateway.authorization import AuthorizationStatus
-from kordena_fiscal.gateway.osasco_rtc_homologation import (
-    OsascoOperationReceipt,
-    OsascoPreparedOperation,
-    OsascoRtcHomologationTransport,
-)
-from kordena_fiscal.gateway.osasco_rtc_request_builder import (
-    build_osasco_original_note_query,
-)
 from kordena_fiscal.gateway.cajamar_geisweb_cancellation_builder import (
     CajamarCancellationDecision,
     interpret_cajamar_cancel_response,
@@ -34,6 +26,14 @@ from kordena_fiscal.gateway.cajamar_geisweb_homologation import (
 )
 from kordena_fiscal.gateway.cajamar_geisweb_invoice_interpreter import (
     interpret_cajamar_geisweb_result,
+)
+from kordena_fiscal.gateway.osasco_rtc_homologation import (
+    OsascoOperationReceipt,
+    OsascoPreparedOperation,
+    OsascoRtcHomologationTransport,
+)
+from kordena_fiscal.gateway.osasco_rtc_request_builder import (
+    build_osasco_original_note_query,
 )
 from kordena_fiscal.gateway.sp4_municipal_canonical import (
     Sp4CanonicalMunicipalError,
