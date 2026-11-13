@@ -90,6 +90,17 @@ Sem o caminho configurado, a API inicia com o Bridge sem credenciais.
 
 ## Cofre A1 — persistência N3 (somente com evidência de host)
 
+**Auditoria de host 13/11/2026 (Contabo vmi3692211):** a API corrente já usa
+bind RW `/var/lib/nfcore/vault` → `/var/lib/nfcore/vault`.
+O auditor root-owned retornou `A1_VAULT_INFRA_GATE=PRECHECK_LOCAL_PARCIAL`:
+diretório, formato da chave e permissões OK; **zero ciphertexts presentes**;
+backup externo, custódia da chave e restore isolado **NÃO VERIFICADOS**.
+O overlay candidato deve usar o **mesmo caminho**; não provisionar
+`/var/lib/nfcore/a1-vault`, nem aplicar um segundo mount ao destino.
+Antes de qualquer deploy, confirmar que o Compose **efetivo no host** preserva
+o bind, independentemente da ausência desse mount na versão Git de
+`compose.prod.yml`. Não executar `docker compose up` para validar a hipótese.
+
 A PR #462 prepara `compose.a1-vault.opt-in.yml` e `a1-vault-ops.py` para
 reutilizar o **mesmo** EncryptedA1Vault da API, com arquivos cifrados fora da
 camada efêmera. Nenhum overlay é aplicado por `deploy.sh` ou `install.sh`.
