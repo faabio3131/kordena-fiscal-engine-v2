@@ -15,6 +15,11 @@ from kordena_fiscal.domain import (
     ExecutionScope,
     FiscalDocumentKind,
 )
+from kordena_fiscal.gateway.osasco_rtc_cancellation_builder import (
+    OsascoCancellationDecision,
+    build_osasco_cancel_request,
+    verify_osasco_cancel_reply,
+)
 from kordena_fiscal.gateway.osasco_rtc_homologation import (
     OsascoOperationReceipt,
     OsascoPreparedOperation,
@@ -57,6 +62,9 @@ class OsascoTrustedRuntimePorts:
         [OsascoOperationReceipt, NfseAuthorizationRequest, Sp4OriginalRps],
         Sp4ProviderOutcome,
     ] = interpret_osasco_full_note_result
+    verify_official_cancel: Callable[
+        [bytes, Sp4OriginalRps, Sp4VerifiedInvoice], bool | None
+    ] | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.transport, OsascoRtcHomologationTransport) or not all(
@@ -68,8 +76,47 @@ class OsascoTrustedRuntimePorts:
                 self.verify_official_invoice_xml,
                 self.interpret_official_result,
             )
+        ) or (
+            self.verify_official_cancel is not None
+            and not callable(self.verify_official_cancel)
         ):
             raise ValueError("Osasco requires complete reviewed municipal fiscal ports")
+
+    def attach_verified_cancellation(
+        self, application: FiscalApplicationService,
+    ) -> Callable[
+        [NfseAuthorizationRequest, Sp4OriginalRps, Sp4VerifiedInvoice, str],
+        OsascoCancellationDecision,
+    ] | None:
+        """Return a municipal cancellation port only if official proof is reviewed."""
+        if self.verify_official_cancel is None:
+            return None
+        validator = self.verify_official_cancel
+
+        def submit(
+            request: NfseAuthorizationRequest, source: Sp4OriginalRps,
+            issued: Sp4VerifiedInvoice, reason: str,
+        ) -> OsascoCancellationDecision:
+            if (
+                request.document.scope.identity_partition_key
+                != source.scope.identity_partition_key
+                or request.document.document_id != source.document_id
+                or request.request_fingerprint != source.request_fingerprint
+                or request.document.issuer.cnpj != source.issuer_cnpj
+            ):
+                raise ValueError("Osasco cancellation differs from original")
+            prepared = build_osasco_cancel_request(
+                source=source, issued=issued,
+                regime=request.document.issuer.tax_regime,
+                cancel_type="N", reason=reason, human_approved=True,
+            )
+            result = self.transport.invoke(prepared)
+            return verify_osasco_cancel_reply(
+                receipt=result, source=source, issued=issued,
+                verify_official_response=validator,
+            )
+
+        return submit
 
     def attach(self, application: FiscalApplicationService) -> Sp4ReviewedMunicipalPorts:
         """The same application's loader is the ONLY original-RPS authority."""
