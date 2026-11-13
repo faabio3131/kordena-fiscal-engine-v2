@@ -10,10 +10,16 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from kordena_fiscal.application.service import FiscalApplicationService
+from kordena_fiscal.domain import (
+    BrazilianJurisdiction,
+    ExecutionScope,
+    FiscalDocumentKind,
+)
 from kordena_fiscal.gateway.osasco_rtc_homologation import (
     OsascoOperationReceipt,
     OsascoPreparedOperation,
     OsascoRtcHomologationTransport,
+    OsascoWcfContract,
 )
 from kordena_fiscal.gateway.sp4_municipal_canonical import (
     Sp4OriginalRps,
@@ -21,7 +27,10 @@ from kordena_fiscal.gateway.sp4_municipal_canonical import (
     Sp4VerifiedInvoice,
 )
 from kordena_fiscal.issuance.nfe_nfse import NfseAuthorizationRequest
+from kordena_fiscal.persistence.ports import FiscalUnitOfWorkFactory
+from kordena_fiscal.vault.contracts import SecretResolutionService
 
+from .osasco_credentials import build_osasco_scoped_key_resolver
 from .sp4_municipal_canonical_composition import Sp4ReviewedMunicipalPorts
 from .sp4_municipal_provider_bridges import (
     Sp4BridgeAuthority,
@@ -76,3 +85,45 @@ class OsascoTrustedRuntimePorts:
             verify_wcf_rps_identity=self.verify_wcf_rps_identity,
             interpret_official_result=self.interpret_official_result,
         )
+
+
+def build_osasco_trusted_transport(
+    *,
+    application: FiscalApplicationService,
+    unit_of_work_factory: FiscalUnitOfWorkFactory,
+    secrets: SecretResolutionService,
+    workload_id: str,
+    validate_official_request: Callable[[bytes, str], None],
+    contract_for_method: Callable[[str], OsascoWcfContract],
+) -> OsascoRtcHomologationTransport:
+    """Bind Osasco WCF through the existing fiscal application and secret Vault.
+
+    No credential is cached, put in a WSDL manifest or provided by the browser.
+    A reviewed WSDL/XSD validator and SOAPAction mapping remain required ports.
+    """
+    if not all(callable(port) for port in (
+        validate_official_request, contract_for_method,
+    )):
+        raise ValueError("Osasco requires reviewed WSDL/XSD contract ports")
+
+    class _CanonicalProviderResolver:
+        def resolve_provider_id(
+            self, *, scope: ExecutionScope,
+            document_kind: FiscalDocumentKind,
+            jurisdiction: BrazilianJurisdiction,
+            operation: str,
+        ) -> str:
+            return application.resolve_configured_provider_id(
+                scope=scope, document_kind=document_kind,
+                jurisdiction=jurisdiction, operation=operation,
+            )
+
+    return OsascoRtcHomologationTransport(
+        resolver=_CanonicalProviderResolver(),
+        resolve_key=build_osasco_scoped_key_resolver(
+            unit_of_work_factory=unit_of_work_factory,
+            secrets=secrets, workload_id=workload_id,
+        ),
+        validated_request=validate_official_request,
+        contract_for_method=contract_for_method,
+    )
