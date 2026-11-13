@@ -865,19 +865,30 @@ class DurableHumanPortalExecutor:
         from .fiscal_intent_recovery import PERMISSIONS
 
         if operation_id in PERMISSIONS:
-            receipt = self.prepare_fiscal_intent(
-                authority=authority,
-                operation_id=operation_id,
-                payload=payload,
-                idempotency_key=idempotency_key,
-            )
-            return self.resume_fiscal_intent(
-                authority=authority,
-                intent_id=str(receipt["intent_id"]),
-                payload=payload,
-                idempotency_key=idempotency_key,
-                legacy_result=True,
-            )
+            try:
+                receipt = self.prepare_fiscal_intent(
+                    authority=authority,
+                    operation_id=operation_id,
+                    payload=payload,
+                    idempotency_key=idempotency_key,
+                )
+                return self.resume_fiscal_intent(
+                    authority=authority,
+                    intent_id=str(receipt["intent_id"]),
+                    payload=payload,
+                    idempotency_key=idempotency_key,
+                    legacy_result=True,
+                )
+            except (PersistenceConflictError, PersistenceStateError) as exc:
+                # A second Cajamar cancellation must return a scoped HTTP 409
+                # instead of leaking a storage exception or issuing another POST.
+                # All other existing fiscal operations retain their contracts.
+                if operation_id != "cancelCajamarNfse":
+                    raise
+                raise _portal_error(
+                    409, "CAJAMAR_CANCELLATION_STATE_CONFLICT",
+                    "Original cancellation is completed, pending or under investigation",
+                ) from exc
         if self._operation_executor is None:
             raise _runtime_unavailable("Fiscal portal operation executor is not configured")
         return self._operation_executor.execute(
