@@ -5,7 +5,9 @@ import base64
 import gzip
 import hashlib
 import json
-from datetime import UTC, datetime, timedelta
+from dataclasses import replace
+from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 from unittest.mock import Mock, patch
 from xml.sax.saxutils import escape
@@ -17,7 +19,11 @@ from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography.x509.oid import NameOID, ObjectIdentifier
 from fastapi.testclient import TestClient
 from lxml import etree
+import pytest
 
+from kordena_fiscal.application.cajamar_substitution_review import (
+    review_cajamar_substitution,
+)
 from kordena_fiscal.application.service import FiscalApplicationService
 from kordena_fiscal.archive import FiscalArchiveKind, RetentionPolicyMetadata
 from kordena_fiscal.compliance.nfse_preaudit import nfse_preaudit
@@ -39,6 +45,8 @@ from kordena_fiscal.domain import (
     FiscalDocumentKind,
     FiscalEnvironment,
     FiscalProfile,
+    FiscalValidationError,
+    Money,
     StateRegistration,
     TaxRegimeCode,
 )
@@ -305,6 +313,89 @@ _TAKER_ADDRESS = {
     "taker_municipality_ibge": "3550308",
     "taker_postal_code": "01001000",
 }
+
+
+def test_cajamar_official_substitution_rules_do_not_infer_soap_completion(
+    tmp_path: Path,
+) -> None:
+    db = _database(
+        tmp_path / "cajamar-substitution-policy.sqlite", provider_id=_CAJAMAR_PROVIDER,
+    )
+    web = _client(db)
+    data = _payload() | _TAKER_ADDRESS | {
+        "competence_date": "2026-10-31",
+        "source_id": "cajamar-original-for-substitution",
+    }
+    old = _post(web, data, "cajamar-review-old")
+    candidate = _post(
+        web, data | {"source_id": "cajamar-candidate-substitution"},
+        "cajamar-review-candidate",
+    )
+    assert old.status_code == 200, old.text
+    assert candidate.status_code == 200, candidate.text
+    app = FiscalApplicationService(db)
+    scope = ExecutionScope(
+        TENANT, UNIT, FiscalEnvironment.HOMOLOGATION,
+        "review", "fm-nfcore",
+    )
+    original = app.load_prepared_nfse_authorization(
+        scope, old.json()["document_id"],
+    )
+    replacement = app.load_prepared_nfse_authorization(
+        scope, candidate.json()["document_id"],
+    )
+    reviewed = review_cajamar_substitution(
+        original=original, replacement=replacement,
+        reviewed_at=datetime(2026, 11, 5, tzinfo=UTC),
+    )
+    assert reviewed.municipal_action == "MUNICIPAL_PORTAL_SUBSTITUTION_REQUIRED"
+    assert reviewed.deadline == date(2026, 11, 10)
+    assert reviewed.official_fiscal_confirmation is False
+    assert reviewed.original_id != reviewed.replacement_id
+
+    with pytest.raises(FiscalValidationError, match="period expired"):
+        review_cajamar_substitution(
+            original=original, replacement=replacement,
+            reviewed_at=datetime(2026, 11, 11, tzinfo=UTC),
+        )
+    with pytest.raises(FiscalValidationError, match="distinct"):
+        review_cajamar_substitution(
+            original=original, replacement=original,
+            reviewed_at=datetime(2026, 11, 5, tzinfo=UTC),
+        )
+    for updated in (
+        replace(replacement.document, competence_date=date(2026, 10, 30)),
+        replace(
+            replacement.document,
+            service_taker=replace(
+                replacement.document.service_taker,
+                legal_name="Outro tomador",
+            ),
+        ),
+        replace(
+            replacement.document,
+            services=(
+                replace(
+                    replacement.document.services[0],
+                    gross_amount=Money(Decimal("120.00")),
+                ),
+            ),
+        ),
+    ):
+        changed = NfseAuthorizationRequest.build(updated)
+        with pytest.raises(FiscalValidationError, match="cannot change"):
+            review_cajamar_substitution(
+                original=original, replacement=changed,
+                reviewed_at=datetime(2026, 11, 5, tzinfo=UTC),
+            )
+
+    # Prepared alone cannot be mistaken for substitution completed by city.
+    with pytest.raises(Exception):
+        app.review_prepared_cajamar_substitution(
+            scope=scope, original_id=old.json()["document_id"],
+            replacement_id=candidate.json()["document_id"],
+            reviewed_at=datetime(2026, 11, 5, tzinfo=UTC),
+        )
 
 
 def test_cajamar_prepares_original_rps_through_same_portal_and_uow(
