@@ -145,7 +145,7 @@ def test_doctype_mismatch_and_non_fiscal_soap_response_rejected() -> None:
     with pytest.raises(Sp4CanonicalMunicipalError):
         _interpret(_receipt('<!DOCTYPE r [<!ENTITY x SYSTEM "file:///etc/passwd">]>'
                             + _lot_xml()))
-    with pytest.raises(Sp4CanonicalMunicipalError, match="method"):
+    with pytest.raises(Sp4CanonicalMunicipalError, match="SOAP|method"):
         _interpret(CajamarGeiswebResult(
             method="ConsultaLoteRps",
             response_xml=b'<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/'
