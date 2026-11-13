@@ -88,3 +88,76 @@ def build_osasco_cancel_handler(
         }
 
     return PreflightFiscalOperationHandler(execute, validate)
+
+
+def build_osasco_substitution_handler(
+    *,
+    application: FiscalApplicationService,
+    verified_substitute_cancel: Callable[
+        [NfseAuthorizationRequest, Sp4OriginalRps, Sp4VerifiedInvoice, str],
+        OsascoCancellationDecision,
+    ],
+    retention: RetentionPolicyMetadata,
+) -> FiscalOperationHandler:
+    """Two documents: official type-S cancellation, then normal issued replacement.
+
+    This is NOT an atomic multi-provider substitution. The issuer may submit
+    the prepared replacement only after confirmed cancellation of the original.
+    """
+    expected = frozenset({
+        "unit_id", "environment", "original_id", "replacement_id",
+        "human_approval", "cancellation_reason",
+    })
+    if not callable(verified_substitute_cancel):
+        raise ValueError("Osasco type-S cancellation needs verified WCF dependency")
+
+    def validate(
+        scope: ExecutionScope, payload: Mapping[str, Any], key: str | None,
+    ) -> None:
+        reason = payload.get("cancellation_reason")
+        if (
+            not isinstance(key, str) or not 0 < len(key.strip()) <= 256
+            or set(payload) != expected
+            or payload.get("unit_id") != scope.unit_id
+            or payload.get("environment") != scope.environment.value
+            or payload.get("human_approval") is not True
+            or not isinstance(payload.get("original_id"), str)
+            or not isinstance(payload.get("replacement_id"), str)
+            or not isinstance(reason, str)
+            or not 1 <= len(reason.strip()) <= 500
+            or any(ord(ch) < 32 for ch in reason)
+        ):
+            raise FiscalValidationError("Osasco substitution needs two reviewed documents")
+        application.preflight_osasco_nfse_substitution(
+            scope=scope, original_id=str(payload["original_id"]),
+            replacement_id=str(payload["replacement_id"]),
+            cancellation_reason=reason,
+        )
+
+    def execute(
+        scope: ExecutionScope, payload: Mapping[str, Any], key: str | None,
+    ) -> Mapping[str, Any]:
+        validate(scope, payload, key)
+        outcome = application.cancel_prepared_osasco_nfse(
+            scope=scope, document_id=str(payload["original_id"]),
+            replacement_id=str(payload["replacement_id"]),
+            cancellation_reason=str(payload["cancellation_reason"]),
+            submit_verified_cancel=verified_substitute_cancel,
+            occurred_at=datetime.now(UTC), retention=retention,
+        )
+        return {
+            "original_id": str(payload["original_id"]),
+            "replacement_id": str(payload["replacement_id"]),
+            "original_status": outcome.lifecycle.state.value,
+            "replacement_status": "ready_to_transmit",
+            "municipality_ibge": "3534401",
+            "official_fiscal_confirmation": outcome.decision.confirmed is True,
+            "recovery_required": outcome.decision.confirmed is None,
+            "next_action": (
+                "issueFiscalDocument" if outcome.decision.confirmed is True
+                else "reconcileCancellation"
+            ),
+            "entry_id": outcome.archive_reference,
+        }
+
+    return PreflightFiscalOperationHandler(execute, validate)
