@@ -9,7 +9,15 @@ from unittest.mock import Mock
 import pytest
 from lxml import etree
 
-from kordena_fiscal.domain import Cnpj, ExecutionScope, FiscalEnvironment, TaxRegimeCode
+from kordena_fiscal.domain import (
+    BrazilianJurisdiction,
+    Cnpj,
+    ExecutionScope,
+    FiscalAddress,
+    FiscalEnvironment,
+    MunicipalRegistration,
+    TaxRegimeCode,
+)
 from kordena_fiscal.gateway.osasco_rtc_issue_builder import (
     OsascoRtcIssueError,
     OsascoRtcRecipient,
@@ -17,8 +25,17 @@ from kordena_fiscal.gateway.osasco_rtc_issue_builder import (
     build_osasco_rtc_issue_xml,
     prepare_osasco_rtc_issue,
 )
+from kordena_fiscal.gateway.osasco_rtc_tax_policy import (
+    OsascoReviewedRtcPolicy,
+    OsascoReviewedTaxPolicyError,
+    build_osasco_reviewed_tax_resolver,
+    reviewed_osasco_rtc_fields,
+)
 from kordena_fiscal.gateway.sp4_municipal_canonical import Sp4OriginalRps
-from kordena_fiscal.issuance.nfe_nfse import NfseAuthorizationRequest
+from kordena_fiscal.issuance.nfe_nfse import (
+    NfseAuthorizationRequest,
+    NfseServiceTaker,
+)
 from kordena_fiscal.runtime.sp4_municipal_request_factories import (
     build_osasco_rtc_issue_request_factory,
 )
@@ -234,3 +251,82 @@ def test_osasco_conditional_location_cannot_be_partially_prepared(
             request=_request(original), original=original,
             fields=replace(_fields(), **change),
         )
+
+
+def _reviewed_rtc_policy() -> OsascoReviewedRtcPolicy:
+    return OsascoReviewedRtcPolicy(
+        source_normative="urn:nfcore:osasco:reviewed-2026",
+        rule_version=12, effective_from=date(2026, 1, 1),
+        effective_through=date(2026, 12, 31),
+        municipal_service_code="14.01", national_taxation_code="010701",
+        activity="14.01", class_trib="000001", nbs_code="1.2001.10.00",
+        incidence_location="3", operation_indicator="050101",
+        service_city="Osasco", service_city_ibge="3534401", service_state="SP",
+        recipient_street_type="RUA", iss_rate=Decimal("3"),
+        pis=Decimal("0.00"), cofins=Decimal("0.00"),
+        csll=Decimal("0.00"), income_tax=Decimal("0.00"),
+        inss=Decimal("0.00"), other_taxes=Decimal("0.00"),
+        test_only=False,
+    )
+
+
+def _reviewed_request(original: Sp4OriginalRps) -> NfseAuthorizationRequest:
+    req = _request(original)
+    d = req.document
+    d.issuer.address.jurisdiction = BrazilianJurisdiction("SP", "3534401")
+    d.issuer.municipal_registration = MunicipalRegistration("123456")
+    d.service_taker = NfseServiceTaker(
+        tax_id=Cnpj("11222333000181"), legal_name="Cliente Fiscal",
+        address=FiscalAddress(
+            street="Rua Sintetica", number="120", district="Centro",
+            municipality_name="Osasco",
+            jurisdiction=BrazilianJurisdiction("SP", "3534401"),
+            postal_code="06018090",
+        ),
+    )
+    item = d.services[0]
+    item.iss_amount.amount = Decimal("4.50")
+    item.taxable_amount.amount = Decimal("150.00")
+    item.municipal_service_code = "14.01"
+    item.national_taxation_code = "010701"
+    item.source_normative = "urn:nfcore:osasco:reviewed-2026"
+    item.rule_version = 12
+    item.iss_withheld = False
+    return req
+
+
+def test_osasco_reviewed_policy_binds_canonical_iss_without_guessing_taxes() -> None:
+    original = _original()
+    req = _reviewed_request(original)
+    resolver = build_osasco_reviewed_tax_resolver(
+        lambda _request, _original: _reviewed_rtc_policy(),
+    )
+    fields = resolver(req, original)
+    assert fields.iss_rate == Decimal("3")
+    assert fields.recipient.tax_id == original.issuer_cnpj.value
+    assert fields.recipient.street_type == "RUA"
+    assert fields.test_only is False
+    xml = build_osasco_rtc_issue_xml(
+        request=req, original=original, fields=fields,
+    )
+    assert b"<" in xml
+    assert b"ValorPisPasep" in xml
+
+
+def test_osasco_reviewed_policy_rejects_missing_sources_and_wrong_iss() -> None:
+    original = _original()
+    req = _reviewed_request(original)
+    policy = _reviewed_rtc_policy()
+    assert reviewed_osasco_rtc_fields(req, original, policy).class_trib == "000001"
+    for change in (
+        {"rule_version": 11},
+        {"effective_from": date(2026, 11, 13)},
+        {"iss_rate": Decimal("4")},
+        {"service_city_ibge": "3550308"},
+        {"source_normative": "unreviewed"},
+    ):
+        with pytest.raises(OsascoReviewedTaxPolicyError):
+            reviewed_osasco_rtc_fields(req, original, replace(policy, **change))
+    req.document.issuer.municipal_registration = None
+    with pytest.raises(OsascoReviewedTaxPolicyError, match="registration"):
+        reviewed_osasco_rtc_fields(req, original, policy)
