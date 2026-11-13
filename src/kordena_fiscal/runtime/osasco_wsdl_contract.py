@@ -124,7 +124,7 @@ def load_osasco_pinned_wsdl(
     if set(methods) != _METHODS or len({
         x.action for x in methods.values()
     }) != len(_METHODS):
-        raise OsascoWsdlIntegrityError("Missing official WCF emission/query/cancellation")
+        raise OsascoWsdlIntegrityError("Missing official WCF operation for emission/query/cancellation")
     return OsascoPinnedWcfWsdl(
         sha256=expected_sha256, binding_name=binding_name, operations=methods,
     )
