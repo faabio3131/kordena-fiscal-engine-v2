@@ -16,10 +16,11 @@ from kordena_fiscal.runtime.cajamar_environment import (
     CajamarReviewedStartup,
     build_cajamar_port_builder_from_environ,
 )
+from kordena_fiscal.runtime.api import build_entrypoint_fiscal_handler_factory
 from kordena_fiscal.runtime.canonical_fiscal_composition import (
     build_runtime_fiscal_handler_factory,
 )
-from kordena_fiscal.runtime.config import RuntimeConfigurationError
+from kordena_fiscal.runtime.config import RuntimeConfigurationError, RuntimeSettings
 from kordena_fiscal.vault.encrypted_a1 import EncryptedA1Vault
 from kordena_fiscal.xml.schema import (
     SchemaIntegrityError,
@@ -155,3 +156,40 @@ def test_cajamar_refuses_unpinned_or_unsafe_config_without_network(
     manifest.write_text(json.dumps(doc), encoding="utf-8")
     with pytest.raises(RuntimeConfigurationError, match="Duplicate"):
         CajamarReviewedStartup.load(str(manifest))
+
+def test_actual_uvicorn_entrypoint_factory_registers_cajamar_once(
+    tmp_path: Path,
+) -> None:
+    manifest = _fixture(tmp_path)
+    vault = EncryptedA1Vault(
+        directory=tmp_path / "entrypoint-vault", master_key=b"x" * 32,
+    )
+    settings = RuntimeSettings.from_mapping({
+        "NFCORE_ENVIRONMENT": "staging",
+        "NFCORE_PERSISTENCE_BACKEND": "postgres",
+        "DATABASE_URL": "postgresql://fake:fake@db/nfcore",
+        "NFCORE_SECRET_BACKEND": "external",
+    })
+    env = {"NFCORE_CAJAMAR_GEISWEB_CONFIG_PATH": str(manifest)}
+    factory = build_entrypoint_fiscal_handler_factory(settings, env, vault)
+    assert factory is not None
+    db = SqliteFiscalDatabase(tmp_path / "single-runtime.sqlite")
+    db.initialize()
+    same_application = FiscalApplicationService(db)
+    configured = factory(same_application)
+    assert "cancelCajamarNfse" in configured
+    assert "reviewCajamarSubstitution" in configured
+    assert "issueFiscalDocument" in configured
+    assert "queryFiscalDocument" in configured
+
+    disabled = build_entrypoint_fiscal_handler_factory(settings, {}, vault)
+    assert disabled is not None
+    assert "cancelCajamarNfse" not in disabled(same_application)
+
+    dev = RuntimeSettings.from_mapping({
+        "NFCORE_ENVIRONMENT": "development",
+    })
+    with pytest.raises(RuntimeConfigurationError, match="staging/production"):
+        build_entrypoint_fiscal_handler_factory(dev, env, vault)
+    assert build_entrypoint_fiscal_handler_factory(dev, {}, vault) is None
+
