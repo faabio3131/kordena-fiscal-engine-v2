@@ -85,3 +85,29 @@ Não promover `INTERNAL_COMPLETE` nem `100%` sem CI completa do HEAD
 integrado e todas as jornadas web, cancellation e PDF/print em contrato
 do município. Não houve merge, deploy, A1 real, migration aplicada ou
 transmissão fiscal.
+
+
+## Reconciliador final de download e contrato de impressão GeisWeb (13/11/2026)
+
+- O código da #463 agora inclui, no **mesmo Portal runtime canônico**, o
+  renderizador nacional `render_authorized_national_danfse` já implementado
+  e aprovado pela #454@`d2a71c1250c01afcd38b0a422cd841e6a7ebfb02`.
+  Este hunk é **reaproveitamento**, não um segundo PDF engine, e ainda deve
+  ser reconciliado formalmente no HEAD cumulativo com o owner B.
+- A geração nacional depende de XML NFS-e nacional oficial arquivado,
+  com `infNFSe/@Id` de chave nacional válida; não aceita XML municipal
+  de Cajamar como NFS-e Nacional, não cria autorização em mock.
+- **Fonte GeisWeb20 identificada, atualização 23/12/2025:**
+  https://atendimento.tecnospeed.com.br/hc/pt-br/articles/1500006998382-Documenta%C3%A7%C3%A3o-T%C3%A9cnica-Padr%C3%A3o-GeisWeb20
+  (CajamarSP e seção Impressão). O fornecedor diz expressamente:
+  *impressão de NFS-e em homologação não disponível*. O comando auxiliar
+  `ObterLinkImpressaoNFSe` é apresentado no contexto do SDK Tecnospeed,
+  não equivale a um endpoint SOAP nativo conhecido, e não fornece PDF
+  oficial de homologação. Não inventar link de cliente nem gerar impressão
+  que não se pode verificar. Classificar como
+  `EXTERNAL_PROVIDER_PRINT_HOMOLOGATION_UNAVAILABLE`.
+- Aceite interno do município permanece dependente de tests positivos completos
+  no HEAD final, revisão do B nas fronteiras compartilhadas, cancelamento
+  municipal com resultado comprovável, contrato WSDL/XSD oficial pinado
+  quando disponibilizado, XMLDA/XMLDSig, observabilidade e readiness real.
+  Este checkpoint não certifica homologação externa nem lançamento.
