@@ -45,7 +45,8 @@ def test_overlay_is_explicit_persistent_private_bind_with_no_implicit_host_creat
     source = _OVERLAY.read_text(encoding="utf-8")
     assert "NFCORE_A1_VAULT_HOST_DIR:?" in source
     assert "create_host_path: false" in source
-    assert "NFCORE_A1_VAULT_DIR: /var/lib/nfcore/a1-vault" in source
+    assert "NFCORE_A1_VAULT_DIR: /var/lib/nfcore/vault" in source
+    assert "Never activate alongside a duplicate target mount" in source
     assert "read_only: false" in source
     assert "nfcore-api:" in source
     # Never silently modify the production compose or introduce another vault authority.
@@ -148,8 +149,8 @@ def test_docker_compose_overlay_effective_mount_is_correct_and_requires_host_sou
                             text=True, env=env, check=False, timeout=30)
     assert result.returncode == 0, "invalid A1 Compose overlay"
     api = json.loads(result.stdout)["services"]["nfcore-api"]
-    assert api["environment"]["NFCORE_A1_VAULT_DIR"] == "/var/lib/nfcore/a1-vault"
-    mounts = [v for v in api["volumes"] if v["target"] == "/var/lib/nfcore/a1-vault"]
+    assert api["environment"]["NFCORE_A1_VAULT_DIR"] == "/var/lib/nfcore/vault"
+    mounts = [v for v in api["volumes"] if v["target"] == "/var/lib/nfcore/vault"]
     assert len(mounts) == 1
     assert mounts[0]["type"] == "bind"
     assert mounts[0]["source"] == str(host_vault)
