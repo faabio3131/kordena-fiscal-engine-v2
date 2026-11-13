@@ -41,6 +41,7 @@ from kordena_fiscal.gateway import (
     AuthorizationStatus,
     FiscalGatewayClient,
 )
+from kordena_fiscal.gateway.sp4_municipal_canonical import Sp4OriginalRps
 from kordena_fiscal.gateway.webiss_extrema_canonical import (
     ExtremaCancellationOutcome,
     ExtremaSubstitutionOutcome,
@@ -58,6 +59,12 @@ from kordena_fiscal.issuance.nfse_archive import (
     NFSE_PREPARED_MEDIA_TYPE,
     decode_prepared_nfse,
     encode_prepared_nfse,
+)
+from kordena_fiscal.issuance.sp4_original_rps_archive import (
+    SP4_ORIGINAL_RPS_MEDIA_TYPE,
+    decode_sp4_original,
+    encode_sp4_original,
+    validate_sp4_original,
 )
 from kordena_fiscal.issuance.webiss_extrema_builder import (
     EXTREMA_INTENT_MEDIA_TYPE,
@@ -622,6 +629,10 @@ class FiscalApplicationService:
             [FiscalNumberReservation], ExtremaRpsIntent
         ] | None = None,
         extrema_rps_series: int | None = None,
+        sp4_original_builder: Callable[
+            [NfseAuthorizationRequest, FiscalNumberReservation], Sp4OriginalRps
+        ] | None = None,
+        sp4_rps_series: int | None = None,
     ) -> DurablePreparedAuthorization:
         """Atomically reserve, validate and archive one provider-neutral NFS-e request."""
         if not isinstance(document, NfseCanonicalDocument):
@@ -638,8 +649,26 @@ class FiscalApplicationService:
             )
         if extrema_intent_builder is not None and not callable(extrema_intent_builder):
             raise FiscalValidationError("WebISS RPS builder must be trusted and callable")
+        if (sp4_original_builder is None) != (sp4_rps_series is None):
+            raise FiscalValidationError(
+                "SP4 original RPS builder and numbering series must be supplied together"
+            )
+        if sp4_original_builder is not None:
+            if not callable(sp4_original_builder) or extrema_intent_builder is not None:
+                raise FiscalValidationError("Municipal fiscal RPS modes are exclusive")
+            if (
+                type(sp4_rps_series) is not int
+                or not 1 <= sp4_rps_series <= 99_999
+                or document.scope.environment is not FiscalEnvironment.HOMOLOGATION
+                or not document.scope.host_namespace
+                or document.issuer.address.jurisdiction.state_code != "SP"
+                or document.issuer.address.jurisdiction.municipality_ibge_code != "3509205"
+            ):
+                raise FiscalValidationError(
+                    "Cajamar original RPS requires reviewed municipal scope and series"
+                )
         with self._uow_factory() as uow:
-            if extrema_intent_builder is None:
+            if extrema_intent_builder is None and sp4_original_builder is None:
                 # The National DPS number and issuance reservation belong to one UoW.
                 dps_serial = uow.dps_sequences.reserve(
                     document, input_fingerprint=build_nfse_request_fingerprint(document),
@@ -674,18 +703,29 @@ class FiscalApplicationService:
                 prepared = self._load_prepared_from_uow(uow, document.scope, document.document_id)
                 if not isinstance(prepared, NfseAuthorizationRequest):
                     raise PersistenceStateError("durable request is not NFS-e")
+                prior_entries = uow.archive.list_for_document(
+                    document.scope, document.document_id,
+                )
                 prior_intents = [
-                    archived.content
-                    for archived in uow.archive.list_for_document(
-                        document.scope, document.document_id,
-                    )
+                    archived for archived in prior_entries
                     if archived.media_type == EXTREMA_INTENT_MEDIA_TYPE
                 ]
-                if len(prior_intents) > 1 or bool(prior_intents) != (
-                    extrema_intent_builder is not None
+                prior_originals = [
+                    archived for archived in prior_entries
+                    if archived.media_type == SP4_ORIGINAL_RPS_MEDIA_TYPE
+                ]
+                if (
+                    len(prior_intents) > 1
+                    or bool(prior_intents) != (extrema_intent_builder is not None)
+                    or len(prior_originals) > 1
+                    or bool(prior_originals) != (sp4_original_builder is not None)
                 ):
                     raise PersistenceConflictError(
-                        "WebISS fiscal intent cannot change after idempotency reservation"
+                        "Municipal original RPS mode cannot change after reservation"
+                    )
+                if prior_originals:
+                    decode_sp4_original(
+                        prior_originals[0].content, scope=document.scope, request=prepared,
                     )
                 uow.commit()
                 return DurablePreparedAuthorization(attempt, current, prepared, True)
@@ -728,6 +768,27 @@ class FiscalApplicationService:
                     archived_at=occurred_at,
                     retention=retention,
                 )
+            elif sp4_original_builder is not None:
+                assert sp4_rps_series is not None
+                key = FiscalSequenceKey.from_scope(
+                    document.scope,
+                    model=InternalFiscalSequenceStream.NFSE_RPS,
+                    series=sp4_rps_series,
+                )
+                reserved_rps = uow.sequences.reserve_next(
+                    key, FiscalSequencePolicy(max_number=99_999_999),
+                )
+                original_rps = sp4_original_builder(request, reserved_rps)
+                validate_sp4_original(request, original_rps, reserved_rps)
+                municipal_entry = FiscalArchiveEntry.build(
+                    scope=document.scope,
+                    document_reference=document.document_id,
+                    kind=FiscalArchiveKind.OTHER,
+                    content=encode_sp4_original(request, original_rps, reserved_rps),
+                    media_type=SP4_ORIGINAL_RPS_MEDIA_TYPE,
+                    archived_at=occurred_at,
+                    retention=retention,
+                )
             current = FiscalStateSnapshot.initial(document.document_id, document.issued_at)
             uow.lifecycle.add(current, scope=document.scope)
             for target, reason in (
@@ -750,6 +811,29 @@ class FiscalApplicationService:
                 uow.archive.append(municipal_entry)
             uow.commit()
             return DurablePreparedAuthorization(attempt, current, request, False)
+
+    def load_sp4_original_rps(
+        self, scope: ExecutionScope, document_id: str,
+    ) -> Sp4OriginalRps:
+        """Recover Cajamar original RPS from the same tenant-scoped canonical archive.
+
+        The fiscal application is the sole loader. Transport drivers cannot
+        supply alternate identity, lot, CNPJ, or original sequence authority.
+        """
+        with self._uow_factory() as uow:
+            prepared = self._load_prepared_from_uow(uow, scope, document_id)
+            if not isinstance(prepared, NfseAuthorizationRequest):
+                raise PersistenceStateError("Original RPS requires prepared NFS-e")
+            originals = [
+                entry for entry in uow.archive.list_for_document(scope, document_id)
+                if entry.kind is FiscalArchiveKind.OTHER
+                and entry.media_type == SP4_ORIGINAL_RPS_MEDIA_TYPE
+            ]
+            if len(originals) != 1:
+                raise PersistenceStateError("Exactly one original RPS archive is required")
+            return decode_sp4_original(
+                originals[0].content, scope=scope, request=prepared,
+            )
 
     def load_extrema_rps_intent(
         self, scope: ExecutionScope, document_id: str,
