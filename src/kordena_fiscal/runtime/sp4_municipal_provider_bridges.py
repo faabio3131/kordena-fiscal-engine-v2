@@ -28,6 +28,7 @@ from kordena_fiscal.gateway.sp4_municipal_canonical import (
     Sp4VerifiedInvoice,
 )
 from kordena_fiscal.issuance.nfe_nfse import NfseAuthorizationRequest
+
 from .sp4_municipal_canonical_composition import Sp4ReviewedMunicipalPorts
 
 
