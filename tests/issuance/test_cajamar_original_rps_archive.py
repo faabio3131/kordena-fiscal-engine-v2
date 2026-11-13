@@ -10,19 +10,34 @@ from decimal import Decimal
 import pytest
 
 from kordena_fiscal.domain import (
-    BrazilianJurisdiction, CnaeCode, Cnpj, ExecutionScope, FiscalAddress,
-    FiscalEnvironment, FiscalProfile, FiscalValidationError, Money,
-    SourceReference, StateRegistration, TaxRegimeCode,
+    BrazilianJurisdiction,
+    CnaeCode,
+    Cnpj,
+    ExecutionScope,
+    FiscalAddress,
+    FiscalEnvironment,
+    FiscalProfile,
+    FiscalValidationError,
+    Money,
+    SourceReference,
+    StateRegistration,
+    TaxRegimeCode,
 )
 from kordena_fiscal.issuance.nfe_nfse import (
-    NfseAuthorizationRequest, NfseCanonicalDocument, NfseServiceLine,
+    NfseAuthorizationRequest,
+    NfseCanonicalDocument,
+    NfseServiceLine,
 )
 from kordena_fiscal.issuance.sp4_original_rps_archive import (
-    build_sp4_original_from_reservation, decode_sp4_original,
-    encode_sp4_original, expected_sp4_batch,
+    build_sp4_original_from_reservation,
+    decode_sp4_original,
+    encode_sp4_original,
+    expected_sp4_batch,
 )
 from kordena_fiscal.numbering import (
-    FiscalNumberReservation, FiscalSequenceKey, InternalFiscalSequenceStream,
+    FiscalNumberReservation,
+    FiscalSequenceKey,
+    InternalFiscalSequenceStream,
 )
 
 _NOW = datetime(2026, 11, 12, 12, tzinfo=UTC)
