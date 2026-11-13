@@ -163,7 +163,7 @@ def interpret_cajamar_cancel_response(
         ):
             raise CajamarGeiswebCancellationError("Unexpected cancellation SOAP envelope")
         body = soap.find(_SOAP + "Body")
-        if body is None or body.find(_SOAP + "Fault") is not None:
+        if body is None or body.find(_SOAP + "Fault") is not None or len(body) != 1:
             raise CajamarGeiswebCancellationError("GeisWeb cancellation SOAP fault")
         wrappers = [
             elem for elem in body

@@ -96,6 +96,28 @@ def test_fiscal_mismatch_is_never_promoted(change: dict[str, str]) -> None:
         _interpret(_receipt(_lot_xml(**change)))
 
 
+@pytest.mark.parametrize("note_number", ["0", "ABC123", "-1", "１２３"])
+def test_lot_query_rejects_invalid_official_invoice_number(note_number: str) -> None:
+    # Do not authorize a fiscal note without a valid municipal invoice number.
+    xml = _lot_xml().replace(
+        "<NumeroNfse>8765</NumeroNfse>",
+        f"<NumeroNfse>{note_number}</NumeroNfse>",
+    )
+    with pytest.raises(Sp4CanonicalMunicipalError):
+        _interpret(_receipt(xml))
+
+
+def test_lot_query_rejects_extra_soap_body_results() -> None:
+    receipt = _receipt(_lot_xml())
+    invalid = receipt.response_xml.replace(
+        b"</soap:Body>", b"<g:OtherResponse/></soap:Body>",
+    )
+    with pytest.raises(Sp4CanonicalMunicipalError):
+        _interpret(CajamarGeiswebResult(
+            method="ConsultaLoteRps", response_xml=invalid,
+        ))
+
+
 def test_lot_error_or_missing_note_remains_pending() -> None:
     for xml in (
         "<ConsultaLoteRpsResposta><Msg><Erro>68</Erro>"

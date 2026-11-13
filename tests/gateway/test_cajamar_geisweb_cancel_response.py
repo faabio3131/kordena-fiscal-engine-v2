@@ -123,6 +123,21 @@ def test_geisweb_cancellation_rejects_fake_confirmed_flag_without_soap_proof() -
     verifier.assert_not_called()
 
 
+def test_cancellation_rejects_extra_soap_body_result() -> None:
+    receipt = _soap(_success())
+    invalid = receipt.response_xml.replace(
+        b"</soap:Body>", b"<g:OtherResponse/></soap:Body>",
+    )
+    with pytest.raises(CajamarGeiswebCancellationError):
+        interpret_cajamar_cancel_response(
+            receipt=CajamarGeiswebResult(
+                method="CancelaNfse", response_xml=invalid,
+            ),
+            source=_original(), issued=_issued(),
+            verify_official_response=Mock(),
+        )
+
+
 def test_geisweb_cancellation_validator_failure_cannot_be_accepted() -> None:
     verifier = Mock(side_effect=CajamarGeiswebCancellationError("Invalid XSD"))
     with pytest.raises(CajamarGeiswebCancellationError, match="Invalid XSD"):

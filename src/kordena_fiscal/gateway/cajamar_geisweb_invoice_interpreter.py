@@ -54,7 +54,7 @@ def _service_result(response_xml: bytes) -> bytes:
     if root.tag != _SOAP + "Envelope":
         raise Sp4CanonicalMunicipalError("GeisWeb response requires SOAP envelope")
     body = root.find(_SOAP + "Body")
-    if body is None or body.find(_SOAP + "Fault") is not None:
+    if body is None or body.find(_SOAP + "Fault") is not None or len(body) != 1:
         raise Sp4CanonicalMunicipalError("GeisWeb fiscal SOAP fault or missing body")
     responses = [
         node for node in body
@@ -155,6 +155,8 @@ def decode_cajamar_archived_invoice(
         raise Sp4CanonicalMunicipalError("GeisWeb official fiscal identity malformed") from None
     if (
         not original_number.isascii() or not original_number.isdecimal()
+        or not note_number.isascii() or not note_number.isdecimal()
+        or int(note_number) < 1
         or not note_number.isascii() or not note_number.isdecimal()
         or int(original_number) != int(original.rps_number)
         or not original.rps_number.isascii() or not original.rps_number.isdecimal()
