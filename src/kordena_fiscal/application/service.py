@@ -41,7 +41,17 @@ from kordena_fiscal.gateway import (
     AuthorizationStatus,
     FiscalGatewayClient,
 )
-from kordena_fiscal.gateway.sp4_municipal_canonical import Sp4OriginalRps
+from kordena_fiscal.gateway.cajamar_geisweb_cancellation_builder import (
+    CajamarCancellationDecision,
+)
+from kordena_fiscal.gateway.cajamar_geisweb_homologation import CAJAMAR_GEISWEB_PROVIDER
+from kordena_fiscal.gateway.cajamar_geisweb_invoice_interpreter import (
+    decode_cajamar_archived_invoice,
+)
+from kordena_fiscal.gateway.sp4_municipal_canonical import (
+    Sp4OriginalRps,
+    Sp4VerifiedInvoice,
+)
 from kordena_fiscal.gateway.webiss_extrema_canonical import (
     ExtremaCancellationOutcome,
     ExtremaSubstitutionOutcome,
@@ -200,6 +210,15 @@ class DurableExtremaSubstitutionOutcome:
     result: ExtremaSubstitutionOutcome
     original_lifecycle: FiscalStateSnapshot
     replacement_lifecycle: FiscalStateSnapshot
+    archive_reference: str
+
+
+@dataclass(frozen=True, slots=True)
+class DurableCajamarCancellationOutcome:
+    """Municipal cancellation result archived with its fiscal state transaction."""
+
+    decision: CajamarCancellationDecision
+    lifecycle: FiscalStateSnapshot
     archive_reference: str
 
 
@@ -1686,6 +1705,134 @@ class FiscalApplicationService:
             uow.commit()
         return DurableExtremaCancellationOutcome(
             result=result, lifecycle=final, archive_reference=archived.entry_id,
+        )
+
+    def preflight_cajamar_nfse_cancellation(
+        self, *, scope: ExecutionScope, document_id: str,
+    ) -> tuple[NfseAuthorizationRequest, Sp4OriginalRps, Sp4VerifiedInvoice]:
+        """Verify archived original RPS and authorized GeisWeb note in one scoped UoW."""
+        if (
+            not isinstance(scope, ExecutionScope)
+            or scope.environment is not FiscalEnvironment.HOMOLOGATION
+        ):
+            raise FiscalValidationError("Cajamar cancellation requires homologation scope")
+        with self._uow_factory() as uow:
+            request = self._load_prepared_from_uow(uow, scope, document_id)
+            if not isinstance(request, NfseAuthorizationRequest):
+                raise PersistenceStateError("Cajamar cancellation requires prepared NFS-e")
+            uow.lifecycle.assert_scope(document_id, scope)
+            current = uow.lifecycle.get(document_id)
+            attempts = uow.idempotency.attempts(request.idempotency_key)
+            if (
+                current is None
+                or current.state is not FiscalDocumentState.AUTHORIZED
+                or len(attempts) != 1
+                or attempts[0].status is not IssuanceAttemptStatus.AUTHORIZED
+                or attempts[0].document_id != document_id
+                or attempts[0].request_fingerprint != request.request_fingerprint
+                or request.document.issuer.address.jurisdiction.municipality_ibge_code
+                != "3509205"
+            ):
+                raise PersistenceStateError(
+                    "Cancellation requires one authorized original Cajamar invoice"
+                )
+            originals = [
+                item for item in uow.archive.list_for_document(scope, document_id)
+                if item.kind is FiscalArchiveKind.OTHER
+                and item.media_type == SP4_ORIGINAL_RPS_MEDIA_TYPE
+            ]
+            official = [
+                item for item in uow.archive.list_for_document(scope, document_id)
+                if item.kind is FiscalArchiveKind.AUTHORIZED_XML
+                and item.media_type == "application/xml"
+            ]
+            if len(originals) != 1 or len(official) != 1:
+                raise PersistenceStateError("Original RPS/authorized XML is missing")
+            FiscalArchiveVerifier().verify_entry(originals[0])
+            FiscalArchiveVerifier().verify_entry(official[0])
+            source = decode_sp4_original(
+                originals[0].content, scope=scope, request=request,
+            )
+            invoice = decode_cajamar_archived_invoice(official[0].content, source)
+        binding = self.resolve_configured_provider_id(
+            scope=scope, document_kind=FiscalDocumentKind.NFSE,
+            jurisdiction=request.document.issuer.address.jurisdiction,
+            operation="cancel",
+        )
+        if binding != CAJAMAR_GEISWEB_PROVIDER:
+            raise FiscalValidationError("Cajamar cancellation provider binding mismatch")
+        return request, source, invoice
+
+    def cancel_prepared_cajamar_nfse(
+        self, *, scope: ExecutionScope, document_id: str,
+        submit_verified_cancel: Callable[
+            [NfseAuthorizationRequest, Sp4OriginalRps, Sp4VerifiedInvoice],
+            CajamarCancellationDecision,
+        ],
+        occurred_at: datetime, retention: RetentionPolicyMetadata,
+    ) -> DurableCajamarCancellationOutcome:
+        """One original NFS-e cancellation claim, one reviewed transport attempt.
+
+        A transport failure leaves CANCEL_REQUESTED for investigation. Replay
+        does not issue another CancelaNfse POST. Only correlated official
+        response proof commits CANCELLED; a proven rejection restores AUTHORIZED.
+        """
+        if (
+            not callable(submit_verified_cancel)
+            or not isinstance(scope, ExecutionScope)
+            or not isinstance(retention, RetentionPolicyMetadata)
+            or not isinstance(occurred_at, datetime)
+            or occurred_at.tzinfo is None
+        ):
+            raise FiscalValidationError("Invalid Cajamar cancellation dependencies")
+        request, original, invoice = self.preflight_cajamar_nfse_cancellation(
+            scope=scope, document_id=document_id,
+        )
+        with self._uow_factory() as uow:
+            uow.lifecycle.assert_scope(document_id, scope)
+            before = uow.lifecycle.get(document_id)
+            if before is None or before.state is not FiscalDocumentState.AUTHORIZED:
+                raise PersistenceConflictError("Concurrent Cajamar cancellation request")
+            claim = self._state_machine.transition(
+                before, FiscalDocumentState.CANCEL_REQUESTED,
+                occurred_at=occurred_at, reason="Cajamar fiscal cancellation claimed",
+                correlation_id=scope.correlation_id,
+            )
+            uow.lifecycle.save(claim, expected_version=before.version)
+            uow.commit()
+        decision = submit_verified_cancel(request, original, invoice)
+        if not isinstance(decision, CajamarCancellationDecision):
+            raise FiscalValidationError(
+                "Cajamar cancellation requires verified typed official response"
+            )
+        event = FiscalArchiveEntry.build(
+            scope=scope, document_reference=document_id,
+            kind=FiscalArchiveKind.FISCAL_EVENT,
+            content=decision.response_xml, media_type="application/xml",
+            archived_at=occurred_at, retention=retention,
+        )
+        with self._uow_factory() as uow:
+            uow.lifecycle.assert_scope(document_id, scope)
+            latest = uow.lifecycle.get(document_id)
+            if latest != claim:
+                raise PersistenceConflictError("Cajamar cancellation changed during delivery")
+            target = (
+                FiscalDocumentState.CANCELLED if decision.confirmed
+                else FiscalDocumentState.AUTHORIZED
+            )
+            final = self._state_machine.transition(
+                latest, target, occurred_at=occurred_at,
+                reason=(
+                    "Cajamar cancellation officially confirmed"
+                    if decision.confirmed else "Cajamar cancellation officially rejected"
+                ),
+                correlation_id=scope.correlation_id,
+            )
+            uow.lifecycle.save(final, expected_version=latest.version)
+            entry = uow.archive.append(event)
+            uow.commit()
+        return DurableCajamarCancellationOutcome(
+            decision=decision, lifecycle=final, archive_reference=entry.entry_id,
         )
 
     def reserve_number(
