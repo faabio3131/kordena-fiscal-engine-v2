@@ -8,6 +8,7 @@ import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import Mock, patch
+from xml.sax.saxutils import escape
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -18,7 +19,7 @@ from fastapi.testclient import TestClient
 from lxml import etree
 
 from kordena_fiscal.application.service import FiscalApplicationService
-from kordena_fiscal.archive import RetentionPolicyMetadata
+from kordena_fiscal.archive import FiscalArchiveKind, RetentionPolicyMetadata
 from kordena_fiscal.compliance.nfse_preaudit import nfse_preaudit
 from kordena_fiscal.control_plane import FiscalOrganization, FiscalUnitRegistration
 from kordena_fiscal.control_plane.commercial import (
@@ -38,6 +39,11 @@ from kordena_fiscal.domain import (
     TaxRegimeCode,
 )
 from kordena_fiscal.gateway.authorization import AuthorizationStatus
+from kordena_fiscal.gateway.cajamar_geisweb_cancellation_builder import (
+    CajamarCancellationDecision,
+    interpret_cajamar_cancel_response,
+)
+from kordena_fiscal.gateway.cajamar_geisweb_homologation import CajamarGeiswebResult
 from kordena_fiscal.gateway.nfse_nacional_homologation import (
     NACIONAL_HOMOLOGATION_PROVIDER_ID,
     NfseNacionalHomologationGateway,
@@ -132,6 +138,15 @@ def _database(
                     document_kind=FiscalDocumentKind.NFSE,
                     jurisdiction=jurisdiction,
                     operation=ConfiguredFiscalOperation.QUERY,
+                    provider_id=provider_id,
+                ))
+                uow.commercial.put_provider_binding(ProviderBinding(
+                    binding_id="cajamar-cancel-binding",
+                    tenant_id=TENANT, unit_id=UNIT,
+                    environment=FiscalEnvironment.HOMOLOGATION,
+                    document_kind=FiscalDocumentKind.NFSE,
+                    jurisdiction=jurisdiction,
+                    operation=ConfiguredFiscalOperation.CANCEL,
                     provider_id=provider_id,
                 ))
         uow.commit()
@@ -376,6 +391,34 @@ def test_cajamar_portal_prepares_sends_recovers_and_downloads_authorized_xml(
     app = FiscalApplicationService(db)
     submitted = Mock(return_value=Sp4ProviderOutcome(status=AuthorizationStatus.PENDING))
     verified = Mock()
+    cancelled = Mock()
+
+    def verified_cancel(
+        request: NfseAuthorizationRequest, original: Sp4OriginalRps,
+        invoice: Sp4VerifiedInvoice,
+    ) -> CajamarCancellationDecision:
+        cancelled(request, original, invoice)
+        official_cancel = (
+            "<CancelaNfseResposta><Nfse><IdentificacaoNfse>"
+            f"<NumeroRps>{original.rps_number}</NumeroRps>"
+            f"<NumeroNfse>{invoice.invoice_number}</NumeroNfse>"
+            f"<CodigoVerificacao>{invoice.verification_code}</CodigoVerificacao>"
+            "</IdentificacaoNfse></Nfse></CancelaNfseResposta>"
+        )
+        soap = (
+            '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" '
+            'xmlns:g="http://www.geisweb.com.br/"><soap:Body>'
+            '<g:CancelaNfseResponse><g:CancelaNfseResult>'
+            f"{escape(official_cancel)}"
+            "</g:CancelaNfseResult></g:CancelaNfseResponse>"
+            "</soap:Body></soap:Envelope>"
+        ).encode()
+        return interpret_cajamar_cancel_response(
+            receipt=CajamarGeiswebResult(
+                method="CancelaNfse", response_xml=soap,
+            ),
+            source=original, issued=invoice, verify_official_response=Mock(),
+        )
 
     def recover(
         request: NfseAuthorizationRequest, original: Sp4OriginalRps,
@@ -390,7 +433,18 @@ def test_cajamar_portal_prepares_sends_recovers_and_downloads_authorized_xml(
             invoice_number="8765",
             verification_code="ABCDEF1234",
             invoice_reference="cajamar-8765",
-            authorized_xml=b"<ConsultaLoteRpsResposta>synthetic-cajamar</ConsultaLoteRpsResposta>",
+            authorized_xml=(
+                "<ConsultaLoteRpsResposta><Rps><IdentificacaoNfse>"
+                f"<NumeroRps>{original.rps_number}</NumeroRps>"
+                "<NumeroNfse>8765</NumeroNfse>"
+                "<CodigoVerificacao>ABCDEF1234</CodigoVerificacao>"
+                "</IdentificacaoNfse><Competencia>2026-10</Competencia>"
+                "<Servico><Valores><ValorServicos>100,00</ValorServicos></Valores>"
+                "<PrestadorServico><IdentificacaoPrestador>"
+                f"<CnpjCpf>{original.issuer_cnpj.value}</CnpjCpf>"
+                "</IdentificacaoPrestador></PrestadorServico></Servico>"
+                "</Rps></ConsultaLoteRpsResposta>"
+            ).encode(),
         )
         return Sp4ProviderOutcome(
             status=AuthorizationStatus.AUTHORIZED, official_invoice=invoice,
@@ -408,6 +462,7 @@ def test_cajamar_portal_prepares_sends_recovers_and_downloads_authorized_xml(
     handler_factory = build_runtime_fiscal_handler_factory(
         operations_gateway=FakeFiscalOperationsGateway(),
         sp4_reviewed_municipalities={_CAJAMAR_PROVIDER: ports},
+        cajamar_verified_cancel=verified_cancel,
     )
     handlers = handler_factory(app)
     executable = CanonicalPortalOperationExecutor(
@@ -457,9 +512,7 @@ def test_cajamar_portal_prepares_sends_recovers_and_downloads_authorized_xml(
         params={"unit_id": UNIT, "environment": "homologation"},
     )
     assert download.status_code == 200, download.text
-    assert download.content == (
-        b"<ConsultaLoteRpsResposta>synthetic-cajamar</ConsultaLoteRpsResposta>"
-    )
+    assert download.content.startswith(b"<ConsultaLoteRpsResposta><Rps>")
     assert download.headers["Cache-Control"] == "no-store"
     denied = web.get(
         f"/v1/portal/documents/{document_id}/artifacts/authorized_xml",
@@ -473,6 +526,44 @@ def test_cajamar_portal_prepares_sends_recovers_and_downloads_authorized_xml(
     )
     assert replay.status_code == 200, replay.text
     assert submitted.call_count == 1
+
+    # Cancellation uses the same authenticated Portal, canonical RPS/archive,
+    # signed municipal contract port and durable fiscal lifecycle.
+    unauthorized = web.post(
+        "/v1/portal/operations/cancelCajamarNfse",
+        json=body | {"human_approval": False},
+        headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-not-approved"},
+    )
+    assert unauthorized.status_code in {400, 403, 409}
+    cancelled.assert_not_called()
+    request_cancel = web.post(
+        "/v1/portal/operations/cancelCajamarNfse",
+        json=body | {"human_approval": True},
+        headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-cancel-one"},
+    )
+    assert request_cancel.status_code == 200, request_cancel.text
+    assert request_cancel.json()["status"] == FiscalDocumentState.CANCELLED.value
+    assert request_cancel.json()["official_fiscal_confirmation"] is True
+    cancelled.assert_called_once()
+    assert submitted.call_count == 1
+    with db() as uow:
+        events = [
+            item for item in uow.archive.list_for_document(
+                original.scope, document_id,
+            )
+            if item.kind is FiscalArchiveKind.FISCAL_EVENT
+        ]
+        assert len(events) == 1
+        assert events[0].content.startswith(b"<CancelaNfseResposta>")
+        assert uow.lifecycle.get(document_id).state is FiscalDocumentState.CANCELLED
+    duplicate = web.post(
+        "/v1/portal/operations/cancelCajamarNfse",
+        json=body | {"human_approval": True},
+        headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-cancel-replayed"},
+    )
+    assert duplicate.status_code != 200
+    cancelled.assert_called_once(), "Duplicate cancellation must never reach provider"
+
 
 def _synthetic_a1_for_native_issuer() -> EphemeralCertificateMaterial:
     """Ephemeral PKCS#12 fixture; never a real customer A1 or trusted authority."""
