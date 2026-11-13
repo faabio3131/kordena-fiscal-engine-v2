@@ -83,12 +83,14 @@ class OsascoTrustedRuntimePorts:
             raise ValueError("Osasco requires complete reviewed municipal fiscal ports")
 
     def attach_verified_cancellation(
-        self, application: FiscalApplicationService,
+        self, application: FiscalApplicationService, *, cancel_type: str = "N",
     ) -> Callable[
         [NfseAuthorizationRequest, Sp4OriginalRps, Sp4VerifiedInvoice, str],
         OsascoCancellationDecision,
     ] | None:
         """Return a municipal cancellation port only if official proof is reviewed."""
+        if cancel_type not in {"N", "S"}:
+            raise ValueError("Unknown Osasco official cancellation type")
         if self.verify_official_cancel is None:
             return None
         validator = self.verify_official_cancel
@@ -108,7 +110,7 @@ class OsascoTrustedRuntimePorts:
             prepared = build_osasco_cancel_request(
                 source=source, issued=issued,
                 regime=request.document.issuer.tax_regime,
-                cancel_type="N", reason=reason, human_approved=True,
+                cancel_type=cancel_type, reason=reason, human_approved=True,
             )
             result = self.transport.invoke(prepared)
             return verify_osasco_cancel_reply(
