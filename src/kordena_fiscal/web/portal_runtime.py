@@ -99,6 +99,40 @@ def _portal_error(status_code: int, code: str, message: str) -> HTTPException:
     )
 
 
+def _printable_authorized_xml(entry: Any) -> bool:
+    """Only advertise a PDF action for an archived XML that our renderer supports.
+
+    GeisWeb's ConsultaLoteRpsResposta is not a National DANFSe and the
+    provider does not publish printable notes in homologation. The backend
+    artifact endpoint independently repeats its own security/proof checks.
+    """
+    if (
+        entry.kind is not FiscalArchiveKind.AUTHORIZED_XML
+        or entry.media_type not in {"application/xml", "text/xml"}
+        or len(entry.content) > 2_097_152
+    ):
+        return False
+    try:
+        from lxml import etree
+
+        FiscalArchiveVerifier().verify_entry(entry)
+        root = etree.fromstring(
+            entry.content,
+            parser=etree.XMLParser(
+                resolve_entities=False, load_dtd=False,
+                no_network=True, huge_tree=False,
+            ),
+        )
+        if getattr(root.getroottree().docinfo, "doctype", ""):
+            return False
+        return root.tag in {
+            "{http://www.sped.fazenda.gov.br/nfse}NFSe",
+            "{http://www.portalfiscal.inf.br/nfe}nfeProc",
+        }
+    except (ArchiveIntegrityError, etree.XMLSyntaxError, ValueError, TypeError):
+        return False
+
+
 class DurableHumanPortalExecutor:
     """Read canonical durable state and execute safe self-service configuration."""
 
@@ -573,6 +607,7 @@ class DurableHumanPortalExecutor:
                             "archived_at": entry.archived_at.isoformat(),
                             "content_sha256": entry.content_sha256,
                             "media_type": entry.media_type,
+                            "auxiliary_pdf_available": _printable_authorized_xml(entry),
                         }
                     )
             if surface_id in {"issuances", "errors"}:
