@@ -48,19 +48,23 @@ def build_sp4_canonical_clients(
     *,
     canonical_resolver: ProviderSelectionResolver,
     configured_municipalities: Mapping[str, Sp4ReviewedMunicipalPorts],
-    canonical_rps_loader: Callable[[ExecutionScope, str], Sp4OriginalRps] | None = None,
+    canonical_rps_loader: Callable[[ExecutionScope, str], Sp4OriginalRps],
 ) -> tuple[Mapping[str, NfseGatewayClient], Mapping[str, NfseQueryClient]]:
     """Build separate issuance/recovery maps for opt-in canonical runtime.
 
     A partial list is valid for safe, staged deployment; it never silently
     enables an unreviewed municipality or an auto-discovered provider.
+    The canonical application loader is mandatory: a driver-provided loader
+    is never authorized as an alternate document/persistence authority.
     """
     if not callable(getattr(canonical_resolver, "resolve_provider_id", None)):
         raise Sp4CanonicalMunicipalError("SP4 requires canonical durable binding resolver")
     if not isinstance(configured_municipalities, Mapping):
         raise Sp4CanonicalMunicipalError("SP4 requires explicit reviewed provider map")
-    if canonical_rps_loader is not None and not callable(canonical_rps_loader):
-        raise Sp4CanonicalMunicipalError("SP4 original RPS loader must be canonical")
+    if not callable(canonical_rps_loader):
+        raise Sp4CanonicalMunicipalError(
+            "SP4 requires the fiscal application's canonical original RPS loader"
+        )
     authorization: dict[str, NfseGatewayClient] = {}
     recovery: dict[str, NfseQueryClient] = {}
     for provider_id, city in configured_municipalities.items():
@@ -71,10 +75,9 @@ def build_sp4_canonical_clients(
         adapter = Sp4MunicipalCanonicalGateway(
             provider_id=provider_id,
             resolver=canonical_resolver,
-            load_original_rps=(
-                canonical_rps_loader if canonical_rps_loader is not None
-                else city.load_original_rps
-            ),
+            # Never fall back to a municipal-local loader: the only source
+            # is the fiscal application's archived original in the same UoW.
+            load_original_rps=canonical_rps_loader,
             municipal_issuer_policy=city.fiscal_issuer_policy,
             validate_prepared_rps=city.validate_prepared_rps,
             submit_prepared_rps=city.submit_official_rps,
