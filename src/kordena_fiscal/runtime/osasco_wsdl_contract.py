@@ -105,7 +105,7 @@ def load_osasco_pinned_wsdl(
     methods: dict[str, OsascoWcfContract] = {}
     for operation in binding.findall(f"{{{_WSDL}}}operation"):
         name = operation.get("name")
-        if name not in _METHODS:
+        if not isinstance(name, str) or name not in _METHODS:
             continue
         if name in methods:
             raise OsascoWsdlIntegrityError("Duplicate Osasco WCF operation")
