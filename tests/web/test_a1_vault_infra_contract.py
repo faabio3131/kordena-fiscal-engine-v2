@@ -153,7 +153,9 @@ def test_docker_compose_overlay_effective_mount_is_correct_and_requires_host_sou
     assert len(mounts) == 1
     assert mounts[0]["type"] == "bind"
     assert mounts[0]["source"] == str(host_vault)
-    assert mounts[0]["bind"]["create_host_path"] is False
+    # Compose may omit false booleans from normalized JSON; source assertion above
+    # independently proves the explicit create_host_path: false contract.
+    assert mounts[0].get("bind", {}).get("create_host_path", False) is False
 
     env.pop("NFCORE_A1_VAULT_HOST_DIR")
     invalid = subprocess.run(args + ["--quiet"], capture_output=True,
