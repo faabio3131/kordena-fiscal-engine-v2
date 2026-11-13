@@ -6,6 +6,8 @@ on:
     branches:
       - main
       - production
+      # Stacked integration PRs must run the same complete gates as main.
+      - feat/nfcore-a-cajamar-isolated-20261113
   push:
     branches:
       - main
