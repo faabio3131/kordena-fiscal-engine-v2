@@ -387,7 +387,7 @@ def test_osasco_original_receipt_issue_and_read_only_full_note_http(
 
 
 
-def _osasco_synthetic_soap(method: str) -> bytes:
+def _osasco_synthetic_soap(method: str, receipt_number: str = "1") -> bytes:
     pre = '<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" '
     pre += 'xmlns:t="http://tempuri.org/" '
     pre += (
@@ -406,8 +406,8 @@ def _osasco_synthetic_soap(method: str) -> bytes:
     if method == "ConsultarNotaCompleta":
         body += (
             '<a:Erro>false</a:Erro><a:NotasGeradas>'
-            '<b:NotaFiscalRelatorioDTO><b:Numero>8001</b:Numero>'
-            '<b:NumeroRecibo>1</b:NumeroRecibo>'
+            f'<b:NotaFiscalRelatorioDTO><b:Numero>{8000 + int(receipt_number)}</b:Numero>'
+            f'<b:NumeroRecibo>{receipt_number}</b:NumeroRecibo>'
             '<b:CodigoAutenticidade>OSASCO1234</b:CodigoAutenticidade>'
             '<b:Prestador><c:CNPJ>11222333000181</c:CNPJ></b:Prestador>'
             '<b:Valor>100.00</b:Valor></b:NotaFiscalRelatorioDTO>'
@@ -549,6 +549,129 @@ def test_osasco_http_full_issued_lifecycle_cancel_replay_and_unknown_outcome(
         )
         assert duplicate.status_code == 409
         assert posts.count("Cancelar") == 1
+
+
+
+def test_osasco_type_s_substitution_keeps_one_invoice_per_original_rps(
+    tmp_path: Path,
+) -> None:
+    """Type S cancels old note once before authorizing the prepared substitute."""
+    db = _database(
+        tmp_path / "osasco-substitution.sqlite", issuer_ibge="3534401",
+        provider_id="osasco-rtc-homologation", tax_regime=TaxRegimeCode.NORMAL,
+    )
+    posts: list[tuple[str, str | None]] = []
+
+    def exchange(soap: bytes, action: str, _timeout: float) -> bytes:
+        method = action.rsplit("/", 1)[-1]
+        root = etree.fromstring(soap)
+        fields = {
+            etree.QName(node).localname: node.text
+            for node in root.iter() if isinstance(node.tag, str)
+        }
+        assert fields.get("ChaveAutenticacao") == (
+            "12345678-1234-1234-1234-123456789012"
+        )
+        posts.append((method, fields.get("TipoCancelamento")))
+        number = fields.get("NumeroReciboUnico") or fields.get("NumeroRecibo") or "1"
+        return _osasco_synthetic_soap(method, number)
+
+    transport = OsascoRtcHomologationTransport(
+        resolver=Mock(resolve_provider_id=lambda **_kw: "osasco-rtc-homologation"),
+        resolve_key=lambda _s, _c: "12345678-1234-1234-1234-123456789012",
+        validated_request=lambda _xml, _hash: None,
+        contract_for_method=lambda method: OsascoWcfContract(
+            action="http://tempuri.org/INotaFiscalEletronica/" + method,
+            method=method, wsdl_sha256="a" * 64,
+        ),
+        exchange=exchange,
+    )
+    ports = OsascoTrustedRuntimePorts(
+        transport=transport,
+        build_wcf_operation=build_osasco_rtc_issue_request_factory(
+            resolve_rtc_fields=build_osasco_reviewed_tax_resolver(
+                lambda _req, _src: _osasco_synthetic_policy(),
+            ),
+            validate_official_request=lambda _xml: None,
+        ),
+        verify_wcf_rps_identity=Mock(),
+        fiscal_issuer_policy=Mock(),
+        validate_prepared_rps=Mock(),
+        verify_official_invoice_xml=Mock(),
+        verify_official_cancel=Mock(return_value=True),
+    )
+    app = FiscalApplicationService(db)
+    handlers = build_runtime_fiscal_handler_factory(osasco_runtime_ports=ports)(app)
+    assert "substituteOsascoNfse" in handlers
+    web = _client(
+        db, operation_executor=CanonicalPortalOperationExecutor(
+            unit_of_work_factory=db,
+            path=CanonicalFiscalOperationPath(app, handlers=handlers),
+        ),
+    )
+    data = _payload() | _TAKER_ADDRESS | {
+        "competence_date": "2026-11-12",
+        "service_municipality_ibge": "3534401",
+    }
+    old = _post(web, data | {"source_id": "osasco-old"}, "osasco-old-key")
+    next_doc = _post(
+        web, data | {"source_id": "osasco-substitute"}, "osasco-new-key",
+    )
+    assert old.status_code == 200 and next_doc.status_code == 200
+    old_id, new_id = old.json()["document_id"], next_doc.json()["document_id"]
+    scope = ExecutionScope(
+        TENANT, UNIT, FiscalEnvironment.HOMOLOGATION, "check", "fm-nfcore",
+    )
+    assert app.load_sp4_original_rps(scope, old_id).rps_number == "1"
+    assert app.load_sp4_original_rps(scope, new_id).rps_number == "2"
+    csrf = web.cookies.get(CSRF_COOKIE)
+    assert csrf
+    headers = {CSRF_HEADER: csrf}
+    base = {"unit_id": UNIT, "environment": "homologation"}
+    def operation(name: str, document_id: str, key: str):
+        return web.post(
+            f"/v1/portal/operations/{name}", json=base | {"document_id": document_id},
+            headers=headers | {"Idempotency-Key": key},
+        )
+    assert operation("issueFiscalDocument", old_id, "issue-old").status_code == 200
+    authorized = operation("reconcileFiscalOperation", old_id, "query-old")
+    assert authorized.status_code == 200, authorized.text
+    assert authorized.json()["status"] == FiscalDocumentState.AUTHORIZED.value
+    substitution = base | {
+        "original_id": old_id, "replacement_id": new_id,
+        "human_approval": True, "cancellation_reason": "Correcao revisada do servico",
+    }
+    sent = web.post(
+        "/v1/portal/operations/substituteOsascoNfse", json=substitution,
+        headers=headers | {"Idempotency-Key": "approve-substitution"},
+    )
+    assert sent.status_code == 200, sent.text
+    assert sent.json()["original_status"] == FiscalDocumentState.CANCELLED.value
+    assert sent.json()["replacement_status"] == "ready_to_transmit"
+    assert sent.json()["next_action"] == "issueFiscalDocument"
+    assert posts[-1] == ("Cancelar", "S")
+    same = web.post(
+        "/v1/portal/operations/substituteOsascoNfse", json=substitution,
+        headers=headers | {"Idempotency-Key": "approve-substitution"},
+    )
+    assert same.status_code == 200, same.text
+    assert [method for method, _ in posts].count("Cancelar") == 1
+    with db() as uow:
+        entries = uow.archive.list_for_document(scope, old_id)
+    links = [
+        e for e in entries
+        if e.media_type == "application/vnd.nfcore.osasco-substitution.v1+json"
+    ]
+    assert len(links) == 1
+    assert json.loads(links[0].content)["replacement_id"] == new_id
+    replacement = operation("issueFiscalDocument", new_id, "issue-substitute")
+    assert replacement.status_code == 200, replacement.text
+    again = operation("reconcileFiscalOperation", new_id, "query-substitute")
+    assert again.status_code == 200, again.text
+    assert again.json()["status"] == FiscalDocumentState.AUTHORIZED.value
+    assert posts[-2:] == [
+        ("RTC_EmitirNFE", None), ("ConsultarNotaCompleta", None),
+    ]
 
 
 def test_osasco_simples_after_november_cutoff_uses_national_not_municipal(
