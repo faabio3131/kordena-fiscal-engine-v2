@@ -8,7 +8,7 @@ No native GeisWeb SubstituirNfse method has been evidenced.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, date
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from kordena_fiscal.domain import FiscalValidationError
