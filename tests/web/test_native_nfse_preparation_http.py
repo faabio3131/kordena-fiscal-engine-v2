@@ -523,6 +523,20 @@ def test_cajamar_portal_prepares_sends_recovers_and_downloads_authorized_xml(
     assert submitted.call_count == 1, "read-only recovery must not submit again"
     queried.assert_called_once()
     verified.assert_called_once()
+    # Reconciliation may retain attempt history, but must archive exactly one
+    # authentic authorized XML. Duplicate archival entries break cancellation.
+    prepared_request = app.load_prepared_nfse_authorization(
+        original.scope, document_id,
+    )
+    with db() as uow:
+        history = uow.idempotency.attempts(prepared_request.idempotency_key)
+        one_xml = [
+            e for e in uow.archive.list_for_document(original.scope, document_id)
+            if e.kind is FiscalArchiveKind.AUTHORIZED_XML
+        ]
+        assert len(one_xml) == 1, "recovery must archive one official XML"
+        assert history[-1].document_id == document_id
+        assert history[-1].status.value == "authorized"
 
     download = web.get(
         f"/v1/portal/documents/{document_id}/artifacts/authorized_xml",
