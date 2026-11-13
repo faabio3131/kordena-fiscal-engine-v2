@@ -399,8 +399,12 @@ class CajamarReviewedStartup:
             )
 
             issuer, scope = source.issuer_cnpj, source.scope
-            sign_scoped = lambda raw: sign(scope, issuer, raw)
-            validate_scoped = lambda raw: verify(scope, issuer, raw)
+
+            def sign_scoped(raw: bytes) -> bytes:
+                return sign(scope, issuer, raw)
+
+            def validate_scoped(raw: bytes) -> None:
+                verify(scope, issuer, raw)
             if method == "EnviaLoteRps":
                 return prepare_cajamar_signed_issue(
                     request=request, original=source,
