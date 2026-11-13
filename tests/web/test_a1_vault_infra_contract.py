@@ -2,7 +2,10 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -127,10 +130,6 @@ def test_backup_refuses_unexpected_files_even_if_private(tmp_path, monkeypatch):
 def test_docker_compose_overlay_effective_mount_is_correct_and_requires_host_source(
     tmp_path, monkeypatch,
 ):
-    import json
-    import shutil
-    import subprocess
-
     if shutil.which("docker") is None:
         pytest.skip("Docker Compose executable unavailable")
     src = _OVERLAY.with_name("compose.prod.yml")
