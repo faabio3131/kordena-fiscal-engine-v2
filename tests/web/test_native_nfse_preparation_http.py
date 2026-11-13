@@ -398,6 +398,8 @@ def test_cajamar_portal_prepares_sends_recovers_and_downloads_authorized_xml(
         invoice: Sp4VerifiedInvoice,
     ) -> CajamarCancellationDecision:
         cancelled(request, original, invoice)
+        if original.rps_number == "2":
+            raise RuntimeError("synthetic transport timeout after cancellation claim")
         official_cancel = (
             "<CancelaNfseResposta><Nfse><IdentificacaoNfse>"
             f"<NumeroRps>{original.rps_number}</NumeroRps>"
@@ -423,6 +425,7 @@ def test_cajamar_portal_prepares_sends_recovers_and_downloads_authorized_xml(
     def recover(
         request: NfseAuthorizationRequest, original: Sp4OriginalRps,
     ) -> Sp4ProviderOutcome:
+        invoice_number = str(8764 + int(original.rps_number))
         invoice = Sp4VerifiedInvoice(
             issuer_cnpj=original.issuer_cnpj,
             issuer_ibge=original.issuer_ibge,
@@ -430,13 +433,13 @@ def test_cajamar_portal_prepares_sends_recovers_and_downloads_authorized_xml(
             rps_number=original.rps_number,
             rps_series=original.rps_series,
             gross_amount=original.gross_amount,
-            invoice_number="8765",
+            invoice_number=invoice_number,
             verification_code="ABCDEF1234",
-            invoice_reference="8765",
+            invoice_reference=invoice_number,
             authorized_xml=(
                 "<ConsultaLoteRpsResposta><Rps><IdentificacaoNfse>"
                 f"<NumeroRps>{original.rps_number}</NumeroRps>"
-                "<NumeroNfse>8765</NumeroNfse>"
+                f"<NumeroNfse>{invoice_number}</NumeroNfse>"
                 "<CodigoVerificacao>ABCDEF1234</CodigoVerificacao>"
                 "</IdentificacaoNfse><Competencia>2026-10</Competencia>"
                 "<Servico><Valores><ValorServicos>100,00</ValorServicos></Valores>"
@@ -581,6 +584,49 @@ def test_cajamar_portal_prepares_sends_recovers_and_downloads_authorized_xml(
     )
     assert duplicate.status_code != 200
     cancelled.assert_called_once(), "Duplicate cancellation must never reach provider"
+
+    # A network timeout after CANCEL_REQUESTED must not send CancelaNfse
+    # again on another HTTP key. The original note stays under investigation.
+    another = _post(
+        web, payload | {"source_id": "cajamar-second-for-ambiguous-cancel"},
+        key="cajamar-second-service-order",
+    )
+    assert another.status_code == 200, another.text
+    second_id = another.json()["document_id"]
+    second_body = body | {"document_id": second_id}
+    second_issue = web.post(
+        "/v1/portal/operations/issueFiscalDocument",
+        json=second_body,
+        headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-second-issue"},
+    )
+    assert second_issue.status_code == 200, second_issue.text
+    second_reconcile = web.post(
+        "/v1/portal/operations/reconcileFiscalOperation",
+        json=second_body,
+        headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-second-recovery"},
+    )
+    assert second_reconcile.status_code == 200, second_reconcile.text
+    assert second_reconcile.json()["status"] == FiscalDocumentState.AUTHORIZED.value
+    try:
+        uncertain = web.post(
+            "/v1/portal/operations/cancelCajamarNfse",
+            json=second_body | {"human_approval": True},
+            headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-second-cancel"},
+        )
+        assert uncertain.status_code >= 400
+    except RuntimeError as exc:
+        assert "synthetic transport timeout" in str(exc)
+    with db() as uow:
+        second_state = uow.lifecycle.get(second_id)
+        assert second_state is not None
+        assert second_state.state is FiscalDocumentState.CANCEL_REQUESTED
+    replay_cancel = web.post(
+        "/v1/portal/operations/cancelCajamarNfse",
+        json=second_body | {"human_approval": True},
+        headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-second-cancel-new-key"},
+    )
+    assert replay_cancel.status_code != 200
+    assert cancelled.call_count == 2, "Ambiguous cancel must not be re-posted"
 
 
 def _synthetic_a1_for_native_issuer() -> EphemeralCertificateMaterial:
