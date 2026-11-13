@@ -1176,12 +1176,40 @@ def create_runtime_app(
     return app
 
 
+def build_entrypoint_fiscal_handler_factory(
+    settings: RuntimeSettings,
+    environ: Mapping[str, str],
+    vault: EncryptedA1Vault | None,
+) -> FiscalOperationHandlerFactory | None:
+    """Compose the actual server entrypoint with the same canonical fiscal factory.
+
+    An opt-in Cajamar manifest must never be silently ignored because the
+    process is in a development/test configuration.
+    """
+    if settings.environment.value not in {"staging", "production"}:
+        if environ.get("NFCORE_CAJAMAR_GEISWEB_CONFIG_PATH", "").strip():
+            raise RuntimeConfigurationError(
+                "Cajamar reviewed fiscal adapters require staging/production runtime"
+            )
+        return None
+    return build_runtime_fiscal_handler_factory(
+        certificate_vault=vault,
+        trusted_signed_dps_builder=build_signed_dps,
+        nfse_preaudit=nfse_preaudit,
+        webiss_extrema_exchange=build_extrema_webiss_exchange(environ),
+        webiss_service_preaudit=(
+            extrema_abrasf_service_preaudit
+            if environ.get("NFCORE_EXTREMA_WEBISS_HOMOLOGATION_URL")
+            else None
+        ),
+        cajamar_port_builder=build_cajamar_port_builder_from_environ(
+            environ, vault=vault,
+        ),
+    )
+
+
 _entrypoint_settings = RuntimeSettings.from_environ()
 _entrypoint_certificate_vault = EncryptedA1Vault.from_environ()
-_entrypoint_cajamar_builder = build_cajamar_port_builder_from_environ(
-    os.environ,
-    vault=_entrypoint_certificate_vault,
-)
 _development_ingress = development_commercial_ingress(_entrypoint_settings, os.environ)
 app = create_runtime_app(
     _entrypoint_settings,
@@ -1201,21 +1229,8 @@ app = create_runtime_app(
         if _entrypoint_settings.environment.value in {"development", "test"}
         else None
     ),
-    fiscal_operation_handler_factory=(
-        build_runtime_fiscal_handler_factory(
-            certificate_vault=_entrypoint_certificate_vault,
-            trusted_signed_dps_builder=build_signed_dps,
-            nfse_preaudit=nfse_preaudit,
-            webiss_extrema_exchange=build_extrema_webiss_exchange(os.environ),
-            cajamar_port_builder=_entrypoint_cajamar_builder,
-            webiss_service_preaudit=(
-                extrema_abrasf_service_preaudit
-                if os.environ.get("NFCORE_EXTREMA_WEBISS_HOMOLOGATION_URL")
-                else None
-            ),
-        )
-        if _entrypoint_settings.environment.value in {"staging", "production"}
-        else None
+    fiscal_operation_handler_factory=build_entrypoint_fiscal_handler_factory(
+        _entrypoint_settings, os.environ, _entrypoint_certificate_vault,
     ),
     commercial_acquisition_security=_development_ingress.get(
         "commercial_acquisition_security"
