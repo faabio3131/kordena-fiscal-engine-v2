@@ -48,6 +48,11 @@ from kordena_fiscal.persistence.fiscal_scope_schema import (
     FISCAL_SCOPE_SCHEMA,
     FISCAL_SCOPE_VERSION,
 )
+from kordena_fiscal.persistence.nfse_dps_numbering_schema import (
+    NFSE_DPS_NUMBERING_NAME,
+    NFSE_DPS_NUMBERING_SCHEMA,
+    NFSE_DPS_NUMBERING_VERSION,
+)
 from kordena_fiscal.persistence.postgres import (
     _COMMERCIAL_ACQUISITION_SCHEMA,
     _COMMERCIAL_CLAIM_SCHEMA,
@@ -120,6 +125,7 @@ def validate_policy() -> tuple[int, ...]:
         COGNITIVE_QUOTA_VERSION,
         BLING_INSTALLATION_VERSION,
         BLING_WORKER_POLICY_VERSION,
+        NFSE_DPS_NUMBERING_VERSION,
     )
     if versions != tuple(range(1, max(versions) + 1)):
         raise RuntimeError(f"migration versions must be contiguous from 1: {versions!r}")
@@ -205,6 +211,11 @@ def validate_policy() -> tuple[int, ...]:
         name=BLING_WORKER_POLICY_NAME,
         statements=BLING_WORKER_POLICY_SCHEMA,
     )
+    _reject_unapproved_destructive(
+        version=NFSE_DPS_NUMBERING_VERSION,
+        name=NFSE_DPS_NUMBERING_NAME,
+        statements=NFSE_DPS_NUMBERING_SCHEMA,
+    )
     print(
         "migration policy: PASS "
         f"versions={','.join(str(item) for item in versions)} "
@@ -243,7 +254,14 @@ def plan_staging() -> None:
     database = PostgresFiscalDatabase(dsn)
     try:
         before = database.applied_migrations()
-        if before != expected[:len(before)]:
+        baseline = expected[:COGNITIVE_QUOTA_VERSION]
+        bling_ready = expected[:BLING_WORKER_POLICY_VERSION]
+        valid_sequences = (
+            baseline, bling_ready,
+            (*baseline, NFSE_DPS_NUMBERING_VERSION),
+            (*bling_ready, NFSE_DPS_NUMBERING_VERSION),
+        )
+        if not any(before == variant[:len(before)] for variant in valid_sequences):
             raise RuntimeError("schema preflight blocked: unexpected fiscal migration sequence")
         with database.connection() as connection:
             available = connection.execute(
@@ -265,7 +283,7 @@ def plan_staging() -> None:
         database.close()
     print(
         "schema preflight: PASS READ_ONLY "
-        f"fiscal_installed={before} fiscal_pending={expected[len(before):]} "
+        f"fiscal_installed={before} fiscal_pending={tuple(v for v in expected if v not in before)} "
         f"cakto_installed={cakto} cakto_pending={expected_cakto[len(cakto):]}"
     )
 
@@ -343,14 +361,15 @@ def assert_current_production() -> None:
         # Accept the certified legacy schema, or a FULL optional Bling schema.
         # Reuse the policy result: the same gate can test historical certified
         # versions without changing or weakening the deployment guard.
-        baseline = expected[:min(len(expected), COGNITIVE_QUOTA_VERSION)]
-        bling_ready = (
-            expected if len(expected) == BLING_WORKER_POLICY_VERSION else ()
-        )
+        baseline = expected[:COGNITIVE_QUOTA_VERSION]
+        bling_ready = expected[:BLING_WORKER_POLICY_VERSION]
+        nfse_baseline = (*baseline, NFSE_DPS_NUMBERING_VERSION)
+        nfse_bling = (*bling_ready, NFSE_DPS_NUMBERING_VERSION)
         enable_bling = os.getenv("NFCORE_BLING_INSTALLATIONS_ENABLED") == "true"
-        if (enable_bling and before != bling_ready) or (
-            not enable_bling and before not in (baseline, bling_ready)
-        ):
+        ready = (bling_ready, nfse_bling) if enable_bling else (
+            baseline, bling_ready, nfse_baseline, nfse_bling,
+        )
+        if before not in ready:
             raise RuntimeError("production schema has pending/drifted fiscal migrations")
         # The original code-only gate remains read-only and compatible with
         # legacy DB probes. Stronger catalog checks apply when opt-in enabled.

@@ -12,8 +12,11 @@ from typing import Protocol
 from kordena_fiscal.documents import CanonicalFiscalDocument
 from kordena_fiscal.domain import (
     BrazilianJurisdiction,
+    Cnpj,
+    Cpf,
     ElectronicInvoiceModel,
     ExecutionScope,
+    FiscalAddress,
     FiscalDocumentKind,
     FiscalDomainError,
     FiscalProfile,
@@ -216,6 +219,81 @@ class NfseDocumentTotals:
 
 
 @dataclass(frozen=True, slots=True)
+class NfseForeignAddress:
+    """National DPS endExt fields; no invented Brazilian municipality authority."""
+
+    country_code: str
+    postal_code: str
+    city: str
+    region: str
+    street: str
+    number: str
+    district: str
+    complement: str | None = None
+
+    def __post_init__(self) -> None:
+        country = _required(self.country_code, "taker.country_code", 2)
+        if (
+            len(country) != 2 or not country.isascii()
+            or not country.isalpha() or country != country.upper()
+        ):
+            raise FiscalValidationError("Foreign country must use two uppercase ISO letters")
+        if country == "BR":
+            raise FiscalValidationError("Brazilian taker address requires FiscalAddress")
+        object.__setattr__(self, "country_code", country)
+        for field_name, limit in (
+            ("postal_code", 11), ("city", 60), ("region", 60),
+            ("street", 255), ("number", 60), ("district", 60),
+        ):
+            object.__setattr__(
+                self, field_name,
+                _required(getattr(self, field_name), f"taker.{field_name}", limit),
+            )
+        object.__setattr__(
+            self, "complement", _optional(self.complement, "taker.complement", 156)
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class NfseServiceTaker:
+    """Single verified DPS toma identity: CPF/CNPJ, NIF or official cNaoNIF."""
+
+    tax_id: Cnpj | Cpf | None
+    legal_name: str
+    address: FiscalAddress | NfseForeignAddress | None = None
+    municipal_registration: str | None = None
+    nif: str | None = None
+    no_nif_reason: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.tax_id is not None and not isinstance(self.tax_id, (Cnpj, Cpf)):
+            raise FiscalValidationError("NFS-e taker requires a validated tax identity")
+        if sum((
+            self.tax_id is not None, self.nif is not None, self.no_nif_reason is not None,
+        )) != 1:
+            raise FiscalValidationError("NFS-e taker requires exactly one tax identity")
+        if self.nif is not None:
+            object.__setattr__(self, "nif", _required(self.nif, "taker.nif", 40))
+        if self.no_nif_reason is not None and self.no_nif_reason not in {"0", "1", "2"}:
+            raise FiscalValidationError("NFS-e cNaoNIF must be official code 0, 1 or 2")
+        if self.address is not None and not isinstance(
+            self.address, (FiscalAddress, NfseForeignAddress)
+        ):
+            raise FiscalValidationError("NFS-e taker address is invalid")
+        if isinstance(self.address, NfseForeignAddress) and self.tax_id is not None:
+            raise FiscalValidationError("Foreign taker address requires NIF or cNaoNIF")
+        if isinstance(self.address, FiscalAddress) and self.tax_id is None:
+            raise FiscalValidationError("NIF/cNaoNIF taker must use foreign address")
+        object.__setattr__(
+            self, "legal_name", _required(self.legal_name, "taker.legal_name", 300)
+        )
+        object.__setattr__(
+            self, "municipal_registration",
+            _optional(self.municipal_registration, "taker.municipal_registration", 15),
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class NfseCanonicalDocument:
     """Canonical NFS-e service snapshot kept separate from merchandise-line semantics."""
 
@@ -229,6 +307,9 @@ class NfseCanonicalDocument:
     services: tuple[NfseServiceLine, ...]
     service_taker_reference: str | None = None
     schema_version: int = 1
+    service_taker: NfseServiceTaker | None = None
+    dps_series: int = 1
+    dps_number: int | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "document_id", _required(self.document_id, "document_id", 128))
@@ -261,10 +342,24 @@ class NfseCanonicalDocument:
             "service_taker_reference",
             _optional(self.service_taker_reference, "service_taker_reference", 256),
         )
+        if self.service_taker is not None and not isinstance(self.service_taker, NfseServiceTaker):
+            raise FiscalValidationError("service_taker must be NfseServiceTaker")
         if not isinstance(self.schema_version, int) or isinstance(self.schema_version, bool):
             raise FiscalValidationError("schema_version must be an integer")
         if self.schema_version < 1:
             raise FiscalValidationError("schema_version must be >= 1")
+        if (
+            not isinstance(self.dps_series, int)
+            or isinstance(self.dps_series, bool)
+            or not 1 <= self.dps_series <= 99_999
+        ):
+            raise FiscalValidationError("DPS series must be between 1 and 99999")
+        if self.dps_number is not None and (
+            not isinstance(self.dps_number, int)
+            or isinstance(self.dps_number, bool)
+            or not 1 <= self.dps_number <= 999_999_999_999_999
+        ):
+            raise FiscalValidationError("DPS serial number is invalid")
 
     @property
     def totals(self) -> NfseDocumentTotals:
@@ -303,14 +398,14 @@ def build_nfse_issuance_key(document: NfseCanonicalDocument) -> IdempotencyKey:
 def build_nfse_request_fingerprint(document: NfseCanonicalDocument) -> str:
     if not isinstance(document, NfseCanonicalDocument):
         raise FiscalValidationError("document must be NfseCanonicalDocument")
-    scope_payload = {
+    scope_payload: dict[str, str] = {
         "tenant_id": document.scope.tenant_id,
         "unit_id": document.scope.unit_id,
         "environment": document.scope.environment.value,
     }
     if document.scope.host_namespace is not None:
         scope_payload["host_namespace"] = document.scope.host_namespace
-    payload = {
+    payload: dict[str, object] = {
         "scope": scope_payload,
         "source": document.source.canonical_tuple,
         "issued_at": document.issued_at.isoformat(),
@@ -342,6 +437,48 @@ def build_nfse_request_fingerprint(document: NfseCanonicalDocument) -> str:
             for line in document.services
         ],
     }
+    if document.service_taker is not None:
+        taker = document.service_taker
+        address = taker.address
+        taker_payload: dict[str, object] = {
+            "tax_id_type": (
+                "cnpj" if isinstance(taker.tax_id, Cnpj)
+                else "cpf" if isinstance(taker.tax_id, Cpf)
+                else "nif" if taker.nif is not None else "cNaoNIF"
+            ),
+            "tax_id": taker.tax_id.value if taker.tax_id is not None else None,
+            "nif": taker.nif,
+            "no_nif_reason": taker.no_nif_reason,
+            "legal_name": taker.legal_name,
+            "municipal_registration": taker.municipal_registration,
+        }
+        if isinstance(address, FiscalAddress):
+            taker_payload["address"] = {
+                "type": "national", "street": address.street, "number": address.number,
+                "district": address.district, "municipality_name": address.municipality_name,
+                "state_code": address.jurisdiction.state_code,
+                "municipality_ibge_code": address.jurisdiction.municipality_ibge_code,
+                "postal_code": address.postal_code, "complement": address.complement,
+            }
+        elif isinstance(address, NfseForeignAddress):
+            taker_payload["address"] = {
+                "type": "foreign", "country_code": address.country_code,
+                "postal_code": address.postal_code, "city": address.city,
+                "region": address.region, "street": address.street,
+                "number": address.number, "district": address.district,
+                "complement": address.complement,
+            }
+        else:
+            taker_payload["address"] = None
+        payload["service_taker"] = taker_payload
+    # Preserve the historic fingerprint of unnumbered/archived requests.
+    # On new preparations the UoW supplies a legally reserved DPS serial,
+    # and this serial is bound to the immutable request fingerprint.
+    if document.dps_number is not None:
+        payload["dps_numbering"] = {
+            "series": document.dps_series,
+            "number": document.dps_number,
+        }
     encoded = json.dumps(
         payload,
         ensure_ascii=False,
@@ -379,6 +516,27 @@ class NfseAuthorizationRequest:
 
 
 @dataclass(frozen=True, slots=True)
+class NfseRejectionDetail:
+    """Lossless bounded provider rejection evidence; never expose raw text to Portal."""
+
+    code: str
+    origin: str
+    raw_message: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "code", _required(self.code, "rejection.code", 512))
+        object.__setattr__(self, "origin", _required(self.origin, "rejection.origin", 128))
+        if (
+            not isinstance(self.raw_message, str)
+            or not self.raw_message.strip()
+            or len(self.raw_message) > 32768
+        ):
+            raise FiscalValidationError(
+                "rejection.raw_message must be non-empty and at most 32768 characters"
+            )
+
+
+@dataclass(frozen=True, slots=True)
 class NfseAuthorizationResult:
     status: AuthorizationStatus
     scope: ExecutionScope
@@ -393,6 +551,7 @@ class NfseAuthorizationResult:
     authorized_xml: bytes | None = None
     rejection_code: str | None = None
     rejection_message: str | None = None
+    rejections: tuple[NfseRejectionDetail, ...] = ()
 
     def __post_init__(self) -> None:
         if not isinstance(self.status, AuthorizationStatus):
@@ -420,8 +579,17 @@ class NfseAuthorizationResult:
             object.__setattr__(
                 self,
                 field_name,
-                _optional(getattr(self, field_name), field_name, 512),
+                _optional(
+                    getattr(self, field_name), field_name,
+                    32768 if field_name == "rejection_message" else 512,
+                ),
             )
+        if (
+            not isinstance(self.rejections, tuple)
+            or len(self.rejections) > 32
+            or any(not isinstance(item, NfseRejectionDetail) for item in self.rejections)
+        ):
+            raise FiscalValidationError("NFS-e rejections require at most 32 typed details")
         if self.authorized_xml is not None and (
             not isinstance(self.authorized_xml, bytes)
             or not 0 < len(self.authorized_xml) <= 2 * 1024 * 1024
@@ -430,30 +598,52 @@ class NfseAuthorizationResult:
         if self.status is AuthorizationStatus.AUTHORIZED:
             if self.invoice_reference is None:
                 raise FiscalValidationError("authorized NFS-e requires invoice_reference")
-            if self.rejection_code is not None or self.rejection_message is not None:
+            if (
+                self.rejection_code is not None
+                or self.rejection_message is not None
+                or self.rejections
+            ):
                 raise FiscalValidationError("authorized NFS-e cannot contain rejection metadata")
         elif self.status is AuthorizationStatus.REJECTED:
             if (
-                self.invoice_reference is not None
-                or self.verification_code is not None
-                or self.invoice_number is not None
-                or self.authorized_xml is not None
+                self.invoice_reference is not None or self.verification_code is not None
+                or self.invoice_number is not None or self.authorized_xml is not None
             ):
                 raise FiscalValidationError("rejected NFS-e cannot contain invoice metadata")
             if self.rejection_code is None or self.rejection_message is None:
                 raise FiscalValidationError(
                     "rejected NFS-e requires rejection_code and rejection_message"
                 )
+            if self.rejections and (
+                self.rejections[0].code != self.rejection_code
+                or self.rejections[0].raw_message.strip() != self.rejection_message
+            ):
+                raise FiscalValidationError("NFS-e first rejection disagrees with summary")
         else:
             if (
-                self.invoice_reference is not None
-                or self.verification_code is not None
-                or self.invoice_number is not None
-                or self.authorized_xml is not None
+                self.invoice_reference is not None or self.verification_code is not None
+                or self.invoice_number is not None or self.authorized_xml is not None
             ):
                 raise FiscalValidationError("pending NFS-e cannot contain invoice metadata")
-            if self.rejection_code is not None or self.rejection_message is not None:
+            if (
+                self.rejection_code is not None
+                or self.rejection_message is not None
+                or self.rejections
+            ):
                 raise FiscalValidationError("pending NFS-e cannot contain rejection metadata")
+
+    def normalized_rejections(self) -> tuple[NfseRejectionDetail, ...]:
+        """Retain every structured provider error or a compatible legacy summary."""
+        if self.status is not AuthorizationStatus.REJECTED:
+            return ()
+        if self.rejections:
+            return self.rejections
+        assert self.rejection_code is not None and self.rejection_message is not None
+        return (NfseRejectionDetail(
+            code=self.rejection_code,
+            origin=self.provider.provider_name,
+            raw_message=self.rejection_message,
+        ),)
 
 
 class NfseGateway(Protocol):
