@@ -15,6 +15,12 @@ from kordena_fiscal.runtime.osasco_operational_composition import (
     OsascoTrustedRuntimePorts,
     build_osasco_trusted_transport,
 )
+from kordena_fiscal.runtime.osasco_pinned_composition import (
+    OsascoReviewedSchemaPorts,
+    build_osasco_pinned_operational_ports,
+)
+from kordena_fiscal.runtime.osasco_wsdl_contract import OsascoPinnedWcfWsdl
+from kordena_fiscal.gateway.osasco_rtc_homologation import OsascoWcfContract
 from kordena_fiscal.vault.contracts import SecretResolutionService
 
 
@@ -100,4 +106,50 @@ def test_osasco_real_transport_builder_reuses_fiscal_application_without_io(
             secrets=secret_resolver, workload_id="nfcore-api",
             validate_official_request=None,  # type: ignore[arg-type]
             contract_for_method=Mock(),
+        )
+
+
+def test_osasco_pinned_wsdl_composes_same_runtime_without_accessing_secrets(
+    tmp_path: object,
+) -> None:
+    from pathlib import Path
+
+    assert isinstance(tmp_path, Path)
+    db = SqliteFiscalDatabase(tmp_path / "osasco-pinned-schema.sqlite")
+    db.initialize()
+    application = FiscalApplicationService(db)
+    secret_service = SecretResolutionService(
+        unit_of_work_factory=db, vault=Mock(),
+    )
+    actions = {
+        m: OsascoWcfContract(
+            action="http://tempuri.org/INotaFiscalEletronica/" + m,
+            method=m, wsdl_sha256="a" * 64,
+        ) for m in ("RTC_EmitirNFE", "ConsultarNotaCompleta", "Cancelar")
+    }
+    wsdl = OsascoPinnedWcfWsdl(
+        sha256="a" * 64, binding_name="BasicHttpBinding_Reviewed",
+        operations=actions,
+    )
+    schema = OsascoReviewedSchemaPorts(
+        validate_issuance=Mock(), validate_query=Mock(),
+        validate_cancellation=Mock(), verify_full_invoice=Mock(),
+    )
+    ports = build_osasco_pinned_operational_ports(
+        application=application, unit_of_work_factory=db,
+        secrets=secret_service, workload_id="nfcore-api",
+        wsdl=wsdl, schema=schema,
+        resolve_policy=Mock(), fiscal_issuer_policy=Mock(),
+    )
+    assert isinstance(ports, OsascoTrustedRuntimePorts)
+    assert ports.verify_official_cancel is None
+    assert "cancelOsascoNfse" not in build_runtime_fiscal_handler_factory(
+        osasco_runtime_ports=ports,
+    )(application)
+    with pytest.raises(ValueError, match="dependencies"):
+        build_osasco_pinned_operational_ports(
+            application=application, unit_of_work_factory=db,
+            secrets=secret_service, workload_id="nfcore-api",
+            wsdl=wsdl, schema=schema, resolve_policy=Mock(),
+            fiscal_issuer_policy=None,  # type: ignore[arg-type]
         )
