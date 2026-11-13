@@ -83,6 +83,8 @@ from kordena_fiscal.xml import NfeAccessKey
 
 from .cajamar_operational_composition import CajamarTrustedRuntimePorts
 from .fiscal_runtime import FiscalOperationHandler, PreflightFiscalOperationHandler
+from .osasco_cancel_handlers import build_osasco_cancel_handler
+from .osasco_operational_composition import OsascoTrustedRuntimePorts
 from .provider_issuance_handler import PreparedXmlGatewaySelector
 from .provider_operation_wiring import build_provider_operation_handlers
 from .sp4_municipal_canonical_composition import (
@@ -371,6 +373,10 @@ def build_runtime_fiscal_handler_factory(
     cajamar_port_builder: Callable[
         [FiscalApplicationService], CajamarTrustedRuntimePorts
     ] | None = None,
+    osasco_runtime_ports: OsascoTrustedRuntimePorts | None = None,
+    osasco_port_builder: Callable[
+        [FiscalApplicationService], OsascoTrustedRuntimePorts
+    ] | None = None,
 ) -> Any:
     """Register all four canonical operations without granting fiscal readiness.
 
@@ -423,6 +429,18 @@ def build_runtime_fiscal_handler_factory(
         or "cajamar-geisweb-homologation" not in sp4_reviewed_municipalities
     ):
         raise ValueError("Cajamar cancellation needs the existing reviewed municipal binding")
+    if (
+        osasco_runtime_ports is not None
+        and (
+            not isinstance(osasco_runtime_ports, OsascoTrustedRuntimePorts)
+            or osasco_port_builder is not None
+            or nfse_gateway is not None
+        )
+    ) or (
+        osasco_port_builder is not None
+        and (not callable(osasco_port_builder) or nfse_gateway is not None)
+    ):
+        raise ValueError("Conflicting reviewed Osasco municipal fiscal authorities")
     if webiss_extrema_exchange is not None or webiss_service_preaudit is not None:
         if (
             nfse_gateway is not None
@@ -465,6 +483,23 @@ def build_runtime_fiscal_handler_factory(
                 "cajamar-geisweb-homologation": reviewed_ports,
             }
             active_cajamar_cancel = reviewed_cancel
+        selected_osasco_ports = (
+            osasco_port_builder(application)
+            if osasco_port_builder is not None else osasco_runtime_ports
+        )
+        active_osasco_cancel = None
+        if selected_osasco_ports is not None:
+            if not isinstance(selected_osasco_ports, OsascoTrustedRuntimePorts):
+                raise ValueError("Osasco operator provisioning returned invalid ports")
+            if active_municipalities and "osasco-rtc-homologation" in active_municipalities:
+                raise ValueError("Duplicate Osasco provider authority")
+            active_municipalities = {
+                **(active_municipalities or {}),
+                "osasco-rtc-homologation": selected_osasco_ports.attach(application),
+            }
+            active_osasco_cancel = selected_osasco_ports.attach_verified_cancellation(
+                application,
+            )
         gateway = selected_operations or UnprovisionedFiscalGateway()
         if operations_gateway is None and certificate_vault is not None:
             vault = certificate_vault
@@ -583,6 +618,11 @@ def build_runtime_fiscal_handler_factory(
             prepared_nfse_query_client=nfse_query_client,
             archive_retention=retention,
         )
+        if active_osasco_cancel is not None:
+            handlers["cancelOsascoNfse"] = build_osasco_cancel_handler(
+                application=application, verified_cancel=active_osasco_cancel,
+                retention=retention,
+            )
         if active_cajamar_cancel is not None:
             reviewed_cancel = active_cajamar_cancel
 
