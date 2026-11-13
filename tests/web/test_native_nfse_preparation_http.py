@@ -22,6 +22,10 @@ from kordena_fiscal.application.service import FiscalApplicationService
 from kordena_fiscal.archive import FiscalArchiveKind, RetentionPolicyMetadata
 from kordena_fiscal.compliance.nfse_preaudit import nfse_preaudit
 from kordena_fiscal.control_plane import FiscalOrganization, FiscalUnitRegistration
+from kordena_fiscal.control_plane.models import (
+    ControlPlaneAuditAction,
+    ControlPlaneAuditEvent,
+)
 from kordena_fiscal.control_plane.commercial import (
     ConfiguredFiscalOperation,
     ProviderBinding,
@@ -107,6 +111,16 @@ def _database(
         uow.control_plane.add_unit(FiscalUnitRegistration(
             tenant_id=TENANT, unit_id=UNIT, display_name="Cajamar",
             enabled_environments=frozenset({FiscalEnvironment.HOMOLOGATION}),
+        ))
+        # The real Portal discovers registered units from canonical audit
+        # evidence. A raw unit insert alone is not a completed onboarding.
+        uow.control_plane.append_audit(ControlPlaneAuditEvent(
+            event_id="synthetic-native-unit-onboarded",
+            occurred_at=datetime.now(UTC),
+            actor_id="synthetic-test-setup",
+            action=ControlPlaneAuditAction.UNIT_ONBOARDED,
+            target_type="unit", target_id=UNIT, correlation_id="synthetic-onboarding",
+            tenant_id=TENANT, unit_id=UNIT,
         ))
         uow.control_plane.add_profile(FiscalProfile(
             profile_id="issuer-native", scope=scope,
