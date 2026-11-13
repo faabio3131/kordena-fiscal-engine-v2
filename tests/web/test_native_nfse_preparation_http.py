@@ -504,7 +504,7 @@ def test_cajamar_portal_prepares_sends_recovers_and_downloads_authorized_xml(
         invoice: Sp4VerifiedInvoice,
     ) -> CajamarCancellationDecision:
         cancelled(request, original, invoice)
-        if original.rps_number == "2":
+        if request.document.source.source_id == "cajamar-second-for-ambiguous-cancel":
             raise RuntimeError("synthetic transport timeout after cancellation claim")
         official_cancel = (
             "<CancelaNfseResposta><Nfse><IdentificacaoNfse>"
@@ -667,6 +667,39 @@ def test_cajamar_portal_prepares_sends_recovers_and_downloads_authorized_xml(
     )
     assert replay.status_code == 200, replay.text
     assert submitted.call_count == 1
+
+    # Municipal substitution is a human review of two durable fiscal records,
+    # not a fictitious SOAP operation or a second automatic issuance.
+    candidate = _post(
+        web, payload | {"source_id": "cajamar-reviewed-replacement"},
+        key="cajamar-substitution-candidate",
+    )
+    assert candidate.status_code == 200, candidate.text
+    candidate_id = candidate.json()["document_id"]
+    reviewed_payload = {
+        "unit_id": UNIT, "environment": "homologation",
+        "original_id": document_id, "replacement_id": candidate_id,
+        "human_approval": True,
+    }
+    with patch("kordena_fiscal.runtime.canonical_fiscal_composition.datetime") as clock:
+        clock.now.return_value = datetime(2026, 11, 5, tzinfo=UTC)
+        reviewed = web.post(
+            "/v1/portal/operations/reviewCajamarSubstitution",
+            json=reviewed_payload, headers={CSRF_HEADER: csrf},
+        )
+    assert reviewed.status_code == 200, reviewed.text
+    assert reviewed.json()["status"] == "MUNICIPAL_PORTAL_SUBSTITUTION_REQUIRED"
+    assert reviewed.json()["official_fiscal_confirmation"] is False
+    assert reviewed.json()["deadline"] == "2026-11-10"
+    assert submitted.call_count == 1
+    with db() as uow:
+        assert uow.lifecycle.get(document_id).state is FiscalDocumentState.AUTHORIZED
+        assert uow.lifecycle.get(candidate_id).state is FiscalDocumentState.READY_TO_TRANSMIT
+    expired_review = web.post(
+        "/v1/portal/operations/reviewCajamarSubstitution",
+        json=reviewed_payload, headers={CSRF_HEADER: csrf},
+    )
+    assert expired_review.status_code == 400
 
     with patch(
         "kordena_fiscal.application.service._cajamar_policy_now",
