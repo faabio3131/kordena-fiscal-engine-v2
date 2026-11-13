@@ -6,8 +6,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from pathlib import Path
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import pytest
 from cryptography import x509
