@@ -12,6 +12,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 from xml.sax.saxutils import escape
 
+import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -19,7 +20,6 @@ from cryptography.hazmat.primitives.serialization import pkcs12
 from cryptography.x509.oid import NameOID, ObjectIdentifier
 from fastapi.testclient import TestClient
 from lxml import etree
-import pytest
 
 from kordena_fiscal.application.cajamar_substitution_review import (
     review_cajamar_substitution,
@@ -70,6 +70,7 @@ from kordena_fiscal.issuance.nfse_dps_builder import build_signed_dps
 from kordena_fiscal.lifecycle import FiscalDocumentState
 from kordena_fiscal.operations import FakeFiscalOperationsGateway, FiscalOperationsClient
 from kordena_fiscal.persistence import SqliteFiscalDatabase
+from kordena_fiscal.persistence.ports import PersistenceStateError
 from kordena_fiscal.runtime.canonical_fiscal_composition import (
     _GovernedNationalNfseGateway,
     build_runtime_fiscal_handler_factory,
@@ -390,7 +391,7 @@ def test_cajamar_official_substitution_rules_do_not_infer_soap_completion(
             )
 
     # Prepared alone cannot be mistaken for substitution completed by city.
-    with pytest.raises(Exception):
+    with pytest.raises(PersistenceStateError):
         app.review_prepared_cajamar_substitution(
             scope=scope, original_id=old.json()["document_id"],
             replacement_id=candidate.json()["document_id"],
