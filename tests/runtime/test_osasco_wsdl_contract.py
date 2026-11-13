@@ -24,7 +24,8 @@ def _wsdl() -> bytes:
           <soap:operation soapAction="http://tempuri.org/INotaFiscalEletronica/RTC_EmitirNFE"/>
         </wsdl:operation>
         <wsdl:operation name="ConsultarNotaCompleta">
-          <soap:operation soapAction="http://tempuri.org/INotaFiscalEletronica/ConsultarNotaCompleta"/>
+          <soap:operation
+              soapAction="http://tempuri.org/INotaFiscalEletronica/ConsultarNotaCompleta"/>
         </wsdl:operation>
         <wsdl:operation name="Cancelar">
           <soap:operation soapAction="http://tempuri.org/INotaFiscalEletronica/Cancelar"/>
