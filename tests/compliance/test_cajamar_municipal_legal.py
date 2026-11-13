@@ -47,7 +47,7 @@ def test_cajamar_cancel_after_deadline_requires_separate_municipal_process() -> 
     with pytest.raises(FiscalValidationError, match="administrative process"):
         validate_cajamar_automatic_cancellation(
             competence=date(2026, 10, 31), reason="incorrect_taker",
-            reviewed_at=datetime(2026, 11, 11, tzinfo=UTC),
+            reviewed_at=datetime(2026, 11, 11, 3, tzinfo=UTC),
         )
     with pytest.raises(FiscalValidationError, match="administrative process"):
         validate_cajamar_automatic_cancellation(
