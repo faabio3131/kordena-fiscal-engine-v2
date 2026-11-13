@@ -22,8 +22,8 @@ from kordena_fiscal.runtime.cajamar_operational_composition import (
 from kordena_fiscal.runtime.canonical_fiscal_composition import (
     build_runtime_fiscal_handler_factory,
 )
-from kordena_fiscal.runtime.fiscal_runtime import CanonicalFiscalOperationPath
 from kordena_fiscal.runtime.config import RuntimeConfigurationError, RuntimeSettings
+from kordena_fiscal.runtime.fiscal_runtime import CanonicalFiscalOperationPath
 
 
 def _trusted_fixture(db: SqliteFiscalDatabase) -> CajamarTrustedRuntimePorts:
