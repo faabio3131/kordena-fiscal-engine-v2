@@ -114,39 +114,24 @@ def _amount(value: str) -> Decimal:
     return amount
 
 
-def interpret_cajamar_geisweb_result(
-    receipt: CajamarGeiswebResult,
-    request: NfseAuthorizationRequest,
-    original: Sp4OriginalRps,
-) -> Sp4ProviderOutcome:
-    """Read-only lot recovery confirms at most ONE matching official NFS-e.
+def decode_cajamar_archived_invoice(
+    official_xml: bytes, original: Sp4OriginalRps,
+) -> Sp4VerifiedInvoice:
+    """Recheck the exact archived note against immutable original fiscal RPS.
 
-    The EnviaLoteRps response is not promoted here. Even a synchronous
-    transport acknowledgement may precede the official original-RPS proof.
+    Only use on integrity-verified fiscal archive evidence, never on browser
+    bytes or an unverified GeisWeb transport response.
     """
-    if (
-        not isinstance(receipt, CajamarGeiswebResult)
-        or not isinstance(request, NfseAuthorizationRequest)
-        or not isinstance(original, Sp4OriginalRps)
-    ):
-        raise Sp4CanonicalMunicipalError("GeisWeb requires canonical request and RPS")
-    if receipt.method == "EnviaLoteRps":
-        return Sp4ProviderOutcome(status=AuthorizationStatus.PENDING)
-    if receipt.method != "ConsultaLoteRps":
-        raise Sp4CanonicalMunicipalError("GeisWeb recovery must use original RPS lot")
-    if not receipt.response_xml:
-        return Sp4ProviderOutcome(status=AuthorizationStatus.PENDING)
-    official_xml = _service_result(receipt.response_xml)
+    if not isinstance(original, Sp4OriginalRps):
+        raise Sp4CanonicalMunicipalError("Original RPS is mandatory")
     root = _parse(official_xml)
     if root.tag != "ConsultaLoteRpsResposta":
         raise Sp4CanonicalMunicipalError("GeisWeb lot XML root mismatch")
     if root.findall("Msg"):
-        if root.findall("Rps"):
-            raise Sp4CanonicalMunicipalError("Contradictory GeisWeb lot error and invoice")
-        return Sp4ProviderOutcome(status=AuthorizationStatus.PENDING)
+        raise Sp4CanonicalMunicipalError("Archived invoice contains a municipal error")
     invoices = root.findall("Rps")
     if not invoices:
-        return Sp4ProviderOutcome(status=AuthorizationStatus.PENDING)
+        raise Sp4CanonicalMunicipalError("Archived XML has no verified invoice")
     if len(invoices) != 1:
         raise Sp4CanonicalMunicipalError("GeisWeb returned multiple RPS invoices")
     rps = invoices[0]
@@ -184,7 +169,7 @@ def interpret_cajamar_geisweb_result(
     # The municipal layout does not expose an RPS series in this reply:
     # the series is taken from the exact immutable original RPS and must
     # be separately validated against the submitted signed RPS identity.
-    invoice = Sp4VerifiedInvoice(
+    return Sp4VerifiedInvoice(
         issuer_cnpj=issuer_id,
         issuer_ibge=original.issuer_ibge,
         competence_date=original.competence_date,
@@ -196,6 +181,42 @@ def interpret_cajamar_geisweb_result(
         invoice_reference=note_number,
         authorized_xml=official_xml,
     )
+
+
+
+def interpret_cajamar_geisweb_result(
+    receipt: CajamarGeiswebResult,
+    request: NfseAuthorizationRequest,
+    original: Sp4OriginalRps,
+) -> Sp4ProviderOutcome:
+    """Read-only lot recovery confirms at most ONE matching official NFS-e.
+
+    The EnviaLoteRps response is not promoted here. Even a synchronous
+    transport acknowledgement may precede the official original-RPS proof.
+    """
+    if (
+        not isinstance(receipt, CajamarGeiswebResult)
+        or not isinstance(request, NfseAuthorizationRequest)
+        or not isinstance(original, Sp4OriginalRps)
+    ):
+        raise Sp4CanonicalMunicipalError("GeisWeb requires canonical request and RPS")
+    if receipt.method == "EnviaLoteRps":
+        return Sp4ProviderOutcome(status=AuthorizationStatus.PENDING)
+    if receipt.method != "ConsultaLoteRps":
+        raise Sp4CanonicalMunicipalError("GeisWeb recovery must use original RPS lot")
+    if not receipt.response_xml:
+        return Sp4ProviderOutcome(status=AuthorizationStatus.PENDING)
+    official_xml = _service_result(receipt.response_xml)
+    root = _parse(official_xml)
+    if root.tag != "ConsultaLoteRpsResposta":
+        raise Sp4CanonicalMunicipalError("GeisWeb lot XML root mismatch")
+    if root.findall("Msg"):
+        if root.findall("Rps"):
+            raise Sp4CanonicalMunicipalError("Contradictory GeisWeb lot error and invoice")
+        return Sp4ProviderOutcome(status=AuthorizationStatus.PENDING)
+    if not root.findall("Rps"):
+        return Sp4ProviderOutcome(status=AuthorizationStatus.PENDING)
+    invoice = decode_cajamar_archived_invoice(official_xml, original)
     return Sp4ProviderOutcome(
         status=AuthorizationStatus.AUTHORIZED, official_invoice=invoice,
     )
