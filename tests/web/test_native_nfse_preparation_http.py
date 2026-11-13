@@ -47,7 +47,10 @@ IBGE = "3509205"
 ROUTE = "/v1/portal/operations/prepareNativeNfse"
 
 
-def _database(path: Path, *, with_binding: bool = True) -> SqliteFiscalDatabase:
+def _database(
+    path: Path, *, with_binding: bool = True,
+    provider_id: str = NACIONAL_HOMOLOGATION_PROVIDER_ID,
+) -> SqliteFiscalDatabase:
     db = SqliteFiscalDatabase(path)
     db.initialize()
     jurisdiction = BrazilianJurisdiction("SP", IBGE)
@@ -77,7 +80,7 @@ def _database(path: Path, *, with_binding: bool = True) -> SqliteFiscalDatabase:
         ))
         if with_binding:
             uow.commercial.put_provider_binding(ProviderBinding(
-                binding_id="native-national-nfse-binding", tenant_id=TENANT,
+                binding_id="native-nfse-binding", tenant_id=TENANT,
                 unit_id=UNIT, environment=FiscalEnvironment.HOMOLOGATION,
                 document_kind=FiscalDocumentKind.NFSE,
                 jurisdiction=jurisdiction,
@@ -207,3 +210,103 @@ def test_unmodeled_untaxed_iss_and_malformed_money_fail_before_preparation(tmp_p
     assert _post(web, _payload() | {"gross_amount": "100.001"}).status_code == 400
     assert _post(web, _payload() | {"national_taxation_code": "bad"}).status_code == 400
     assert _post(web, _payload()).status_code == 200
+
+
+_CAJAMAR_PROVIDER = "cajamar-geisweb-homologation"
+_TAKER_ADDRESS = {
+    "taker_street": "Rua Teste Fiscal",
+    "taker_number": "100",
+    "taker_neighborhood": "Centro",
+    "taker_city": "Sao Paulo",
+    "taker_state": "SP",
+    "taker_municipality_ibge": "3550308",
+    "taker_postal_code": "01001000",
+}
+
+
+def test_cajamar_prepares_original_rps_through_same_portal_and_uow(
+    tmp_path: Path,
+) -> None:
+    db = _database(
+        tmp_path / "cajamar-portal.sqlite", provider_id=_CAJAMAR_PROVIDER,
+    )
+    web = _client(db)
+    reviewed = _payload() | _TAKER_ADDRESS | {
+        "competence_date": "2026-10-31",
+        "source_id": "cajamar-original-portal-2026",
+    }
+    first = _post(web, reviewed)
+    assert first.status_code == 200, first.text
+    record = first.json()
+    assert record["status"] == FiscalDocumentState.READY_TO_TRANSMIT.value
+    assert record["numbering_authority"] == "municipal_rps_durable"
+    assert record["dps_numbering"] == "not_applicable_municipal_original_rps"
+    assert record["transmitted"] is False
+    assert record["fiscal_authorization"] == "not_inferred_from_preparation"
+
+    scope = ExecutionScope(
+        TENANT, UNIT, FiscalEnvironment.HOMOLOGATION, "replay", "fm-nfcore",
+    )
+    app = FiscalApplicationService(db)
+    saved = app.load_prepared_nfse_authorization(scope, record["document_id"])
+    assert saved.document.dps_number is None
+    assert saved.document.service_taker is not None
+    assert saved.document.service_taker.address is not None
+    assert saved.document.service_taker.address.postal_code == "01001000"
+    original = app.load_sp4_original_rps(scope, record["document_id"])
+    assert original.issuer_ibge == IBGE
+    assert original.rps_number == "1"
+    assert original.municipal_batch_id == "1"
+    assert original.issuer_cnpj == saved.document.issuer.cnpj
+
+    again = _post(web, reviewed, key="same-cajamar-source")
+    assert again.status_code == 200, again.text
+    assert again.json()["replay"] is True
+    assert app.load_sp4_original_rps(scope, record["document_id"]) == original
+    with db() as uow:
+        records = uow.archive.list_for_document(scope, record["document_id"])
+    assert len(records) == 2
+
+
+def test_cajamar_requires_full_taker_and_blocks_national_mandatory_competence(
+    tmp_path: Path,
+) -> None:
+    db = _database(
+        tmp_path / "cajamar-no-false-channel.sqlite", provider_id=_CAJAMAR_PROVIDER,
+    )
+    web = _client(db)
+    prior = _payload() | {"competence_date": "2026-10-31"}
+    missing_address = _post(web, prior)
+    assert missing_address.status_code == 400
+    assert missing_address.json()["detail"]["code"] == "NATIVE_NFSE_INVALID_FISCAL_FACTS"
+    wrong_channel = _post(web, _payload() | _TAKER_ADDRESS | {
+        "competence_date": "2026-11-01",
+    })
+    assert wrong_channel.status_code == 400
+    assert wrong_channel.json()["detail"]["code"] == "NATIVE_NFSE_INVALID_FISCAL_FACTS"
+    with db() as uow:
+        assert uow.lifecycle.get(
+            "native-nfse-" + __import__("hashlib").sha256(
+                (repr((
+                    "fm-nfcore", TENANT, UNIT, FiscalEnvironment.HOMOLOGATION,
+                )) + ":" + "service-order-native-1").encode(),
+            ).hexdigest()[:40]
+        ) is None
+
+
+def test_native_national_preserves_complete_reviewed_brazilian_taker(
+    tmp_path: Path,
+) -> None:
+    db = _database(tmp_path / "native-full-taker.sqlite")
+    web = _client(db)
+    sent = _post(web, _payload() | _TAKER_ADDRESS)
+    assert sent.status_code == 200, sent.text
+    scope = ExecutionScope(
+        TENANT, UNIT, FiscalEnvironment.HOMOLOGATION, "check", "fm-nfcore",
+    )
+    doc = FiscalApplicationService(db).load_prepared_nfse_authorization(
+        scope, sent.json()["document_id"],
+    ).document
+    assert doc.service_taker is not None
+    assert doc.service_taker.address is not None
+    assert doc.service_taker.address.jurisdiction.municipality_ibge_code == "3550308"
