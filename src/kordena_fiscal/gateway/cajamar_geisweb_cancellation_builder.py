@@ -222,11 +222,8 @@ def interpret_cajamar_cancel_response(
     }
     for key, expected in required.items():
         found = ident.findall(key)
-        if (
-            len(found) != 1
-            or not isinstance(found[0].text, str)
-            or found[0].text.strip() != expected
-        ):
+        observed = found[0].text if len(found) == 1 else None
+        if not isinstance(observed, str) or observed.strip() != expected:
             raise CajamarGeiswebCancellationError(
                 "Cancellation response is not linked to original fiscal invoice"
             )
