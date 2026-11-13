@@ -10,6 +10,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from unittest.mock import Mock
 from xml.sax.saxutils import escape
+from xml.sax.saxutils import escape
 
 from kordena_fiscal.domain import (
     BrazilianJurisdiction,
@@ -30,6 +31,7 @@ from kordena_fiscal.gateway.cajamar_geisweb_homologation import (
     CajamarGeiswebResult,
 )
 from kordena_fiscal.gateway.cajamar_geisweb_issue_builder import CajamarGeiswebIssueData
+from kordena_fiscal.gateway.sp4_municipal_canonical import Sp4VerifiedInvoice
 from kordena_fiscal.issuance.nfe_nfse import (
     NfseAuthorizationRequest,
     NfseCanonicalDocument,
@@ -49,6 +51,7 @@ from kordena_fiscal.runtime.sp4_municipal_canonical_composition import (
 from kordena_fiscal.runtime.sp4_municipal_provider_bridges import (
     Sp4BridgeAuthority,
     build_cajamar_reviewed_ports,
+    build_cajamar_verified_cancellation_port,
 )
 from kordena_fiscal.runtime.sp4_municipal_request_factories import (
     build_cajamar_geisweb_issue_request_factory,
@@ -210,3 +213,71 @@ def test_one_cajamar_rps_issue_and_read_only_recovery_with_verified_invoice() ->
     validate_issue.assert_called_once()
     validate_query.assert_called_once()
     validate_official.assert_called_once()
+
+
+def test_cajamar_cancellation_traverses_signed_original_note_and_verified_transport() -> None:
+    """No second RPS: CancelaNfse references already-authorized RPS and NFS-e."""
+    req = _canonical_request()
+    key = FiscalSequenceKey.from_scope(
+        req.document.scope, model=InternalFiscalSequenceStream.NFSE_RPS, series=1,
+    )
+    reservation = FiscalNumberReservation(
+        key=key, number=42,
+        reservation_token=hashlib.sha256(
+            f"{key.canonical_material}|42".encode(),
+        ).hexdigest(),
+    )
+    original = build_sp4_original_from_reservation(
+        req, reservation, rps_series="NF",
+    )
+    invoice = Sp4VerifiedInvoice(
+        issuer_cnpj=original.issuer_cnpj,
+        issuer_ibge=original.issuer_ibge,
+        competence_date=original.competence_date,
+        rps_number=original.rps_number,
+        rps_series=original.rps_series,
+        gross_amount=original.gross_amount,
+        invoice_number="8765", verification_code="ABCDEF1234",
+        invoice_reference="8765",
+        authorized_xml=b"<ConsultaLoteRpsResposta>fixture</ConsultaLoteRpsResposta>",
+    )
+    inner = (
+        "<CancelaNfseResposta><Nfse><IdentificacaoNfse>"
+        "<NumeroRps>42</NumeroRps>"
+        "<NumeroNfse>8765</NumeroNfse>"
+        "<CodigoVerificacao>ABCDEF1234</CodigoVerificacao>"
+        "</IdentificacaoNfse></Nfse></CancelaNfseResposta>"
+    )
+    soap = (
+        '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"'
+        ' xmlns:g="http://www.geisweb.com.br/"><soap:Body>'
+        '<g:CancelaNfseResponse><g:CancelaNfseResult>'
+        f"{escape(inner)}</g:CancelaNfseResult>"
+        "</g:CancelaNfseResponse></soap:Body></soap:Envelope>"
+    ).encode()
+    transport = Mock(spec=CajamarGeiswebHomologationTransport)
+    transport.invoke.return_value = CajamarGeiswebResult(
+        method="CancelaNfse", response_xml=soap,
+    )
+    signed = Mock(side_effect=lambda data: data)
+    validate_signed = Mock()
+    validate_official = Mock()
+    cancel = build_cajamar_verified_cancellation_port(
+        transport=transport, sign_cancel=signed,
+        validate_signed_cancel=validate_signed,
+        verify_official_cancel=validate_official,
+    )
+    decision = cancel(req, original, invoice)
+    assert decision.confirmed is True
+    assert decision.response_xml == inner.encode()
+    assert decision.rejection_code is None
+    transport.invoke.assert_called_once()
+    sent = transport.invoke.call_args.args[0]
+    assert sent.method == "CancelaNfse"
+    assert sent.scope.identity_partition_key == original.scope.identity_partition_key
+    assert sent.issuer_cnpj == original.issuer_cnpj
+    assert b"<NumeroNfse>8765</NumeroNfse>" in sent.signed_request_xml
+    assert b"<NumeroRps>" not in sent.signed_request_xml
+    signed.assert_called_once()
+    validate_signed.assert_called_once()
+    validate_official.assert_called_once_with(inner.encode())
