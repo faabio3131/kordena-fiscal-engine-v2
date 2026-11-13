@@ -695,10 +695,10 @@ class FiscalApplicationService:
                 or document.scope.environment is not FiscalEnvironment.HOMOLOGATION
                 or not document.scope.host_namespace
                 or document.issuer.address.jurisdiction.state_code != "SP"
-                or document.issuer.address.jurisdiction.municipality_ibge_code != "3509205"
+                or document.issuer.address.jurisdiction.municipality_ibge_code not in {"3509205", "3534401"}
             ):
                 raise FiscalValidationError(
-                    "Cajamar original RPS requires reviewed municipal scope and series"
+                    "SP4 municipal original RPS requires reviewed scope and series"
                 )
         with self._uow_factory() as uow:
             if extrema_intent_builder is None and sp4_original_builder is None:
@@ -808,8 +808,13 @@ class FiscalApplicationService:
                     model=InternalFiscalSequenceStream.NFSE_RPS,
                     series=sp4_rps_series,
                 )
+                municipal_ibge = document.issuer.address.jurisdiction.municipality_ibge_code
+                max_number = (
+                    999_999_999_999_999 if municipal_ibge == "3534401"
+                    else 99_999_999
+                )
                 reserved_rps = uow.sequences.reserve_next(
-                    key, FiscalSequencePolicy(max_number=99_999_999),
+                    key, FiscalSequencePolicy(max_number=max_number),
                 )
                 original_rps = sp4_original_builder(request, reserved_rps)
                 validate_sp4_original(request, original_rps, reserved_rps)
@@ -848,7 +853,7 @@ class FiscalApplicationService:
     def load_sp4_original_rps(
         self, scope: ExecutionScope, document_id: str,
     ) -> Sp4OriginalRps:
-        """Recover Cajamar original RPS from the same tenant-scoped canonical archive.
+        """Recover SP4 original RPS from the same tenant-scoped canonical archive.
 
         The fiscal application is the sole loader. Transport drivers cannot
         supply alternate identity, lot, CNPJ, or original sequence authority.
