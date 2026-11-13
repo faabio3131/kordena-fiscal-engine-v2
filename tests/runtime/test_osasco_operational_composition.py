@@ -11,7 +11,11 @@ from kordena_fiscal.persistence import SqliteFiscalDatabase
 from kordena_fiscal.runtime.canonical_fiscal_composition import (
     build_runtime_fiscal_handler_factory,
 )
-from kordena_fiscal.runtime.osasco_operational_composition import OsascoTrustedRuntimePorts
+from kordena_fiscal.runtime.osasco_operational_composition import (
+    OsascoTrustedRuntimePorts,
+    build_osasco_trusted_transport,
+)
+from kordena_fiscal.vault.contracts import SecretResolutionService
 
 
 def _ports() -> OsascoTrustedRuntimePorts:
@@ -64,4 +68,36 @@ def test_osasco_port_set_rejects_missing_external_verified_interpreter() -> None
             validate_prepared_rps=ports.validate_prepared_rps,
             verify_official_invoice_xml=ports.verify_official_invoice_xml,
             interpret_official_result=None,  # type: ignore[arg-type]
+        )
+
+
+def test_osasco_real_transport_builder_reuses_fiscal_application_without_io(
+    tmp_path: object,
+) -> None:
+    from pathlib import Path
+
+    assert isinstance(tmp_path, Path)
+    db = SqliteFiscalDatabase(tmp_path / "osasco-factory.sqlite")
+    db.initialize()
+    application = FiscalApplicationService(db)
+    vault = Mock()
+    secret_resolver = SecretResolutionService(
+        unit_of_work_factory=db, vault=vault,
+    )
+    transport = build_osasco_trusted_transport(
+        application=application,
+        unit_of_work_factory=db,
+        secrets=secret_resolver,
+        workload_id="nfcore-api",
+        validate_official_request=Mock(),
+        contract_for_method=Mock(),
+    )
+    assert isinstance(transport, OsascoRtcHomologationTransport)
+    assert vault.resolve.call_count == 0
+    with pytest.raises(ValueError, match="contract ports"):
+        build_osasco_trusted_transport(
+            application=application, unit_of_work_factory=db,
+            secrets=secret_resolver, workload_id="nfcore-api",
+            validate_official_request=None,  # type: ignore[arg-type]
+            contract_for_method=Mock(),
         )
