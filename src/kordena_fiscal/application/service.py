@@ -9,15 +9,15 @@ from dataclasses import dataclass, replace
 from datetime import datetime
 from enum import StrEnum
 
+from kordena_fiscal.application.cajamar_substitution_review import (
+    CajamarSubstitutionReview,
+    review_cajamar_substitution,
+)
 from kordena_fiscal.archive import (
     FiscalArchiveEntry,
     FiscalArchiveKind,
     FiscalArchiveVerifier,
     RetentionPolicyMetadata,
-)
-from kordena_fiscal.application.cajamar_substitution_review import (
-    CajamarSubstitutionReview,
-    review_cajamar_substitution,
 )
 from kordena_fiscal.contingency import (
     FiscalOutboxEnqueueResult,
