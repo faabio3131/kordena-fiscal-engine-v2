@@ -4,10 +4,12 @@ from __future__ import annotations
 import hashlib
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest.mock import Mock
 
 from fastapi.testclient import TestClient
 
 from kordena_fiscal.application.service import FiscalApplicationService
+from kordena_fiscal.archive import RetentionPolicyMetadata
 from kordena_fiscal.control_plane import FiscalOrganization, FiscalUnitRegistration
 from kordena_fiscal.control_plane.commercial import (
     ConfiguredFiscalOperation,
@@ -25,11 +27,27 @@ from kordena_fiscal.domain import (
     StateRegistration,
     TaxRegimeCode,
 )
+from kordena_fiscal.gateway.authorization import AuthorizationStatus
 from kordena_fiscal.gateway.nfse_nacional_homologation import (
     NACIONAL_HOMOLOGATION_PROVIDER_ID,
 )
+from kordena_fiscal.gateway.sp4_municipal_canonical import (
+    Sp4OriginalRps,
+    Sp4ProviderOutcome,
+    Sp4VerifiedInvoice,
+)
 from kordena_fiscal.lifecycle import FiscalDocumentState
 from kordena_fiscal.persistence import SqliteFiscalDatabase
+from kordena_fiscal.runtime.canonical_fiscal_composition import (
+    build_runtime_fiscal_handler_factory,
+)
+from kordena_fiscal.runtime.fiscal_runtime import (
+    CanonicalFiscalOperationPath,
+    CanonicalPortalOperationExecutor,
+)
+from kordena_fiscal.runtime.sp4_municipal_canonical_composition import (
+    Sp4ReviewedMunicipalPorts,
+)
 from kordena_fiscal.security.human_identity import (
     HumanAccount,
     HumanIdentityService,
@@ -38,6 +56,7 @@ from kordena_fiscal.security.human_identity import (
     PortalRole,
     ScryptPasswordHasher,
 )
+from kordena_fiscal.operations import FakeFiscalOperationsGateway
 from kordena_fiscal.web import create_app
 from kordena_fiscal.web.human_auth import CSRF_COOKIE, CSRF_HEADER
 from kordena_fiscal.web.portal_runtime import DurableHumanPortalExecutor
@@ -88,11 +107,26 @@ def _database(
                 operation=ConfiguredFiscalOperation.AUTHORIZE,
                 provider_id=provider_id,
             ))
+            if provider_id == "cajamar-geisweb-homologation":
+                uow.commercial.put_provider_binding(ProviderBinding(
+                    binding_id="cajamar-query-binding",
+                    tenant_id=TENANT, unit_id=UNIT,
+                    environment=FiscalEnvironment.HOMOLOGATION,
+                    document_kind=FiscalDocumentKind.NFSE,
+                    jurisdiction=jurisdiction,
+                    operation=ConfiguredFiscalOperation.QUERY,
+                    provider_id=provider_id,
+                ))
         uow.commit()
     return db
 
 
-def _client(db: SqliteFiscalDatabase, role: PortalRole = PortalRole.OWNER) -> TestClient:
+def _client(
+    db: SqliteFiscalDatabase,
+    role: PortalRole = PortalRole.OWNER,
+    *,
+    operation_executor: CanonicalPortalOperationExecutor | None = None,
+) -> TestClient:
     password = "only-for-synthetic-fixtures-2026"
     hasher = ScryptPasswordHasher()
     accounts = InMemoryHumanAccountRepository((HumanAccount(
@@ -107,7 +141,9 @@ def _client(db: SqliteFiscalDatabase, role: PortalRole = PortalRole.OWNER) -> Te
     web = TestClient(
         create_app(
             human_identity=identity,
-            portal_executor=DurableHumanPortalExecutor(db),
+            portal_executor=DurableHumanPortalExecutor(
+                db, operation_executor=operation_executor,
+            ),
         ),
         base_url="https://nfcore.test",
     )
@@ -311,3 +347,112 @@ def test_native_national_preserves_complete_reviewed_brazilian_taker(
     assert doc.service_taker is not None
     assert doc.service_taker.address is not None
     assert doc.service_taker.address.jurisdiction.municipality_ibge_code == "3550308"
+
+
+def test_cajamar_portal_prepares_sends_recovers_and_downloads_authorized_xml(
+    tmp_path: Path,
+) -> None:
+    """Same Portal and one UoW; only synthetic GeisWeb ports, no official I/O."""
+    db = _database(
+        tmp_path / "cajamar-end-to-end.sqlite", provider_id=_CAJAMAR_PROVIDER,
+    )
+    app = FiscalApplicationService(db)
+    submitted = Mock(return_value=Sp4ProviderOutcome(status=AuthorizationStatus.PENDING))
+    verified = Mock()
+
+    def recover(
+        request: NfseAuthorizationRequest, original: Sp4OriginalRps,
+    ) -> Sp4ProviderOutcome:
+        invoice = Sp4VerifiedInvoice(
+            issuer_cnpj=original.issuer_cnpj,
+            issuer_ibge=original.issuer_ibge,
+            competence_date=original.competence_date,
+            rps_number=original.rps_number,
+            rps_series=original.rps_series,
+            gross_amount=original.gross_amount,
+            invoice_number="8765",
+            verification_code="ABCDEF1234",
+            invoice_reference="cajamar-8765",
+            authorized_xml=b"<ConsultaLoteRpsResposta>synthetic-cajamar</ConsultaLoteRpsResposta>",
+        )
+        return Sp4ProviderOutcome(
+            status=AuthorizationStatus.AUTHORIZED, official_invoice=invoice,
+        )
+
+    queried = Mock(side_effect=recover)
+    ports = Sp4ReviewedMunicipalPorts(
+        load_original_rps=Mock(side_effect=AssertionError("alternative loader used")),
+        fiscal_issuer_policy=Mock(),
+        validate_prepared_rps=Mock(),
+        submit_official_rps=submitted,
+        query_official_rps=queried,
+        verify_official_invoice_xml=verified,
+    )
+    handler_factory = build_runtime_fiscal_handler_factory(
+        operations_gateway=FakeFiscalOperationsGateway(),
+        sp4_reviewed_municipalities={_CAJAMAR_PROVIDER: ports},
+    )
+    handlers = handler_factory(app)
+    executable = CanonicalPortalOperationExecutor(
+        unit_of_work_factory=db,
+        path=CanonicalFiscalOperationPath(app, handlers=handlers),
+    )
+    web = _client(db, operation_executor=executable)
+    payload = _payload() | _TAKER_ADDRESS | {
+        "competence_date": "2026-10-31",
+        "source_id": "cajamar-fully-exercised-portal",
+    }
+    prepared = _post(web, payload)
+    assert prepared.status_code == 200, prepared.text
+    document_id = prepared.json()["document_id"]
+    original = app.load_sp4_original_rps(
+        ExecutionScope(
+            TENANT, UNIT, FiscalEnvironment.HOMOLOGATION, "lookup", "fm-nfcore",
+        ), document_id,
+    )
+    assert original.rps_number == "1"
+
+    csrf = web.cookies.get(CSRF_COOKIE)
+    assert csrf
+    body = {
+        "unit_id": UNIT, "environment": "homologation", "document_id": document_id,
+    }
+    issued = web.post(
+        "/v1/portal/operations/issueFiscalDocument",
+        json=body, headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-first-post"},
+    )
+    assert issued.status_code == 200, issued.text
+    assert submitted.call_count == 1
+    queried.assert_not_called()
+
+    completed = web.post(
+        "/v1/portal/operations/reconcileFiscalOperation",
+        json=body, headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-original-lot-query"},
+    )
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["status"] == FiscalDocumentState.AUTHORIZED.value
+    assert submitted.call_count == 1, "read-only recovery must not submit again"
+    queried.assert_called_once()
+    verified.assert_called_once()
+
+    download = web.get(
+        f"/v1/portal/documents/{document_id}/artifacts/authorized_xml",
+        params={"unit_id": UNIT, "environment": "homologation"},
+    )
+    assert download.status_code == 200, download.text
+    assert download.content == (
+        b"<ConsultaLoteRpsResposta>synthetic-cajamar</ConsultaLoteRpsResposta>"
+    )
+    assert download.headers["Cache-Control"] == "no-store"
+    denied = web.get(
+        f"/v1/portal/documents/{document_id}/artifacts/authorized_xml",
+        params={"unit_id": "another-unit", "environment": "homologation"},
+    )
+    assert denied.status_code == 403
+
+    replay = web.post(
+        "/v1/portal/operations/issueFiscalDocument",
+        json=body, headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-first-post"},
+    )
+    assert replay.status_code == 200, replay.text
+    assert submitted.call_count == 1
