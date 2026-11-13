@@ -220,7 +220,7 @@ function appendFiscalFilters(article, viewId) {
   article.append(notice);
 }
 
-/** Build one native National NFS-e prepared record; no ERP and no provider POST.
+/** Prepare one canonical NFS-e National or Cajamar record; no ERP or provider POST.
  * @param {HTMLElement} article
  */
 function appendNativeNfsePreparation(article) {
@@ -233,10 +233,10 @@ function appendNativeNfsePreparation(article) {
   form.id = "native-nfse-preparation";
   form.className = "panel-form";
   const heading = document.createElement("h3");
-  heading.textContent = "Preparar NFS-e Nacional pelo NFCore";
+  heading.textContent = "Preparar NFS-e pelo NFCore — canal fiscal configurado";
   const info = document.createElement("p");
   info.className = "empty-state";
-  info.textContent = "Emissor próprio, sem ERP. Somente homologação. Informe dados efetivamente revisados; preparar não emite a nota. A numeração definitiva da DPS e a homologação oficial possuem gates separados.";
+  info.textContent = "Emissor próprio, sem ERP. Somente homologação. O canal Nacional ou Cajamar é determinado pelo vínculo fiscal e competência no servidor. Informe emitente, serviço e tomador revisados. Preparação não emite a nota; a numeração fiscal é reservada no Core.";
   form.append(heading, info);
   /** @type {Record<string, HTMLInputElement>} */
   const inputs = {};
@@ -254,6 +254,13 @@ function appendNativeNfsePreparation(article) {
     ["iss_amount", "ISS apurado e revisado (R$ 0.00)", "text", "[0-9]+\\.[0-9]{2}"],
     ["taker_document", "CPF ou CNPJ do tomador", "text", "[0-9]{11}|[0-9]{14}"],
     ["taker_name", "Nome ou razão social do tomador", "text", ""],
+    ["taker_street", "Logradouro do tomador", "text", ""],
+    ["taker_number", "Número do endereço do tomador", "text", ""],
+    ["taker_neighborhood", "Bairro do tomador", "text", ""],
+    ["taker_city", "Município do tomador", "text", ""],
+    ["taker_state", "UF do tomador", "text", "[A-Z]{2}"],
+    ["taker_municipality_ibge", "Código IBGE do município do tomador", "text", "[0-9]{7}"],
+    ["taker_postal_code", "CEP do tomador sem pontuação", "text", "[0-9]{8}"],
     ["source_normative", "Referência da regra fiscal aprovada", "text", ""],
     ["rule_version", "Versão da regra fiscal", "number", ""],
   ];
@@ -283,7 +290,7 @@ function appendNativeNfsePreparation(article) {
     " Confirmo a revisão dos dados fiscais, competência, tomador, código de serviço e ISS. A aplicação não presume enquadramento tributário."
   ));
   const submit = document.createElement("button");
-  submit.type = "submit"; submit.className = "primary"; submit.textContent = "Preparar NFS-e em homologação";
+  submit.type = "submit"; submit.className = "primary"; submit.textContent = "Preparar NFS-e revisada em homologação";
   const result = document.createElement("p"); result.id = "native-nfse-result";
   result.setAttribute("role", "status"); result.setAttribute("aria-live", "polite");
   form.append(withholding, reviewedLabel, submit, result); article.append(form);
@@ -319,7 +326,8 @@ function appendNativeNfsePreparation(article) {
       });
       operationDocument.value = String(prepared.document_id);
       result.textContent = "NFS-e preparada: " + String(prepared.document_id)
-        + ". Referência preenchida na emissão. Documento não transmitido nem autorizado.";
+        + " (" + String(prepared.numbering_authority || "numeração fiscal durável") + ")."
+        + " Referência preenchida na emissão. Documento não transmitido nem autorizado.";
       attempt = null;
     } catch (error) {
       result.textContent = (error instanceof Error ? error.message : "Preparação falhou")
