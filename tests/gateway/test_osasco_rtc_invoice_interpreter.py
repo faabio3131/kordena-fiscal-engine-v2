@@ -40,27 +40,27 @@ def _original() -> Sp4OriginalRps:
 
 def _xml() -> bytes:
     return (
-        '<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" '
-        'xmlns:t="http://tempuri.org/" '
-        'xmlns:a="http://schemas.datacontract.org/2004/07/Eissnfe.Negocio.WebServices.Mensagem" '
-        'xmlns:b="http://schemas.datacontract.org/2004/07/'
-        'Eissnfe.Dominio.DataTransferObject.Prestador" '
-        'xmlns:c="http://schemas.datacontract.org/2004/07/'
-        'Eissnfe.Dominio.DataTransferObject.Contribuinte">'
-        '<s:Body><t:ConsultarNotaCompletaResponse>'
-        '<t:ConsultarNotaCompletaResult>'
-        '<a:Erro>false</a:Erro>'
-        '<a:NotasGeradas><b:NotaFiscalRelatorioDTO>'
-        '<b:Numero>8001</b:Numero>'
-        '<b:NumeroRecibo>42</b:NumeroRecibo>'
-        '<b:CodigoAutenticidade>OSASCO1234</b:CodigoAutenticidade>'
-        '<b:Prestador><c:CNPJ>11222333000181</c:CNPJ></b:Prestador>'
-        '<b:Valor>150.00</b:Valor>'
-        '</b:NotaFiscalRelatorioDTO></a:NotasGeradas>'
-        '<a:QtdeNotas>1</a:QtdeNotas>'
-        '</t:ConsultarNotaCompletaResult>'
-        '</t:ConsultarNotaCompletaResponse></s:Body></s:Envelope>'
-    ).encode()
+        b'<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" '
+        b'xmlns:t="http://tempuri.org/" '
+        b'xmlns:a="http://schemas.datacontract.org/2004/07/Eissnfe.Negocio.WebServices.Mensagem" '
+        b'xmlns:b="http://schemas.datacontract.org/2004/07/'
+        b'Eissnfe.Dominio.DataTransferObject.Prestador" '
+        b'xmlns:c="http://schemas.datacontract.org/2004/07/'
+        b'Eissnfe.Dominio.DataTransferObject.Contribuinte">'
+        b'<s:Body><t:ConsultarNotaCompletaResponse>'
+        b'<t:ConsultarNotaCompletaResult>'
+        b'<a:Erro>false</a:Erro>'
+        b'<a:NotasGeradas><b:NotaFiscalRelatorioDTO>'
+        b'<b:Numero>8001</b:Numero>'
+        b'<b:NumeroRecibo>42</b:NumeroRecibo>'
+        b'<b:CodigoAutenticidade>OSASCO1234</b:CodigoAutenticidade>'
+        b'<b:Prestador><c:CNPJ>11222333000181</c:CNPJ></b:Prestador>'
+        b'<b:Valor>150.00</b:Valor>'
+        b'</b:NotaFiscalRelatorioDTO></a:NotasGeradas>'
+        b'<a:QtdeNotas>1</a:QtdeNotas>'
+        b'</t:ConsultarNotaCompletaResult>'
+        b'</t:ConsultarNotaCompletaResponse></s:Body></s:Envelope>'
+    )
 
 
 def test_osasco_full_invoice_correlates_issuer_receipt_and_amount() -> None:

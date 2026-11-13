@@ -15,14 +15,14 @@ from kordena_fiscal.domain import (
     ExecutionScope,
     FiscalDocumentKind,
 )
-from kordena_fiscal.gateway.osasco_rtc_invoice_interpreter import (
-    interpret_osasco_full_note_result,
-)
 from kordena_fiscal.gateway.osasco_rtc_homologation import (
     OsascoOperationReceipt,
     OsascoPreparedOperation,
     OsascoRtcHomologationTransport,
     OsascoWcfContract,
+)
+from kordena_fiscal.gateway.osasco_rtc_invoice_interpreter import (
+    interpret_osasco_full_note_result,
 )
 from kordena_fiscal.gateway.sp4_municipal_canonical import (
     Sp4OriginalRps,
