@@ -9,6 +9,8 @@ from decimal import Decimal
 
 import pytest
 
+from kordena_fiscal.application.service import FiscalApplicationService
+from kordena_fiscal.archive import RetentionPolicyMetadata
 from kordena_fiscal.domain import (
     BrazilianJurisdiction,
     CnaeCode,
@@ -23,8 +25,6 @@ from kordena_fiscal.domain import (
     StateRegistration,
     TaxRegimeCode,
 )
-from kordena_fiscal.application.service import FiscalApplicationService
-from kordena_fiscal.archive import RetentionPolicyMetadata
 from kordena_fiscal.issuance.nfe_nfse import (
     NfseAuthorizationRequest,
     NfseCanonicalDocument,
@@ -42,6 +42,7 @@ from kordena_fiscal.numbering import (
     InternalFiscalSequenceStream,
 )
 from kordena_fiscal.persistence import SqliteFiscalDatabase
+from kordena_fiscal.persistence.ports import PersistenceConflictError, PersistenceStateError
 
 _NOW = datetime(2026, 11, 12, 12, tzinfo=UTC)
 _CNPJ = Cnpj("11222333000181")
@@ -253,7 +254,7 @@ def test_cajamar_application_rollback_never_consumes_failed_original_rps(
 
     with pytest.raises(FiscalValidationError, match="before commit"):
         _prepare_cajamar(app, request, builder=failing_builder)
-    with pytest.raises(Exception):
+    with pytest.raises((PersistenceConflictError, PersistenceStateError, FiscalValidationError)):
         app.load_prepared_nfse_authorization(
             request.document.scope, request.document.document_id,
         )
@@ -277,7 +278,7 @@ def test_cajamar_application_loader_cannot_leak_original_to_other_scope(
         replace(request.document.scope, unit_id="other-unit"),
         replace(request.document.scope, environment=FiscalEnvironment.PRODUCTION),
     ):
-        with pytest.raises(Exception):
+        with pytest.raises((PersistenceConflictError, PersistenceStateError, FiscalValidationError)):
             app.load_sp4_original_rps(scope, request.document.document_id)
 
 
