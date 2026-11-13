@@ -620,6 +620,81 @@ function appendCajamarCancellation(article) {
   });
 }
 
+/** Portal-side review for Cajamar 7.311/2024, never a fake SOAP substitution.
+ * @param {HTMLElement} article
+ */
+function appendCajamarSubstitutionReview(article) {
+  const operations = bootstrapState?.projection.configured_fiscal_operations;
+  if (!bootstrapState?.permissions.includes("document.issue")
+    || !bootstrapState?.permissions.includes("document.cancel")
+    || !Array.isArray(operations)
+    || !operations.includes("reviewCajamarSubstitution")) return;
+
+  const form = document.createElement("form");
+  form.id = "cajamar-substitution-review-form";
+  form.className = "panel-form";
+  const title = document.createElement("h3");
+  title.textContent = "Analisar substituição de NFS-e — Cajamar";
+  const help = document.createElement("p");
+  help.textContent = "A substituição é realizada no sistema eletrônico da Prefeitura, não pelo SOAP GeisWeb. A competência, o tomador e o valor do serviço não podem mudar; o prazo regular é dia 10 do mês seguinte à competência.";
+  const originalLabel = document.createElement("label");
+  originalLabel.textContent = "ID da NFS-e original autorizada";
+  const original = document.createElement("input");
+  original.required = true; original.maxLength = 128; original.autocomplete = "off";
+  originalLabel.append(original);
+  const replacementLabel = document.createElement("label");
+  replacementLabel.textContent = "ID do documento substituto preparado (não transmitido)";
+  const replacement = document.createElement("input");
+  replacement.required = true; replacement.maxLength = 128; replacement.autocomplete = "off";
+  replacementLabel.append(replacement);
+  const reviewLabel = document.createElement("label");
+  const review = document.createElement("input");
+  review.type = "checkbox"; review.required = true;
+  reviewLabel.append(review, document.createTextNode(
+    " Confirmei a identidade, o vínculo entre os documentos e a análise fiscal humana.",
+  ));
+  const submit = document.createElement("button");
+  submit.type = "submit"; submit.className = "primary";
+  submit.textContent = "Validar substituição municipal";
+  const result = document.createElement("p");
+  result.setAttribute("role", "status"); result.setAttribute("aria-live", "polite");
+  const official = document.createElement("a");
+  official.className = "ghost";
+  official.textContent = "Serviços fiscais oficiais de Cajamar";
+  official.href = "https://cajamar.sp.gov.br/fazenda/servicos-online/";
+  official.target = "_blank"; official.rel = "noopener noreferrer";
+  form.append(title, help, originalLabel, replacementLabel, reviewLabel, submit, result, official);
+  article.append(form);
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    if (!selectedFiscalUnit || selectedFiscalEnvironment !== "homologation") {
+      result.textContent = "Selecione uma unidade fiscal autorizada em homologação.";
+      return;
+    }
+    submit.disabled = true;
+    result.textContent = "Conferindo os dois documentos, as restrições e o prazo municipal...";
+    try {
+      const response = await api("/v1/portal/operations/reviewCajamarSubstitution", {
+        method: "POST",
+        headers: {"X-CSRF-Token": csrfToken()},
+        body: JSON.stringify({
+          unit_id: selectedFiscalUnit, environment: selectedFiscalEnvironment,
+          original_id: original.value.trim(), replacement_id: replacement.value.trim(),
+          human_approval: review.checked,
+        }),
+      });
+      result.textContent = response.status === "MUNICIPAL_PORTAL_SUBSTITUTION_REQUIRED"
+        ? `Pré-análise interna aprovada até ${response.deadline}. Execute no portal oficial e registre a comprovação da prefeitura; nenhuma substituição fiscal foi transmitida.`
+        : "Resultado municipal não confirmado. Revise o procedimento.";
+    } catch (error) {
+      result.textContent = error instanceof Error
+        ? error.message : "Pré-análise indisponível; a NFS-e original não foi alterada.";
+    } finally { submit.disabled = false; }
+  });
+}
+
 /** @param {HTMLElement} article */
 function appendExtremaSubstitution(article) {
   const operations = bootstrapState?.projection.configured_fiscal_operations;
@@ -2385,6 +2460,7 @@ async function renderSurface(viewId) {
     if (viewId === "issuances") appendExtremaCancellation(article);
     if (viewId === "issuances") appendCajamarCancellation(article);
     if (viewId === "issuances") appendExtremaSubstitution(article);
+    if (viewId === "issuances") appendCajamarSubstitutionReview(article);
     if (viewId === "inutilizations") appendInutilizationForm(article);
     if (["documents", "issuances", "reconciliation"].includes(viewId)) appendFiscalActions(article);
     if (scopedViews.has(viewId) && viewId !== "capabilities") {
