@@ -15,6 +15,7 @@ from kordena_fiscal.gateway.cajamar_geisweb_homologation import (
     CajamarGeiswebWsdl,
 )
 from kordena_fiscal.persistence import SqliteFiscalDatabase
+from kordena_fiscal.runtime import api as runtime_api
 from kordena_fiscal.runtime.cajamar_operational_composition import (
     CajamarTrustedRuntimePorts,
 )
@@ -22,6 +23,7 @@ from kordena_fiscal.runtime.canonical_fiscal_composition import (
     build_runtime_fiscal_handler_factory,
 )
 from kordena_fiscal.runtime.fiscal_runtime import CanonicalFiscalOperationPath
+from kordena_fiscal.runtime.config import RuntimeConfigurationError, RuntimeSettings
 
 
 def _trusted_fixture(db: SqliteFiscalDatabase) -> CajamarTrustedRuntimePorts:
@@ -110,3 +112,61 @@ def test_runtime_rejects_two_cajamar_authorities(tmp_path: object) -> None:
             sign_cancel=Mock(), validate_signed_cancel=Mock(),
             verify_official_cancel=Mock(),
         )
+
+
+def test_real_api_composition_accepts_one_operator_provisioned_cajamar_factory(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: object,
+) -> None:
+    """Actual API assembly must pass the reviewed ports into the existing UoW.
+
+    The fake runtime avoids DB/network startup; it captures composition inputs
+    only, never claims a municipal provider was contacted or configured.
+    """
+    from pathlib import Path
+
+    assert isinstance(tmp_path, Path)
+    db = SqliteFiscalDatabase(tmp_path / "cajamar-real-entrypoint.sqlite")
+    db.initialize()
+    ports = _trusted_fixture(db)
+    captured: list[object] = []
+
+    class _CaptureRuntime:
+        def __init__(self, settings: RuntimeSettings, **kwargs: object) -> None:
+            del settings
+            self.database = None
+            self.composition = None
+            captured.append(kwargs.get("fiscal_operation_handler_factory"))
+
+        def ready(self) -> tuple[bool, str]:
+            return False, "composition_not_started"
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(runtime_api, "RuntimeApi", _CaptureRuntime)
+    settings = RuntimeSettings.from_mapping({
+        "NFCORE_ENVIRONMENT": "staging",
+        "NFCORE_PERSISTENCE_BACKEND": "postgres",
+        "NFCORE_SECRET_BACKEND": "external",
+        "DATABASE_URL": "postgresql://fake:fake@db/nfcore",
+        "NFCORE_REQUIRE_HTTPS": "true",
+    })
+    runtime_api.create_runtime_app(settings, cajamar_runtime_ports=ports)
+    assert len(captured) == 1
+    factory = captured[0]
+    assert callable(factory)
+    application = FiscalApplicationService(db)
+    assert {
+        "cancelCajamarNfse", "reviewCajamarSubstitution",
+        "issueFiscalDocument", "reconcileFiscalOperation",
+    } <= set(factory(application))
+    with pytest.raises(RuntimeConfigurationError, match="second fiscal operation authority"):
+        runtime_api.create_runtime_app(
+            settings, cajamar_runtime_ports=ports, fiscal_operation_handlers={},
+        )
+    dev = RuntimeSettings.from_mapping({
+        "NFCORE_ENVIRONMENT": "development",
+        "NFCORE_PERSISTENCE_BACKEND": "sqlite",
+    })
+    with pytest.raises(RuntimeConfigurationError, match="staging/production"):
+        runtime_api.create_runtime_app(dev, cajamar_runtime_ports=ports)
