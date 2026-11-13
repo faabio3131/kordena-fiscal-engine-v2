@@ -8,11 +8,15 @@ verified note and delegates XMLDSig/XSD to reviewed runtime ports.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass, field
 
 from lxml import etree
 
 from kordena_fiscal.domain import FiscalValidationError, TaxRegimeCode
-from kordena_fiscal.gateway.cajamar_geisweb_homologation import CajamarPreparedNfse
+from kordena_fiscal.gateway.cajamar_geisweb_homologation import (
+    CajamarGeiswebResult,
+    CajamarPreparedNfse,
+)
 from kordena_fiscal.gateway.sp4_municipal_canonical import (
     Sp4OriginalRps,
     Sp4VerifiedInvoice,
@@ -106,3 +110,124 @@ def prepare_cajamar_cancel(
         method="CancelaNfse", signed_request_xml=signed,
         human_approved=True,
     )
+
+
+_SOAP = "{http://schemas.xmlsoap.org/soap/envelope/}"
+
+
+@dataclass(frozen=True, slots=True)
+class CajamarCancellationDecision:
+    """Reviewed municipal cancellation, not an HTTP/SOAP success assumption."""
+
+    confirmed: bool
+    response_xml: bytes = field(repr=False)
+    rejection_code: str | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.confirmed, bool) or not isinstance(self.response_xml, bytes):
+            raise CajamarGeiswebCancellationError("Invalid municipal cancel decision")
+        if not 0 < len(self.response_xml) <= _LIMIT:
+            raise CajamarGeiswebCancellationError("Missing municipal cancellation evidence")
+        if self.confirmed == (self.rejection_code is not None):
+            raise CajamarGeiswebCancellationError("Contradictory municipal cancel decision")
+
+
+def interpret_cajamar_cancel_response(
+    *, receipt: CajamarGeiswebResult,
+    source: Sp4OriginalRps,
+    issued: Sp4VerifiedInvoice,
+    verify_official_response: Callable[[bytes], None],
+) -> CajamarCancellationDecision:
+    """Correlate the exact original invoice with confirmed GeisWeb cancellation.
+
+    GeisWeb's CancelaNfseResposta contains Nfse/IdentificacaoNfse with
+    NumeroRps, NumeroNfse and CodigoVerificacao. A generic 200/OK or Msg
+    cannot prove that a specific authorized fiscal note was cancelled.
+    """
+    build_cajamar_cancel_xml(source=source, issued=issued)
+    if (
+        not isinstance(receipt, CajamarGeiswebResult)
+        or receipt.method != "CancelaNfse"
+        or not callable(verify_official_response)
+        or not isinstance(receipt.response_xml, bytes)
+        or not 0 < len(receipt.response_xml) <= _LIMIT
+    ):
+        raise CajamarGeiswebCancellationError("Official GeisWeb cancellation proof required")
+    try:
+        parser = etree.XMLParser(
+            no_network=True, load_dtd=False, resolve_entities=False, huge_tree=False,
+        )
+        soap = etree.fromstring(receipt.response_xml, parser=parser)
+        if soap.tag != _SOAP + "Envelope" or bool(
+            getattr(soap.getroottree().docinfo, "doctype", "")
+        ):
+            raise CajamarGeiswebCancellationError("Unexpected cancellation SOAP envelope")
+        body = soap.find(_SOAP + "Body")
+        if body is None or body.find(_SOAP + "Fault") is not None:
+            raise CajamarGeiswebCancellationError("GeisWeb cancellation SOAP fault")
+        wrappers = [
+            elem for elem in body
+            if etree.QName(elem).localname == "CancelaNfseResponse"
+        ]
+        if len(wrappers) != 1:
+            raise CajamarGeiswebCancellationError("Ambiguous GeisWeb cancellation method")
+        payloads = [
+            elem for elem in wrappers[0]
+            if etree.QName(elem).localname == "CancelaNfseResult"
+        ]
+        if len(payloads) != 1:
+            raise CajamarGeiswebCancellationError("GeisWeb cancellation result unavailable")
+        result = payloads[0]
+        if len(result) == 1 and not (result.text or "").strip():
+            inner = etree.tostring(result[0], encoding="utf-8")
+        elif not len(result) and (result.text or "").strip():
+            inner = result.text.strip().encode("utf-8")
+        else:
+            raise CajamarGeiswebCancellationError("Ambiguous GeisWeb cancellation XML")
+        if len(inner) > _LIMIT:
+            raise CajamarGeiswebCancellationError("Oversized cancellation XML")
+        root = etree.fromstring(inner, parser=parser)
+    except etree.XMLSyntaxError:
+        raise CajamarGeiswebCancellationError("Malformed GeisWeb cancellation XML") from None
+    if root.tag != "CancelaNfseResposta" or bool(
+        getattr(root.getroottree().docinfo, "doctype", "")
+    ):
+        raise CajamarGeiswebCancellationError("Invalid official cancellation response")
+    verify_official_response(inner)
+    errors = root.findall("Msg")
+    notes = root.findall("Nfse")
+    if errors:
+        if len(errors) != 1 or notes:
+            raise CajamarGeiswebCancellationError("Contradictory municipal cancellation result")
+        error_code = errors[0].findtext("Erro")
+        if (
+            not isinstance(error_code, str)
+            or not error_code.isascii() or not error_code.isdecimal()
+            or not 0 < int(error_code) <= 999
+        ):
+            raise CajamarGeiswebCancellationError("Unverified municipal cancellation rejection")
+        return CajamarCancellationDecision(
+            confirmed=False, response_xml=inner, rejection_code=error_code,
+        )
+    if len(notes) != 1:
+        raise CajamarGeiswebCancellationError("No correlated cancelled fiscal note")
+    identities = notes[0].findall("IdentificacaoNfse")
+    if len(identities) != 1:
+        raise CajamarGeiswebCancellationError("Ambiguous cancelled NFS-e identity")
+    ident = identities[0]
+    required = {
+        "NumeroRps": source.rps_number,
+        "NumeroNfse": issued.invoice_number,
+        "CodigoVerificacao": issued.verification_code,
+    }
+    for key, expected in required.items():
+        found = ident.findall(key)
+        if (
+            len(found) != 1
+            or not isinstance(found[0].text, str)
+            or found[0].text.strip() != expected
+        ):
+            raise CajamarGeiswebCancellationError(
+                "Cancellation response is not linked to original fiscal invoice"
+            )
+    return CajamarCancellationDecision(confirmed=True, response_xml=inner)
