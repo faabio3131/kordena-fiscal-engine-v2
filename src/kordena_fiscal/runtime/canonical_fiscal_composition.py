@@ -76,6 +76,10 @@ from kordena_fiscal.xml import NfeAccessKey
 
 from .fiscal_runtime import FiscalOperationHandler, PreflightFiscalOperationHandler
 from .provider_issuance_handler import PreparedXmlGatewaySelector
+from .sp4_municipal_canonical_composition import (
+    Sp4ReviewedMunicipalPorts,
+    build_sp4_canonical_clients,
+)
 from .provider_operation_wiring import build_provider_operation_handlers
 
 
@@ -228,10 +232,14 @@ class _GovernedNfseRouter:
         self, *, application: FiscalApplicationService,
         national: _GovernedNationalNfseGateway | None,
         extrema: WebissExtremaCanonicalNfseGateway | None,
+        municipal_issuance: Mapping[str, NfseGatewayClient] | None = None,
+        municipal_recovery: Mapping[str, NfseQueryClient] | None = None,
     ) -> None:
         self._application = application
         self._national = national
         self._extrema = extrema
+        self._municipal_issuance = municipal_issuance or {}
+        self._municipal_recovery = municipal_recovery or {}
 
     def _provider(self, request: NfseAuthorizationRequest) -> str:
         scope = request.document.scope
@@ -258,18 +266,27 @@ class _GovernedNfseRouter:
             return self._extrema.authorize(request)
         if provider == NACIONAL_HOMOLOGATION_PROVIDER_ID and self._national is not None:
             return self._national.authorize(request)
+        municipal = self._municipal_issuance.get(provider)
+        if municipal is not None:
+            return municipal.authorize(request)
         raise FiscalValidationError("NFS-e issuance has no approved matching provider")
 
     def query(self, request: NfseAuthorizationRequest) -> NfseAuthorizationResult:
         provider = self._provider(request)
-        if (
-            provider != EXTREMA_WEBISS_PROVIDER_ID
-            or self._extrema is None
-            or request.document.issuer.address.jurisdiction.municipality_ibge_code
-            != EXTREMA_IBGE
-        ):
-            raise FiscalValidationError("Read-only NFS-e provider recovery is unavailable")
-        return self._extrema.query(request)
+        if provider == EXTREMA_WEBISS_PROVIDER_ID:
+            if (
+                self._extrema is None
+                or request.document.issuer.address.jurisdiction.municipality_ibge_code
+                != EXTREMA_IBGE
+            ):
+                raise FiscalValidationError("Read-only NFS-e provider recovery is unavailable")
+            return self._extrema.query(request)
+        municipal = self._municipal_recovery.get(provider)
+        if municipal is not None:
+            # Canonical municipal loader reads the archived original RPS.
+            # Query is read-only and never repeats the fiscal POST.
+            return municipal.query(request)
+        raise FiscalValidationError("Read-only NFS-e provider recovery is unavailable")
 
 
 class _GovernedMgQueryGateway:
@@ -335,6 +352,9 @@ def build_runtime_fiscal_handler_factory(
     webiss_service_preaudit: Callable[
         [tuple[AbrasfServiceFacts, ...]], None
     ] | None = None,
+    sp4_reviewed_municipalities: Mapping[
+        str, Sp4ReviewedMunicipalPorts
+    ] | None = None,
 ) -> Any:
     """Register all four canonical operations without granting fiscal readiness.
 
@@ -364,6 +384,8 @@ def build_runtime_fiscal_handler_factory(
         raise ValueError("configure either an NFS-e gateway or a trusted DPS builder")
     if trusted_signed_dps_builder is not None and not callable(nfse_preaudit):
         raise ValueError("NFS-e signed DPS composition requires fiscal pre-audit")
+    if sp4_reviewed_municipalities is not None and nfse_gateway is not None:
+        raise ValueError("Municipal reviewed ports cannot coexist with an opaque gateway")
     if webiss_extrema_exchange is not None or webiss_service_preaudit is not None:
         if (
             nfse_gateway is not None
@@ -479,16 +501,25 @@ def build_runtime_fiscal_handler_factory(
                 cancellation_preaudit=extrema_cancellation_preaudit,
                 municipal_validator=validator,
             )
-        if national_adapter is not None or extrema_adapter is not None:
+        municipal_issue: Mapping[str, NfseGatewayClient] = {}
+        municipal_query: Mapping[str, NfseQueryClient] = {}
+        if sp4_reviewed_municipalities is not None:
+            municipal_issue, municipal_query = build_sp4_canonical_clients(
+                canonical_resolver=_CanonicalWebissProviderResolver(application),
+                configured_municipalities=sp4_reviewed_municipalities,
+                canonical_rps_loader=application.load_sp4_original_rps,
+            )
+        if national_adapter is not None or extrema_adapter is not None or municipal_issue:
             router = _GovernedNfseRouter(
                 application=application,
                 national=national_adapter,
                 extrema=extrema_adapter,
+                municipal_issuance=municipal_issue,
+                municipal_recovery=municipal_query,
             )
             selected_nfse = NfseGatewayClient(router)
-            if extrema_adapter is not None:
-                # The canonical durable recovery handler performs only the
-                # original RPS query, never a second issuance POST.
+            if extrema_adapter is not None or municipal_query:
+                # Never re-submit a municipal RPS on an uncertain return.
                 nfse_query_client = NfseQueryClient(router)
         handlers = build_provider_operation_handlers(
             FiscalOperationsClient(gateway),
