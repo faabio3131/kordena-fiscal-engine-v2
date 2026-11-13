@@ -1,4 +1,4 @@
-"""Native National NFS-e preparation without ERP, A1, external transport or mock issuance."""
+"""Native National/Cajamar NFS-e preparation and synthetic HTTP fiscal journeys."""
 from __future__ import annotations
 
 import hashlib
@@ -9,7 +9,6 @@ from unittest.mock import Mock
 from fastapi.testclient import TestClient
 
 from kordena_fiscal.application.service import FiscalApplicationService
-from kordena_fiscal.archive import RetentionPolicyMetadata
 from kordena_fiscal.control_plane import FiscalOrganization, FiscalUnitRegistration
 from kordena_fiscal.control_plane.commercial import (
     ConfiguredFiscalOperation,
@@ -36,7 +35,9 @@ from kordena_fiscal.gateway.sp4_municipal_canonical import (
     Sp4ProviderOutcome,
     Sp4VerifiedInvoice,
 )
+from kordena_fiscal.issuance import NfseAuthorizationRequest
 from kordena_fiscal.lifecycle import FiscalDocumentState
+from kordena_fiscal.operations import FakeFiscalOperationsGateway
 from kordena_fiscal.persistence import SqliteFiscalDatabase
 from kordena_fiscal.runtime.canonical_fiscal_composition import (
     build_runtime_fiscal_handler_factory,
@@ -56,7 +57,6 @@ from kordena_fiscal.security.human_identity import (
     PortalRole,
     ScryptPasswordHasher,
 )
-from kordena_fiscal.operations import FakeFiscalOperationsGateway
 from kordena_fiscal.web import create_app
 from kordena_fiscal.web.human_auth import CSRF_COOKIE, CSRF_HEADER
 from kordena_fiscal.web.portal_runtime import DurableHumanPortalExecutor
