@@ -11,7 +11,6 @@ from pathlib import Path
 
 import pytest
 
-
 _SCRIPT = Path(__file__).resolve().parents[2] / "deploy" / "contabo" / "a1-vault-ops.py"
 _OVERLAY = _SCRIPT.with_name("compose.a1-vault.opt-in.yml")
 
