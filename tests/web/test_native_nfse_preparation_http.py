@@ -22,13 +22,13 @@ from kordena_fiscal.application.service import FiscalApplicationService
 from kordena_fiscal.archive import FiscalArchiveKind, RetentionPolicyMetadata
 from kordena_fiscal.compliance.nfse_preaudit import nfse_preaudit
 from kordena_fiscal.control_plane import FiscalOrganization, FiscalUnitRegistration
-from kordena_fiscal.control_plane.models import (
-    ControlPlaneAuditAction,
-    ControlPlaneAuditEvent,
-)
 from kordena_fiscal.control_plane.commercial import (
     ConfiguredFiscalOperation,
     ProviderBinding,
+)
+from kordena_fiscal.control_plane.models import (
+    ControlPlaneAuditAction,
+    ControlPlaneAuditEvent,
 )
 from kordena_fiscal.domain import (
     BrazilianJurisdiction,
