@@ -105,6 +105,7 @@ _OPERATION_PERMISSIONS: dict[str, PortalPermission] = {
     "cancelExtremaNfse": PortalPermission.DOCUMENT_CANCEL,
     "cancelCajamarNfse": PortalPermission.DOCUMENT_CANCEL,
     "substituteExtremaNfse": PortalPermission.DOCUMENT_CANCEL,
+    "reviewCajamarSubstitution": PortalPermission.DOCUMENT_CANCEL,
     "inutilizeFiscalRange": PortalPermission.DOCUMENT_INUTILIZE,
     "reconcileFiscalOperation": PortalPermission.RECONCILIATION_EXECUTE,
 }
