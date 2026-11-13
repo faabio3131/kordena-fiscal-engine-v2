@@ -29,10 +29,6 @@ from kordena_fiscal.gateway import AuthorizationRequest, FiscalGatewayClient
 from kordena_fiscal.gateway.cajamar_geisweb_cancellation_builder import (
     CajamarCancellationDecision,
 )
-from kordena_fiscal.gateway.sp4_municipal_canonical import (
-    Sp4OriginalRps,
-    Sp4VerifiedInvoice,
-)
 from kordena_fiscal.gateway.mg_webiss_soap import (
     EXTREMA_IBGE,
     EXTREMA_WEBISS_PROVIDER_ID,
@@ -54,6 +50,10 @@ from kordena_fiscal.gateway.nfse_abrasf203_envelope import AbrasfServiceFacts
 from kordena_fiscal.gateway.nfse_nacional_homologation import (
     NACIONAL_HOMOLOGATION_PROVIDER_ID,
     NfseNacionalHomologationGateway,
+)
+from kordena_fiscal.gateway.sp4_municipal_canonical import (
+    Sp4OriginalRps,
+    Sp4VerifiedInvoice,
 )
 from kordena_fiscal.gateway.webiss_2026_schema import (
     load_pinned_extrema_webiss_rtc_schema,
