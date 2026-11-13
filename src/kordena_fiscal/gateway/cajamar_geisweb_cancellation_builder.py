@@ -178,10 +178,11 @@ def interpret_cajamar_cancel_response(
         if len(payloads) != 1:
             raise CajamarGeiswebCancellationError("GeisWeb cancellation result unavailable")
         result = payloads[0]
-        if len(result) == 1 and not (result.text or "").strip():
+        payload_text = result.text
+        if len(result) == 1 and not (payload_text or "").strip():
             inner = etree.tostring(result[0], encoding="utf-8")
-        elif not len(result) and (result.text or "").strip():
-            inner = result.text.strip().encode("utf-8")
+        elif not len(result) and isinstance(payload_text, str) and payload_text.strip():
+            inner = payload_text.strip().encode("utf-8")
         else:
             raise CajamarGeiswebCancellationError("Ambiguous GeisWeb cancellation XML")
         if len(inner) > _LIMIT:
