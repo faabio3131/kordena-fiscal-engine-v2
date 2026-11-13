@@ -95,7 +95,13 @@ bind RW `/var/lib/nfcore/vault` → `/var/lib/nfcore/vault`.
 O auditor root-owned retornou `A1_VAULT_INFRA_GATE=PRECHECK_LOCAL_PARCIAL`:
 diretório, formato da chave e permissões OK; **zero ciphertexts presentes**;
 backup externo, custódia da chave e restore isolado **NÃO VERIFICADOS**.
-O overlay candidato deve usar o **mesmo caminho**; não provisionar
+O `compose.prod.yml` do Git foi reconciliado nesta PR e agora também
+preserva explicitamente o **mesmo bind RW** no destino `/var/lib/nfcore/vault`,
+com `create_host_path: false`. O `install.sh` **não** instala Compose;
+o arquivo efetivo do host continua sendo a autoridade operacional e não
+pode ser substituído sem diff, backup e preflight. O overlay candidato
+é opcional e **não deve ser ativado no host já configurado**.
+Não provisionar
 `/var/lib/nfcore/a1-vault`, nem aplicar um segundo mount ao destino.
 Antes de qualquer deploy, confirmar que o Compose **efetivo no host** preserva
 o bind, independentemente da ausência desse mount na versão Git de
