@@ -1266,13 +1266,6 @@ class FiscalApplicationService:
                 raise PersistenceConflictError("NFS-e transmission changed during provider query")
             if result.status is AuthorizationStatus.AUTHORIZED:
                 assert result.invoice_reference is not None
-                if result.authorized_xml is not None:
-                    uow.archive.append(FiscalArchiveEntry.build(
-                        scope=scope, document_reference=document_id,
-                        kind=FiscalArchiveKind.AUTHORIZED_XML,
-                        content=result.authorized_xml, media_type="application/xml",
-                        archived_at=occurred_at, retention=retention,
-                    ))
                 updated = self._state_machine.transition(
                     current,
                     FiscalDocumentState.AUTHORIZED,
@@ -1726,10 +1719,10 @@ class FiscalApplicationService:
             if (
                 current is None
                 or current.state is not FiscalDocumentState.AUTHORIZED
-                or len(attempts) != 1
-                or attempts[0].status is not IssuanceAttemptStatus.AUTHORIZED
-                or attempts[0].document_id != document_id
-                or attempts[0].request_fingerprint != request.request_fingerprint
+                or not attempts
+                or attempts[-1].status is not IssuanceAttemptStatus.AUTHORIZED
+                or attempts[-1].document_id != document_id
+                or attempts[-1].request_fingerprint != request.request_fingerprint
                 or request.document.issuer.address.jurisdiction.municipality_ibge_code
                 != "3509205"
             ):
@@ -1754,7 +1747,7 @@ class FiscalApplicationService:
                 originals[0].content, scope=scope, request=request,
             )
             invoice = decode_cajamar_archived_invoice(official[0].content, source)
-            if attempts[0].result_reference != invoice.invoice_reference:
+            if attempts[-1].result_reference != invoice.invoice_reference:
                 raise PersistenceConflictError(
                     "Cajamar fiscal cancellation invoice reference disagrees with issuance"
                 )
