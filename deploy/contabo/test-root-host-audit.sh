@@ -50,7 +50,7 @@ parse_root_audit_request < <(printf 'a1 %s %s\n' "$sha" "$digest")
 grep -Fq 'ROOT_AUDIT_SCRIPT=$GSM_AUDIT_SCRIPT' "$here/root-host-audit.sh"
 grep -Fq '/usr/bin/python3 -I "$ROOT_AUDIT_SCRIPT"' "$here/root-host-audit.sh"
 grep -Fq 'ROOT_AUDIT_SCRIPT=$A1_AUDIT_SCRIPT' "$here/root-host-audit.sh"
-grep -Fq '--expected-production-sha "$ROOT_AUDIT_SHA"' "$here/root-host-audit.sh"
+grep -Fq -- '--expected-production-sha "$ROOT_AUDIT_SHA"' "$here/root-host-audit.sh"
 
 for invalid in \
   "not-an-audit" \
