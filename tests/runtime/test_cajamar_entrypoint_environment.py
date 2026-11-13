@@ -19,11 +19,11 @@ from cryptography.x509.oid import NameOID, ObjectIdentifier
 from kordena_fiscal.application.service import FiscalApplicationService
 from kordena_fiscal.domain import Cnpj, ExecutionScope, FiscalEnvironment, FiscalValidationError
 from kordena_fiscal.persistence import SqliteFiscalDatabase
+from kordena_fiscal.runtime.api import build_entrypoint_fiscal_handler_factory
 from kordena_fiscal.runtime.cajamar_environment import (
     CajamarReviewedStartup,
     build_cajamar_port_builder_from_environ,
 )
-from kordena_fiscal.runtime.api import build_entrypoint_fiscal_handler_factory
 from kordena_fiscal.runtime.canonical_fiscal_composition import (
     build_runtime_fiscal_handler_factory,
 )
