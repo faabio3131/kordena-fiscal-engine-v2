@@ -1754,6 +1754,10 @@ class FiscalApplicationService:
                 originals[0].content, scope=scope, request=request,
             )
             invoice = decode_cajamar_archived_invoice(official[0].content, source)
+            if attempts[0].result_reference != invoice.invoice_reference:
+                raise PersistenceConflictError(
+                    "Cajamar fiscal cancellation invoice reference disagrees with issuance"
+                )
         binding = self.resolve_configured_provider_id(
             scope=scope, document_kind=FiscalDocumentKind.NFSE,
             jurisdiction=request.document.issuer.address.jurisdiction,
