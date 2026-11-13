@@ -565,12 +565,27 @@ function appendCajamarCancellation(article) {
   const heading = document.createElement("h3");
   heading.textContent = "Cancelar NFS-e de Cajamar (homologação)";
   const notice = document.createElement("p");
-  notice.textContent = "Confirme a NFS-e original emitida e autorizada. O NFCore utiliza o RPS, XML e vínculo GeisWeb persistidos. Uma resposta incerta não autoriza repetir o cancelamento.";
+  notice.textContent = "O cancelamento direto é admitido até dia 10 do mês seguinte à competência. Fora do prazo, siga o processo administrativo municipal; o NFCore não substituirá a decisão do Fisco. Resposta incerta não autoriza retransmissão.";
   const refLabel = document.createElement("label");
   refLabel.textContent = "Referência da NFS-e original";
   const ref = document.createElement("input");
   ref.required = true; ref.maxLength = 128; ref.autocomplete = "off";
   refLabel.append(ref);
+  const motiveLabel = document.createElement("label");
+  motiveLabel.textContent = "Motivo fiscal permitido (Decreto nº 7.311/2024)";
+  const motive = document.createElement("select");
+  motive.required = true;
+  for (const [code, title] of [
+    ["", "Selecione o motivo legal"],
+    ["service_not_provided", "Serviço não prestado"],
+    ["duplicate_invoice", "NFS-e emitida em duplicidade"],
+    ["incorrect_taker", "Erro de identificação do tomador"],
+    ["incorrect_amount", "Erro no valor da NFS-e"],
+  ]) {
+    const opt = document.createElement("option");
+    opt.value = code; opt.textContent = title; motive.append(opt);
+  }
+  motiveLabel.append(motive);
   const approvedLabel = document.createElement("label");
   const approved = document.createElement("input");
   approved.type = "checkbox"; approved.required = true;
@@ -582,7 +597,7 @@ function appendCajamarCancellation(article) {
   submit.textContent = "Solicitar cancelamento GeisWeb";
   const result = document.createElement("p");
   result.setAttribute("role", "status"); result.setAttribute("aria-live", "polite");
-  form.append(heading, notice, refLabel, approvedLabel, submit, result);
+  form.append(heading, notice, refLabel, motiveLabel, approvedLabel, submit, result);
   article.append(form);
   /** @type {{fingerprint:string,key:string}|null} */
   let attempt = null;
@@ -594,7 +609,8 @@ function appendCajamarCancellation(article) {
     }
     const payload = {
       unit_id: selectedFiscalUnit, environment: selectedFiscalEnvironment,
-      document_id: ref.value.trim(), human_approval: approved.checked,
+      document_id: ref.value.trim(), cancellation_reason: motive.value,
+      human_approval: approved.checked,
     };
     const fingerprint = JSON.stringify(payload);
     if (attempt && attempt.fingerprint !== fingerprint) {
