@@ -24,6 +24,7 @@ from kordena_fiscal.archive import (
     FiscalArchiveKind,
     FiscalArchiveVerifier,
 )
+from kordena_fiscal.archive.danfse_pdf import render_authorized_national_danfse
 from kordena_fiscal.compliance import CapabilityReadinessService, JurisdictionCapabilityError
 from kordena_fiscal.compliance.capability_api import CapabilityReadinessError
 from kordena_fiscal.contingency import FiscalOutboxStatus
@@ -141,7 +142,14 @@ class DurableHumanPortalExecutor:
         self._user_administration = user_administration
         self._commercial_reader = commercial_reader
         self._danfe_renderer = danfe_renderer
-        self._danfse_renderer = danfse_renderer
+        # The real national DANFSe renderer is the default runtime behavior,
+        # not an optional test-only injection. It reads exclusively the scoped
+        # authorized XML archive and fails if the XML is not national or valid.
+        self._danfse_renderer = (
+            danfse_renderer
+            if danfse_renderer is not None
+            else render_authorized_national_danfse
+        )
         self._capabilities = (
             GovernedCapabilityReadinessService(
                 unit_of_work_factory=unit_of_work_factory,
