@@ -24,7 +24,11 @@ from kordena_fiscal.domain import (
     HostScope,
 )
 from kordena_fiscal.operations import InutilizationRequest
-from kordena_fiscal.persistence.ports import FiscalUnitOfWorkFactory
+from kordena_fiscal.persistence.ports import (
+    FiscalUnitOfWorkFactory,
+    PersistenceConflictError,
+    PersistenceStateError,
+)
 from kordena_fiscal.security.human_identity import AuthenticatedHuman
 from kordena_fiscal.security.s2s import (
     AuthorizedFiscalRequest,
@@ -479,6 +483,16 @@ class CanonicalPortalOperationExecutor:
                 detail={
                     "code": "FISCAL_RUNTIME_NOT_READY",
                     "message": "Canonical fiscal execution dependency is not configured",
+                },
+            ) from exc
+        except (PersistenceStateError, PersistenceConflictError) as exc:
+            if operation_id != "reviewCajamarSubstitution":
+                raise
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "code": "CAJAMAR_SUBSTITUTION_SOURCE_NOT_READY",
+                    "message": "Original or candidate lacks verified municipal fiscal evidence",
                 },
             ) from exc
         except FiscalValidationError as exc:
