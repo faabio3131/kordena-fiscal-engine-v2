@@ -26,6 +26,13 @@ from kordena_fiscal.domain import (
     FiscalValidationError,
 )
 from kordena_fiscal.gateway import AuthorizationRequest, FiscalGatewayClient
+from kordena_fiscal.gateway.cajamar_geisweb_cancellation_builder import (
+    CajamarCancellationDecision,
+)
+from kordena_fiscal.gateway.sp4_municipal_canonical import (
+    Sp4OriginalRps,
+    Sp4VerifiedInvoice,
+)
 from kordena_fiscal.gateway.mg_webiss_soap import (
     EXTREMA_IBGE,
     EXTREMA_WEBISS_PROVIDER_ID,
@@ -355,6 +362,10 @@ def build_runtime_fiscal_handler_factory(
     sp4_reviewed_municipalities: Mapping[
         str, Sp4ReviewedMunicipalPorts
     ] | None = None,
+    cajamar_verified_cancel: Callable[
+        [NfseAuthorizationRequest, Sp4OriginalRps, Sp4VerifiedInvoice],
+        CajamarCancellationDecision,
+    ] | None = None,
 ) -> Any:
     """Register all four canonical operations without granting fiscal readiness.
 
@@ -386,6 +397,12 @@ def build_runtime_fiscal_handler_factory(
         raise ValueError("NFS-e signed DPS composition requires fiscal pre-audit")
     if sp4_reviewed_municipalities is not None and nfse_gateway is not None:
         raise ValueError("Municipal reviewed ports cannot coexist with an opaque gateway")
+    if cajamar_verified_cancel is not None and (
+        not callable(cajamar_verified_cancel)
+        or sp4_reviewed_municipalities is None
+        or "cajamar-geisweb-homologation" not in sp4_reviewed_municipalities
+    ):
+        raise ValueError("Cajamar cancellation needs the existing reviewed municipal binding")
     if webiss_extrema_exchange is not None or webiss_service_preaudit is not None:
         if (
             nfse_gateway is not None
@@ -530,6 +547,49 @@ def build_runtime_fiscal_handler_factory(
             prepared_nfse_query_client=nfse_query_client,
             archive_retention=retention,
         )
+        if cajamar_verified_cancel is not None:
+            reviewed_cancel = cajamar_verified_cancel
+
+            def validate_cajamar_cancel(
+                scope: ExecutionScope, payload: Mapping[str, Any], key: str | None,
+            ) -> None:
+                if (
+                    not isinstance(key, str) or not key.strip() or len(key) > 256
+                    or set(payload) != {
+                        "unit_id", "environment", "document_id", "human_approval",
+                    }
+                    or payload.get("unit_id") != scope.unit_id
+                    or payload.get("environment") != scope.environment.value
+                    or payload.get("human_approval") is not True
+                    or not isinstance(payload.get("document_id"), str)
+                    or not str(payload["document_id"]).strip()
+                ):
+                    raise FiscalValidationError("Human-reviewed Cajamar cancellation required")
+                application.preflight_cajamar_nfse_cancellation(
+                    scope=scope, document_id=str(payload["document_id"]),
+                )
+
+            def execute_cajamar_cancel(
+                scope: ExecutionScope, payload: Mapping[str, Any], key: str | None,
+            ) -> Mapping[str, Any]:
+                validate_cajamar_cancel(scope, payload, key)
+                result = application.cancel_prepared_cajamar_nfse(
+                    scope=scope, document_id=str(payload["document_id"]),
+                    submit_verified_cancel=reviewed_cancel,
+                    occurred_at=datetime.now(UTC), retention=retention,
+                )
+                return {
+                    "document_id": str(payload["document_id"]),
+                    "entry_id": result.archive_reference,
+                    "status": result.lifecycle.state.value,
+                    "official_fiscal_confirmation": result.decision.confirmed,
+                    "rejection_code": result.decision.rejection_code,
+                    "municipality_ibge": "3509205",
+                }
+
+            handlers["cancelCajamarNfse"] = PreflightFiscalOperationHandler(
+                execute_cajamar_cancel, validate_cajamar_cancel,
+            )
         if extrema_adapter is not None:
             cancellation_gateway = extrema_adapter
 
