@@ -13,6 +13,11 @@ from typing import Protocol, TypeVar
 from lxml import etree
 
 from kordena_fiscal.domain import Cnpj, ExecutionScope, TaxRegimeCode
+from kordena_fiscal.gateway.cajamar_geisweb_cancellation_builder import (
+    CajamarCancellationDecision,
+    interpret_cajamar_cancel_response,
+    prepare_cajamar_cancel,
+)
 from kordena_fiscal.gateway.cajamar_geisweb_homologation import (
     CajamarGeiswebHomologationTransport,
     CajamarGeiswebResult,
@@ -195,3 +200,58 @@ def build_cajamar_reviewed_ports(
         # identifier and cannot reconcile an ambiguous emission POST.
         lambda req, original: invoke(req, original, "ConsultaLoteRps"),
     )
+
+
+def build_cajamar_verified_cancellation_port(
+    *,
+    transport: CajamarGeiswebHomologationTransport,
+    sign_cancel: Callable[[bytes], bytes],
+    validate_signed_cancel: Callable[[bytes], None],
+    verify_official_cancel: Callable[[bytes], None],
+) -> Callable[
+    [NfseAuthorizationRequest, Sp4OriginalRps, Sp4VerifiedInvoice],
+    CajamarCancellationDecision,
+]:
+    """Review and invoke one original-issuer CancelaNfse, never re-number RPS.
+
+    This is an opt-in trusted fiscal transport port; the application's
+    CANCEL_REQUESTED transaction and human Portal review happen first.
+    """
+    if not isinstance(transport, CajamarGeiswebHomologationTransport) or not all(
+        callable(port) for port in (
+            sign_cancel, validate_signed_cancel, verify_official_cancel,
+        )
+    ):
+        raise Sp4CanonicalMunicipalError("Verified Cajamar cancellation ports required")
+
+    def submit(
+        req: NfseAuthorizationRequest,
+        original: Sp4OriginalRps,
+        issued: Sp4VerifiedInvoice,
+    ) -> CajamarCancellationDecision:
+        if (
+            not isinstance(req, NfseAuthorizationRequest)
+            or not isinstance(original, Sp4OriginalRps)
+            or not isinstance(issued, Sp4VerifiedInvoice)
+            or req.document.scope.identity_partition_key
+            != original.scope.identity_partition_key
+            or req.document.issuer.cnpj != original.issuer_cnpj
+            or original.document_id != req.document.document_id
+            or original.request_fingerprint != req.request_fingerprint
+            or original.issuer_ibge != "3509205"
+        ):
+            raise Sp4CanonicalMunicipalError(
+                "Cancellation cannot change original Cajamar issuer or RPS"
+            )
+        prepared = prepare_cajamar_cancel(
+            source=original, issued=issued,
+            regime=req.document.issuer.tax_regime, human_approved=True,
+            sign_document=sign_cancel, validate_signed_request=validate_signed_cancel,
+        )
+        receipt = transport.invoke(prepared)
+        return interpret_cajamar_cancel_response(
+            receipt=receipt, source=original, issued=issued,
+            verify_official_response=verify_official_cancel,
+        )
+
+    return submit
