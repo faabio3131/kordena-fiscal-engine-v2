@@ -76,11 +76,11 @@ from kordena_fiscal.xml import NfeAccessKey
 
 from .fiscal_runtime import FiscalOperationHandler, PreflightFiscalOperationHandler
 from .provider_issuance_handler import PreparedXmlGatewaySelector
+from .provider_operation_wiring import build_provider_operation_handlers
 from .sp4_municipal_canonical_composition import (
     Sp4ReviewedMunicipalPorts,
     build_sp4_canonical_clients,
 )
-from .provider_operation_wiring import build_provider_operation_handlers
 
 
 def fiscal_external_dependency_snapshot(
