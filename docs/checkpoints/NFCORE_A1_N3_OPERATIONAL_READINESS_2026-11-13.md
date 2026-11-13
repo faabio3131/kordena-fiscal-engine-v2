@@ -116,6 +116,38 @@ recreate. Evitar duplicar a montagem se o Compose host já a declara.
    recriação controlada do contêiner. **Não realizar emissão fiscal real**
    nem proclamar homologação por resultado sintético.
 
+
+## Ensaio mínimo sem serviço externo — ciphertext A1 (N3)
+
+Na PR #462, o mesmo \`deploy/contabo/a1-vault-ops.py\` ganhou **exportação
+offline de ciphertexts já AES-GCM**, sem alterar o EncryptedA1Vault:
+\`offline-export /caminho/absoluto/novo.zip\` e
+\`offline-restore-test /caminho/absoluto/arquivo.zip\`.
+
+- Exige pelo menos um registro \`*.a1.enc\`, modo privado e UID do Vault;
+  rejeita arquivos inesperados, symlinks e destino de exportação existente.
+- O pacote é ZIP **sem criptografia adicional**: contém apenas os ciphertexts
+  AES-GCM do Vault, **nunca** a chave mestra ou um PFX em claro. A chave
+  permanece sob a custódia externa já comprovada. O pacote não oferece
+  sigilo se a chave mestra for comprometida; guarde ambos separados.
+- A restauração de ensaio vai para diretório temporário isolado, valida nomes
+  restritos, manifest, tamanhos e hashes, e **não escreve no Vault vivo**.
+- O teste automatizado integra um PFX sintético válido ao EncryptedA1Vault,
+  exporta, restaura em caminho separado e resolve **com a mesma chave sintética**,
+  incluindo negativa de outro tenant e deteção de adulteração. Nenhum
+  certificado de cliente ou chave mestra real participa da CI.
+- \`CHECKSUM_PASS\` não certifica restore criptográfico real nem cópia offsite.
+  \`offline-export\` imprime \`OFFSITE=NOT_VERIFIED\` até o proprietário
+  transferir o pacote cifrado para armazenamento fora da VPS e confirmar hashes.
+- Com o Vault real vazio na auditoria, **não existe backup real de registro A1**
+  a validar ainda. Após o primeiro upload legítimo, executar o export offline
+  e copiar para PC/USB em local seguro, sem substituir as cópias da chave mestra.
+  Backup agendado/com retenção e prova de recuperação de certificado real
+  permanecem pendentes.
+
+**Atenção:** exportar para pasta privada separada do Vault, nunca dentro dele;
+não incluir dados reais, certificados ou segredos no GitHub ou logs.
+
 ## Go/No-Go
 
 **NO-GO operacional enquanto host/backup externo/escrow/restore não tiverem
