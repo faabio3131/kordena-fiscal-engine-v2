@@ -278,7 +278,9 @@ def test_cajamar_application_loader_cannot_leak_original_to_other_scope(
         replace(request.document.scope, unit_id="other-unit"),
         replace(request.document.scope, environment=FiscalEnvironment.PRODUCTION),
     ):
-        with pytest.raises((PersistenceConflictError, PersistenceStateError, FiscalValidationError)):
+        with pytest.raises((
+            PersistenceConflictError, PersistenceStateError, FiscalValidationError,
+        )):
             app.load_sp4_original_rps(scope, request.document.document_id)
 
 
