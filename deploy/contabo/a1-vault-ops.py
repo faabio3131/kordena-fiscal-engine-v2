@@ -109,7 +109,10 @@ def restore_rehearsal() -> int:
             restored[entry.name] = hashlib.sha256(entry.read_bytes()).hexdigest()
         if restored != expected:
             raise VaultOpsError()
-        print(f"A1_ISOLATED_RESTORE=SUCCESS; ENCRYPTED_RECORDS={len(expected)}; KEY_ESCROW=NOT_VERIFIED")
+        print(
+            f"A1_ISOLATED_RESTORE=SUCCESS; ENCRYPTED_RECORDS={len(expected)}; "
+            "KEY_ESCROW=NOT_VERIFIED"
+        )
         return 0
     finally:
         shutil.rmtree(stage)
