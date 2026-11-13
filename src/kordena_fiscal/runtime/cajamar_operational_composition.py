@@ -12,7 +12,10 @@ from dataclasses import dataclass
 
 from kordena_fiscal.application.service import FiscalApplicationService
 from kordena_fiscal.domain import (
-    BrazilianJurisdiction, Cnpj, ExecutionScope, FiscalDocumentKind,
+    BrazilianJurisdiction,
+    Cnpj,
+    ExecutionScope,
+    FiscalDocumentKind,
 )
 from kordena_fiscal.gateway.cajamar_geisweb_cancellation_builder import (
     CajamarCancellationDecision,
