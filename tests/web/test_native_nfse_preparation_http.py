@@ -357,7 +357,7 @@ def test_cajamar_official_substitution_rules_do_not_infer_soap_completion(
     with pytest.raises(FiscalValidationError, match="period expired"):
         review_cajamar_substitution(
             original=original, replacement=replacement,
-            reviewed_at=datetime(2026, 11, 11, tzinfo=UTC),
+            reviewed_at=datetime(2026, 11, 11, 3, tzinfo=UTC),
         )
     with pytest.raises(FiscalValidationError, match="distinct"):
         review_cajamar_substitution(
