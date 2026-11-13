@@ -258,7 +258,7 @@ def test_cajamar_cancellation_traverses_signed_original_note_and_verified_transp
     transport.invoke.return_value = CajamarGeiswebResult(
         method="CancelaNfse", response_xml=soap,
     )
-    signed = Mock(side_effect=lambda data: data)
+    signed = Mock(side_effect=lambda scope, issuer, data: data)
     validate_signed = Mock()
     validate_official = Mock()
     cancel = build_cajamar_verified_cancellation_port(
@@ -278,5 +278,11 @@ def test_cajamar_cancellation_traverses_signed_original_note_and_verified_transp
     assert b"<NumeroNfse>8765</NumeroNfse>" in sent.signed_request_xml
     assert b"<NumeroRps>" not in sent.signed_request_xml
     signed.assert_called_once()
+    assert signed.call_args.args[:2] == (original.scope, original.issuer_cnpj)
     validate_signed.assert_called_once()
-    validate_official.assert_called_once_with(inner.encode())
+    assert validate_signed.call_args.args[:2] == (
+        original.scope, original.issuer_cnpj,
+    )
+    validate_official.assert_called_once_with(
+        original.scope, original.issuer_cnpj, inner.encode(),
+    )
