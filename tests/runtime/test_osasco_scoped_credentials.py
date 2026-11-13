@@ -30,7 +30,9 @@ from kordena_fiscal.gateway.osasco_rtc_homologation import OSASCO_RTC_PROVIDER_I
 from kordena_fiscal.persistence import SqliteFiscalDatabase
 from kordena_fiscal.runtime.osasco_credentials import build_osasco_scoped_key_resolver
 from kordena_fiscal.vault.contracts import (
+    EphemeralCscMaterial,
     EphemeralProviderCredentialsMaterial,
+    SecretMaterialTypeError,
     SecretResolutionService,
 )
 
@@ -126,6 +128,8 @@ def test_osasco_fails_on_wrong_secret_type_or_credential_shape(tmp_path: Path) -
     )
     with pytest.raises(FiscalValidationError, match="shape"):
         resolver(scope, "11222333000181")
-    vault.resolve.return_value = object()
-    with pytest.raises(FiscalValidationError, match="type"):
+    vault.resolve.return_value = EphemeralCscMaterial(
+        reference_id="ref:osasco-municipal-auth", code=b"wrong-kind",
+    )
+    with pytest.raises(SecretMaterialTypeError, match="inconsistent"):
         resolver(scope, "11222333000181")
