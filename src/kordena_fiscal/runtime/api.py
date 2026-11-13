@@ -107,7 +107,6 @@ from .development_commercial_ingress import (
 from .development_fiscal_ingress import development_fiscal_ingress
 from .extrema_webiss_environment import build_extrema_webiss_exchange
 from .fiscal_runtime import FiscalOperationHandler
-from .osasco_operational_composition import OsascoTrustedRuntimePorts
 from .observability import (
     MetricsRegistry,
     RequestTimer,
@@ -115,6 +114,7 @@ from .observability import (
     StructuredLogger,
     TraceContext,
 )
+from .osasco_operational_composition import OsascoTrustedRuntimePorts
 from .otel_trace_sink import build_trace_sink
 from .production_cakto_ingress import production_cakto_webhook_secret
 from .production_cakto_webhook_env import production_cakto_webhook_secret_from_env

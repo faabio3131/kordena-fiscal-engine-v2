@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 
 from kordena_fiscal.domain import FiscalAddress, FiscalValidationError, TaxRegimeCode
 from kordena_fiscal.gateway.osasco_rtc_issue_builder import (

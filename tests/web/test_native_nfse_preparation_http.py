@@ -57,6 +57,10 @@ from kordena_fiscal.gateway.cajamar_geisweb_cancellation_builder import (
     interpret_cajamar_cancel_response,
 )
 from kordena_fiscal.gateway.cajamar_geisweb_homologation import CajamarGeiswebResult
+from kordena_fiscal.gateway.nfse_nacional_homologation import (
+    NACIONAL_HOMOLOGATION_PROVIDER_ID,
+    NfseNacionalHomologationGateway,
+)
 from kordena_fiscal.gateway.osasco_rtc_homologation import (
     OsascoRtcHomologationTransport,
     OsascoWcfContract,
@@ -64,16 +68,6 @@ from kordena_fiscal.gateway.osasco_rtc_homologation import (
 from kordena_fiscal.gateway.osasco_rtc_tax_policy import (
     OsascoReviewedRtcPolicy,
     build_osasco_reviewed_tax_resolver,
-)
-from kordena_fiscal.runtime.osasco_operational_composition import (
-    OsascoTrustedRuntimePorts,
-)
-from kordena_fiscal.runtime.sp4_municipal_request_factories import (
-    build_osasco_rtc_issue_request_factory,
-)
-from kordena_fiscal.gateway.nfse_nacional_homologation import (
-    NACIONAL_HOMOLOGATION_PROVIDER_ID,
-    NfseNacionalHomologationGateway,
 )
 from kordena_fiscal.gateway.sp4_municipal_canonical import (
     Sp4OriginalRps,
@@ -97,6 +91,12 @@ from kordena_fiscal.runtime.fiscal_runtime import (
 from kordena_fiscal.runtime.provider_operation_wiring import build_provider_operation_handlers
 from kordena_fiscal.runtime.sp4_municipal_canonical_composition import (
     Sp4ReviewedMunicipalPorts,
+)
+from kordena_fiscal.runtime.osasco_operational_composition import (
+    OsascoTrustedRuntimePorts,
+)
+from kordena_fiscal.runtime.sp4_municipal_request_factories import (
+    build_osasco_rtc_issue_request_factory,
 )
 from kordena_fiscal.security.human_identity import (
     HumanAccount,
