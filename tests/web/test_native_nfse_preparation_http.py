@@ -47,6 +47,7 @@ from kordena_fiscal.domain import (
     FiscalProfile,
     FiscalValidationError,
     Money,
+    MunicipalRegistration,
     StateRegistration,
     TaxRegimeCode,
 )
@@ -56,6 +57,20 @@ from kordena_fiscal.gateway.cajamar_geisweb_cancellation_builder import (
     interpret_cajamar_cancel_response,
 )
 from kordena_fiscal.gateway.cajamar_geisweb_homologation import CajamarGeiswebResult
+from kordena_fiscal.gateway.osasco_rtc_homologation import (
+    OsascoRtcHomologationTransport,
+    OsascoWcfContract,
+)
+from kordena_fiscal.gateway.osasco_rtc_tax_policy import (
+    OsascoReviewedRtcPolicy,
+    build_osasco_reviewed_tax_resolver,
+)
+from kordena_fiscal.runtime.osasco_operational_composition import (
+    OsascoTrustedRuntimePorts,
+)
+from kordena_fiscal.runtime.sp4_municipal_request_factories import (
+    build_osasco_rtc_issue_request_factory,
+)
 from kordena_fiscal.gateway.nfse_nacional_homologation import (
     NACIONAL_HOMOLOGATION_PROVIDER_ID,
     NfseNacionalHomologationGateway,
@@ -138,6 +153,9 @@ def _database(
             cnpj=Cnpj("11222333000181"), legal_name="Emissor Sintetico Ltda",
             tax_regime=tax_regime,
             state_registration=StateRegistration("SP", "123456789"),
+            municipal_registration=(
+                MunicipalRegistration("123456") if issuer_ibge == "3534401" else None
+            ),
             primary_cnae=CnaeCode("6201501"),
             address=FiscalAddress(
                 street="Rua de Homologacao", number="10", district="Centro",
@@ -366,6 +384,171 @@ def test_osasco_original_receipt_issue_and_read_only_full_note_http(
     )
     assert repeat.status_code == 200, repeat.text
     assert submitted.call_count == 1
+
+
+
+def _osasco_synthetic_soap(method: str) -> bytes:
+    pre = '<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" '
+    pre += 'xmlns:t="http://tempuri.org/" '
+    pre += (
+        'xmlns:a="http://schemas.datacontract.org/2004/07/'
+        'Eissnfe.Negocio.WebServices.Mensagem" '
+    )
+    pre += (
+        'xmlns:b="http://schemas.datacontract.org/2004/07/'
+        'Eissnfe.Dominio.DataTransferObject.Prestador" '
+    )
+    pre += (
+        'xmlns:c="http://schemas.datacontract.org/2004/07/'
+        'Eissnfe.Dominio.DataTransferObject.Contribuinte">'
+    )
+    body = f"<s:Body><t:{method}Response><t:{method}Result>"
+    if method == "ConsultarNotaCompleta":
+        body += (
+            '<a:Erro>false</a:Erro><a:NotasGeradas>'
+            '<b:NotaFiscalRelatorioDTO><b:Numero>8001</b:Numero>'
+            '<b:NumeroRecibo>1</b:NumeroRecibo>'
+            '<b:CodigoAutenticidade>OSASCO1234</b:CodigoAutenticidade>'
+            '<b:Prestador><c:CNPJ>11222333000181</c:CNPJ></b:Prestador>'
+            '<b:Valor>100.00</b:Valor></b:NotaFiscalRelatorioDTO>'
+            '</a:NotasGeradas><a:QtdeNotas>1</a:QtdeNotas>'
+        )
+    else:
+        body += "<a:Erro>false</a:Erro>"
+    body += f"</t:{method}Result></t:{method}Response></s:Body></s:Envelope>"
+    return (pre + body).encode("utf-8")
+
+
+def _osasco_synthetic_policy() -> OsascoReviewedRtcPolicy:
+    return OsascoReviewedRtcPolicy(
+        source_normative="urn:nfcore:synthetic:rule:2026",
+        rule_version=1, effective_from=date(2026, 1, 1),
+        effective_through=date(2026, 12, 31),
+        municipal_service_code="0107", national_taxation_code="010701",
+        activity="14.01", class_trib="000001", nbs_code="1.2001.10.00",
+        incidence_location="3", operation_indicator="050101",
+        service_city="Osasco", service_city_ibge="3534401", service_state="SP",
+        recipient_street_type="RUA", iss_rate=Decimal("3"),
+        pis=Decimal("0.00"), cofins=Decimal("0.00"), csll=Decimal("0.00"),
+        income_tax=Decimal("0.00"), inss=Decimal("0.00"),
+        other_taxes=Decimal("0.00"), test_only=False,
+    )
+
+
+@pytest.mark.parametrize("cancel_proof", [True, False, None])
+def test_osasco_http_full_issued_lifecycle_cancel_replay_and_unknown_outcome(
+    tmp_path: Path, cancel_proof: bool | None,
+) -> None:
+    """Synthetic SOAP verifies the actual Portal→UoW→WCF→read-back path."""
+    db = _database(
+        tmp_path / f"osasco-cycle-{cancel_proof}.sqlite",
+        issuer_ibge="3534401", provider_id="osasco-rtc-homologation",
+        tax_regime=TaxRegimeCode.NORMAL,
+    )
+    posts: list[str] = []
+    def exchange(_body: bytes, soap_action: str, _timeout: float) -> bytes:
+        method = soap_action.rsplit("/", 1)[-1]
+        posts.append(method)
+        return _osasco_synthetic_soap(method)
+
+    transport = OsascoRtcHomologationTransport(
+        resolver=Mock(resolve_provider_id=lambda **kw: (
+            "osasco-rtc-homologation"
+        )),
+        resolve_key=lambda _scope, _cnpj: "12345678-1234-1234-1234-123456789012",
+        validated_request=lambda _raw, _hash: None,
+        contract_for_method=lambda method: OsascoWcfContract(
+            action="http://tempuri.org/INotaFiscalEletronica/" + method,
+            method=method, wsdl_sha256="a" * 64,
+        ),
+        exchange=exchange,
+    )
+    reviewed = OsascoTrustedRuntimePorts(
+        transport=transport,
+        build_wcf_operation=build_osasco_rtc_issue_request_factory(
+            resolve_rtc_fields=build_osasco_reviewed_tax_resolver(
+                lambda _request, _original: _osasco_synthetic_policy(),
+            ),
+            validate_official_request=lambda _raw: None,
+        ),
+        verify_wcf_rps_identity=Mock(),
+        fiscal_issuer_policy=Mock(),
+        validate_prepared_rps=Mock(),
+        verify_official_invoice_xml=Mock(),
+        verify_official_cancel=Mock(return_value=cancel_proof),
+    )
+    app = FiscalApplicationService(db)
+    handlers = build_runtime_fiscal_handler_factory(
+        osasco_runtime_ports=reviewed,
+    )(app)
+    assert "cancelOsascoNfse" in handlers
+    web = _client(
+        db, operation_executor=CanonicalPortalOperationExecutor(
+            unit_of_work_factory=db,
+            path=CanonicalFiscalOperationPath(app, handlers=handlers),
+        ),
+    )
+    payload = _payload() | _TAKER_ADDRESS | {
+        "competence_date": "2026-11-12",
+        "source_id": "osasco-complete-cycle",
+        "service_municipality_ibge": "3534401",
+    }
+    prepared = _post(web, payload, "osasco-complete")
+    assert prepared.status_code == 200, prepared.text
+    document_id = prepared.json()["document_id"]
+    csrf = web.cookies.get(CSRF_COOKIE)
+    assert csrf
+    body = {"unit_id": UNIT, "environment": "homologation", "document_id": document_id}
+    issued = web.post(
+        "/v1/portal/operations/issueFiscalDocument", json=body,
+        headers={CSRF_HEADER: csrf, "Idempotency-Key": "osasco-issue-key"},
+    )
+    assert issued.status_code == 200, issued.text
+    assert posts == ["RTC_EmitirNFE"]
+    query = web.post(
+        "/v1/portal/operations/reconcileFiscalOperation", json=body,
+        headers={CSRF_HEADER: csrf, "Idempotency-Key": "osasco-reconcile-key"},
+    )
+    assert query.status_code == 200, query.text
+    assert query.json()["status"] == FiscalDocumentState.AUTHORIZED.value
+    assert posts == ["RTC_EmitirNFE", "ConsultarNotaCompleta"]
+    xml = web.get(
+        f"/v1/portal/documents/{document_id}/artifacts/authorized_xml",
+        params={"unit_id": UNIT, "environment": "homologation"},
+    )
+    assert xml.status_code == 200
+    assert xml.content == _osasco_synthetic_soap("ConsultarNotaCompleta")
+    cancellation = body | {
+        "human_approval": True,
+        "cancellation_reason": "Cancelamento humano revisado",
+    }
+    cancelled = web.post(
+        "/v1/portal/operations/cancelOsascoNfse", json=cancellation,
+        headers={CSRF_HEADER: csrf, "Idempotency-Key": "osasco-cancel-key"},
+    )
+    assert cancelled.status_code == 200, cancelled.text
+    expected = (
+        FiscalDocumentState.CANCEL_REQUESTED if cancel_proof is None
+        else (
+            FiscalDocumentState.CANCELLED if cancel_proof
+            else FiscalDocumentState.AUTHORIZED
+        )
+    )
+    assert cancelled.json()["status"] == expected.value
+    assert posts == ["RTC_EmitirNFE", "ConsultarNotaCompleta", "Cancelar"]
+    retry = web.post(
+        "/v1/portal/operations/cancelOsascoNfse", json=cancellation,
+        headers={CSRF_HEADER: csrf, "Idempotency-Key": "osasco-cancel-key"},
+    )
+    assert retry.status_code == 200
+    assert posts.count("Cancelar") == 1
+    if cancel_proof is not False:
+        duplicate = web.post(
+            "/v1/portal/operations/cancelOsascoNfse", json=cancellation,
+            headers={CSRF_HEADER: csrf, "Idempotency-Key": "different-osasco-key"},
+        )
+        assert duplicate.status_code == 409
+        assert posts.count("Cancelar") == 1
 
 
 def test_osasco_simples_after_november_cutoff_uses_national_not_municipal(
