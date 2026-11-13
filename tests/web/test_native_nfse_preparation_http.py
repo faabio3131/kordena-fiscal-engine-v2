@@ -85,7 +85,7 @@ def _database(
                 document_kind=FiscalDocumentKind.NFSE,
                 jurisdiction=jurisdiction,
                 operation=ConfiguredFiscalOperation.AUTHORIZE,
-                provider_id=NACIONAL_HOMOLOGATION_PROVIDER_ID,
+                provider_id=provider_id,
             ))
         uow.commit()
     return db
@@ -284,14 +284,14 @@ def test_cajamar_requires_full_taker_and_blocks_national_mandatory_competence(
     })
     assert wrong_channel.status_code == 400
     assert wrong_channel.json()["detail"]["code"] == "NATIVE_NFSE_INVALID_FISCAL_FACTS"
+    scope = ExecutionScope(
+        TENANT, UNIT, FiscalEnvironment.HOMOLOGATION, "check", "fm-nfcore",
+    )
+    reference = "native-nfse-" + hashlib.sha256(
+        (repr(scope.identity_partition_key) + ":service-order-native-1").encode(),
+    ).hexdigest()[:40]
     with db() as uow:
-        assert uow.lifecycle.get(
-            "native-nfse-" + __import__("hashlib").sha256(
-                (repr((
-                    "fm-nfcore", TENANT, UNIT, FiscalEnvironment.HOMOLOGATION,
-                )) + ":" + "service-order-native-1").encode(),
-            ).hexdigest()[:40]
-        ) is None
+        assert uow.lifecycle.get(reference) is None
 
 
 def test_native_national_preserves_complete_reviewed_brazilian_taker(
