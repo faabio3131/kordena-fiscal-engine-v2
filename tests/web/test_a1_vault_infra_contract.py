@@ -161,3 +161,26 @@ def test_docker_compose_overlay_effective_mount_is_correct_and_requires_host_sou
     invalid = subprocess.run(args + ["--quiet"], capture_output=True,
                              text=True, env=env, check=False, timeout=30)
     assert invalid.returncode != 0, "missing persistent host source accepted"
+
+
+def test_a1_audit_requires_exact_deployed_production_sha_before_docker(
+    tmp_path, monkeypatch, capsys,
+):
+    audit_script = _OVERLAY.with_name("audit-a1-vault-readonly.py")
+    spec = importlib.util.spec_from_file_location("a1_host_preflight", audit_script)
+    assert spec is not None and spec.loader is not None
+    audit = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(audit)
+    marker = tmp_path / ".deployed"
+    sha = "a" * 40
+    marker.write_text(f"SHA={sha}\n", encoding="ascii")
+    monkeypatch.setattr(audit, "_DEPLOY_MARKER", marker)
+    assert audit._pinned_production_sha(sha) is True
+    assert audit._pinned_production_sha("b" * 40) is False
+    assert audit._pinned_production_sha(sha + ";id") is False
+    marker.write_text("SHA=" + "b" * 40 + "\n", encoding="ascii")
+    monkeypatch.setattr(
+        audit, "_docker", lambda _: pytest.fail("Docker must not run for invalid release pin")
+    )
+    assert audit.main(sha) == 2
+    assert capsys.readouterr().out == "DEPLOY_SHA_EXACT=BLOCKED\n"
