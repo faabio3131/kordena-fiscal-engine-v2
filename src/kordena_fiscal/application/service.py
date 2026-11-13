@@ -2116,7 +2116,10 @@ class FiscalApplicationService:
             if replacement_id is not None:
                 uow.lifecycle.assert_scope(replacement_id, scope)
                 candidate = uow.lifecycle.get(replacement_id)
-                if candidate is None or candidate.state is not FiscalDocumentState.READY_TO_TRANSMIT:
+                if (
+                    candidate is None
+                    or candidate.state is not FiscalDocumentState.READY_TO_TRANSMIT
+                ):
                     raise PersistenceConflictError("Concurrent Osasco substitution changed")
             claim = self._state_machine.transition(
                 previous, FiscalDocumentState.CANCEL_REQUESTED,

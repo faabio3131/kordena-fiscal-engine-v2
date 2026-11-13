@@ -859,7 +859,10 @@ class DurableHumanPortalExecutor:
                 payload=payload,
                 idempotency_key=idempotency_key,
             )
-        if operation_id in {"substituteExtremaNfse", "reviewCajamarSubstitution", "substituteOsascoNfse"}:
+        if operation_id in {
+            "substituteExtremaNfse", "reviewCajamarSubstitution",
+            "substituteOsascoNfse",
+        }:
             try:
                 unit = payload.get("unit_id")
                 if not isinstance(unit, str) or not unit.strip():
