@@ -243,3 +243,12 @@ def test_spoofed_original_rps_fingerprint_cannot_bypass_canonical_loader() -> No
     with pytest.raises(Sp4CanonicalMunicipalError, match="original RPS"):
         issue.authorize(_request())
     mocks["submit"].assert_not_called()
+
+
+def test_alternate_municipal_loader_is_not_a_fallback_authority() -> None:
+    with pytest.raises(Sp4CanonicalMunicipalError, match="canonical original RPS"):
+        build_sp4_canonical_clients(
+            canonical_resolver=Mock(),
+            configured_municipalities={},
+            canonical_rps_loader=None,  # type: ignore[arg-type]
+        )
