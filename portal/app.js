@@ -552,6 +552,74 @@ function appendExtremaCancellation(article) {
   });
 }
 
+/** Governed Cajamar cancellation on the SAME authenticated fiscal Portal.
+ * @param {HTMLElement} article
+ */
+function appendCajamarCancellation(article) {
+  const operations = bootstrapState?.projection.configured_fiscal_operations;
+  if (!bootstrapState?.permissions.includes("document.cancel")
+    || !Array.isArray(operations) || !operations.includes("cancelCajamarNfse")) return;
+  const form = document.createElement("form");
+  form.id = "cajamar-cancellation-form";
+  form.className = "panel-form";
+  const heading = document.createElement("h3");
+  heading.textContent = "Cancelar NFS-e de Cajamar (homologação)";
+  const notice = document.createElement("p");
+  notice.textContent = "Confirme a NFS-e original emitida e autorizada. O NFCore utiliza o RPS, XML e vínculo GeisWeb persistidos. Uma resposta incerta não autoriza repetir o cancelamento.";
+  const refLabel = document.createElement("label");
+  refLabel.textContent = "Referência da NFS-e original";
+  const ref = document.createElement("input");
+  ref.required = true; ref.maxLength = 128; ref.autocomplete = "off";
+  refLabel.append(ref);
+  const approvedLabel = document.createElement("label");
+  const approved = document.createElement("input");
+  approved.type = "checkbox"; approved.required = true;
+  approvedLabel.append(approved, document.createTextNode(
+    " Verifiquei o emitente, a nota original, sua situação e autorizo esta operação fiscal.",
+  ));
+  const submit = document.createElement("button");
+  submit.type = "submit"; submit.className = "primary";
+  submit.textContent = "Solicitar cancelamento GeisWeb";
+  const result = document.createElement("p");
+  result.setAttribute("role", "status"); result.setAttribute("aria-live", "polite");
+  form.append(heading, notice, refLabel, approvedLabel, submit, result);
+  article.append(form);
+  /** @type {{fingerprint:string,key:string}|null} */
+  let attempt = null;
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    if (!selectedFiscalUnit || selectedFiscalEnvironment !== "homologation") {
+      result.textContent = "Selecione unidade autorizada de homologação."; return;
+    }
+    const payload = {
+      unit_id: selectedFiscalUnit, environment: selectedFiscalEnvironment,
+      document_id: ref.value.trim(), human_approval: approved.checked,
+    };
+    const fingerprint = JSON.stringify(payload);
+    if (attempt && attempt.fingerprint !== fingerprint) {
+      result.textContent = "Pedido fiscal pendente com conteúdo diferente. Consulte o original."; return;
+    }
+    attempt ||= {fingerprint, key: crypto.randomUUID()};
+    submit.disabled = true;
+    result.textContent = "Conferindo prova original e transmitindo um único cancelamento...";
+    try {
+      const reply = await api("/v1/portal/operations/cancelCajamarNfse", {
+        method: "POST",
+        headers: {"X-CSRF-Token": csrfToken(), "Idempotency-Key": attempt.key},
+        body: JSON.stringify(payload),
+      });
+      result.textContent = reply.official_fiscal_confirmation
+        ? "Cancelamento Cajamar confirmado. Evento arquivado no documento original."
+        : "A prefeitura rejeitou o pedido. Consulte o evento fiscal antes de outra ação.";
+      attempt = null;
+    } catch (error) {
+      result.textContent = (error instanceof Error ? error.message : "Cancelamento não confirmado")
+        + " Não retransmita: consulte o histórico e reconcilie o estado do pedido.";
+    } finally { submit.disabled = false; }
+  });
+}
+
 /** @param {HTMLElement} article */
 function appendExtremaSubstitution(article) {
   const operations = bootstrapState?.projection.configured_fiscal_operations;
@@ -2315,6 +2383,7 @@ async function renderSurface(viewId) {
     if (viewId === "issuances") appendNativeNfsePreparation(article);
     if (viewId === "issuances") appendExtremaNfsePreparation(article);
     if (viewId === "issuances") appendExtremaCancellation(article);
+    if (viewId === "issuances") appendCajamarCancellation(article);
     if (viewId === "issuances") appendExtremaSubstitution(article);
     if (viewId === "inutilizations") appendInutilizationForm(article);
     if (["documents", "issuances", "reconciliation"].includes(viewId)) appendFiscalActions(article);
