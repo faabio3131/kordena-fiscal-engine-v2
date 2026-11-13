@@ -85,6 +85,7 @@ from .bling_review import build_bling_review_router
 from .bling_status import build_bling_status_router
 from .bling_worker import build_bling_orders
 from .bridge_credentials import load_bridge_credentials
+from .cajamar_environment import build_cajamar_port_builder_from_environ
 from .cajamar_operational_composition import CajamarTrustedRuntimePorts
 from .cakto import build_cakto_webhook_router, compose_postgres_cakto_commercial_runtime
 from .cakto_claim_email import build_cakto_claim_delivery_from_environ
@@ -1177,6 +1178,10 @@ def create_runtime_app(
 
 _entrypoint_settings = RuntimeSettings.from_environ()
 _entrypoint_certificate_vault = EncryptedA1Vault.from_environ()
+_entrypoint_cajamar_builder = build_cajamar_port_builder_from_environ(
+    os.environ,
+    vault=_entrypoint_certificate_vault,
+)
 _development_ingress = development_commercial_ingress(_entrypoint_settings, os.environ)
 app = create_runtime_app(
     _entrypoint_settings,
@@ -1202,6 +1207,7 @@ app = create_runtime_app(
             trusted_signed_dps_builder=build_signed_dps,
             nfse_preaudit=nfse_preaudit,
             webiss_extrema_exchange=build_extrema_webiss_exchange(os.environ),
+            cajamar_port_builder=_entrypoint_cajamar_builder,
             webiss_service_preaudit=(
                 extrema_abrasf_service_preaudit
                 if os.environ.get("NFCORE_EXTREMA_WEBISS_HOMOLOGATION_URL")
