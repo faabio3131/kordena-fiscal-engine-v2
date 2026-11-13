@@ -181,17 +181,17 @@ def test_unapproved_provider_never_reads_original_or_opens_transport() -> None:
     mocks["submit"].assert_not_called()
 
 
-@pytest.mark.parametrize("request", [
+@pytest.mark.parametrize("changes", [
     {"tenant": "different-tenant"},
     {"unit": "different-unit"},
     {"cnpj": Cnpj("00944029000121")},
 ])
 def test_unrelated_taxpayer_cannot_use_original_rps_even_in_same_unit(
-    request: dict[str, object],
+    changes: dict[str, object],
 ) -> None:
     issue, _, mocks = _clients()
     with pytest.raises(Sp4CanonicalMunicipalError, match="original RPS"):
-        issue.authorize(_request(**request))  # type: ignore[arg-type]
+        issue.authorize(_request(**changes))  # type: ignore[arg-type]
     mocks["submit"].assert_not_called()
     mocks["verify"].assert_not_called()
 
