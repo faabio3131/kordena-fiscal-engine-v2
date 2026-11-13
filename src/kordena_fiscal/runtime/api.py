@@ -85,9 +85,9 @@ from .bling_review import build_bling_review_router
 from .bling_status import build_bling_status_router
 from .bling_worker import build_bling_orders
 from .bridge_credentials import load_bridge_credentials
+from .cajamar_operational_composition import CajamarTrustedRuntimePorts
 from .cakto import build_cakto_webhook_router, compose_postgres_cakto_commercial_runtime
 from .cakto_claim_email import build_cakto_claim_delivery_from_environ
-from .cajamar_operational_composition import CajamarTrustedRuntimePorts
 from .canonical_fiscal_composition import (
     build_runtime_fiscal_handler_factory,
     fiscal_external_dependency_snapshot,
