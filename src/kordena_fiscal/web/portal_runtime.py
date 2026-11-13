@@ -743,6 +743,15 @@ class DurableHumanPortalExecutor:
         if not idempotency_key or not idempotency_key.strip():
             raise _portal_error(400, "MISSING_IDEMPOTENCY_KEY", "Idempotency key is required")
         scope = recovery.scope(authority, payload)
+        if operation_id == "cancelCajamarNfse":
+            # Replay an already-scoped T07 claim without asking the gateway
+            # to preflight a note that was successfully cancelled earlier.
+            # The exact account, key, payload and session epoch are checked.
+            replay = recovery.existing_exact_request(
+                authority, operation_id, payload, idempotency_key,
+            )
+            if replay is not None:
+                return replay
         preflight = getattr(self._operation_executor, "validate_prepared", None)
         if callable(preflight):
             preflight(
