@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from cryptography import x509
+from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.hazmat.primitives.serialization import pkcs12
@@ -31,7 +32,10 @@ from lxml import etree
 from kordena_fiscal.application.service import FiscalApplicationService
 from kordena_fiscal.compliance.nfse_preaudit import nfse_preaudit
 from kordena_fiscal.domain import Cnpj, ExecutionScope, FiscalAddress, FiscalValidationError
-from kordena_fiscal.gateway.cajamar_geisweb_homologation import CajamarGeiswebWsdl
+from kordena_fiscal.gateway.cajamar_geisweb_homologation import (
+    CajamarGeiswebWsdl,
+    CajamarPreparedNfse,
+)
 from kordena_fiscal.gateway.cajamar_geisweb_issue_builder import CajamarGeiswebIssueData
 from kordena_fiscal.gateway.sp4_municipal_canonical import Sp4OriginalRps, Sp4VerifiedInvoice
 from kordena_fiscal.issuance.nfe_nfse import NfseAuthorizationRequest
@@ -45,7 +49,6 @@ from .cajamar_operational_composition import (
     CajamarTrustedRuntimePorts,
     build_cajamar_trusted_transport,
 )
-from .sp4_municipal_request_factories import build_cajamar_geisweb_issue_request_factory
 
 _DS = "http://www.w3.org/2000/09/xmldsig#"
 _C14N = "http://www.w3.org/TR/2001/REC-xml-c14n-20010315"
@@ -329,7 +332,7 @@ class CajamarReviewedStartup:
                     base64.b64decode(value, validate=True),
                     signed, padding.PKCS1v15(), algorithm,
                 )
-            except (ValueError, TypeError, Exception) as exc:
+            except (InvalidSignature, ValueError, TypeError) as exc:
                 raise FiscalValidationError("Invalid original Cajamar XMLDSig") from exc
 
         def check_request(request: NfseAuthorizationRequest) -> None:
@@ -384,17 +387,10 @@ class CajamarReviewedStartup:
                 raise FiscalValidationError("Cajamar invoice proof must be municipally scoped")
             validate_xml(invoice.authorized_xml, self.contract.xsd_package_sha256)
 
-        factory = build_cajamar_geisweb_issue_request_factory(
-            resolve_issue_fields=issue_fields,
-            sign_issue=lambda request: request,  # replaced by scoped closure below
-            validate_signed_issue=lambda _: None,
-            sign_lot_query=lambda raw: raw,
-            validate_signed_query=lambda _: None,
-        )
         # The request-specific closure is necessary for A1 scope authority.
         def reviewed_operation(
             request: NfseAuthorizationRequest, source: Sp4OriginalRps, method: str,
-        ) -> object:
+        ) -> CajamarPreparedNfse:
             from kordena_fiscal.gateway.cajamar_geisweb_issue_builder import (
                 prepare_cajamar_signed_issue,
             )
@@ -420,7 +416,6 @@ class CajamarReviewedStartup:
                 )
             raise FiscalValidationError("Unknown Cajamar municipal fiscal method")
 
-        del factory  # direct scoped composition above, never unscoped fallback
         transport = build_cajamar_trusted_transport(
             application=application,
             vault=vault,
