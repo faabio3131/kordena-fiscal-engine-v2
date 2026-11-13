@@ -122,3 +122,41 @@ def test_backup_refuses_unexpected_files_even_if_private(tmp_path, monkeypatch):
     (vault / "password.txt").write_text("unsafe", encoding="utf-8")
     with pytest.raises(mod.VaultOpsError):
         mod.backup()
+
+
+def test_docker_compose_overlay_effective_mount_is_correct_and_requires_host_source(
+    tmp_path, monkeypatch,
+):
+    import json
+    import shutil
+    import subprocess
+
+    if shutil.which("docker") is None:
+        pytest.skip("Docker Compose executable unavailable")
+    src = _OVERLAY.with_name("compose.prod.yml")
+    base = tmp_path / "compose.prod.yml"
+    overlay = tmp_path / "compose.a1-vault.opt-in.yml"
+    base.write_bytes(src.read_bytes())
+    overlay.write_bytes(_OVERLAY.read_bytes())
+    (tmp_path / ".env").write_text("POSTGRES_PASSWORD=synthetic\n", encoding="utf-8")
+    (tmp_path / "src").mkdir()
+    host_vault = tmp_path / "vault"
+    host_vault.mkdir(mode=0o700)
+    env = {**os.environ, "POSTGRES_PASSWORD": "synthetic",
+           "NFCORE_A1_VAULT_HOST_DIR": str(host_vault)}
+    args = ["docker", "compose", "-f", str(base), "-f", str(overlay), "config"]
+    result = subprocess.run(args + ["--format", "json"], capture_output=True,
+                            text=True, env=env, check=False, timeout=30)
+    assert result.returncode == 0, "invalid A1 Compose overlay"
+    api = json.loads(result.stdout)["services"]["nfcore-api"]
+    assert api["environment"]["NFCORE_A1_VAULT_DIR"] == "/var/lib/nfcore/a1-vault"
+    mounts = [v for v in api["volumes"] if v["target"] == "/var/lib/nfcore/a1-vault"]
+    assert len(mounts) == 1
+    assert mounts[0]["type"] == "bind"
+    assert mounts[0]["source"] == str(host_vault)
+    assert mounts[0]["bind"]["create_host_path"] is False
+
+    env.pop("NFCORE_A1_VAULT_HOST_DIR")
+    invalid = subprocess.run(args + ["--quiet"], capture_output=True,
+                             text=True, env=env, check=False, timeout=30)
+    assert invalid.returncode != 0, "missing persistent host source accepted"
