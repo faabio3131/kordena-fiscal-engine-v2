@@ -7,14 +7,17 @@ Não efetua alterações na VPS, Docker, PostgreSQL nem rede.
 """
 from __future__ import annotations
 
+import argparse
 import base64
 import binascii
 import json
+import re
 import subprocess
 import sys
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 CONTAINER = "nfcore-api"
+_DEPLOY_MARKER = Path("/opt/fm/nfcore/.deployed")
 
 
 def _docker(args: list[str]) -> str | None:
@@ -69,7 +72,23 @@ else:
 """
 
 
-def main() -> int:
+def _pinned_production_sha(expected: str) -> bool:
+    if re.fullmatch(r"[0-9a-f]{40}", expected) is None:
+        return False
+    try:
+        return _DEPLOY_MARKER.read_text(encoding="ascii").strip() == f"SHA={expected}"
+    except (OSError, UnicodeError):
+        return False
+
+
+def main(expected_sha: str | None = None) -> int:
+    if expected_sha is not None:
+        if not _pinned_production_sha(expected_sha):
+            print("DEPLOY_SHA_EXACT=BLOCKED")
+            return 2
+        print("DEPLOY_SHA_EXACT=PASS")
+    else:
+        print("DEPLOY_SHA_EXACT=NAO_VERIFICADO")
     raw = _docker(["inspect", CONTAINER])
     if raw is None:
         print("A1_AUDIT=INCONCLUSIVO; MOTIVO=CONTAINER_INACESSIVEL")
@@ -132,4 +151,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    parser = argparse.ArgumentParser(description="A1 encrypted Vault read-only audit")
+    parser.add_argument("--expected-production-sha", default=None)
+    args = parser.parse_args()
+    sys.exit(main(args.expected_production_sha))
