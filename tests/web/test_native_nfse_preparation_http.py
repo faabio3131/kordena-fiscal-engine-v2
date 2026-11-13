@@ -432,7 +432,7 @@ def test_cajamar_portal_prepares_sends_recovers_and_downloads_authorized_xml(
             gross_amount=original.gross_amount,
             invoice_number="8765",
             verification_code="ABCDEF1234",
-            invoice_reference="cajamar-8765",
+            invoice_reference="8765",
             authorized_xml=(
                 "<ConsultaLoteRpsResposta><Rps><IdentificacaoNfse>"
                 f"<NumeroRps>{original.rps_number}</NumeroRps>"
