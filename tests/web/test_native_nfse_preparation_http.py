@@ -91,12 +91,12 @@ from kordena_fiscal.runtime.fiscal_runtime import (
 from kordena_fiscal.runtime.osasco_operational_composition import (
     OsascoTrustedRuntimePorts,
 )
-from kordena_fiscal.runtime.sp4_municipal_request_factories import (
-    build_osasco_rtc_issue_request_factory,
-)
 from kordena_fiscal.runtime.provider_operation_wiring import build_provider_operation_handlers
 from kordena_fiscal.runtime.sp4_municipal_canonical_composition import (
     Sp4ReviewedMunicipalPorts,
+)
+from kordena_fiscal.runtime.sp4_municipal_request_factories import (
+    build_osasco_rtc_issue_request_factory,
 )
 from kordena_fiscal.security.human_identity import (
     HumanAccount,
