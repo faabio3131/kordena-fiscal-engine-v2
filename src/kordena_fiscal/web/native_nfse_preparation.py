@@ -26,9 +26,13 @@ from kordena_fiscal.domain import (
     ExecutionScope,
     FiscalDocumentKind,
     FiscalEnvironment,
+    FiscalAddress,
     FiscalValidationError,
     Money,
     SourceReference,
+)
+from kordena_fiscal.gateway.municipal_sp_routing import (
+    classify_sp_national_nfse_eligibility,
 )
 from kordena_fiscal.gateway.nfse_nacional_homologation import (
     NACIONAL_HOMOLOGATION_PROVIDER_ID,
@@ -38,6 +42,9 @@ from kordena_fiscal.issuance import (
     NfseCanonicalDocument,
     NfseServiceLine,
     NfseServiceTaker,
+)
+from kordena_fiscal.issuance.sp4_original_rps_archive import (
+    build_sp4_original_from_reservation,
 )
 from kordena_fiscal.lifecycle.idempotency import IdempotencyConflictError
 from kordena_fiscal.persistence.ports import (
@@ -60,6 +67,11 @@ _FIELDS = frozenset({
     "source_normative", "rule_version", "fiscal_review_approved",
 })
 _STRING_FIELDS = _FIELDS - {"iss_withheld", "rule_version", "fiscal_review_approved"}
+_TAKER_ADDRESS_FIELDS = frozenset({
+    "taker_street", "taker_number", "taker_neighborhood", "taker_city",
+    "taker_state", "taker_municipality_ibge", "taker_postal_code",
+})
+_CAJAMAR_PROVIDER = "cajamar-geisweb-homologation"
 _CENTS = re.compile(r"(?:0|[1-9][0-9]{0,8})\.[0-9]{2}\Z")
 _TAKER = re.compile(r"(?:[0-9]{11}|[0-9]{14})\Z")
 _DIGITS_6 = re.compile(r"[0-9]{6}\Z")
@@ -74,11 +86,15 @@ def prepare_native_nfse(
     *, factory: FiscalUnitOfWorkFactory, authority: AuthenticatedHuman,
     payload: Mapping[str, Any], idempotency_key: str | None,
 ) -> Mapping[str, Any]:
-    """Persist one immutable reviewed NFS-e; never submit to SEFIN or allocate a DPS."""
+    """Persist one reviewed NFS-e by the existing national or Cajamar UoW authority."""
     key = (idempotency_key or "").strip()
     if (
-        not isinstance(payload, Mapping) or set(payload) != _FIELDS
-        or any(type(payload.get(field)) is not str for field in _STRING_FIELDS)
+        not isinstance(payload, Mapping)
+        or set(payload) not in (_FIELDS, _FIELDS | _TAKER_ADDRESS_FIELDS)
+        or any(
+            type(payload.get(field)) is not str
+            for field in _STRING_FIELDS | (set(payload) & _TAKER_ADDRESS_FIELDS)
+        )
         or type(payload.get("iss_withheld")) is not bool
         or type(payload.get("rule_version")) is not int
         or type(payload.get("fiscal_review_approved")) is not bool
@@ -98,7 +114,7 @@ def prepare_native_nfse(
         authority.assert_permission(PortalPermission.DOCUMENT_ISSUE, unit_id=unit)
         authority.assert_permission(PortalPermission.CONFIGURATION_WRITE, unit_id=unit)
         if payload["environment"] != FiscalEnvironment.HOMOLOGATION.value:
-            raise FiscalValidationError("Only National NFS-e homologation may be prepared")
+            raise FiscalValidationError("Only NFS-e homologation may be prepared")
         source_id = payload["source_id"].strip()
         if not source_id or len(source_id) > 120:
             raise FiscalValidationError("Unique source reference is required")
@@ -122,7 +138,24 @@ def prepare_native_nfse(
             Cnpj(payload["taker_document"]) if len(payload["taker_document"]) == 14
             else Cpf(payload["taker_document"])
         )
-        taker = NfseServiceTaker(tax_id=taker_id, legal_name=payload["taker_name"])
+        taker_address = None
+        if _TAKER_ADDRESS_FIELDS.issubset(payload):
+            if not _DIGITS_7.fullmatch(payload["taker_municipality_ibge"]):
+                raise FiscalValidationError("Taker municipality IBGE code is required")
+            taker_address = FiscalAddress(
+                street=payload["taker_street"],
+                number=payload["taker_number"],
+                district=payload["taker_neighborhood"],
+                municipality_name=payload["taker_city"],
+                jurisdiction=BrazilianJurisdiction(
+                    payload["taker_state"], payload["taker_municipality_ibge"],
+                ),
+                postal_code=payload["taker_postal_code"],
+            )
+        taker = NfseServiceTaker(
+            tax_id=taker_id, legal_name=payload["taker_name"],
+            address=taker_address,
+        )
         for field in ("gross_amount", "deduction_amount", "iss_amount"):
             if not _CENTS.fullmatch(payload[field]):
                 raise FiscalValidationError("Values require exact two-decimal BRL amounts")
@@ -167,8 +200,30 @@ def prepare_native_nfse(
             jurisdiction=profile.address.jurisdiction,
             operation=ConfiguredFiscalOperation.AUTHORIZE.value,
         )
-        if provider != NACIONAL_HOMOLOGATION_PROVIDER_ID:
-            raise FiscalValidationError("National NFS-e binding is not approved")
+        municipal_cajamar = provider == _CAJAMAR_PROVIDER
+        if provider != NACIONAL_HOMOLOGATION_PROVIDER_ID and not municipal_cajamar:
+            raise FiscalValidationError("Configured NFS-e provider is not supported")
+        if municipal_cajamar:
+            if (
+                profile.address.jurisdiction.state_code != "SP"
+                or profile.address.jurisdiction.municipality_ibge_code != "3509205"
+                or taker_address is None
+            ):
+                raise FiscalValidationError(
+                    "Cajamar requires issuer's reviewed city and complete taker address"
+                )
+            try:
+                classify_sp_national_nfse_eligibility(
+                    issuer_jurisdiction=profile.address.jurisdiction,
+                    tax_regime=profile.tax_regime,
+                    competence_date=competence,
+                )
+            except FiscalValidationError:
+                pass
+            else:
+                raise FiscalValidationError(
+                    "National NFS-e is mandatory for this regime and competence"
+                )
         previous = None
         try:
             previous = app.load_prepared_nfse_authorization(scope, document_id)
@@ -196,9 +251,19 @@ def prepare_native_nfse(
             service_taker=taker,
         )
         nfse_preaudit(NfseAuthorizationRequest.build(document))
+        # The browser never chooses the provider or RPS series. Cajamar's
+        # reviewed GeisWeb adapter uses series NF, with the existing sequence
+        # stream partition 1, in the same canonical fiscal transaction.
+        def cajamar_original(prepared, reserved):
+            return build_sp4_original_from_reservation(
+                prepared, reserved, rps_series="NF",
+            )
+
         result = app.prepare_nfse_authorization(
             document, occurred_at=now,
             retention=RetentionPolicyMetadata("nfcore-fiscal-archive", 1),
+            sp4_original_builder=cajamar_original if municipal_cajamar else None,
+            sp4_rps_series=1 if municipal_cajamar else None,
         )
         return {
             "document_id": result.attempt.document_id,
@@ -207,7 +272,14 @@ def prepare_native_nfse(
             "environment": "homologation",
             "transmitted": False,
             "fiscal_authorization": "not_inferred_from_preparation",
-            "dps_numbering": "pending_durable_authority",
+            "dps_numbering": (
+                "not_applicable_municipal_original_rps"
+                if municipal_cajamar else "pending_durable_authority"
+            ),
+            "numbering_authority": (
+                "municipal_rps_durable" if municipal_cajamar
+                else "national_dps_durable"
+            ),
         }
     except HumanAuthorizationError as exc:
         raise _error(403, "NATIVE_NFSE_UNIT_FORBIDDEN") from exc
