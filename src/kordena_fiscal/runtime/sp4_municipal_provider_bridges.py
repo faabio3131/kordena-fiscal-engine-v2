@@ -205,9 +205,9 @@ def build_cajamar_reviewed_ports(
 def build_cajamar_verified_cancellation_port(
     *,
     transport: CajamarGeiswebHomologationTransport,
-    sign_cancel: Callable[[bytes], bytes],
-    validate_signed_cancel: Callable[[bytes], None],
-    verify_official_cancel: Callable[[bytes], None],
+    sign_cancel: Callable[[ExecutionScope, Cnpj, bytes], bytes],
+    validate_signed_cancel: Callable[[ExecutionScope, Cnpj, bytes], None],
+    verify_official_cancel: Callable[[ExecutionScope, Cnpj, bytes], None],
 ) -> Callable[
     [NfseAuthorizationRequest, Sp4OriginalRps, Sp4VerifiedInvoice],
     CajamarCancellationDecision,
@@ -246,12 +246,19 @@ def build_cajamar_verified_cancellation_port(
         prepared = prepare_cajamar_cancel(
             source=original, issued=issued,
             regime=req.document.issuer.tax_regime, human_approved=True,
-            sign_document=sign_cancel, validate_signed_request=validate_signed_cancel,
+            sign_document=lambda raw: sign_cancel(
+                original.scope, original.issuer_cnpj, raw,
+            ),
+            validate_signed_request=lambda signed: validate_signed_cancel(
+                original.scope, original.issuer_cnpj, signed,
+            ),
         )
         receipt = transport.invoke(prepared)
         return interpret_cajamar_cancel_response(
             receipt=receipt, source=original, issued=issued,
-            verify_official_response=verify_official_cancel,
+            verify_official_response=lambda official: verify_official_cancel(
+                original.scope, original.issuer_cnpj, official,
+            ),
         )
 
     return submit
