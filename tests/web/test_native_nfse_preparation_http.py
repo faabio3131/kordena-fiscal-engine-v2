@@ -514,6 +514,24 @@ def test_cajamar_portal_prepares_sends_recovers_and_downloads_authorized_xml(
     assert download.status_code == 200, download.text
     assert download.content.startswith(b"<ConsultaLoteRpsResposta><Rps>")
     assert download.headers["Cache-Control"] == "no-store"
+    listed = web.get(
+        "/v1/portal/surfaces/documents",
+        params={"unit_id": UNIT, "environment": "homologation"},
+    )
+    assert listed.status_code == 200, listed.text
+    printed = [
+        row for row in listed.json()["rows"]
+        if row.get("record_type") == "archive"
+        and row.get("document_reference") == document_id
+        and row.get("kind") == "authorized_xml"
+    ]
+    assert len(printed) == 1
+    assert printed[0]["auxiliary_pdf_available"] is False
+    municipal_pdf = web.get(
+        f"/v1/portal/documents/{document_id}/artifacts/auxiliary_pdf",
+        params={"unit_id": UNIT, "environment": "homologation"},
+    )
+    assert municipal_pdf.status_code == 409
     denied = web.get(
         f"/v1/portal/documents/{document_id}/artifacts/authorized_xml",
         params={"unit_id": "another-unit", "environment": "homologation"},
@@ -691,6 +709,18 @@ def test_web_native_nfse_preparation_to_signed_gateway_and_authorized_xml(
     assert downloaded.content == official_xml
     assert downloaded.headers["Cache-Control"] == "no-store"
     assert downloaded.headers["X-Content-Type-Options"] == "nosniff"
+    projection = browser.get(
+        "/v1/portal/surfaces/documents",
+        params={"unit_id": UNIT, "environment": "homologation"},
+    )
+    assert projection.status_code == 200, projection.text
+    national_artifacts = [
+        row for row in projection.json()["rows"]
+        if row.get("document_reference") == document_id
+        and row.get("kind") == "authorized_xml"
+    ]
+    assert len(national_artifacts) == 1
+    assert national_artifacts[0]["auxiliary_pdf_available"] is True
     assert downloaded.headers["Content-Disposition"].startswith("attachment;")
     assert downloaded.headers["Content-Type"].startswith("application/xml")
 
