@@ -727,6 +727,62 @@ def build_runtime_fiscal_handler_factory(
             handlers["substituteExtremaNfse"] = PreflightFiscalOperationHandler(
                 execute_extrema_substitution, validate_extrema_substitution,
             )
+        # Cajamar's official Decree 7.311/2024 provides municipal portal
+        # substitution, not a reviewed GeisWeb SOAP operation. This handler
+        # validates an original+candidate without altering either lifecycle.
+        # It is available for human review even when municipal SOAP ports are
+        # not provisioned; the fiscal documents must already exist.
+        def validate_cajamar_substitution_review(
+            scope: ExecutionScope, payload: Mapping[str, Any], key: str | None,
+        ) -> None:
+            if (
+                set(payload) != {
+                    "unit_id", "environment", "original_id",
+                    "replacement_id", "human_approval",
+                }
+                or payload.get("unit_id") != scope.unit_id
+                or payload.get("environment") != scope.environment.value
+                or scope.environment is not FiscalEnvironment.HOMOLOGATION
+                or payload.get("human_approval") is not True
+                or not isinstance(payload.get("original_id"), str)
+                or not isinstance(payload.get("replacement_id"), str)
+                or not str(payload["original_id"]).strip()
+                or not str(payload["replacement_id"]).strip()
+            ):
+                raise FiscalValidationError(
+                    "Cajamar substitution review needs two approved document references"
+                )
+            application.review_prepared_cajamar_substitution(
+                scope=scope,
+                original_id=str(payload["original_id"]),
+                replacement_id=str(payload["replacement_id"]),
+                reviewed_at=datetime.now(UTC),
+            )
+
+        def execute_cajamar_substitution_review(
+            scope: ExecutionScope, payload: Mapping[str, Any], key: str | None,
+        ) -> Mapping[str, Any]:
+            review = application.review_prepared_cajamar_substitution(
+                scope=scope,
+                original_id=str(payload["original_id"]),
+                replacement_id=str(payload["replacement_id"]),
+                reviewed_at=datetime.now(UTC),
+            )
+            return {
+                "original_id": review.original_id,
+                "replacement_id": review.replacement_id,
+                "deadline": review.deadline.isoformat(),
+                "status": review.municipal_action,
+                "official_fiscal_confirmation": False,
+                "municipal_portal_url": review.portal_url,
+                "regulatory_evidence_url": review.decree_url,
+                "municipality_ibge": "3509205",
+            }
+
+        handlers["reviewCajamarSubstitution"] = PreflightFiscalOperationHandler(
+            execute_cajamar_substitution_review,
+            validate_cajamar_substitution_review,
+        )
         required = {
             "issueFiscalDocument",
             "queryFiscalDocument",
