@@ -1,4 +1,5 @@
 """N3 A1 infrastructure contract tests — synthetic ciphertext, no external services."""
+
 from __future__ import annotations
 
 import importlib.util
