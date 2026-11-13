@@ -37,7 +37,7 @@ Fontes oficiais:
 
 ### EXTERNAL_BLOCKED (não impede engenharia interna)
 - WSDL/XSD vigente da prefeitura/GeisWeb com origem, hashes e autorização de uso do contribuinte.
-- A1 e credenciais do contribuinte, hoje sujeitos à auditoria de volume e backup do cofre na Contabo (#462); certificado Windows não exportável, solicitar reemissão exportável à DigitalSign conforme #447.
+- A1 e credenciais do contribuinte, sujeitos à auditoria de volume e backup do cofre na Contabo (#462); o proprietário informou que o A1 já foi exportado em arquivo .pfx protegido por senha e armazenado fora do repositório e servidor ([issue #447, comentário 6840382267](https://github.com/faabio3131/nf-core-v001/issues/447#issuecomment-6840382267)). A reemissão à DigitalSign não é mais necessária. Cadastro/upload no cofre continua pendente de auditoria operacional e de autorização N3.
 - Validação em ambiente oficial com contribuinte autorizado e resposta municipal real, protocolo/XML legítimo, regras de cancelamento/substituição conforme disponibilidade oficial.
 
 ## Critério de avanço
