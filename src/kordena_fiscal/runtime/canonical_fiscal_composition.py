@@ -81,6 +81,7 @@ from kordena_fiscal.vault import EphemeralCertificateMaterial
 from kordena_fiscal.vault.encrypted_a1 import EncryptedA1Vault
 from kordena_fiscal.xml import NfeAccessKey
 
+from .cajamar_operational_composition import CajamarTrustedRuntimePorts
 from .fiscal_runtime import FiscalOperationHandler, PreflightFiscalOperationHandler
 from .provider_issuance_handler import PreparedXmlGatewaySelector
 from .provider_operation_wiring import build_provider_operation_handlers
@@ -366,6 +367,7 @@ def build_runtime_fiscal_handler_factory(
         [NfseAuthorizationRequest, Sp4OriginalRps, Sp4VerifiedInvoice],
         CajamarCancellationDecision,
     ] | None = None,
+    cajamar_runtime_ports: CajamarTrustedRuntimePorts | None = None,
 ) -> Any:
     """Register all four canonical operations without granting fiscal readiness.
 
@@ -397,6 +399,13 @@ def build_runtime_fiscal_handler_factory(
         raise ValueError("NFS-e signed DPS composition requires fiscal pre-audit")
     if sp4_reviewed_municipalities is not None and nfse_gateway is not None:
         raise ValueError("Municipal reviewed ports cannot coexist with an opaque gateway")
+    if cajamar_runtime_ports is not None and (
+        not isinstance(cajamar_runtime_ports, CajamarTrustedRuntimePorts)
+        or sp4_reviewed_municipalities is not None
+        or cajamar_verified_cancel is not None
+        or nfse_gateway is not None
+    ):
+        raise ValueError("Conflicting trusted Cajamar fiscal authorities")
     if cajamar_verified_cancel is not None and (
         not callable(cajamar_verified_cancel)
         or sp4_reviewed_municipalities is None
@@ -429,6 +438,16 @@ def build_runtime_fiscal_handler_factory(
     def factory(
         application: FiscalApplicationService,
     ) -> Mapping[str, FiscalOperationHandler]:
+        # The municipal ports are scoped to the same canonical application.
+        # No secondary persistence, fiscal router, auth or signing identity.
+        active_municipalities = sp4_reviewed_municipalities
+        active_cajamar_cancel = cajamar_verified_cancel
+        if cajamar_runtime_ports is not None:
+            reviewed_ports, reviewed_cancel = cajamar_runtime_ports.attach(application)
+            active_municipalities = {
+                "cajamar-geisweb-homologation": reviewed_ports,
+            }
+            active_cajamar_cancel = reviewed_cancel
         gateway = selected_operations or UnprovisionedFiscalGateway()
         if operations_gateway is None and certificate_vault is not None:
             vault = certificate_vault
@@ -520,10 +539,10 @@ def build_runtime_fiscal_handler_factory(
             )
         municipal_issue: Mapping[str, NfseGatewayClient] = {}
         municipal_query: Mapping[str, NfseQueryClient] = {}
-        if sp4_reviewed_municipalities is not None:
+        if active_municipalities is not None:
             municipal_issue, municipal_query = build_sp4_canonical_clients(
                 canonical_resolver=_CanonicalWebissProviderResolver(application),
-                configured_municipalities=sp4_reviewed_municipalities,
+                configured_municipalities=active_municipalities,
                 canonical_rps_loader=application.load_sp4_original_rps,
             )
         if national_adapter is not None or extrema_adapter is not None or municipal_issue:
@@ -547,8 +566,8 @@ def build_runtime_fiscal_handler_factory(
             prepared_nfse_query_client=nfse_query_client,
             archive_retention=retention,
         )
-        if cajamar_verified_cancel is not None:
-            reviewed_cancel = cajamar_verified_cancel
+        if active_cajamar_cancel is not None:
+            reviewed_cancel = active_cajamar_cancel
 
             def validate_cajamar_cancel(
                 scope: ExecutionScope, payload: Mapping[str, Any], key: str | None,
