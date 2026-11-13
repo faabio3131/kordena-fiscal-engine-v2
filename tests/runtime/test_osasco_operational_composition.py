@@ -6,7 +6,10 @@ from unittest.mock import Mock
 import pytest
 
 from kordena_fiscal.application.service import FiscalApplicationService
-from kordena_fiscal.gateway.osasco_rtc_homologation import OsascoRtcHomologationTransport
+from kordena_fiscal.gateway.osasco_rtc_homologation import (
+    OsascoRtcHomologationTransport,
+    OsascoWcfContract,
+)
 from kordena_fiscal.persistence import SqliteFiscalDatabase
 from kordena_fiscal.runtime.canonical_fiscal_composition import (
     build_runtime_fiscal_handler_factory,
@@ -20,7 +23,6 @@ from kordena_fiscal.runtime.osasco_pinned_composition import (
     build_osasco_pinned_operational_ports,
 )
 from kordena_fiscal.runtime.osasco_wsdl_contract import OsascoPinnedWcfWsdl
-from kordena_fiscal.gateway.osasco_rtc_homologation import OsascoWcfContract
 from kordena_fiscal.vault.contracts import SecretResolutionService
 
 
