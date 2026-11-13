@@ -8,6 +8,7 @@ from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
+from typing import cast
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
@@ -1192,7 +1193,7 @@ def build_entrypoint_fiscal_handler_factory(
                 "Cajamar reviewed fiscal adapters require staging/production runtime"
             )
         return None
-    return build_runtime_fiscal_handler_factory(
+    configured_factory = build_runtime_fiscal_handler_factory(
         certificate_vault=vault,
         trusted_signed_dps_builder=build_signed_dps,
         nfse_preaudit=nfse_preaudit,
@@ -1206,6 +1207,9 @@ def build_entrypoint_fiscal_handler_factory(
             environ, vault=vault,
         ),
     )
+    # The shared builder's public annotation is Any, but its closure implements
+    # the existing FiscalOperationHandlerFactory contract. Preserve B ownership.
+    return cast(FiscalOperationHandlerFactory, configured_factory)
 
 
 _entrypoint_settings = RuntimeSettings.from_environ()
