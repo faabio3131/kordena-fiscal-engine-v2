@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
+from kordena_fiscal.compliance.cajamar_municipal_legal import cajamar_regular_deadline
 from kordena_fiscal.domain import FiscalValidationError
 from kordena_fiscal.issuance.nfe_nfse import NfseAuthorizationRequest
 
@@ -74,9 +75,7 @@ def review_cajamar_substitution(
         raise FiscalValidationError(
             "Cajamar municipal substitution cannot change competence, taker or gross value"
         )
-    year = old.competence_date.year + (old.competence_date.month == 12)
-    month = old.competence_date.month % 12 + 1
-    deadline = date(year, month, 10)
+    deadline = cajamar_regular_deadline(old.competence_date)
     if reviewed_at.astimezone(_SAO_PAULO).date() > deadline:
         raise FiscalValidationError(
             "Cajamar substitution period expired; municipal administrative review required"
