@@ -7,10 +7,17 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from datetime import UTC, datetime, timedelta
 
 import pytest
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.serialization import pkcs12
+from cryptography.x509.oid import NameOID, ObjectIdentifier
 
 from kordena_fiscal.application.service import FiscalApplicationService
+from kordena_fiscal.domain import Cnpj, ExecutionScope, FiscalEnvironment, FiscalValidationError
 from kordena_fiscal.persistence import SqliteFiscalDatabase
 from kordena_fiscal.runtime.cajamar_environment import (
     CajamarReviewedStartup,
@@ -192,4 +199,80 @@ def test_actual_uvicorn_entrypoint_factory_registers_cajamar_once(
     with pytest.raises(RuntimeConfigurationError, match="staging/production"):
         build_entrypoint_fiscal_handler_factory(dev, env, vault)
     assert build_entrypoint_fiscal_handler_factory(dev, {}, vault) is None
+
+
+def test_cajamar_real_cryptographic_ports_sign_verify_and_reject_tampering(
+    tmp_path: Path,
+) -> None:
+    """Synthetic A1 only: real signature verification without fiscal network I/O."""
+    manifest = _fixture(tmp_path)
+    config = CajamarReviewedStartup.load(str(manifest))
+    vault = EncryptedA1Vault(directory=tmp_path / "a1-vault", master_key=b"k" * 32)
+    issuer = Cnpj("11222333000181")
+    scope = ExecutionScope(
+        "tenant-test", "unit-test", FiscalEnvironment.HOMOLOGATION,
+        "crypto-fixture", "fm-nfcore",
+    )
+    password = b"synthetic-a1-only-no-real-client"
+    private = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    identity = x509.Name([
+        x509.NameAttribute(NameOID.COMMON_NAME, "Synthetic Cajamar fixture"),
+    ])
+    encoded = issuer.value.encode("ascii")
+    now = datetime.now(UTC)
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(identity).issuer_name(identity)
+        .public_key(private.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(days=1))
+        .not_valid_after(now + timedelta(days=30))
+        .add_extension(
+            x509.KeyUsage(
+                digital_signature=True, content_commitment=False,
+                key_encipherment=False, data_encipherment=False,
+                key_agreement=False, key_cert_sign=False, crl_sign=False,
+                encipher_only=False, decipher_only=False,
+            ),
+            critical=True,
+        )
+        .add_extension(x509.SubjectAlternativeName([
+            x509.OtherName(
+                ObjectIdentifier("2.16.76.1.3.3"),
+                bytes([4, len(encoded)]) + encoded,
+            ),
+        ]), critical=False)
+        .sign(private, hashes.SHA256())
+    )
+    pfx = pkcs12.serialize_key_and_certificates(
+        name=b"synthetic-cajamar",
+        key=private, cert=cert, cas=None,
+        encryption_algorithm=serialization.BestAvailableEncryption(password),
+    )
+    vault.provision(
+        scope=scope, issuer_cnpj=issuer.value,
+        pkcs12_bytes=pfx, password=password,
+    )
+    db = SqliteFiscalDatabase(tmp_path / "signed-ports.sqlite")
+    db.initialize()
+    ports = config.build_ports(FiscalApplicationService(db), vault)
+    unsigned = b"<CancelaNfse><CnpjCpf>11222333000181</CnpjCpf></CancelaNfse>"
+    signed = ports.sign_cancel(scope, issuer, unsigned)
+    assert b"SignatureValue" in signed
+    ports.validate_signed_cancel(scope, issuer, signed)
+
+    with pytest.raises(FiscalValidationError, match="modified"):
+        ports.validate_signed_cancel(
+            scope, issuer, signed.replace(b"11222333000181", b"11222333000182"),
+        )
+    with pytest.raises(FiscalValidationError, match="XMLDSig"):
+        ports.validate_signed_cancel(scope, issuer, unsigned)
+
+    # Another unit has no corresponding A1; no provider or signer fallback.
+    other = ExecutionScope(
+        scope.tenant_id, "another-unit", FiscalEnvironment.HOMOLOGATION,
+        "scope-proof", "fm-nfcore",
+    )
+    with pytest.raises(FiscalValidationError):
+        ports.sign_cancel(other, issuer, unsigned)
 
