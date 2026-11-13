@@ -743,7 +743,7 @@ class DurableHumanPortalExecutor:
         if not idempotency_key or not idempotency_key.strip():
             raise _portal_error(400, "MISSING_IDEMPOTENCY_KEY", "Idempotency key is required")
         scope = recovery.scope(authority, payload)
-        if operation_id in {"cancelCajamarNfse", "cancelOsascoNfse"}:
+        if operation_id in {"cancelCajamarNfse", "cancelOsascoNfse", "substituteOsascoNfse"}:
             # Replay an already-scoped T07 claim without asking the gateway
             # to preflight a note that was successfully cancelled earlier.
             # The exact account, key, payload and session epoch are checked.
@@ -859,7 +859,7 @@ class DurableHumanPortalExecutor:
                 payload=payload,
                 idempotency_key=idempotency_key,
             )
-        if operation_id in {"substituteExtremaNfse", "reviewCajamarSubstitution"}:
+        if operation_id in {"substituteExtremaNfse", "reviewCajamarSubstitution", "substituteOsascoNfse"}:
             try:
                 unit = payload.get("unit_id")
                 if not isinstance(unit, str) or not unit.strip():
@@ -892,7 +892,9 @@ class DurableHumanPortalExecutor:
                 # A second Cajamar cancellation must return a scoped HTTP 409
                 # instead of leaking a storage exception or issuing another POST.
                 # All other existing fiscal operations retain their contracts.
-                if operation_id not in {"cancelCajamarNfse", "cancelOsascoNfse"}:
+                if operation_id not in {
+                    "cancelCajamarNfse", "cancelOsascoNfse", "substituteOsascoNfse",
+                }:
                     raise
                 raise _portal_error(
                     409, "MUNICIPAL_CANCELLATION_STATE_CONFLICT",
