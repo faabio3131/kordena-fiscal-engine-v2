@@ -10,7 +10,6 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from unittest.mock import Mock
 from xml.sax.saxutils import escape
-from xml.sax.saxutils import escape
 
 from kordena_fiscal.domain import (
     BrazilianJurisdiction,
