@@ -22,6 +22,10 @@ from kordena_fiscal.archive import (
 from kordena_fiscal.compliance.cajamar_municipal_legal import (
     validate_cajamar_automatic_cancellation,
 )
+from kordena_fiscal.compliance.osasco_municipal_legal import (
+    validate_osasco_automatic_cancellation,
+    validate_osasco_substitution_references,
+)
 from kordena_fiscal.contingency import (
     FiscalOutboxEnqueueResult,
     FiscalOutboxEntry,
@@ -1973,6 +1977,10 @@ class FiscalApplicationService:
             request = self._load_prepared_from_uow(uow, scope, document_id)
             if not isinstance(request, NfseAuthorizationRequest):
                 raise PersistenceStateError("Osasco cancellation needs canonical NFS-e")
+            validate_osasco_automatic_cancellation(
+                issued_at=request.document.issued_at,
+                reviewed_at=datetime.now(UTC),
+            )
             uow.lifecycle.assert_scope(document_id, scope)
             current = uow.lifecycle.get(document_id)
             attempts = uow.idempotency.attempts(request.idempotency_key)
@@ -2023,6 +2031,50 @@ class FiscalApplicationService:
             raise FiscalValidationError("Osasco cancellation provider binding mismatch")
         return request, original, invoice
 
+    def preflight_osasco_nfse_substitution(
+        self, *, scope: ExecutionScope, original_id: str, replacement_id: str,
+        cancellation_reason: str,
+    ) -> tuple[NfseAuthorizationRequest, Sp4OriginalRps, Sp4VerifiedInvoice]:
+        """Type S requires an authorized old invoice and a distinct ready replacement."""
+        validate_osasco_substitution_references(original_id, replacement_id)
+        request, original, invoice = self.preflight_osasco_nfse_cancellation(
+            scope=scope, document_id=original_id,
+            cancellation_reason=cancellation_reason,
+        )
+        with self._uow_factory() as uow:
+            candidate = self._load_prepared_from_uow(uow, scope, replacement_id)
+            if not isinstance(candidate, NfseAuthorizationRequest):
+                raise PersistenceStateError("Osasco substitute needs prepared NFS-e")
+            uow.lifecycle.assert_scope(replacement_id, scope)
+            state = uow.lifecycle.get(replacement_id)
+            attempts = uow.idempotency.attempts(candidate.idempotency_key)
+            if (
+                state is None
+                or state.state is not FiscalDocumentState.READY_TO_TRANSMIT
+                or not attempts
+                or attempts[-1].status is not IssuanceAttemptStatus.RESERVED
+                or attempts[-1].document_id != replacement_id
+                or candidate.document.scope.identity_partition_key
+                != original.scope.identity_partition_key
+                or candidate.document.issuer.cnpj != original.issuer_cnpj
+                or candidate.document.issuer.address.jurisdiction.municipality_ibge_code
+                != "3534401"
+            ):
+                raise PersistenceStateError(
+                    "Osasco substitute must be unissued for the same taxpayer"
+                )
+            originals = [
+                e for e in uow.archive.list_for_document(scope, replacement_id)
+                if e.media_type == SP4_ORIGINAL_RPS_MEDIA_TYPE
+            ]
+            if len(originals) != 1:
+                raise PersistenceStateError("Osasco substitute needs durable original RPS")
+            FiscalArchiveVerifier().verify_entry(originals[0])
+            decode_sp4_original(
+                originals[0].content, scope=scope, request=candidate,
+            )
+        return request, original, invoice
+
     def cancel_prepared_osasco_nfse(
         self, *, scope: ExecutionScope, document_id: str,
         submit_verified_cancel: Callable[
@@ -2031,6 +2083,7 @@ class FiscalApplicationService:
         ],
         cancellation_reason: str,
         occurred_at: datetime, retention: RetentionPolicyMetadata,
+        replacement_id: str | None = None,
     ) -> DurableOsascoCancellationOutcome:
         """Claim before exactly one WCF POST, archive reply and reconcile outcome.
 
@@ -2044,15 +2097,27 @@ class FiscalApplicationService:
             or not isinstance(retention, RetentionPolicyMetadata)
         ):
             raise FiscalValidationError("Invalid Osasco municipal cancellation authority")
-        request, original, invoice = self.preflight_osasco_nfse_cancellation(
-            scope=scope, document_id=document_id,
-            cancellation_reason=cancellation_reason,
-        )
+        if replacement_id is not None:
+            request, original, invoice = self.preflight_osasco_nfse_substitution(
+                scope=scope, original_id=document_id,
+                replacement_id=replacement_id,
+                cancellation_reason=cancellation_reason,
+            )
+        else:
+            request, original, invoice = self.preflight_osasco_nfse_cancellation(
+                scope=scope, document_id=document_id,
+                cancellation_reason=cancellation_reason,
+            )
         with self._uow_factory() as uow:
             uow.lifecycle.assert_scope(document_id, scope)
             previous = uow.lifecycle.get(document_id)
             if previous is None or previous.state is not FiscalDocumentState.AUTHORIZED:
                 raise PersistenceConflictError("Concurrent Osasco cancellation request")
+            if replacement_id is not None:
+                uow.lifecycle.assert_scope(replacement_id, scope)
+                candidate = uow.lifecycle.get(replacement_id)
+                if candidate is None or candidate.state is not FiscalDocumentState.READY_TO_TRANSMIT:
+                    raise PersistenceConflictError("Concurrent Osasco substitution changed")
             claim = self._state_machine.transition(
                 previous, FiscalDocumentState.CANCEL_REQUESTED,
                 occurred_at=occurred_at, reason="Osasco WCF cancellation claimed",
@@ -2095,6 +2160,21 @@ class FiscalApplicationService:
                 )
                 uow.lifecycle.save(final, expected_version=current.version)
             entry = uow.archive.append(event)
+            if replacement_id is not None:
+                linked = FiscalArchiveEntry.build(
+                    scope=scope, document_reference=document_id,
+                    kind=FiscalArchiveKind.FISCAL_EVENT,
+                    content=json.dumps({
+                        "municipality_ibge": "3534401",
+                        "original_id": document_id,
+                        "replacement_id": replacement_id,
+                        "cancel_type": "S",
+                        "cancel_confirmed": decision.confirmed,
+                    }, sort_keys=True, separators=(",", ":")).encode("utf-8"),
+                    media_type="application/vnd.nfcore.osasco-substitution.v1+json",
+                    archived_at=occurred_at, retention=retention,
+                )
+                uow.archive.append(linked)
             uow.commit()
         return DurableOsascoCancellationOutcome(
             decision=decision, lifecycle=final, archive_reference=entry.entry_id,
