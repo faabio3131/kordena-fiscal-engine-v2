@@ -13,6 +13,15 @@ from typing import Protocol, TypeVar
 from lxml import etree
 
 from kordena_fiscal.domain import Cnpj, ExecutionScope, TaxRegimeCode
+from kordena_fiscal.gateway.authorization import AuthorizationStatus
+from kordena_fiscal.gateway.osasco_rtc_homologation import (
+    OsascoOperationReceipt,
+    OsascoPreparedOperation,
+    OsascoRtcHomologationTransport,
+)
+from kordena_fiscal.gateway.osasco_rtc_request_builder import (
+    build_osasco_original_note_query,
+)
 from kordena_fiscal.gateway.cajamar_geisweb_cancellation_builder import (
     CajamarCancellationDecision,
     interpret_cajamar_cancel_response,
@@ -262,3 +271,104 @@ def build_cajamar_verified_cancellation_port(
         )
 
     return submit
+
+
+def build_osasco_reviewed_ports(
+    *, authority: Sp4BridgeAuthority,
+    transport: OsascoRtcHomologationTransport,
+    build_wcf_operation: Callable[
+        [NfseAuthorizationRequest, Sp4OriginalRps, str], OsascoPreparedOperation
+    ],
+    verify_wcf_rps_identity: Callable[[Sp4OriginalRps, bytes], None],
+    interpret_official_result: Callable[
+        [OsascoOperationReceipt, NfseAuthorizationRequest, Sp4OriginalRps],
+        Sp4ProviderOutcome,
+    ],
+) -> Sp4ReviewedMunicipalPorts:
+    if not isinstance(transport, OsascoRtcHomologationTransport) or not all(
+        callable(x) for x in (
+            build_wcf_operation, verify_wcf_rps_identity,
+            interpret_official_result,
+        )
+    ):
+        raise Sp4CanonicalMunicipalError("Osasco RTC provider adapter incomplete")
+
+    def invoke(
+        req: NfseAuthorizationRequest, original: Sp4OriginalRps, method: str,
+    ) -> Sp4ProviderOutcome:
+        prepared = (
+            build_osasco_original_note_query(
+                original=original, regime=req.document.issuer.tax_regime,
+            ) if method == "ConsultarNotaCompleta"
+            else build_wcf_operation(req, original, method)
+        )
+        operation = _validate_prepared_link(
+            req, original, prepared,
+            expected_type=OsascoPreparedOperation, expected_method=method,
+        )
+        # The April 2026 municipal v2.1 manual includes RTC_ConsultarNFE
+        # and ConsultarNotaCompleta. The latter retrieves complete invoice
+        # XML by the original NumeroReciboUnico without a second issuance.
+        if (
+            not original.rps_number.isascii()
+            or not original.rps_number.isdecimal()
+            or not 1 <= len(original.rps_number) <= 20
+        ):
+            raise Sp4CanonicalMunicipalError("Osasco original receipt number invalid")
+        field_name = (
+            "NumeroRecibo" if method == "RTC_EmitirNFE"
+            else "NumeroReciboUnico"
+        )
+        namespace = (
+            "http://schemas.datacontract.org/2004/07/"
+            + "Eissnfe.Dominio.DataTransferObject.Prestador"
+            if method == "RTC_EmitirNFE"
+            else "http://schemas.datacontract.org/2004/07/"
+            + "Eissnfe.Negocio.WebServices.Mensagem"
+        )
+        try:
+            root = etree.fromstring(
+                operation.request_xml,
+                parser=etree.XMLParser(
+                    no_network=True, resolve_entities=False, load_dtd=False,
+                ),
+            )
+        except etree.XMLSyntaxError:
+            raise Sp4CanonicalMunicipalError("Osasco fiscal request is malformed") from None
+        found = root.findall(f".//{{{namespace}}}{field_name}")
+        if (
+            len(found) != 1
+            or not found[0].text
+            or not found[0].text.isascii()
+            or not found[0].text.isdecimal()
+            or int(found[0].text) != int(original.rps_number)
+            or bool(getattr(root.getroottree().docinfo, "doctype", ""))
+        ):
+            raise Sp4CanonicalMunicipalError(
+                "Osasco requested receipt differs from durable original RPS"
+            )
+        verify_wcf_rps_identity(original, operation.request_xml)
+        receipt = transport.invoke(operation)
+        if not isinstance(receipt, OsascoOperationReceipt) or receipt.method != method:
+            raise Sp4CanonicalMunicipalError(
+                "Osasco returned an unexpected official operation"
+            )
+        if method == "RTC_EmitirNFE":
+            # Even a synchronous NotaFiscalGerada with Erro=false is only a
+            # provider reference until read-only ConsultarNotaCompleta
+            # reconciles the original receipt and official invoice XML.
+            return Sp4ProviderOutcome(
+                status=AuthorizationStatus.PENDING,
+                provider_request_id=(
+                    receipt.note_reference.number
+                    if receipt.note_reference is not None else None
+                ),
+            )
+        if not receipt.response_xml or receipt.fiscal_error:
+            return Sp4ProviderOutcome(status=AuthorizationStatus.PENDING)
+        return _verified_outcome(interpret_official_result(receipt, req, original))
+
+    return authority.wrap(
+        lambda req, original: invoke(req, original, "RTC_EmitirNFE"),
+        lambda req, original: invoke(req, original, "ConsultarNotaCompleta"),
+    )
