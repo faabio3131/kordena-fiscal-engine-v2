@@ -52,6 +52,9 @@ def test_overlay_is_explicit_persistent_private_bind_with_no_implicit_host_creat
     # Never silently modify the production compose or introduce another vault authority.
     canonical = _OVERLAY.with_name("compose.prod.yml").read_text(encoding="utf-8")
     assert "compose.a1-vault.opt-in.yml" not in canonical
+    assert "source: /var/lib/nfcore/vault" in canonical
+    assert "target: /var/lib/nfcore/vault" in canonical
+    assert "create_host_path: false" in canonical
 
 
 def test_offsite_backup_requires_remote_repository_private_password_and_private_vault(
@@ -144,6 +147,20 @@ def test_docker_compose_overlay_effective_mount_is_correct_and_requires_host_sou
     host_vault.mkdir(mode=0o700)
     env = {**os.environ, "POSTGRES_PASSWORD": "synthetic",
            "NFCORE_A1_VAULT_HOST_DIR": str(host_vault)}
+    # The canonical production Compose must preserve the existing Contabo Vault
+    # even WITHOUT the optional overlay. Do not create an alternative authority.
+    base_result = subprocess.run(
+        ["docker", "compose", "-f", str(base), "config", "--format", "json"],
+        capture_output=True, text=True, env=env, check=False, timeout=30,
+    )
+    assert base_result.returncode == 0, "invalid canonical A1 production Compose"
+    base_mounts = json.loads(base_result.stdout)["services"]["nfcore-api"]["volumes"]
+    canonical_vault = [m for m in base_mounts if m["target"] == "/var/lib/nfcore/vault"]
+    assert len(canonical_vault) == 1
+    assert canonical_vault[0]["type"] == "bind"
+    assert canonical_vault[0]["source"] == "/var/lib/nfcore/vault"
+    assert canonical_vault[0].get("bind", {}).get("create_host_path", False) is False
+
     args = ["docker", "compose", "-f", str(base), "-f", str(overlay), "config"]
     result = subprocess.run(args + ["--format", "json"], capture_output=True,
                             text=True, env=env, check=False, timeout=30)
