@@ -139,3 +139,21 @@ def test_cajamar_numbering_limit_keeps_durable_RPS_in_bounds() -> None:
     assert expected_sp4_batch("3509205", 99_999_999) == "99999999"
     with pytest.raises(FiscalValidationError, match="exceeds"):
         expected_sp4_batch("3509205", 100_000_000)
+
+def test_cajamar_same_tenant_and_unit_cannot_exchange_issuer_cnpj() -> None:
+    """A different issuer CNPJ in the same unit cannot consume another original RPS."""
+    request = _request("3509205")
+    reservation = _reservation(request)
+    original = build_sp4_original_from_reservation(request, reservation, rps_series="NF")
+    raw = encode_sp4_original(request, original, reservation)
+
+    other_issuer = replace(request.document.issuer, cnpj=Cnpj("22333444000181"))
+    another_document = replace(request.document, issuer=other_issuer)
+    another_request = NfseAuthorizationRequest.build(another_document)
+
+    assert another_request.document.scope == request.document.scope
+    assert another_request.document.issuer.cnpj != request.document.issuer.cnpj
+    with pytest.raises(FiscalValidationError, match="altered|diverge"):
+        decode_sp4_original(
+            raw, scope=request.document.scope, request=another_request,
+        )
