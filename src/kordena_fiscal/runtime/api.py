@@ -87,6 +87,7 @@ from .bling_worker import build_bling_orders
 from .bridge_credentials import load_bridge_credentials
 from .cakto import build_cakto_webhook_router, compose_postgres_cakto_commercial_runtime
 from .cakto_claim_email import build_cakto_claim_delivery_from_environ
+from .cajamar_operational_composition import CajamarTrustedRuntimePorts
 from .canonical_fiscal_composition import (
     build_runtime_fiscal_handler_factory,
     fiscal_external_dependency_snapshot,
@@ -249,10 +250,31 @@ def create_runtime_app(
     security_audit_sink: SecurityAuditSink | None = None,
     fiscal_operation_handlers: Mapping[str, FiscalOperationHandler] | None = None,
     fiscal_operation_handler_factory: FiscalOperationHandlerFactory | None = None,
+    cajamar_runtime_ports: CajamarTrustedRuntimePorts | None = None,
     certificate_vault: EncryptedA1Vault | None = None,
     fiscal_dependency_probe: Callable[[], Mapping[str, bool]] | None = None,
 ) -> FastAPI:
     resolved = settings or RuntimeSettings.from_environ()
+    if cajamar_runtime_ports is not None:
+        # One and only one canonical handler factory. This opt-in path is for
+        # operator-provisioned, independently validated GeisWeb dependencies.
+        # Without them, the default runtime remains non-transmitting.
+        if fiscal_operation_handlers is not None or fiscal_operation_handler_factory is not None:
+            raise RuntimeConfigurationError(
+                "Cajamar cannot introduce a second fiscal operation authority"
+            )
+        if resolved.environment.value not in {"staging", "production"}:
+            raise RuntimeConfigurationError(
+                "Cajamar official adapter can only attach to staging/production runtime"
+            )
+        fiscal_operation_handler_factory = build_runtime_fiscal_handler_factory(
+            certificate_vault=certificate_vault,
+            trusted_signed_dps_builder=(
+                build_signed_dps if certificate_vault is not None else None
+            ),
+            nfse_preaudit=(nfse_preaudit if certificate_vault is not None else None),
+            cajamar_runtime_ports=cajamar_runtime_ports,
+        )
     runtime_metrics = metrics or MetricsRegistry()
     runtime = RuntimeApi(
         resolved,
