@@ -9,10 +9,16 @@ audit and human approval remain separate concerns.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
+from dataclasses import dataclass, field
+
 from lxml import etree
 
 from kordena_fiscal.domain import FiscalValidationError, TaxRegimeCode
-from kordena_fiscal.gateway.osasco_rtc_homologation import OsascoPreparedOperation
+from kordena_fiscal.gateway.osasco_rtc_homologation import (
+    OsascoOperationReceipt,
+    OsascoPreparedOperation,
+)
 from kordena_fiscal.gateway.sp4_municipal_canonical import (
     Sp4OriginalRps,
     Sp4VerifiedInvoice,
@@ -76,4 +82,78 @@ def build_osasco_cancel_request(
         tax_regime=regime, competence_date=source.competence_date,
         method="Cancelar",
         request_xml=etree.tostring(root, encoding="utf-8", xml_declaration=True),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class OsascoCancellationDecision:
+    """Only a separately verified municipal reply may advance cancellation state.
+
+    None means ambiguous/unknown: preserve CANCEL_REQUESTED and investigate
+    using read-only consultation, never resend a cancellation POST automatically.
+    """
+
+    confirmed: bool | None
+    response_xml: bytes = field(repr=False)
+    rejection_code: str | None = None
+
+    def __post_init__(self) -> None:
+        if (
+            self.confirmed not in (True, False, None)
+            or type(self.response_xml) is not bytes
+            or not 0 < len(self.response_xml) <= 2_097_152
+            or (
+                self.rejection_code is not None and (
+                    not isinstance(self.rejection_code, str)
+                    or not 1 <= len(self.rejection_code) <= 64
+                )
+            )
+            or (self.confirmed is False) != (self.rejection_code is not None)
+        ):
+            raise OsascoCancelBuilderError("Osasco cancellation decision is unverified")
+
+
+def verify_osasco_cancel_reply(
+    *,
+    receipt: OsascoOperationReceipt,
+    source: Sp4OriginalRps,
+    issued: Sp4VerifiedInvoice,
+    verify_official_response: Callable[
+        [bytes, Sp4OriginalRps, Sp4VerifiedInvoice], bool | None
+    ],
+) -> OsascoCancellationDecision:
+    """Only a reviewed external validator interprets cancellation confirmation.
+
+    The WCF result is not proof of a cancellation by itself; the supplied
+    verifier must correlate the municipal response/consultation to the original
+    invoice, taxpayer, number, scope and legal cancellation requirements.
+    """
+    if (
+        not isinstance(receipt, OsascoOperationReceipt)
+        or receipt.method != "Cancelar"
+        or not isinstance(source, Sp4OriginalRps)
+        or not isinstance(issued, Sp4VerifiedInvoice)
+        or not callable(verify_official_response)
+        or source.issuer_ibge != "3534401"
+        or source.issuer_cnpj != issued.issuer_cnpj
+        or issued.issuer_ibge != source.issuer_ibge
+        or issued.rps_number != source.rps_number
+        or issued.rps_series != source.rps_series
+        or issued.competence_date != source.competence_date
+        or issued.gross_amount != source.gross_amount
+        or not receipt.response_xml
+    ):
+        raise OsascoCancelBuilderError("Unreviewed Osasco cancellation response")
+    proof = verify_official_response(receipt.response_xml, source, issued)
+    if type(proof) is not bool and proof is not None:
+        raise OsascoCancelBuilderError("Municipal cancellation proof must be tri-state")
+    if receipt.fiscal_error and proof is True:
+        raise OsascoCancelBuilderError("Contradictory Osasco cancellation response")
+    if proof is False:
+        return OsascoCancellationDecision(
+            confirmed=False, response_xml=receipt.response_xml,
+            rejection_code="OSASCO_CANCEL_REJECTED",
+        )
+    return OsascoCancellationDecision(
+        confirmed=proof, response_xml=receipt.response_xml,
     )
