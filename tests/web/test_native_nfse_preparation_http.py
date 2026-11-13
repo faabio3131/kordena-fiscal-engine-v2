@@ -1,12 +1,23 @@
 """Native National NFS-e preparation without ERP, A1, external transport or mock issuance."""
 from __future__ import annotations
 
+import base64
+import gzip
+import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.serialization import pkcs12
+from cryptography.x509.oid import NameOID, ObjectIdentifier
 from fastapi.testclient import TestClient
+from lxml import etree
 
 from kordena_fiscal.application.service import FiscalApplicationService
+from kordena_fiscal.archive import RetentionPolicyMetadata
+from kordena_fiscal.compliance.nfse_preaudit import nfse_preaudit
 from kordena_fiscal.control_plane import FiscalOrganization, FiscalUnitRegistration
 from kordena_fiscal.control_plane.commercial import (
     ConfiguredFiscalOperation,
@@ -26,9 +37,19 @@ from kordena_fiscal.domain import (
 )
 from kordena_fiscal.gateway.nfse_nacional_homologation import (
     NACIONAL_HOMOLOGATION_PROVIDER_ID,
+    NfseNacionalHomologationGateway,
 )
+from kordena_fiscal.issuance import NfseGatewayClient
+from kordena_fiscal.issuance.nfse_dps_builder import build_signed_dps
 from kordena_fiscal.lifecycle import FiscalDocumentState
+from kordena_fiscal.operations import FakeFiscalOperationsGateway, FiscalOperationsClient
 from kordena_fiscal.persistence import SqliteFiscalDatabase
+from kordena_fiscal.runtime.canonical_fiscal_composition import _GovernedNationalNfseGateway
+from kordena_fiscal.runtime.fiscal_runtime import (
+    CanonicalFiscalOperationPath,
+    CanonicalPortalOperationExecutor,
+)
+from kordena_fiscal.runtime.provider_operation_wiring import build_provider_operation_handlers
 from kordena_fiscal.security.human_identity import (
     HumanAccount,
     HumanIdentityService,
@@ -40,6 +61,8 @@ from kordena_fiscal.security.human_identity import (
 from kordena_fiscal.web import create_app
 from kordena_fiscal.web.human_auth import CSRF_COOKIE, CSRF_HEADER
 from kordena_fiscal.web.portal_runtime import DurableHumanPortalExecutor
+from kordena_fiscal.vault import EphemeralCertificateMaterial
+from kordena_fiscal.xml.nfse_nacional_schema import national_dps_validator
 
 TENANT = "tenant-native"
 UNIT = "unit-cajamar"
@@ -88,7 +111,12 @@ def _database(path: Path, *, with_binding: bool = True) -> SqliteFiscalDatabase:
     return db
 
 
-def _client(db: SqliteFiscalDatabase, role: PortalRole = PortalRole.OWNER) -> TestClient:
+def _client(
+    db: SqliteFiscalDatabase,
+    role: PortalRole = PortalRole.OWNER,
+    *,
+    operation_executor: CanonicalPortalOperationExecutor | None = None,
+) -> TestClient:
     password = "only-for-synthetic-fixtures-2026"
     hasher = ScryptPasswordHasher()
     accounts = InMemoryHumanAccountRepository((HumanAccount(
@@ -103,7 +131,7 @@ def _client(db: SqliteFiscalDatabase, role: PortalRole = PortalRole.OWNER) -> Te
     web = TestClient(
         create_app(
             human_identity=identity,
-            portal_executor=DurableHumanPortalExecutor(db),
+            portal_executor=DurableHumanPortalExecutor(db, operation_executor=operation_executor),
         ),
         base_url="https://nfcore.test",
     )
@@ -207,3 +235,134 @@ def test_unmodeled_untaxed_iss_and_malformed_money_fail_before_preparation(tmp_p
     assert _post(web, _payload() | {"gross_amount": "100.001"}).status_code == 400
     assert _post(web, _payload() | {"national_taxation_code": "bad"}).status_code == 400
     assert _post(web, _payload()).status_code == 200
+
+
+
+def _synthetic_a1_for_native_issuer() -> EphemeralCertificateMaterial:
+    """Ephemeral PKCS#12 fixture; never a real customer A1 or trusted authority."""
+    password = b"synthetic-native-e2e-only"
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    now = datetime.now(UTC)
+    issuer = Cnpj("11222333000181")
+    name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "Synthetic A1 fixture")])
+    encoded = issuer.value.encode("ascii")
+    certificate = (
+        x509.CertificateBuilder()
+        .subject_name(name)
+        .issuer_name(name)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(now - timedelta(days=1))
+        .not_valid_after(now + timedelta(days=30))
+        .add_extension(x509.KeyUsage(
+            digital_signature=True, content_commitment=False, key_encipherment=False,
+            data_encipherment=False, key_agreement=False, key_cert_sign=False,
+            crl_sign=False, encipher_only=False, decipher_only=False,
+        ), critical=True)
+        .add_extension(x509.SubjectAlternativeName([
+            x509.OtherName(ObjectIdentifier("2.16.76.1.3.3"),
+                           bytes([0x04, len(encoded)]) + encoded),
+        ]), critical=False)
+        .sign(key, hashes.SHA256())
+    )
+    return EphemeralCertificateMaterial(
+        reference_id="synthetic-only-native-e2e",
+        pkcs12_bytes=pkcs12.serialize_key_and_certificates(
+            name=b"synthetic-native", key=key, cert=certificate, cas=None,
+            encryption_algorithm=serialization.BestAvailableEncryption(password),
+        ),
+        password=password,
+    )
+
+
+def test_web_native_nfse_preparation_to_signed_gateway_and_authorized_xml(
+    tmp_path: Path,
+) -> None:
+    """HTTP Portal -> durable preparation -> DPS 1.01 -> fake SEFIN -> archive HTTP.
+
+    This uses one canonical runtime path and an ephemeral synthetic A1; no
+    external gateway, municipality authorization or customer cert is contacted.
+    """
+    db = _database(tmp_path / "native-e2e.sqlite")
+    application = FiscalApplicationService(db)
+    captured: list[bytes] = []
+    key = "35" + "0" * 48
+    official_xml = (
+        '<NFSe xmlns="http://www.sped.fazenda.gov.br/nfse">'
+        f'<infNFSe Id="NFS{key}"/></NFSe>'
+    ).encode()
+
+    def fake_sefin(payload: bytes, *_args: object) -> bytes:
+        request = json.loads(payload)
+        signed = gzip.decompress(base64.b64decode(request["dpsXmlGZipB64"]))
+        national_dps_validator("1.01").validate_document(signed)
+        root = etree.fromstring(signed)
+        signature = root.find("{http://www.w3.org/2000/09/xmldsig#}Signature")
+        assert signature is not None
+        assert root.findtext(
+            "{http://www.sped.fazenda.gov.br/nfse}infDPS/"
+            "{http://www.sped.fazenda.gov.br/nfse}prest/"
+            "{http://www.sped.fazenda.gov.br/nfse}CNPJ"
+        ) == "11222333000181"
+        captured.append(signed)
+        return json.dumps({
+            "tipoAmbiente": 2, "chaveAcesso": key, "idDps": "synthetic-native-e2e",
+            "nfseXmlGZipB64": base64.b64encode(
+                gzip.compress(official_xml, mtime=0)
+            ).decode("ascii"),
+        }).encode()
+
+    a1 = _synthetic_a1_for_native_issuer()
+    national = NfseNacionalHomologationGateway(
+        resolve_certificate=lambda _scope, _cnpj: a1,
+        build_signed_dps=build_signed_dps,
+        exchange=fake_sefin,
+    )
+    governed = _GovernedNationalNfseGateway(
+        application=application, preaudit=nfse_preaudit, gateway=national,
+    )
+    handlers = build_provider_operation_handlers(
+        FiscalOperationsClient(FakeFiscalOperationsGateway()),
+        application=application, prepared_nfse_gateway=NfseGatewayClient(governed),
+        archive_retention=RetentionPolicyMetadata("nfcore-fiscal-archive", 1),
+    )
+    operation_executor = CanonicalPortalOperationExecutor(
+        unit_of_work_factory=db,
+        path=CanonicalFiscalOperationPath(application, handlers=handlers),
+    )
+    browser = _client(db, operation_executor=operation_executor)
+    prepared = _post(browser, _payload())
+    assert prepared.status_code == 200, prepared.text
+    document_id = prepared.json()["document_id"]
+
+    csrf = browser.cookies.get(CSRF_COOKIE)
+    assert csrf
+    issue_body = {
+        "unit_id": UNIT, "environment": "homologation", "document_id": document_id,
+    }
+    issued = browser.post(
+        "/v1/portal/operations/issueFiscalDocument",
+        json=issue_body,
+        headers={CSRF_HEADER: csrf, "Idempotency-Key": "native-issue-1"},
+    )
+    assert issued.status_code == 200, issued.text
+    assert issued.json()["status"] == FiscalDocumentState.AUTHORIZED.value
+    assert len(captured) == 1
+
+    downloaded = browser.get(
+        f"/v1/portal/documents/{document_id}/artifacts/authorized_xml",
+        params={"unit_id": UNIT, "environment": "homologation"},
+    )
+    assert downloaded.status_code == 200, downloaded.text
+    assert downloaded.content == official_xml
+    assert downloaded.headers["Cache-Control"] == "no-store"
+    assert downloaded.headers["X-Content-Type-Options"] == "nosniff"
+
+    again = browser.post(
+        "/v1/portal/operations/issueFiscalDocument",
+        json=issue_body,
+        headers={CSRF_HEADER: csrf, "Idempotency-Key": "native-issue-1"},
+    )
+    assert again.status_code == 200, again.text
+    assert len(captured) == 1, "Replay must not retransmit the signed DPS"
+    assert _post(browser, _payload(), "native-after-authorization").status_code == 200
