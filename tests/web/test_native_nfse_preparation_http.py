@@ -6,6 +6,7 @@ import gzip
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -335,6 +336,13 @@ def test_web_native_nfse_preparation_to_signed_gateway_and_authorized_xml(
     assert prepared.status_code == 200, prepared.text
     document_id = prepared.json()["document_id"]
 
+    # No printable document may exist before the authorized XML is archived.
+    not_yet = browser.get(
+        f"/v1/portal/documents/{document_id}/artifacts/auxiliary_pdf",
+        params={"unit_id": UNIT, "environment": "homologation"},
+    )
+    assert not_yet.status_code == 404
+
     csrf = browser.cookies.get(CSRF_COOKIE)
     assert csrf
     issue_body = {
@@ -357,6 +365,32 @@ def test_web_native_nfse_preparation_to_signed_gateway_and_authorized_xml(
     assert downloaded.content == official_xml
     assert downloaded.headers["Cache-Control"] == "no-store"
     assert downloaded.headers["X-Content-Type-Options"] == "nosniff"
+    assert downloaded.headers["Content-Disposition"].startswith("attachment;")
+    assert downloaded.headers["Content-Type"].startswith("application/xml")
+
+    # The default Portal runtime must serve PDF/DANFSe from the SAME archived
+    # authorized XML, with an actual renderer wired, not a missing dependency.
+    # A fake PDF factory isolates output layout; HTTP/identity/archive are real.
+    with patch("brazilfiscalreport.danfse.Danfse") as pdf_renderer:
+        pdf_renderer.return_value.output.return_value = b"%PDF-1.4\\nSYNTHETIC"
+        pdf = browser.get(
+            f"/v1/portal/documents/{document_id}/artifacts/auxiliary_pdf",
+            params={"unit_id": UNIT, "environment": "homologation"},
+        )
+    assert pdf.status_code == 200, pdf.text
+    assert pdf.content.startswith(b"%PDF-")
+    assert pdf.headers["Content-Type"].startswith("application/pdf")
+    assert pdf.headers["Content-Disposition"].startswith("inline;")
+    assert pdf.headers["Cache-Control"] == "no-store"
+    assert pdf_renderer.call_count == 1
+    assert official_xml.decode("utf-8") == pdf_renderer.call_args.kwargs["xml"]
+
+    # Artifact query is still bound to the authenticated user's unit.
+    wrong_unit = browser.get(
+        f"/v1/portal/documents/{document_id}/artifacts/auxiliary_pdf",
+        params={"unit_id": "unrelated-unit", "environment": "homologation"},
+    )
+    assert wrong_unit.status_code == 403
 
     again = browser.post(
         "/v1/portal/operations/issueFiscalDocument",
