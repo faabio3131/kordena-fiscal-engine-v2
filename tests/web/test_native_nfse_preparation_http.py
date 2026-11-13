@@ -157,7 +157,7 @@ def _database(
                 operation=ConfiguredFiscalOperation.AUTHORIZE,
                 provider_id=provider_id,
             ))
-            if provider_id == "cajamar-geisweb-homologation":
+            if provider_id in {"cajamar-geisweb-homologation", "osasco-rtc-homologation"}:
                 uow.commercial.put_provider_binding(ProviderBinding(
                     binding_id="cajamar-query-binding",
                     tenant_id=TENANT, unit_id=UNIT,
@@ -271,6 +271,101 @@ def test_osasco_portal_prepares_durable_original_and_replay_without_dps(
     assert again.json()["replay"] is True
     assert again.json()["document_id"] == identifier
     assert app.load_sp4_original_rps(scope, identifier) == original
+
+
+def test_osasco_original_receipt_issue_and_read_only_full_note_http(
+    tmp_path: Path,
+) -> None:
+    """Existing Portal/UoW; synthetic reviewed WCF notes, no municipal HTTP."""
+    db = _database(
+        tmp_path / "osasco-full-native.sqlite", issuer_ibge="3534401",
+        provider_id="osasco-rtc-homologation", tax_regime=TaxRegimeCode.NORMAL,
+    )
+    application = FiscalApplicationService(db)
+    submitted = Mock(return_value=Sp4ProviderOutcome(
+        status=AuthorizationStatus.PENDING, provider_request_id="8001",
+    ))
+    verified = Mock()
+
+    def read_full_invoice(
+        request: NfseAuthorizationRequest, original: Sp4OriginalRps,
+    ) -> Sp4ProviderOutcome:
+        assert original.issuer_ibge == "3534401"
+        assert original.rps_series == "R1"
+        assert original.municipal_batch_id is None
+        assert request.request_fingerprint == original.request_fingerprint
+        invoice = Sp4VerifiedInvoice(
+            issuer_cnpj=original.issuer_cnpj,
+            issuer_ibge=original.issuer_ibge,
+            competence_date=original.competence_date,
+            rps_number=original.rps_number,
+            rps_series=original.rps_series,
+            gross_amount=original.gross_amount,
+            invoice_number="8001",
+            verification_code="OSASCO001",
+            invoice_reference="8001",
+            authorized_xml=b"<OsascoOfficialInvoiceSynthetic>8001</OsascoOfficialInvoiceSynthetic>",
+        )
+        return Sp4ProviderOutcome(
+            status=AuthorizationStatus.AUTHORIZED, official_invoice=invoice,
+        )
+
+    queried = Mock(side_effect=read_full_invoice)
+    ports = Sp4ReviewedMunicipalPorts(
+        load_original_rps=Mock(side_effect=AssertionError("noncanonical loader")),
+        fiscal_issuer_policy=Mock(), validate_prepared_rps=Mock(),
+        submit_official_rps=submitted, query_official_rps=queried,
+        verify_official_invoice_xml=verified,
+    )
+    handlers = build_runtime_fiscal_handler_factory(
+        operations_gateway=FakeFiscalOperationsGateway(),
+        sp4_reviewed_municipalities={"osasco-rtc-homologation": ports},
+    )(application)
+    web = _client(
+        db, operation_executor=CanonicalPortalOperationExecutor(
+            unit_of_work_factory=db,
+            path=CanonicalFiscalOperationPath(application, handlers=handlers),
+        ),
+    )
+    payload = _payload() | _TAKER_ADDRESS | {
+        "competence_date": "2026-11-12",
+        "source_id": "osasco-http-one-post",
+        "service_municipality_ibge": "3534401",
+    }
+    prepared = _post(web, payload, key="osasco-one-preparation")
+    assert prepared.status_code == 200, prepared.text
+    document_id = prepared.json()["document_id"]
+    csrf = web.cookies.get(CSRF_COOKIE)
+    assert csrf
+    body = {"unit_id": UNIT, "environment": "homologation", "document_id": document_id}
+    issue = web.post(
+        "/v1/portal/operations/issueFiscalDocument", json=body,
+        headers={CSRF_HEADER: csrf, "Idempotency-Key": "osasco-one-post"},
+    )
+    assert issue.status_code == 200, issue.text
+    assert submitted.call_count == 1
+    assert queried.call_count == 0
+    reconcile = web.post(
+        "/v1/portal/operations/reconcileFiscalOperation", json=body,
+        headers={CSRF_HEADER: csrf, "Idempotency-Key": "osasco-original-read"},
+    )
+    assert reconcile.status_code == 200, reconcile.text
+    assert reconcile.json()["status"] == FiscalDocumentState.AUTHORIZED.value
+    assert submitted.call_count == 1
+    queried.assert_called_once()
+    verified.assert_called_once()
+    xml = web.get(
+        f"/v1/portal/documents/{document_id}/artifacts/authorized_xml",
+        params={"unit_id": UNIT, "environment": "homologation"},
+    )
+    assert xml.status_code == 200, xml.text
+    assert xml.content == b"<OsascoOfficialInvoiceSynthetic>8001</OsascoOfficialInvoiceSynthetic>"
+    repeat = web.post(
+        "/v1/portal/operations/issueFiscalDocument", json=body,
+        headers={CSRF_HEADER: csrf, "Idempotency-Key": "osasco-one-post"},
+    )
+    assert repeat.status_code == 200, repeat.text
+    assert submitted.call_count == 1
 
 
 def test_osasco_simples_after_november_cutoff_uses_national_not_municipal(
