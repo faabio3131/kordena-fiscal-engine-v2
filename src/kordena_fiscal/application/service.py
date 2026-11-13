@@ -15,6 +15,10 @@ from kordena_fiscal.archive import (
     FiscalArchiveVerifier,
     RetentionPolicyMetadata,
 )
+from kordena_fiscal.application.cajamar_substitution_review import (
+    CajamarSubstitutionReview,
+    review_cajamar_substitution,
+)
 from kordena_fiscal.contingency import (
     FiscalOutboxEnqueueResult,
     FiscalOutboxEntry,
@@ -1699,6 +1703,88 @@ class FiscalApplicationService:
         return DurableExtremaCancellationOutcome(
             result=result, lifecycle=final, archive_reference=archived.entry_id,
         )
+
+    def review_prepared_cajamar_substitution(
+        self, *, scope: ExecutionScope, original_id: str, replacement_id: str,
+        reviewed_at: datetime,
+    ) -> CajamarSubstitutionReview:
+        """Preflight only: Cajamar 7.311/2024 requires the official city portal.
+
+        No SOAP substitution is manufactured; no lifecycle, RPS or numbering is
+        changed. The authoritative municipal confirmation must be reviewed later.
+        """
+        if (
+            not isinstance(scope, ExecutionScope)
+            or scope.environment is not FiscalEnvironment.HOMOLOGATION
+            or not isinstance(reviewed_at, datetime)
+            or reviewed_at.tzinfo is None
+        ):
+            raise FiscalValidationError("Cajamar substitution review needs scoped datetime")
+        original = self.load_prepared_nfse_authorization(scope, original_id)
+        candidate = self.load_prepared_nfse_authorization(scope, replacement_id)
+        eligibility = review_cajamar_substitution(
+            original=original, replacement=candidate, reviewed_at=reviewed_at,
+        )
+        with self._uow_factory() as uow:
+            uow.lifecycle.assert_scope(original_id, scope)
+            uow.lifecycle.assert_scope(replacement_id, scope)
+            previous = uow.lifecycle.get(original_id)
+            new = uow.lifecycle.get(replacement_id)
+            old_attempts = uow.idempotency.attempts(original.idempotency_key)
+            candidate_attempts = uow.idempotency.attempts(candidate.idempotency_key)
+            if (
+                previous is None
+                or previous.state is not FiscalDocumentState.AUTHORIZED
+                or new is None
+                or new.state is not FiscalDocumentState.READY_TO_TRANSMIT
+                or not old_attempts
+                or old_attempts[-1].status is not IssuanceAttemptStatus.AUTHORIZED
+                or old_attempts[-1].document_id != original_id
+                or not candidate_attempts
+                or candidate_attempts[-1].status is not IssuanceAttemptStatus.RESERVED
+                or candidate_attempts[-1].document_id != replacement_id
+            ):
+                raise PersistenceStateError(
+                    "Cajamar review requires an authorized original and unissued candidate"
+                )
+            original_archives = uow.archive.list_for_document(scope, original_id)
+            candidate_archives = uow.archive.list_for_document(scope, replacement_id)
+            archived_note = [
+                entry for entry in original_archives
+                if entry.kind is FiscalArchiveKind.AUTHORIZED_XML
+                and entry.media_type == "application/xml"
+            ]
+            originals = [
+                entry for entry in original_archives
+                if entry.media_type == SP4_ORIGINAL_RPS_MEDIA_TYPE
+            ]
+            candidate_rps = [
+                entry for entry in candidate_archives
+                if entry.media_type == SP4_ORIGINAL_RPS_MEDIA_TYPE
+            ]
+            if (
+                len(archived_note) != 1 or len(originals) != 1
+                or len(candidate_rps) != 1
+            ):
+                raise PersistenceStateError(
+                    "Cajamar review requires both original RPS and official NFS-e XML"
+                )
+            for entry in (archived_note[0], originals[0], candidate_rps[0]):
+                FiscalArchiveVerifier().verify_entry(entry)
+            persisted_rps = decode_sp4_original(
+                originals[0].content, scope=scope, request=original,
+            )
+            decode_sp4_original(
+                candidate_rps[0].content, scope=scope, request=candidate,
+            )
+            fiscal_note = decode_cajamar_archived_invoice(
+                archived_note[0].content, persisted_rps,
+            )
+            if old_attempts[-1].result_reference != fiscal_note.invoice_reference:
+                raise PersistenceConflictError(
+                    "Cajamar original authorization and archived XML disagree"
+                )
+        return eligibility
 
     def preflight_cajamar_nfse_cancellation(
         self, *, scope: ExecutionScope, document_id: str,
