@@ -23,6 +23,8 @@ from kordena_fiscal.domain import (
     StateRegistration,
     TaxRegimeCode,
 )
+from kordena_fiscal.application.service import FiscalApplicationService
+from kordena_fiscal.archive import RetentionPolicyMetadata
 from kordena_fiscal.issuance.nfe_nfse import (
     NfseAuthorizationRequest,
     NfseCanonicalDocument,
@@ -39,6 +41,7 @@ from kordena_fiscal.numbering import (
     FiscalSequenceKey,
     InternalFiscalSequenceStream,
 )
+from kordena_fiscal.persistence import SqliteFiscalDatabase
 
 _NOW = datetime(2026, 11, 12, 12, tzinfo=UTC)
 _CNPJ = Cnpj("11222333000181")
@@ -156,4 +159,139 @@ def test_cajamar_same_tenant_and_unit_cannot_exchange_issuer_cnpj() -> None:
     with pytest.raises(FiscalValidationError, match="altered|diverge"):
         decode_sp4_original(
             raw, scope=request.document.scope, request=another_request,
+        )
+
+
+def _prepare_cajamar(
+    app: FiscalApplicationService,
+    request: NfseAuthorizationRequest,
+    *,
+    builder=None,
+):
+    def original_builder(
+        prepared: NfseAuthorizationRequest,
+        number: FiscalNumberReservation,
+    ):
+        return build_sp4_original_from_reservation(
+            prepared, number, rps_series="NF",
+        )
+
+    return app.prepare_nfse_authorization(
+        request.document, occurred_at=_NOW,
+        retention=RetentionPolicyMetadata("cajamar-internal-proof", 1),
+        sp4_original_builder=builder if builder is not None else original_builder,
+        sp4_rps_series=1,
+    )
+
+
+def test_cajamar_application_commits_original_rps_and_prepared_in_one_uow(
+    tmp_path,
+) -> None:
+    db = SqliteFiscalDatabase(tmp_path / "cajamar-prepare.sqlite")
+    db.initialize()
+    app = FiscalApplicationService(db)
+    request = _request("3509205")
+    prepared = _prepare_cajamar(app, request)
+    assert prepared.replay is False
+    assert prepared.request.document.dps_number is None
+    original = app.load_sp4_original_rps(request.document.scope, request.document.document_id)
+    assert original.rps_number == "1"
+    assert original.rps_series == "NF"
+    assert original.municipal_batch_id == "1"
+    assert original.issuer_cnpj == request.document.issuer.cnpj
+    assert original.request_fingerprint == prepared.request.request_fingerprint
+    assert app.load_prepared_nfse_authorization(
+        request.document.scope, request.document.document_id,
+    ) == prepared.request
+    with db() as uow:
+        archive = uow.archive.list_for_document(
+            request.document.scope, request.document.document_id,
+        )
+    assert len(archive) == 2, "one canonical NFS-e request and one original RPS"
+
+
+def test_cajamar_application_replay_never_reserves_next_rps_or_calls_builder_twice(
+    tmp_path,
+) -> None:
+    db = SqliteFiscalDatabase(tmp_path / "cajamar-replay.sqlite")
+    db.initialize()
+    app = FiscalApplicationService(db)
+    request = _request("3509205")
+    invoked = []
+
+    def builder(prepared, reservation):
+        invoked.append(reservation.number)
+        return build_sp4_original_from_reservation(
+            prepared, reservation, rps_series="NF",
+        )
+
+    first = _prepare_cajamar(app, request, builder=builder)
+    again = _prepare_cajamar(app, request, builder=builder)
+    assert not first.replay and again.replay
+    assert invoked == [1]
+    assert first.request == again.request
+    second = _request("3509205", identifier="second")
+    prepared_second = _prepare_cajamar(app, second, builder=builder)
+    original_second = app.load_sp4_original_rps(
+        second.document.scope, second.document.document_id,
+    )
+    assert prepared_second.replay is False
+    assert original_second.rps_number == "2"
+    assert invoked == [1, 2]
+
+
+def test_cajamar_application_rollback_never_consumes_failed_original_rps(
+    tmp_path,
+) -> None:
+    db = SqliteFiscalDatabase(tmp_path / "cajamar-rollback.sqlite")
+    db.initialize()
+    app = FiscalApplicationService(db)
+    request = _request("3509205")
+
+    def failing_builder(prepared, reservation):
+        raise FiscalValidationError("Synthetic validation failure before commit")
+
+    with pytest.raises(FiscalValidationError, match="before commit"):
+        _prepare_cajamar(app, request, builder=failing_builder)
+    with pytest.raises(Exception):
+        app.load_prepared_nfse_authorization(
+            request.document.scope, request.document.document_id,
+        )
+    first = _prepare_cajamar(app, request)
+    assert first.replay is False
+    assert app.load_sp4_original_rps(
+        request.document.scope, request.document.document_id,
+    ).rps_number == "1"
+
+
+def test_cajamar_application_loader_cannot_leak_original_to_other_scope(
+    tmp_path,
+) -> None:
+    db = SqliteFiscalDatabase(tmp_path / "cajamar-isolation.sqlite")
+    db.initialize()
+    app = FiscalApplicationService(db)
+    request = _request("3509205")
+    _prepare_cajamar(app, request)
+    for scope in (
+        replace(request.document.scope, tenant_id="other-tenant"),
+        replace(request.document.scope, unit_id="other-unit"),
+        replace(request.document.scope, environment=FiscalEnvironment.PRODUCTION),
+    ):
+        with pytest.raises(Exception):
+            app.load_sp4_original_rps(scope, request.document.document_id)
+
+
+def test_cajamar_application_rejects_parallel_extrema_and_municipal_numbering(
+    tmp_path,
+) -> None:
+    db = SqliteFiscalDatabase(tmp_path / "cajamar-exclusive.sqlite")
+    db.initialize()
+    app = FiscalApplicationService(db)
+    request = _request("3509205")
+    with pytest.raises(FiscalValidationError, match="exclusive"):
+        app.prepare_nfse_authorization(
+            request.document, occurred_at=_NOW,
+            retention=RetentionPolicyMetadata("cajamar-internal-proof", 1),
+            extrema_intent_builder=lambda _r: None, extrema_rps_series=1,
+            sp4_original_builder=lambda _p, _r: None, sp4_rps_series=1,
         )
