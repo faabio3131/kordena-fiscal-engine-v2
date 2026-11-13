@@ -86,3 +86,43 @@ do arquivo e reinício de todos os workers. Verifique
 `bridge_workload_identity_configured` em `/runtime/profile` e valide uma consulta
 autenticada de capacidades. Arquivo configurado inválido bloqueia o arranque.
 Sem o caminho configurado, a API inicia com o Bridge sem credenciais.
+
+
+## Cofre A1 — persistência N3 (somente com evidência de host)
+
+A PR #462 prepara `compose.a1-vault.opt-in.yml` e `a1-vault-ops.py` para
+reutilizar o **mesmo** EncryptedA1Vault da API, com arquivos cifrados fora da
+camada efêmera. Nenhum overlay é aplicado por `deploy.sh` ou `install.sh`.
+Até o host ser auditado, **não habilite o overlay nem substitua containers**:
+um mount novo pode ocultar certificados já armazenados na camada antiga.
+
+Após o preflight read-only `audit-a1-vault-readonly.py` e a migração auditada
+de eventuais ciphertexts existentes, provisionar diretório do host com
+UID/GID 10001 e permissões 0700 (arquivos 0600), fora do checkout Git.
+O operador define `NFCORE_A1_VAULT_HOST_DIR` em configuração privada e
+ativa o overlay na composição **canônica**, não em uma segunda API.
+
+Para backup externo cifrado, configurar repositório restic remoto
+(`RESTIC_REPOSITORY`) e arquivo de senha próprio (`RESTIC_PASSWORD_FILE`,
+0600, diferente da chave do Vault). Sob identidade host autorizada:
+
+```sh
+python3 deploy/contabo/a1-vault-ops.py backup
+python3 deploy/contabo/a1-vault-ops.py restore-test
+```
+
+A rotina de restore usa somente diretório temporário isolado, confere SHA-256
+dos arquivos cifrados e **nunca escreve no cofre ativo**. A chave mestra
+`NFCORE_A1_VAULT_KEY_BASE64` exige custódia recuperável **separada do
+repositório restic e fora da VPS**. Backup de ciphertext sem essa chave não
+significa A1 recuperável. Exigir teste de recuperação de A1 com material
+sintético/autorizado, sem expor PKCS#12 ou segredo.
+
+Exemplos `nfcore-a1-backup.service.example` e
+`nfcore-a1-backup.timer.example` preparam agendamento diário com
+`EnvironmentFile=/etc/nfcore/a1-backup.env` privado. São opt-in:
+não foram instalados, habilitados nem testados no servidor; configurar
+alertas, retenção e prova de destino efetivamente offsite antes de GO.
+
+Checklist completo e N3 aprovado:
+`docs/checkpoints/NFCORE_A1_N3_OPERATIONAL_READINESS_2026-11-13.md`.
