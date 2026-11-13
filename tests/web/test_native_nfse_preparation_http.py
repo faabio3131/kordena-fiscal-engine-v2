@@ -106,10 +106,12 @@ ROUTE = "/v1/portal/operations/prepareNativeNfse"
 def _database(
     path: Path, *, with_binding: bool = True,
     provider_id: str = NACIONAL_HOMOLOGATION_PROVIDER_ID,
+    issuer_ibge: str = IBGE,
+    tax_regime: TaxRegimeCode = TaxRegimeCode.SIMPLES_NACIONAL,
 ) -> SqliteFiscalDatabase:
     db = SqliteFiscalDatabase(path)
     db.initialize()
-    jurisdiction = BrazilianJurisdiction("SP", IBGE)
+    jurisdiction = BrazilianJurisdiction("SP", issuer_ibge)
     scope = ExecutionScope(
         TENANT, UNIT, FiscalEnvironment.HOMOLOGATION, "setup", "fm-nfcore"
     )
@@ -134,12 +136,14 @@ def _database(
         uow.control_plane.add_profile(FiscalProfile(
             profile_id="issuer-native", scope=scope,
             cnpj=Cnpj("11222333000181"), legal_name="Emissor Sintetico Ltda",
-            tax_regime=TaxRegimeCode.SIMPLES_NACIONAL,
+            tax_regime=tax_regime,
             state_registration=StateRegistration("SP", "123456789"),
             primary_cnae=CnaeCode("6201501"),
             address=FiscalAddress(
                 street="Rua de Homologacao", number="10", district="Centro",
-                municipality_name="Cajamar", jurisdiction=jurisdiction,
+                municipality_name=(
+                    "Osasco" if issuer_ibge == "3534401" else "Cajamar"
+                ), jurisdiction=jurisdiction,
                 postal_code="07750000",
             ),
             effective_from=datetime.now(UTC) - timedelta(days=1),
@@ -234,6 +238,56 @@ def _post(web: TestClient, payload: dict[str, object], key: str = "first-review"
         ROUTE, json=payload,
         headers={CSRF_HEADER: csrf, "Idempotency-Key": key},
     )
+
+
+def test_osasco_portal_prepares_durable_original_and_replay_without_dps(
+    tmp_path: Path,
+) -> None:
+    db = _database(
+        tmp_path / "osasco-original.sqlite", issuer_ibge="3534401",
+        provider_id="osasco-rtc-homologation", tax_regime=TaxRegimeCode.NORMAL,
+    )
+    web = _client(db)
+    app = FiscalApplicationService(db)
+    payload = _payload() | _TAKER_ADDRESS | {
+        "competence_date": "2026-11-12",
+        "source_id": "osasco-rtc-original",
+        "service_municipality_ibge": "3534401",
+    }
+    first = _post(web, payload, key="osasco-original-prepare")
+    assert first.status_code == 200, first.text
+    assert first.json()["numbering_authority"] == "municipal_rps_durable"
+    identifier = first.json()["document_id"]
+    scope = ExecutionScope(
+        TENANT, UNIT, FiscalEnvironment.HOMOLOGATION, "readback", "fm-nfcore",
+    )
+    original = app.load_sp4_original_rps(scope, identifier)
+    assert (original.issuer_ibge, original.rps_number, original.rps_series) == (
+        "3534401", "1", "R1",
+    )
+    assert original.municipal_batch_id is None
+    again = _post(web, payload, key="osasco-original-prepare")
+    assert again.status_code == 200, again.text
+    assert again.json()["replay"] is True
+    assert again.json()["document_id"] == identifier
+    assert app.load_sp4_original_rps(scope, identifier) == original
+
+
+def test_osasco_simples_after_november_cutoff_uses_national_not_municipal(
+    tmp_path: Path,
+) -> None:
+    db = _database(
+        tmp_path / "osasco-cutoff.sqlite", issuer_ibge="3534401",
+        provider_id="osasco-rtc-homologation",
+    )
+    web = _client(db)
+    payload = _payload() | _TAKER_ADDRESS | {
+        "competence_date": "2026-11-12",
+        "source_id": "osasco-national-mandatory",
+        "service_municipality_ibge": "3534401",
+    }
+    response = _post(web, payload, key="osasco-cutoff")
+    assert response.status_code == 400
 
 
 def test_owner_prepares_native_nfse_and_replay_keeps_immutable_document(tmp_path: Path) -> None:
