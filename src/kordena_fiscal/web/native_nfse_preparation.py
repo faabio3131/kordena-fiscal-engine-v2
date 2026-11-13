@@ -74,6 +74,7 @@ _TAKER_ADDRESS_FIELDS = frozenset({
     "taker_state", "taker_municipality_ibge", "taker_postal_code",
 })
 _CAJAMAR_PROVIDER = "cajamar-geisweb-homologation"
+_OSASCO_PROVIDER = "osasco-rtc-homologation"
 _CENTS = re.compile(r"(?:0|[1-9][0-9]{0,8})\.[0-9]{2}\Z")
 _TAKER = re.compile(r"(?:[0-9]{11}|[0-9]{14})\Z")
 _DIGITS_6 = re.compile(r"[0-9]{6}\Z")
@@ -88,7 +89,7 @@ def prepare_native_nfse(
     *, factory: FiscalUnitOfWorkFactory, authority: AuthenticatedHuman,
     payload: Mapping[str, Any], idempotency_key: str | None,
 ) -> Mapping[str, Any]:
-    """Persist one reviewed NFS-e by the existing national or Cajamar UoW authority."""
+    """Persist reviewed National or SP4 NFS-e through one canonical fiscal UoW."""
     key = (idempotency_key or "").strip()
     if (
         not isinstance(payload, Mapping)
@@ -203,16 +204,19 @@ def prepare_native_nfse(
             operation=ConfiguredFiscalOperation.AUTHORIZE.value,
         )
         municipal_cajamar = provider == _CAJAMAR_PROVIDER
-        if provider != NACIONAL_HOMOLOGATION_PROVIDER_ID and not municipal_cajamar:
+        municipal_osasco = provider == _OSASCO_PROVIDER
+        municipal_sp = municipal_cajamar or municipal_osasco
+        if provider != NACIONAL_HOMOLOGATION_PROVIDER_ID and not municipal_sp:
             raise FiscalValidationError("Configured NFS-e provider is not supported")
-        if municipal_cajamar:
+        if municipal_sp:
+            expected_city = "3509205" if municipal_cajamar else "3534401"
             if (
                 profile.address.jurisdiction.state_code != "SP"
-                or profile.address.jurisdiction.municipality_ibge_code != "3509205"
+                or profile.address.jurisdiction.municipality_ibge_code != expected_city
                 or taker_address is None
             ):
                 raise FiscalValidationError(
-                    "Cajamar requires issuer's reviewed city and complete taker address"
+                    "Municipal NFS-e requires issuer city and complete taker address"
                 )
             try:
                 classify_sp_national_nfse_eligibility(
@@ -253,22 +257,23 @@ def prepare_native_nfse(
             service_taker=taker,
         )
         nfse_preaudit(NfseAuthorizationRequest.build(document))
-        # The browser never chooses the provider or RPS series. Cajamar's
-        # reviewed GeisWeb adapter uses series NF, with the existing sequence
-        # stream partition 1, in the same canonical fiscal transaction.
-        def cajamar_original(
+        # Browser cannot choose provider, series or sequence. The same UoW
+        # reserves a city's original RPS without creating a second counter.
+        def municipal_original(
             prepared: NfseAuthorizationRequest,
             reserved: FiscalNumberReservation,
         ) -> Sp4OriginalRps:
             return build_sp4_original_from_reservation(
-                prepared, reserved, rps_series="NF",
+                prepared, reserved, rps_series=(
+                    "NF" if municipal_cajamar else "R1"
+                ),
             )
 
         result = app.prepare_nfse_authorization(
             document, occurred_at=now,
             retention=RetentionPolicyMetadata("nfcore-fiscal-archive", 1),
-            sp4_original_builder=cajamar_original if municipal_cajamar else None,
-            sp4_rps_series=1 if municipal_cajamar else None,
+            sp4_original_builder=municipal_original if municipal_sp else None,
+            sp4_rps_series=1 if municipal_sp else None,
         )
         return {
             "document_id": result.attempt.document_id,
@@ -279,10 +284,10 @@ def prepare_native_nfse(
             "fiscal_authorization": "not_inferred_from_preparation",
             "dps_numbering": (
                 "not_applicable_municipal_original_rps"
-                if municipal_cajamar else "pending_durable_authority"
+                if municipal_sp else "pending_durable_authority"
             ),
             "numbering_authority": (
-                "municipal_rps_durable" if municipal_cajamar
+                "municipal_rps_durable" if municipal_sp
                 else "national_dps_durable"
             ),
         }
