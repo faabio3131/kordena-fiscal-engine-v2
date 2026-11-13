@@ -26,16 +26,15 @@ longer accept new issuance for that regime.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 
-from dataclasses import dataclass
-
 from kordena_fiscal.domain import (
-    FiscalValidationError,
-    TaxRegimeCode,
     BrazilianJurisdiction,
     ExecutionScope,
     FiscalDocumentKind,
+    FiscalValidationError,
+    TaxRegimeCode,
 )
 from kordena_fiscal.gateway.provider import (
     ProviderOperation,
