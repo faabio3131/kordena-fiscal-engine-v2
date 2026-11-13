@@ -327,8 +327,11 @@ class CajamarReviewedStartup:
                 raise FiscalValidationError("Cajamar signature is from another taxpayer")
             signed = etree.tostring(info, method="c14n", exclusive=False)
             value = signature.findtext(f"{{{_DS}}}SignatureValue")
+            public_key = certificate.public_key()
+            if not isinstance(value, str) or not isinstance(public_key, rsa.RSAPublicKey):
+                raise FiscalValidationError("Cajamar XMLDSig requires issuer A1 RSA")
             try:
-                certificate.public_key().verify(
+                public_key.verify(
                     base64.b64decode(value, validate=True),
                     signed, padding.PKCS1v15(), algorithm,
                 )
@@ -358,7 +361,8 @@ class CajamarReviewedStartup:
             if line.taxable_amount.amount <= 0:
                 raise FiscalValidationError("Cajamar ISS base is required")
             rate = line.iss_amount.amount * Decimal("100") / line.taxable_amount.amount
-            if rate.as_tuple().exponent < -5:
+            exponent = rate.as_tuple().exponent
+            if not isinstance(exponent, int) or exponent < -5:
                 raise FiscalValidationError("Cajamar ISS rate has unsupported precision")
             return CajamarGeiswebIssueData(
                 municipal_registration=doc.issuer.municipal_registration.number,
