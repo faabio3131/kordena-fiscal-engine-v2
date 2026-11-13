@@ -15,6 +15,9 @@ from kordena_fiscal.domain import (
     ExecutionScope,
     FiscalDocumentKind,
 )
+from kordena_fiscal.gateway.osasco_rtc_invoice_interpreter import (
+    interpret_osasco_full_note_result,
+)
 from kordena_fiscal.gateway.osasco_rtc_homologation import (
     OsascoOperationReceipt,
     OsascoPreparedOperation,
@@ -53,7 +56,7 @@ class OsascoTrustedRuntimePorts:
     interpret_official_result: Callable[
         [OsascoOperationReceipt, NfseAuthorizationRequest, Sp4OriginalRps],
         Sp4ProviderOutcome,
-    ]
+    ] = interpret_osasco_full_note_result
 
     def __post_init__(self) -> None:
         if not isinstance(self.transport, OsascoRtcHomologationTransport) or not all(
