@@ -27,6 +27,7 @@ PERMISSIONS = {
     "issueFiscalDocument": PortalPermission.DOCUMENT_ISSUE,
     "cancelFiscalDocument": PortalPermission.DOCUMENT_CANCEL,
     "cancelExtremaNfse": PortalPermission.DOCUMENT_CANCEL,
+    "cancelCajamarNfse": PortalPermission.DOCUMENT_CANCEL,
     "substituteExtremaNfse": PortalPermission.DOCUMENT_CANCEL,
     "inutilizeFiscalRange": PortalPermission.DOCUMENT_INUTILIZE,
     "reconcileFiscalOperation": PortalPermission.RECONCILIATION_EXECUTE,
@@ -35,6 +36,7 @@ OPERATIONS = {
     "issueFiscalDocument": frozenset({"issue", "issueFiscalDocument"}),
     "cancelFiscalDocument": frozenset({"cancel", "cancelFiscalDocument"}),
     "cancelExtremaNfse": frozenset({"cancelExtremaNfse"}),
+    "cancelCajamarNfse": frozenset({"cancelCajamarNfse"}),
     "substituteExtremaNfse": frozenset({"substituteExtremaNfse"}),
     "inutilizeFiscalRange": frozenset({"inutilize", "inutilizeFiscalRange"}),
     "reconcileFiscalOperation": frozenset({"reconcile", "reconcileFiscalOperation"}),
@@ -235,6 +237,35 @@ class FiscalIntentRecovery:
             raise denied("FISCAL_INTENT_POLICY_REQUIRED") from exc
         if expired:
             self.blocked(auth, scope, intent, "FISCAL_INTENT_EXPIRED")
+
+    def existing_exact_request(
+        self, auth: AuthenticatedHuman, operation: str,
+        payload: Mapping[str, Any], key: str,
+    ) -> Mapping[str, Any] | None:
+        """Read an already-authorized exact fiscal intent before new preflight.
+
+        Idempotent retries of a completed cancellation must replay the receipt
+        rather than re-checking whether the original invoice can be cancelled.
+        No new execution/claim is created, and tenant, unit, account, session
+        epoch, permission and payload fingerprint are revalidated.
+        """
+        self.permission(auth, operation)
+        if not isinstance(key, str) or not key.strip():
+            raise denied("MISSING_IDEMPOTENCY_KEY", 400)
+        scope = self.scope(auth, payload)
+        fingerprint = self.fingerprint(operation, scope, payload)
+        intent = self.prefix(auth) + digest(self.prefix(auth) + fingerprint)
+        with self.factory() as uow:
+            recorded = uow.commercial.configuration_receipt(scope, intent)
+        if recorded is None or recorded.get("original_key") != key:
+            return None
+        self.validate(auth, scope, recorded, intent)
+        if (
+            recorded.get("operation") != operation
+            or recorded.get("fingerprint") != fingerprint
+        ):
+            raise denied("FISCAL_INTENT_CONTENT_CONFLICT")
+        return self.project(recorded, replay=True)
 
     def prepare(
         self, auth: AuthenticatedHuman, operation: str, payload: Mapping[str, Any], key: str | None

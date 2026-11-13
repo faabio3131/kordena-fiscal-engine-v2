@@ -220,7 +220,7 @@ function appendFiscalFilters(article, viewId) {
   article.append(notice);
 }
 
-/** Build one native National NFS-e prepared record; no ERP and no provider POST.
+/** Prepare one canonical NFS-e National or Cajamar record; no ERP or provider POST.
  * @param {HTMLElement} article
  */
 function appendNativeNfsePreparation(article) {
@@ -233,10 +233,10 @@ function appendNativeNfsePreparation(article) {
   form.id = "native-nfse-preparation";
   form.className = "panel-form";
   const heading = document.createElement("h3");
-  heading.textContent = "Preparar NFS-e Nacional pelo NFCore";
+  heading.textContent = "Preparar NFS-e pelo NFCore — canal fiscal configurado";
   const info = document.createElement("p");
   info.className = "empty-state";
-  info.textContent = "Emissor próprio, sem ERP. Somente homologação. Informe dados efetivamente revisados; preparar não emite a nota. A numeração definitiva da DPS e a homologação oficial possuem gates separados.";
+  info.textContent = "Emissor próprio, sem ERP. Somente homologação. O canal Nacional ou Cajamar é determinado pelo vínculo fiscal e competência no servidor. Informe emitente, serviço e tomador revisados. Preparação não emite a nota; a numeração fiscal é reservada no Core.";
   form.append(heading, info);
   /** @type {Record<string, HTMLInputElement>} */
   const inputs = {};
@@ -254,6 +254,13 @@ function appendNativeNfsePreparation(article) {
     ["iss_amount", "ISS apurado e revisado (R$ 0.00)", "text", "[0-9]+\\.[0-9]{2}"],
     ["taker_document", "CPF ou CNPJ do tomador", "text", "[0-9]{11}|[0-9]{14}"],
     ["taker_name", "Nome ou razão social do tomador", "text", ""],
+    ["taker_street", "Logradouro do tomador", "text", ""],
+    ["taker_number", "Número do endereço do tomador", "text", ""],
+    ["taker_neighborhood", "Bairro do tomador", "text", ""],
+    ["taker_city", "Município do tomador", "text", ""],
+    ["taker_state", "UF do tomador", "text", "[A-Z]{2}"],
+    ["taker_municipality_ibge", "Código IBGE do município do tomador", "text", "[0-9]{7}"],
+    ["taker_postal_code", "CEP do tomador sem pontuação", "text", "[0-9]{8}"],
     ["source_normative", "Referência da regra fiscal aprovada", "text", ""],
     ["rule_version", "Versão da regra fiscal", "number", ""],
   ];
@@ -283,7 +290,7 @@ function appendNativeNfsePreparation(article) {
     " Confirmo a revisão dos dados fiscais, competência, tomador, código de serviço e ISS. A aplicação não presume enquadramento tributário."
   ));
   const submit = document.createElement("button");
-  submit.type = "submit"; submit.className = "primary"; submit.textContent = "Preparar NFS-e em homologação";
+  submit.type = "submit"; submit.className = "primary"; submit.textContent = "Preparar NFS-e revisada em homologação";
   const result = document.createElement("p"); result.id = "native-nfse-result";
   result.setAttribute("role", "status"); result.setAttribute("aria-live", "polite");
   form.append(withholding, reviewedLabel, submit, result); article.append(form);
@@ -319,7 +326,8 @@ function appendNativeNfsePreparation(article) {
       });
       operationDocument.value = String(prepared.document_id);
       result.textContent = "NFS-e preparada: " + String(prepared.document_id)
-        + ". Referência preenchida na emissão. Documento não transmitido nem autorizado.";
+        + " (" + String(prepared.numbering_authority || "numeração fiscal durável") + ")."
+        + " Referência preenchida na emissão. Documento não transmitido nem autorizado.";
       attempt = null;
     } catch (error) {
       result.textContent = (error instanceof Error ? error.message : "Preparação falhou")
@@ -541,6 +549,165 @@ function appendExtremaCancellation(article) {
       status.textContent = (error instanceof Error ? error.message : "Cancelamento não confirmado")
         + " Resultado incerto: não envie outra solicitação sem conciliar com o WebISS.";
     } finally { send.disabled = false; }
+  });
+}
+
+/** Governed Cajamar cancellation on the SAME authenticated fiscal Portal.
+ * @param {HTMLElement} article
+ */
+function appendCajamarCancellation(article) {
+  const operations = bootstrapState?.projection.configured_fiscal_operations;
+  if (!bootstrapState?.permissions.includes("document.cancel")
+    || !Array.isArray(operations) || !operations.includes("cancelCajamarNfse")) return;
+  const form = document.createElement("form");
+  form.id = "cajamar-cancellation-form";
+  form.className = "panel-form";
+  const heading = document.createElement("h3");
+  heading.textContent = "Cancelar NFS-e de Cajamar (homologação)";
+  const notice = document.createElement("p");
+  notice.textContent = "O cancelamento direto é admitido até dia 10 do mês seguinte à competência. Fora do prazo, siga o processo administrativo municipal; o NFCore não substituirá a decisão do Fisco. Resposta incerta não autoriza retransmissão.";
+  const refLabel = document.createElement("label");
+  refLabel.textContent = "Referência da NFS-e original";
+  const ref = document.createElement("input");
+  ref.required = true; ref.maxLength = 128; ref.autocomplete = "off";
+  refLabel.append(ref);
+  const motiveLabel = document.createElement("label");
+  motiveLabel.textContent = "Motivo fiscal permitido (Decreto nº 7.311/2024)";
+  const motive = document.createElement("select");
+  motive.required = true;
+  for (const [code, title] of [
+    ["", "Selecione o motivo legal"],
+    ["service_not_provided", "Serviço não prestado"],
+    ["duplicate_invoice", "NFS-e emitida em duplicidade"],
+    ["incorrect_taker", "Erro de identificação do tomador"],
+    ["incorrect_amount", "Erro no valor da NFS-e"],
+  ]) {
+    const opt = document.createElement("option");
+    opt.value = code; opt.textContent = title; motive.append(opt);
+  }
+  motiveLabel.append(motive);
+  const approvedLabel = document.createElement("label");
+  const approved = document.createElement("input");
+  approved.type = "checkbox"; approved.required = true;
+  approvedLabel.append(approved, document.createTextNode(
+    " Verifiquei o emitente, a nota original, sua situação e autorizo esta operação fiscal.",
+  ));
+  const submit = document.createElement("button");
+  submit.type = "submit"; submit.className = "primary";
+  submit.textContent = "Solicitar cancelamento GeisWeb";
+  const result = document.createElement("p");
+  result.setAttribute("role", "status"); result.setAttribute("aria-live", "polite");
+  form.append(heading, notice, refLabel, motiveLabel, approvedLabel, submit, result);
+  article.append(form);
+  /** @type {{fingerprint:string,key:string}|null} */
+  let attempt = null;
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    if (!selectedFiscalUnit || selectedFiscalEnvironment !== "homologation") {
+      result.textContent = "Selecione unidade autorizada de homologação."; return;
+    }
+    const payload = {
+      unit_id: selectedFiscalUnit, environment: selectedFiscalEnvironment,
+      document_id: ref.value.trim(), cancellation_reason: motive.value,
+      human_approval: approved.checked,
+    };
+    const fingerprint = JSON.stringify(payload);
+    if (attempt && attempt.fingerprint !== fingerprint) {
+      result.textContent = "Pedido fiscal pendente com conteúdo diferente. Consulte o original."; return;
+    }
+    attempt ||= {fingerprint, key: crypto.randomUUID()};
+    submit.disabled = true;
+    result.textContent = "Conferindo prova original e transmitindo um único cancelamento...";
+    try {
+      const reply = await api("/v1/portal/operations/cancelCajamarNfse", {
+        method: "POST",
+        headers: {"X-CSRF-Token": csrfToken(), "Idempotency-Key": attempt.key},
+        body: JSON.stringify(payload),
+      });
+      result.textContent = reply.official_fiscal_confirmation
+        ? "Cancelamento Cajamar confirmado. Evento arquivado no documento original."
+        : "A prefeitura rejeitou o pedido. Consulte o evento fiscal antes de outra ação.";
+      attempt = null;
+    } catch (error) {
+      result.textContent = (error instanceof Error ? error.message : "Cancelamento não confirmado")
+        + " Não retransmita: consulte o histórico e reconcilie o estado do pedido.";
+    } finally { submit.disabled = false; }
+  });
+}
+
+/** Portal-side review for Cajamar 7.311/2024, never a fake SOAP substitution.
+ * @param {HTMLElement} article
+ */
+function appendCajamarSubstitutionReview(article) {
+  const operations = bootstrapState?.projection.configured_fiscal_operations;
+  if (!bootstrapState?.permissions.includes("document.issue")
+    || !bootstrapState?.permissions.includes("document.cancel")
+    || !Array.isArray(operations)
+    || !operations.includes("reviewCajamarSubstitution")) return;
+
+  const form = document.createElement("form");
+  form.id = "cajamar-substitution-review-form";
+  form.className = "panel-form";
+  const title = document.createElement("h3");
+  title.textContent = "Analisar substituição de NFS-e — Cajamar";
+  const help = document.createElement("p");
+  help.textContent = "A substituição é realizada no sistema eletrônico da Prefeitura, não pelo SOAP GeisWeb. A competência, o tomador e o valor do serviço não podem mudar; o prazo regular é dia 10 do mês seguinte à competência.";
+  const originalLabel = document.createElement("label");
+  originalLabel.textContent = "ID da NFS-e original autorizada";
+  const original = document.createElement("input");
+  original.required = true; original.maxLength = 128; original.autocomplete = "off";
+  originalLabel.append(original);
+  const replacementLabel = document.createElement("label");
+  replacementLabel.textContent = "ID do documento substituto preparado (não transmitido)";
+  const replacement = document.createElement("input");
+  replacement.required = true; replacement.maxLength = 128; replacement.autocomplete = "off";
+  replacementLabel.append(replacement);
+  const reviewLabel = document.createElement("label");
+  const review = document.createElement("input");
+  review.type = "checkbox"; review.required = true;
+  reviewLabel.append(review, document.createTextNode(
+    " Confirmei a identidade, o vínculo entre os documentos e a análise fiscal humana.",
+  ));
+  const submit = document.createElement("button");
+  submit.type = "submit"; submit.className = "primary";
+  submit.textContent = "Validar substituição municipal";
+  const result = document.createElement("p");
+  result.setAttribute("role", "status"); result.setAttribute("aria-live", "polite");
+  const official = document.createElement("a");
+  official.className = "ghost";
+  official.textContent = "Serviços fiscais oficiais de Cajamar";
+  official.href = "https://cajamar.sp.gov.br/fazenda/servicos-online/";
+  official.target = "_blank"; official.rel = "noopener noreferrer";
+  form.append(title, help, originalLabel, replacementLabel, reviewLabel, submit, result, official);
+  article.append(form);
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    if (!selectedFiscalUnit || selectedFiscalEnvironment !== "homologation") {
+      result.textContent = "Selecione uma unidade fiscal autorizada em homologação.";
+      return;
+    }
+    submit.disabled = true;
+    result.textContent = "Conferindo os dois documentos, as restrições e o prazo municipal...";
+    try {
+      const response = await api("/v1/portal/operations/reviewCajamarSubstitution", {
+        method: "POST",
+        headers: {"X-CSRF-Token": csrfToken()},
+        body: JSON.stringify({
+          unit_id: selectedFiscalUnit, environment: selectedFiscalEnvironment,
+          original_id: original.value.trim(), replacement_id: replacement.value.trim(),
+          human_approval: review.checked,
+        }),
+      });
+      result.textContent = response.status === "MUNICIPAL_PORTAL_SUBSTITUTION_REQUIRED"
+        ? `Pré-análise interna aprovada até ${response.deadline}. Execute no portal oficial e registre a comprovação da prefeitura; nenhuma substituição fiscal foi transmitida.`
+        : "Resultado municipal não confirmado. Revise o procedimento.";
+    } catch (error) {
+      result.textContent = error instanceof Error
+        ? error.message : "Pré-análise indisponível; a NFS-e original não foi alterada.";
+    } finally { submit.disabled = false; }
   });
 }
 
@@ -995,7 +1162,7 @@ function fiscalRowElement(row) {
       artifact.rel = "noopener noreferrer";
     }
     wrapper.append(artifact);
-    if (kind === "authorized_xml") {
+    if (kind === "authorized_xml" && row.auxiliary_pdf_available === true) {
       const danfe = document.createElement("a");
       danfe.className = "ghost";
       danfe.textContent = "Visualizar documento auxiliar (DANFE/DANFSe)";
@@ -1568,7 +1735,47 @@ function appendA1UploadForm(article) {
   submit.textContent = "Armazenar A1 com segurança";
   const status = document.createElement("p");
   status.setAttribute("role", "status");
-  form.append(submit, status);
+  const check = document.createElement("button");
+  check.type = "button";
+  check.className = "secondary";
+  check.textContent = "Verificar A1 armazenado";
+  const statusUrl = () => (
+    "/v1/portal/certificates/a1/status"
+    + "?unit_id=" + encodeURIComponent(selectedFiscalUnit)
+    + "&environment=homologation"
+    + "&issuer_cnpj=" + encodeURIComponent(cnpj.value)
+  );
+  check.addEventListener("click", async () => {
+    if (!cnpj.checkValidity()) {
+      status.textContent = "Informe o CNPJ do emitente com 14 dígitos para consultar o cofre.";
+      return;
+    }
+    if (!selectedFiscalUnit || selectedFiscalEnvironment !== "homologation") {
+      status.textContent = "Selecione a unidade e Homologação para consultar o cofre A1.";
+      return;
+    }
+    check.disabled = true;
+    status.textContent = "Consultando o A1 no cofre da unidade...";
+    try {
+      const evidence = await api(statusUrl());
+      if (evidence.status === "stored") {
+        status.textContent = "A1 recuperável no cofre desta unidade. Validade: "
+          + evidence.expires_at + ". SHA-256: " + evidence.fingerprint_sha256
+          + ". Persistência após reinício e backup ainda exigem comprovação.";
+      } else if (evidence.status === "absent") {
+        status.textContent = "Não há A1 cadastrado neste escopo de empresa/unidade e ambiente."
+          + " Confira o escopo antes de qualquer novo envio.";
+      } else {
+        status.textContent = "O cofre não apresentou uma confirmação verificável.";
+      }
+    } catch {
+      status.textContent = "Não foi possível confirmar o A1 no cofre."
+        + " Não reenvie o certificado antes de investigar o erro.";
+    } finally {
+      check.disabled = false;
+    }
+  });
+  form.append(submit, check, status);
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!form.reportValidity()) return;
@@ -1578,7 +1785,7 @@ function appendA1UploadForm(article) {
     }
     const chosen = file.files?.[0];
     if (!chosen || chosen.size === 0 || chosen.size > 2 * 1024 * 1024 ||
-        !/\\.(pfx|p12)$/i.test(chosen.name)) {
+        !/\.(pfx|p12)$/i.test(chosen.name)) {
       status.textContent = "Selecione um arquivo A1 .pfx ou .p12 de até 2 MB.";
       return;
     }
@@ -1601,7 +1808,23 @@ function appendA1UploadForm(article) {
           password: password.value,
         }),
       });
-      status.textContent = `Certificado A1 armazenado com segurança. Validade: ${result.expires_at}. Identificador de verificação: ${result.fingerprint_sha256}.`;
+      // HTTP 200 is only the write acknowledgement. Confirm separate
+      // scope-bound decryption/readback before claiming the A1 is usable.
+      let readback = null;
+      try {
+        readback = await api(statusUrl());
+      } catch {
+        // The write may have succeeded; never encourage a blind second POST.
+      }
+      if (result.status === "stored" && readback?.status === "stored"
+          && readback.fingerprint_sha256 === result.fingerprint_sha256) {
+        status.textContent = "A1 gravado e recuperado nesta unidade. Validade: "
+          + readback.expires_at + ". SHA-256: " + readback.fingerprint_sha256
+          + ". Persistência após reinício e backup ainda não comprovados.";
+      } else {
+        status.textContent = "O envio foi aceito, mas a leitura posterior do A1 não foi comprovada."
+          + " Não repita o envio até verificar o cofre.";
+      }
       file.value = "";
       password.value = "";
     } catch (error) {
@@ -2307,7 +2530,9 @@ async function renderSurface(viewId) {
     if (viewId === "issuances") appendNativeNfsePreparation(article);
     if (viewId === "issuances") appendExtremaNfsePreparation(article);
     if (viewId === "issuances") appendExtremaCancellation(article);
+    if (viewId === "issuances") appendCajamarCancellation(article);
     if (viewId === "issuances") appendExtremaSubstitution(article);
+    if (viewId === "issuances") appendCajamarSubstitutionReview(article);
     if (viewId === "inutilizations") appendInutilizationForm(article);
     if (["documents", "issuances", "reconciliation"].includes(viewId)) appendFiscalActions(article);
     if (scopedViews.has(viewId) && viewId !== "capabilities") {

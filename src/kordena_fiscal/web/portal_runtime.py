@@ -99,6 +99,40 @@ def _portal_error(status_code: int, code: str, message: str) -> HTTPException:
     )
 
 
+def _printable_authorized_xml(entry: Any) -> bool:
+    """Only advertise a PDF action for an archived XML that our renderer supports.
+
+    GeisWeb's ConsultaLoteRpsResposta is not a National DANFSe and the
+    provider does not publish printable notes in homologation. The backend
+    artifact endpoint independently repeats its own security/proof checks.
+    """
+    if (
+        entry.kind is not FiscalArchiveKind.AUTHORIZED_XML
+        or entry.media_type not in {"application/xml", "text/xml"}
+        or len(entry.content) > 2_097_152
+    ):
+        return False
+    try:
+        from lxml import etree
+
+        FiscalArchiveVerifier().verify_entry(entry)
+        root = etree.fromstring(
+            entry.content,
+            parser=etree.XMLParser(
+                resolve_entities=False, load_dtd=False,
+                no_network=True, huge_tree=False,
+            ),
+        )
+        if getattr(root.getroottree().docinfo, "doctype", ""):
+            return False
+        return root.tag in {
+            "{http://www.sped.fazenda.gov.br/nfse}NFSe",
+            "{http://www.portalfiscal.inf.br/nfe}nfeProc",
+        }
+    except (ArchiveIntegrityError, etree.XMLSyntaxError, ValueError, TypeError):
+        return False
+
+
 class DurableHumanPortalExecutor:
     """Read canonical durable state and execute safe self-service configuration."""
 
@@ -142,12 +176,10 @@ class DurableHumanPortalExecutor:
         self._user_administration = user_administration
         self._commercial_reader = commercial_reader
         self._danfe_renderer = danfe_renderer
-        # The real national DANFSe renderer is the default runtime behavior,
-        # not an optional test-only injection. It reads exclusively the scoped
-        # authorized XML archive and fails if the XML is not national or valid.
+        # Use the same already-approved national PDF implementation as #454.
+        # Only a scoped, verified authorized National XML may produce DANFSe.
         self._danfse_renderer = (
-            danfse_renderer
-            if danfse_renderer is not None
+            danfse_renderer if danfse_renderer is not None
             else render_authorized_national_danfse
         )
         self._capabilities = (
@@ -575,6 +607,7 @@ class DurableHumanPortalExecutor:
                             "archived_at": entry.archived_at.isoformat(),
                             "content_sha256": entry.content_sha256,
                             "media_type": entry.media_type,
+                            "auxiliary_pdf_available": _printable_authorized_xml(entry),
                         }
                     )
             if surface_id in {"issuances", "errors"}:
@@ -710,6 +743,15 @@ class DurableHumanPortalExecutor:
         if not idempotency_key or not idempotency_key.strip():
             raise _portal_error(400, "MISSING_IDEMPOTENCY_KEY", "Idempotency key is required")
         scope = recovery.scope(authority, payload)
+        if operation_id == "cancelCajamarNfse":
+            # Replay an already-scoped T07 claim without asking the gateway
+            # to preflight a note that was successfully cancelled earlier.
+            # The exact account, key, payload and session epoch are checked.
+            replay = recovery.existing_exact_request(
+                authority, operation_id, payload, idempotency_key,
+            )
+            if replay is not None:
+                return replay
         preflight = getattr(self._operation_executor, "validate_prepared", None)
         if callable(preflight):
             preflight(
@@ -817,7 +859,7 @@ class DurableHumanPortalExecutor:
                 payload=payload,
                 idempotency_key=idempotency_key,
             )
-        if operation_id == "substituteExtremaNfse":
+        if operation_id in {"substituteExtremaNfse", "reviewCajamarSubstitution"}:
             try:
                 unit = payload.get("unit_id")
                 if not isinstance(unit, str) or not unit.strip():
@@ -832,19 +874,30 @@ class DurableHumanPortalExecutor:
         from .fiscal_intent_recovery import PERMISSIONS
 
         if operation_id in PERMISSIONS:
-            receipt = self.prepare_fiscal_intent(
-                authority=authority,
-                operation_id=operation_id,
-                payload=payload,
-                idempotency_key=idempotency_key,
-            )
-            return self.resume_fiscal_intent(
-                authority=authority,
-                intent_id=str(receipt["intent_id"]),
-                payload=payload,
-                idempotency_key=idempotency_key,
-                legacy_result=True,
-            )
+            try:
+                receipt = self.prepare_fiscal_intent(
+                    authority=authority,
+                    operation_id=operation_id,
+                    payload=payload,
+                    idempotency_key=idempotency_key,
+                )
+                return self.resume_fiscal_intent(
+                    authority=authority,
+                    intent_id=str(receipt["intent_id"]),
+                    payload=payload,
+                    idempotency_key=idempotency_key,
+                    legacy_result=True,
+                )
+            except (PersistenceConflictError, PersistenceStateError) as exc:
+                # A second Cajamar cancellation must return a scoped HTTP 409
+                # instead of leaking a storage exception or issuing another POST.
+                # All other existing fiscal operations retain their contracts.
+                if operation_id != "cancelCajamarNfse":
+                    raise
+                raise _portal_error(
+                    409, "CAJAMAR_CANCELLATION_STATE_CONFLICT",
+                    "Original cancellation is completed, pending or under investigation",
+                ) from exc
         if self._operation_executor is None:
             raise _runtime_unavailable("Fiscal portal operation executor is not configured")
         return self._operation_executor.execute(

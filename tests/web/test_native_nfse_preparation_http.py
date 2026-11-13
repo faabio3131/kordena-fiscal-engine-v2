@@ -1,13 +1,18 @@
-"""Native National NFS-e preparation without ERP, A1, external transport or mock issuance."""
+"""Native National/Cajamar NFS-e preparation and synthetic HTTP fiscal journeys."""
 from __future__ import annotations
 
 import base64
 import gzip
+import hashlib
 import json
-from datetime import UTC, datetime, timedelta
+from dataclasses import replace
+from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
+from xml.sax.saxutils import escape
 
+import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -16,13 +21,20 @@ from cryptography.x509.oid import NameOID, ObjectIdentifier
 from fastapi.testclient import TestClient
 from lxml import etree
 
+from kordena_fiscal.application.cajamar_substitution_review import (
+    review_cajamar_substitution,
+)
 from kordena_fiscal.application.service import FiscalApplicationService
-from kordena_fiscal.archive import RetentionPolicyMetadata
+from kordena_fiscal.archive import FiscalArchiveKind, RetentionPolicyMetadata
 from kordena_fiscal.compliance.nfse_preaudit import nfse_preaudit
 from kordena_fiscal.control_plane import FiscalOrganization, FiscalUnitRegistration
 from kordena_fiscal.control_plane.commercial import (
     ConfiguredFiscalOperation,
     ProviderBinding,
+)
+from kordena_fiscal.control_plane.models import (
+    ControlPlaneAuditAction,
+    ControlPlaneAuditEvent,
 )
 from kordena_fiscal.domain import (
     BrazilianJurisdiction,
@@ -33,24 +45,44 @@ from kordena_fiscal.domain import (
     FiscalDocumentKind,
     FiscalEnvironment,
     FiscalProfile,
+    FiscalValidationError,
+    Money,
     StateRegistration,
     TaxRegimeCode,
 )
+from kordena_fiscal.gateway.authorization import AuthorizationStatus
+from kordena_fiscal.gateway.cajamar_geisweb_cancellation_builder import (
+    CajamarCancellationDecision,
+    interpret_cajamar_cancel_response,
+)
+from kordena_fiscal.gateway.cajamar_geisweb_homologation import CajamarGeiswebResult
 from kordena_fiscal.gateway.nfse_nacional_homologation import (
     NACIONAL_HOMOLOGATION_PROVIDER_ID,
     NfseNacionalHomologationGateway,
 )
-from kordena_fiscal.issuance import NfseGatewayClient
+from kordena_fiscal.gateway.sp4_municipal_canonical import (
+    Sp4OriginalRps,
+    Sp4ProviderOutcome,
+    Sp4VerifiedInvoice,
+)
+from kordena_fiscal.issuance import NfseAuthorizationRequest, NfseGatewayClient
 from kordena_fiscal.issuance.nfse_dps_builder import build_signed_dps
 from kordena_fiscal.lifecycle import FiscalDocumentState
 from kordena_fiscal.operations import FakeFiscalOperationsGateway, FiscalOperationsClient
 from kordena_fiscal.persistence import SqliteFiscalDatabase
-from kordena_fiscal.runtime.canonical_fiscal_composition import _GovernedNationalNfseGateway
+from kordena_fiscal.persistence.ports import PersistenceStateError
+from kordena_fiscal.runtime.canonical_fiscal_composition import (
+    _GovernedNationalNfseGateway,
+    build_runtime_fiscal_handler_factory,
+)
 from kordena_fiscal.runtime.fiscal_runtime import (
     CanonicalFiscalOperationPath,
     CanonicalPortalOperationExecutor,
 )
 from kordena_fiscal.runtime.provider_operation_wiring import build_provider_operation_handlers
+from kordena_fiscal.runtime.sp4_municipal_canonical_composition import (
+    Sp4ReviewedMunicipalPorts,
+)
 from kordena_fiscal.security.human_identity import (
     HumanAccount,
     HumanIdentityService,
@@ -71,7 +103,10 @@ IBGE = "3509205"
 ROUTE = "/v1/portal/operations/prepareNativeNfse"
 
 
-def _database(path: Path, *, with_binding: bool = True) -> SqliteFiscalDatabase:
+def _database(
+    path: Path, *, with_binding: bool = True,
+    provider_id: str = NACIONAL_HOMOLOGATION_PROVIDER_ID,
+) -> SqliteFiscalDatabase:
     db = SqliteFiscalDatabase(path)
     db.initialize()
     jurisdiction = BrazilianJurisdiction("SP", IBGE)
@@ -85,6 +120,16 @@ def _database(path: Path, *, with_binding: bool = True) -> SqliteFiscalDatabase:
         uow.control_plane.add_unit(FiscalUnitRegistration(
             tenant_id=TENANT, unit_id=UNIT, display_name="Cajamar",
             enabled_environments=frozenset({FiscalEnvironment.HOMOLOGATION}),
+        ))
+        # The real Portal discovers registered units from canonical audit
+        # evidence. A raw unit insert alone is not a completed onboarding.
+        uow.control_plane.append_audit(ControlPlaneAuditEvent(
+            event_id="synthetic-native-unit-onboarded",
+            occurred_at=datetime.now(UTC),
+            actor_id="synthetic-test-setup",
+            action=ControlPlaneAuditAction.UNIT_ONBOARDED,
+            target_type="unit", target_id=UNIT, correlation_id="synthetic-onboarding",
+            tenant_id=TENANT, unit_id=UNIT,
         ))
         uow.control_plane.add_profile(FiscalProfile(
             profile_id="issuer-native", scope=scope,
@@ -101,13 +146,32 @@ def _database(path: Path, *, with_binding: bool = True) -> SqliteFiscalDatabase:
         ))
         if with_binding:
             uow.commercial.put_provider_binding(ProviderBinding(
-                binding_id="native-national-nfse-binding", tenant_id=TENANT,
+                binding_id="native-nfse-binding", tenant_id=TENANT,
                 unit_id=UNIT, environment=FiscalEnvironment.HOMOLOGATION,
                 document_kind=FiscalDocumentKind.NFSE,
                 jurisdiction=jurisdiction,
                 operation=ConfiguredFiscalOperation.AUTHORIZE,
-                provider_id=NACIONAL_HOMOLOGATION_PROVIDER_ID,
+                provider_id=provider_id,
             ))
+            if provider_id == "cajamar-geisweb-homologation":
+                uow.commercial.put_provider_binding(ProviderBinding(
+                    binding_id="cajamar-query-binding",
+                    tenant_id=TENANT, unit_id=UNIT,
+                    environment=FiscalEnvironment.HOMOLOGATION,
+                    document_kind=FiscalDocumentKind.NFSE,
+                    jurisdiction=jurisdiction,
+                    operation=ConfiguredFiscalOperation.QUERY,
+                    provider_id=provider_id,
+                ))
+                uow.commercial.put_provider_binding(ProviderBinding(
+                    binding_id="cajamar-cancel-binding",
+                    tenant_id=TENANT, unit_id=UNIT,
+                    environment=FiscalEnvironment.HOMOLOGATION,
+                    document_kind=FiscalDocumentKind.NFSE,
+                    jurisdiction=jurisdiction,
+                    operation=ConfiguredFiscalOperation.CANCEL,
+                    provider_id=provider_id,
+                ))
         uow.commit()
     return db
 
@@ -132,7 +196,9 @@ def _client(
     web = TestClient(
         create_app(
             human_identity=identity,
-            portal_executor=DurableHumanPortalExecutor(db, operation_executor=operation_executor),
+            portal_executor=DurableHumanPortalExecutor(
+                db, operation_executor=operation_executor,
+            ),
         ),
         base_url="https://nfcore.test",
     )
@@ -237,6 +303,491 @@ def test_unmodeled_untaxed_iss_and_malformed_money_fail_before_preparation(tmp_p
     assert _post(web, _payload() | {"national_taxation_code": "bad"}).status_code == 400
     assert _post(web, _payload()).status_code == 200
 
+
+_CAJAMAR_PROVIDER = "cajamar-geisweb-homologation"
+_TAKER_ADDRESS = {
+    "taker_street": "Rua Teste Fiscal",
+    "taker_number": "100",
+    "taker_neighborhood": "Centro",
+    "taker_city": "Sao Paulo",
+    "taker_state": "SP",
+    "taker_municipality_ibge": "3550308",
+    "taker_postal_code": "01001000",
+}
+
+
+def test_cajamar_official_substitution_rules_do_not_infer_soap_completion(
+    tmp_path: Path,
+) -> None:
+    db = _database(
+        tmp_path / "cajamar-substitution-policy.sqlite", provider_id=_CAJAMAR_PROVIDER,
+    )
+    web = _client(db)
+    data = _payload() | _TAKER_ADDRESS | {
+        "competence_date": "2026-10-31",
+        "source_id": "cajamar-original-for-substitution",
+    }
+    old = _post(web, data, "cajamar-review-old")
+    candidate = _post(
+        web, data | {"source_id": "cajamar-candidate-substitution"},
+        "cajamar-review-candidate",
+    )
+    assert old.status_code == 200, old.text
+    assert candidate.status_code == 200, candidate.text
+    app = FiscalApplicationService(db)
+    scope = ExecutionScope(
+        TENANT, UNIT, FiscalEnvironment.HOMOLOGATION,
+        "review", "fm-nfcore",
+    )
+    original = app.load_prepared_nfse_authorization(
+        scope, old.json()["document_id"],
+    )
+    replacement = app.load_prepared_nfse_authorization(
+        scope, candidate.json()["document_id"],
+    )
+    reviewed = review_cajamar_substitution(
+        original=original, replacement=replacement,
+        reviewed_at=datetime(2026, 11, 5, tzinfo=UTC),
+    )
+    assert reviewed.municipal_action == "MUNICIPAL_PORTAL_SUBSTITUTION_REQUIRED"
+    assert reviewed.deadline == date(2026, 11, 10)
+    assert reviewed.official_fiscal_confirmation is False
+    assert reviewed.original_id != reviewed.replacement_id
+
+    with pytest.raises(FiscalValidationError, match="period expired"):
+        review_cajamar_substitution(
+            original=original, replacement=replacement,
+            reviewed_at=datetime(2026, 11, 11, 3, tzinfo=UTC),
+        )
+    with pytest.raises(FiscalValidationError, match="distinct"):
+        review_cajamar_substitution(
+            original=original, replacement=original,
+            reviewed_at=datetime(2026, 11, 5, tzinfo=UTC),
+        )
+    for updated in (
+        replace(replacement.document, competence_date=date(2026, 10, 30)),
+        replace(
+            replacement.document,
+            service_taker=replace(
+                replacement.document.service_taker,
+                legal_name="Outro tomador",
+            ),
+        ),
+        replace(
+            replacement.document,
+            services=(
+                replace(
+                    replacement.document.services[0],
+                    gross_amount=Money(Decimal("120.00")),
+                ),
+            ),
+        ),
+    ):
+        changed = NfseAuthorizationRequest.build(updated)
+        with pytest.raises(FiscalValidationError, match="cannot change"):
+            review_cajamar_substitution(
+                original=original, replacement=changed,
+                reviewed_at=datetime(2026, 11, 5, tzinfo=UTC),
+            )
+
+    # Prepared alone cannot be mistaken for substitution completed by city.
+    with pytest.raises(PersistenceStateError):
+        app.review_prepared_cajamar_substitution(
+            scope=scope, original_id=old.json()["document_id"],
+            replacement_id=candidate.json()["document_id"],
+            reviewed_at=datetime(2026, 11, 5, tzinfo=UTC),
+        )
+
+
+def test_cajamar_prepares_original_rps_through_same_portal_and_uow(
+    tmp_path: Path,
+) -> None:
+    db = _database(
+        tmp_path / "cajamar-portal.sqlite", provider_id=_CAJAMAR_PROVIDER,
+    )
+    web = _client(db)
+    reviewed = _payload() | _TAKER_ADDRESS | {
+        "competence_date": "2026-10-31",
+        "source_id": "cajamar-original-portal-2026",
+    }
+    first = _post(web, reviewed)
+    assert first.status_code == 200, first.text
+    record = first.json()
+    assert record["status"] == FiscalDocumentState.READY_TO_TRANSMIT.value
+    assert record["numbering_authority"] == "municipal_rps_durable"
+    assert record["dps_numbering"] == "not_applicable_municipal_original_rps"
+    assert record["transmitted"] is False
+    assert record["fiscal_authorization"] == "not_inferred_from_preparation"
+
+    scope = ExecutionScope(
+        TENANT, UNIT, FiscalEnvironment.HOMOLOGATION, "replay", "fm-nfcore",
+    )
+    app = FiscalApplicationService(db)
+    saved = app.load_prepared_nfse_authorization(scope, record["document_id"])
+    assert saved.document.dps_number is None
+    assert saved.document.service_taker is not None
+    assert saved.document.service_taker.address is not None
+    assert saved.document.service_taker.address.postal_code == "01001000"
+    original = app.load_sp4_original_rps(scope, record["document_id"])
+    assert original.issuer_ibge == IBGE
+    assert original.rps_number == "1"
+    assert original.municipal_batch_id == "1"
+    assert original.issuer_cnpj == saved.document.issuer.cnpj
+
+    again = _post(web, reviewed, key="same-cajamar-source")
+    assert again.status_code == 200, again.text
+    assert again.json()["replay"] is True
+    assert app.load_sp4_original_rps(scope, record["document_id"]) == original
+    with db() as uow:
+        records = uow.archive.list_for_document(scope, record["document_id"])
+    assert len(records) == 2
+
+
+def test_cajamar_requires_full_taker_and_blocks_national_mandatory_competence(
+    tmp_path: Path,
+) -> None:
+    db = _database(
+        tmp_path / "cajamar-no-false-channel.sqlite", provider_id=_CAJAMAR_PROVIDER,
+    )
+    web = _client(db)
+    prior = _payload() | {"competence_date": "2026-10-31"}
+    missing_address = _post(web, prior)
+    assert missing_address.status_code == 400
+    assert missing_address.json()["detail"]["code"] == "NATIVE_NFSE_INVALID_FISCAL_FACTS"
+    wrong_channel = _post(web, _payload() | _TAKER_ADDRESS | {
+        "competence_date": "2026-11-01",
+    })
+    assert wrong_channel.status_code == 400
+    assert wrong_channel.json()["detail"]["code"] == "NATIVE_NFSE_INVALID_FISCAL_FACTS"
+    scope = ExecutionScope(
+        TENANT, UNIT, FiscalEnvironment.HOMOLOGATION, "check", "fm-nfcore",
+    )
+    reference = "native-nfse-" + hashlib.sha256(
+        (repr(scope.identity_partition_key) + ":service-order-native-1").encode(),
+    ).hexdigest()[:40]
+    with db() as uow:
+        assert uow.lifecycle.get(reference) is None
+
+
+def test_native_national_preserves_complete_reviewed_brazilian_taker(
+    tmp_path: Path,
+) -> None:
+    db = _database(tmp_path / "native-full-taker.sqlite")
+    web = _client(db)
+    sent = _post(web, _payload() | _TAKER_ADDRESS)
+    assert sent.status_code == 200, sent.text
+    scope = ExecutionScope(
+        TENANT, UNIT, FiscalEnvironment.HOMOLOGATION, "check", "fm-nfcore",
+    )
+    doc = FiscalApplicationService(db).load_prepared_nfse_authorization(
+        scope, sent.json()["document_id"],
+    ).document
+    assert doc.service_taker is not None
+    assert doc.service_taker.address is not None
+    assert doc.service_taker.address.jurisdiction.municipality_ibge_code == "3550308"
+
+
+def test_cajamar_portal_prepares_sends_recovers_and_downloads_authorized_xml(
+    tmp_path: Path,
+) -> None:
+    """Same Portal and one UoW; only synthetic GeisWeb ports, no official I/O."""
+    db = _database(
+        tmp_path / "cajamar-end-to-end.sqlite", provider_id=_CAJAMAR_PROVIDER,
+    )
+    app = FiscalApplicationService(db)
+    submitted = Mock(return_value=Sp4ProviderOutcome(status=AuthorizationStatus.PENDING))
+    verified = Mock()
+    cancelled = Mock()
+
+    def verified_cancel(
+        request: NfseAuthorizationRequest, original: Sp4OriginalRps,
+        invoice: Sp4VerifiedInvoice,
+    ) -> CajamarCancellationDecision:
+        cancelled(request, original, invoice)
+        if request.document.source.source_id == "cajamar-second-for-ambiguous-cancel":
+            raise RuntimeError("synthetic transport timeout after cancellation claim")
+        official_cancel = (
+            "<CancelaNfseResposta><Nfse><IdentificacaoNfse>"
+            f"<NumeroRps>{original.rps_number}</NumeroRps>"
+            f"<NumeroNfse>{invoice.invoice_number}</NumeroNfse>"
+            f"<CodigoVerificacao>{invoice.verification_code}</CodigoVerificacao>"
+            "</IdentificacaoNfse></Nfse></CancelaNfseResposta>"
+        )
+        soap = (
+            '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" '
+            'xmlns:g="http://www.geisweb.com.br/"><soap:Body>'
+            '<g:CancelaNfseResponse><g:CancelaNfseResult>'
+            f"{escape(official_cancel)}"
+            "</g:CancelaNfseResult></g:CancelaNfseResponse>"
+            "</soap:Body></soap:Envelope>"
+        ).encode()
+        return interpret_cajamar_cancel_response(
+            receipt=CajamarGeiswebResult(
+                method="CancelaNfse", response_xml=soap,
+            ),
+            source=original, issued=invoice, verify_official_response=Mock(),
+        )
+
+    def recover(
+        request: NfseAuthorizationRequest, original: Sp4OriginalRps,
+    ) -> Sp4ProviderOutcome:
+        invoice_number = str(8764 + int(original.rps_number))
+        invoice = Sp4VerifiedInvoice(
+            issuer_cnpj=original.issuer_cnpj,
+            issuer_ibge=original.issuer_ibge,
+            competence_date=original.competence_date,
+            rps_number=original.rps_number,
+            rps_series=original.rps_series,
+            gross_amount=original.gross_amount,
+            invoice_number=invoice_number,
+            verification_code="ABCDEF1234",
+            invoice_reference=invoice_number,
+            authorized_xml=(
+                "<ConsultaLoteRpsResposta><Rps><IdentificacaoNfse>"
+                f"<NumeroRps>{original.rps_number}</NumeroRps>"
+                f"<NumeroNfse>{invoice_number}</NumeroNfse>"
+                "<CodigoVerificacao>ABCDEF1234</CodigoVerificacao>"
+                "</IdentificacaoNfse><Competencia>2026-10</Competencia>"
+                "<Servico><Valores><ValorServicos>100,00</ValorServicos></Valores>"
+                "<PrestadorServico><IdentificacaoPrestador>"
+                f"<CnpjCpf>{original.issuer_cnpj.value}</CnpjCpf>"
+                "</IdentificacaoPrestador></PrestadorServico></Servico>"
+                "</Rps></ConsultaLoteRpsResposta>"
+            ).encode(),
+        )
+        return Sp4ProviderOutcome(
+            status=AuthorizationStatus.AUTHORIZED, official_invoice=invoice,
+        )
+
+    queried = Mock(side_effect=recover)
+    ports = Sp4ReviewedMunicipalPorts(
+        load_original_rps=Mock(side_effect=AssertionError("alternative loader used")),
+        fiscal_issuer_policy=Mock(),
+        validate_prepared_rps=Mock(),
+        submit_official_rps=submitted,
+        query_official_rps=queried,
+        verify_official_invoice_xml=verified,
+    )
+    handler_factory = build_runtime_fiscal_handler_factory(
+        operations_gateway=FakeFiscalOperationsGateway(),
+        sp4_reviewed_municipalities={_CAJAMAR_PROVIDER: ports},
+        cajamar_verified_cancel=verified_cancel,
+    )
+    handlers = handler_factory(app)
+    executable = CanonicalPortalOperationExecutor(
+        unit_of_work_factory=db,
+        path=CanonicalFiscalOperationPath(app, handlers=handlers),
+    )
+    web = _client(db, operation_executor=executable)
+    payload = _payload() | _TAKER_ADDRESS | {
+        "competence_date": "2026-10-31",
+        "source_id": "cajamar-fully-exercised-portal",
+    }
+    prepared = _post(web, payload)
+    assert prepared.status_code == 200, prepared.text
+    document_id = prepared.json()["document_id"]
+    original = app.load_sp4_original_rps(
+        ExecutionScope(
+            TENANT, UNIT, FiscalEnvironment.HOMOLOGATION, "lookup", "fm-nfcore",
+        ), document_id,
+    )
+    assert original.rps_number == "1"
+
+    csrf = web.cookies.get(CSRF_COOKIE)
+    assert csrf
+    body = {
+        "unit_id": UNIT, "environment": "homologation", "document_id": document_id,
+    }
+    issued = web.post(
+        "/v1/portal/operations/issueFiscalDocument",
+        json=body, headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-first-post"},
+    )
+    assert issued.status_code == 200, issued.text
+    assert submitted.call_count == 1
+    queried.assert_not_called()
+
+    completed = web.post(
+        "/v1/portal/operations/reconcileFiscalOperation",
+        json=body, headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-original-lot-query"},
+    )
+    assert completed.status_code == 200, completed.text
+    assert completed.json()["status"] == FiscalDocumentState.AUTHORIZED.value
+    assert submitted.call_count == 1, "read-only recovery must not submit again"
+    queried.assert_called_once()
+    verified.assert_called_once()
+    # Reconciliation may retain attempt history, but must archive exactly one
+    # authentic authorized XML. Duplicate archival entries break cancellation.
+    prepared_request = app.load_prepared_nfse_authorization(
+        original.scope, document_id,
+    )
+    with db() as uow:
+        history = uow.idempotency.attempts(prepared_request.idempotency_key)
+        one_xml = [
+            e for e in uow.archive.list_for_document(original.scope, document_id)
+            if e.kind is FiscalArchiveKind.AUTHORIZED_XML
+        ]
+        assert len(one_xml) == 1, "recovery must archive one official XML"
+        assert history[-1].document_id == document_id
+        assert history[-1].status.value == "authorized"
+
+    download = web.get(
+        f"/v1/portal/documents/{document_id}/artifacts/authorized_xml",
+        params={"unit_id": UNIT, "environment": "homologation"},
+    )
+    assert download.status_code == 200, download.text
+    assert download.content.startswith(b"<ConsultaLoteRpsResposta><Rps>")
+    assert download.headers["Cache-Control"] == "no-store"
+    listed = web.get(
+        "/v1/portal/surfaces/documents",
+        params={"unit_id": UNIT, "environment": "homologation"},
+    )
+    assert listed.status_code == 200, listed.text
+    printed = [
+        row for row in listed.json()["rows"]
+        if row.get("record_type") == "archive"
+        and row.get("document_reference") == document_id
+        and row.get("kind") == "authorized_xml"
+    ]
+    assert len(printed) == 1
+    assert printed[0]["auxiliary_pdf_available"] is False
+    municipal_pdf = web.get(
+        f"/v1/portal/documents/{document_id}/artifacts/auxiliary_pdf",
+        params={"unit_id": UNIT, "environment": "homologation"},
+    )
+    assert municipal_pdf.status_code == 409
+    denied = web.get(
+        f"/v1/portal/documents/{document_id}/artifacts/authorized_xml",
+        params={"unit_id": "another-unit", "environment": "homologation"},
+    )
+    assert denied.status_code == 403
+
+    replay = web.post(
+        "/v1/portal/operations/issueFiscalDocument",
+        json=body, headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-first-post"},
+    )
+    assert replay.status_code == 200, replay.text
+    assert submitted.call_count == 1
+
+    # Municipal substitution is a human review of two durable fiscal records,
+    # not a fictitious SOAP operation or a second automatic issuance.
+    candidate = _post(
+        web, payload | {"source_id": "cajamar-reviewed-replacement"},
+        key="cajamar-substitution-candidate",
+    )
+    assert candidate.status_code == 200, candidate.text
+    candidate_id = candidate.json()["document_id"]
+    reviewed_payload = {
+        "unit_id": UNIT, "environment": "homologation",
+        "original_id": document_id, "replacement_id": candidate_id,
+        "human_approval": True,
+    }
+    with patch("kordena_fiscal.runtime.canonical_fiscal_composition.datetime") as clock:
+        clock.now.return_value = datetime(2026, 11, 5, tzinfo=UTC)
+        reviewed = web.post(
+            "/v1/portal/operations/reviewCajamarSubstitution",
+            json=reviewed_payload, headers={CSRF_HEADER: csrf},
+        )
+    assert reviewed.status_code == 200, reviewed.text
+    assert reviewed.json()["status"] == "MUNICIPAL_PORTAL_SUBSTITUTION_REQUIRED"
+    assert reviewed.json()["official_fiscal_confirmation"] is False
+    assert reviewed.json()["deadline"] == "2026-11-10"
+    assert submitted.call_count == 1
+    with db() as uow:
+        assert uow.lifecycle.get(document_id).state is FiscalDocumentState.AUTHORIZED
+        assert uow.lifecycle.get(candidate_id).state is FiscalDocumentState.READY_TO_TRANSMIT
+    expired_review = web.post(
+        "/v1/portal/operations/reviewCajamarSubstitution",
+        json=reviewed_payload, headers={CSRF_HEADER: csrf},
+    )
+    assert expired_review.status_code == 400
+
+    with patch(
+        "kordena_fiscal.application.service._cajamar_policy_now",
+        return_value=datetime(2026, 11, 5, tzinfo=UTC),
+    ):
+        # Cancellation uses the same authenticated Portal, canonical RPS/archive,
+        cancel_body = body | {"cancellation_reason": "duplicate_invoice"}
+        # signed municipal contract port and durable fiscal lifecycle.
+        unauthorized = web.post(
+            "/v1/portal/operations/cancelCajamarNfse",
+            json=cancel_body | {"human_approval": False},
+            headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-not-approved"},
+        )
+        assert unauthorized.status_code in {400, 403, 409}
+        cancelled.assert_not_called()
+        request_cancel = web.post(
+            "/v1/portal/operations/cancelCajamarNfse",
+            json=cancel_body | {"human_approval": True},
+            headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-cancel-one"},
+        )
+        assert request_cancel.status_code == 200, request_cancel.text
+        assert request_cancel.json()["status"] == FiscalDocumentState.CANCELLED.value
+        assert request_cancel.json()["official_fiscal_confirmation"] is True
+        cancelled.assert_called_once()
+        assert submitted.call_count == 1
+        with db() as uow:
+            events = [
+                item for item in uow.archive.list_for_document(
+                    original.scope, document_id,
+                )
+                if item.kind is FiscalArchiveKind.FISCAL_EVENT
+            ]
+            assert len(events) == 1
+            assert events[0].content.startswith(b"<CancelaNfseResposta>")
+            assert uow.lifecycle.get(document_id).state is FiscalDocumentState.CANCELLED
+        duplicate = web.post(
+            "/v1/portal/operations/cancelCajamarNfse",
+            json=cancel_body | {"human_approval": True},
+            headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-cancel-replayed"},
+        )
+        assert duplicate.status_code != 200
+        cancelled.assert_called_once(), "Duplicate cancellation must never reach provider"
+
+        # A network timeout after CANCEL_REQUESTED must not send CancelaNfse
+        # again on another HTTP key. The original note stays under investigation.
+        another = _post(
+            web, payload | {"source_id": "cajamar-second-for-ambiguous-cancel"},
+            key="cajamar-second-service-order",
+        )
+        assert another.status_code == 200, another.text
+        second_id = another.json()["document_id"]
+        second_body = body | {"document_id": second_id}
+        second_issue = web.post(
+            "/v1/portal/operations/issueFiscalDocument",
+            json=second_body,
+            headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-second-issue"},
+        )
+        assert second_issue.status_code == 200, second_issue.text
+        second_reconcile = web.post(
+            "/v1/portal/operations/reconcileFiscalOperation",
+            json=second_body,
+            headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-second-recovery"},
+        )
+        assert second_reconcile.status_code == 200, second_reconcile.text
+        assert second_reconcile.json()["status"] == FiscalDocumentState.AUTHORIZED.value
+        try:
+            uncertain = web.post(
+                "/v1/portal/operations/cancelCajamarNfse",
+                json=second_body | {
+                    "cancellation_reason": "duplicate_invoice",
+                    "human_approval": True,
+                },
+                headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-second-cancel"},
+            )
+            assert uncertain.status_code >= 400
+        except RuntimeError as exc:
+            assert "synthetic transport timeout" in str(exc)
+        with db() as uow:
+            second_state = uow.lifecycle.get(second_id)
+            assert second_state is not None
+            assert second_state.state is FiscalDocumentState.CANCEL_REQUESTED
+        replay_cancel = web.post(
+            "/v1/portal/operations/cancelCajamarNfse",
+            json=second_body | {"cancellation_reason": "duplicate_invoice", "human_approval": True},
+            headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-second-cancel-new-key"},
+        )
+        assert replay_cancel.status_code != 200
+        assert cancelled.call_count == 2, "Ambiguous cancel must not be re-posted"
 
 
 def _synthetic_a1_for_native_issuer() -> EphemeralCertificateMaterial:
@@ -365,6 +916,18 @@ def test_web_native_nfse_preparation_to_signed_gateway_and_authorized_xml(
     assert downloaded.content == official_xml
     assert downloaded.headers["Cache-Control"] == "no-store"
     assert downloaded.headers["X-Content-Type-Options"] == "nosniff"
+    projection = browser.get(
+        "/v1/portal/surfaces/documents",
+        params={"unit_id": UNIT, "environment": "homologation"},
+    )
+    assert projection.status_code == 200, projection.text
+    national_artifacts = [
+        row for row in projection.json()["rows"]
+        if row.get("document_reference") == document_id
+        and row.get("kind") == "authorized_xml"
+    ]
+    assert len(national_artifacts) == 1
+    assert national_artifacts[0]["auxiliary_pdf_available"] is True
     assert downloaded.headers["Content-Disposition"].startswith("attachment;")
     assert downloaded.headers["Content-Type"].startswith("application/xml")
 
