@@ -24,9 +24,9 @@ from kordena_fiscal.domain import (
     Cnpj,
     Cpf,
     ExecutionScope,
+    FiscalAddress,
     FiscalDocumentKind,
     FiscalEnvironment,
-    FiscalAddress,
     FiscalValidationError,
     Money,
     SourceReference,
@@ -34,6 +34,7 @@ from kordena_fiscal.domain import (
 from kordena_fiscal.gateway.municipal_sp_routing import (
     classify_sp_national_nfse_eligibility,
 )
+from kordena_fiscal.gateway.sp4_municipal_canonical import Sp4OriginalRps
 from kordena_fiscal.gateway.nfse_nacional_homologation import (
     NACIONAL_HOMOLOGATION_PROVIDER_ID,
 )
@@ -47,6 +48,7 @@ from kordena_fiscal.issuance.sp4_original_rps_archive import (
     build_sp4_original_from_reservation,
 )
 from kordena_fiscal.lifecycle.idempotency import IdempotencyConflictError
+from kordena_fiscal.numbering import FiscalNumberReservation
 from kordena_fiscal.persistence.ports import (
     FiscalUnitOfWorkFactory,
     PersistenceConflictError,
@@ -138,7 +140,7 @@ def prepare_native_nfse(
             Cnpj(payload["taker_document"]) if len(payload["taker_document"]) == 14
             else Cpf(payload["taker_document"])
         )
-        taker_address = None
+        taker_address: FiscalAddress | None = None
         if _TAKER_ADDRESS_FIELDS.issubset(payload):
             if not _DIGITS_7.fullmatch(payload["taker_municipality_ibge"]):
                 raise FiscalValidationError("Taker municipality IBGE code is required")
@@ -254,7 +256,10 @@ def prepare_native_nfse(
         # The browser never chooses the provider or RPS series. Cajamar's
         # reviewed GeisWeb adapter uses series NF, with the existing sequence
         # stream partition 1, in the same canonical fiscal transaction.
-        def cajamar_original(prepared, reserved):
+        def cajamar_original(
+            prepared: NfseAuthorizationRequest,
+            reserved: FiscalNumberReservation,
+        ) -> Sp4OriginalRps:
             return build_sp4_original_from_reservation(
                 prepared, reserved, rps_series="NF",
             )
