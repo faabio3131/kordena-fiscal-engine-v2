@@ -668,85 +668,90 @@ def test_cajamar_portal_prepares_sends_recovers_and_downloads_authorized_xml(
     assert replay.status_code == 200, replay.text
     assert submitted.call_count == 1
 
-    # Cancellation uses the same authenticated Portal, canonical RPS/archive,
-    # signed municipal contract port and durable fiscal lifecycle.
-    unauthorized = web.post(
-        "/v1/portal/operations/cancelCajamarNfse",
-        json=body | {"human_approval": False},
-        headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-not-approved"},
-    )
-    assert unauthorized.status_code in {400, 403, 409}
-    cancelled.assert_not_called()
-    request_cancel = web.post(
-        "/v1/portal/operations/cancelCajamarNfse",
-        json=body | {"human_approval": True},
-        headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-cancel-one"},
-    )
-    assert request_cancel.status_code == 200, request_cancel.text
-    assert request_cancel.json()["status"] == FiscalDocumentState.CANCELLED.value
-    assert request_cancel.json()["official_fiscal_confirmation"] is True
-    cancelled.assert_called_once()
-    assert submitted.call_count == 1
-    with db() as uow:
-        events = [
-            item for item in uow.archive.list_for_document(
-                original.scope, document_id,
-            )
-            if item.kind is FiscalArchiveKind.FISCAL_EVENT
-        ]
-        assert len(events) == 1
-        assert events[0].content.startswith(b"<CancelaNfseResposta>")
-        assert uow.lifecycle.get(document_id).state is FiscalDocumentState.CANCELLED
-    duplicate = web.post(
-        "/v1/portal/operations/cancelCajamarNfse",
-        json=body | {"human_approval": True},
-        headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-cancel-replayed"},
-    )
-    assert duplicate.status_code != 200
-    cancelled.assert_called_once(), "Duplicate cancellation must never reach provider"
-
-    # A network timeout after CANCEL_REQUESTED must not send CancelaNfse
-    # again on another HTTP key. The original note stays under investigation.
-    another = _post(
-        web, payload | {"source_id": "cajamar-second-for-ambiguous-cancel"},
-        key="cajamar-second-service-order",
-    )
-    assert another.status_code == 200, another.text
-    second_id = another.json()["document_id"]
-    second_body = body | {"document_id": second_id}
-    second_issue = web.post(
-        "/v1/portal/operations/issueFiscalDocument",
-        json=second_body,
-        headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-second-issue"},
-    )
-    assert second_issue.status_code == 200, second_issue.text
-    second_reconcile = web.post(
-        "/v1/portal/operations/reconcileFiscalOperation",
-        json=second_body,
-        headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-second-recovery"},
-    )
-    assert second_reconcile.status_code == 200, second_reconcile.text
-    assert second_reconcile.json()["status"] == FiscalDocumentState.AUTHORIZED.value
-    try:
-        uncertain = web.post(
+    with patch(
+        "kordena_fiscal.application.service._cajamar_policy_now",
+        return_value=datetime(2026, 11, 5, tzinfo=UTC),
+    ):
+        # Cancellation uses the same authenticated Portal, canonical RPS/archive,
+        cancel_body = body | {"cancellation_reason": "duplicate_invoice"}
+        # signed municipal contract port and durable fiscal lifecycle.
+        unauthorized = web.post(
             "/v1/portal/operations/cancelCajamarNfse",
-            json=second_body | {"human_approval": True},
-            headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-second-cancel"},
+            json=cancel_body | {"human_approval": False},
+            headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-not-approved"},
         )
-        assert uncertain.status_code >= 400
-    except RuntimeError as exc:
-        assert "synthetic transport timeout" in str(exc)
-    with db() as uow:
-        second_state = uow.lifecycle.get(second_id)
-        assert second_state is not None
-        assert second_state.state is FiscalDocumentState.CANCEL_REQUESTED
-    replay_cancel = web.post(
-        "/v1/portal/operations/cancelCajamarNfse",
-        json=second_body | {"human_approval": True},
-        headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-second-cancel-new-key"},
-    )
-    assert replay_cancel.status_code != 200
-    assert cancelled.call_count == 2, "Ambiguous cancel must not be re-posted"
+        assert unauthorized.status_code in {400, 403, 409}
+        cancelled.assert_not_called()
+        request_cancel = web.post(
+            "/v1/portal/operations/cancelCajamarNfse",
+            json=cancel_body | {"human_approval": True},
+            headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-cancel-one"},
+        )
+        assert request_cancel.status_code == 200, request_cancel.text
+        assert request_cancel.json()["status"] == FiscalDocumentState.CANCELLED.value
+        assert request_cancel.json()["official_fiscal_confirmation"] is True
+        cancelled.assert_called_once()
+        assert submitted.call_count == 1
+        with db() as uow:
+            events = [
+                item for item in uow.archive.list_for_document(
+                    original.scope, document_id,
+                )
+                if item.kind is FiscalArchiveKind.FISCAL_EVENT
+            ]
+            assert len(events) == 1
+            assert events[0].content.startswith(b"<CancelaNfseResposta>")
+            assert uow.lifecycle.get(document_id).state is FiscalDocumentState.CANCELLED
+        duplicate = web.post(
+            "/v1/portal/operations/cancelCajamarNfse",
+            json=cancel_body | {"human_approval": True},
+            headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-cancel-replayed"},
+        )
+        assert duplicate.status_code != 200
+        cancelled.assert_called_once(), "Duplicate cancellation must never reach provider"
+
+        # A network timeout after CANCEL_REQUESTED must not send CancelaNfse
+        # again on another HTTP key. The original note stays under investigation.
+        another = _post(
+            web, payload | {"source_id": "cajamar-second-for-ambiguous-cancel"},
+            key="cajamar-second-service-order",
+        )
+        assert another.status_code == 200, another.text
+        second_id = another.json()["document_id"]
+        second_body = body | {"document_id": second_id}
+        second_issue = web.post(
+            "/v1/portal/operations/issueFiscalDocument",
+            json=second_body,
+            headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-second-issue"},
+        )
+        assert second_issue.status_code == 200, second_issue.text
+        second_reconcile = web.post(
+            "/v1/portal/operations/reconcileFiscalOperation",
+            json=second_body,
+            headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-second-recovery"},
+        )
+        assert second_reconcile.status_code == 200, second_reconcile.text
+        assert second_reconcile.json()["status"] == FiscalDocumentState.AUTHORIZED.value
+        try:
+            uncertain = web.post(
+                "/v1/portal/operations/cancelCajamarNfse",
+                json=second_body | {"cancellation_reason": "duplicate_invoice", "human_approval": True},
+                headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-second-cancel"},
+            )
+            assert uncertain.status_code >= 400
+        except RuntimeError as exc:
+            assert "synthetic transport timeout" in str(exc)
+        with db() as uow:
+            second_state = uow.lifecycle.get(second_id)
+            assert second_state is not None
+            assert second_state.state is FiscalDocumentState.CANCEL_REQUESTED
+        replay_cancel = web.post(
+            "/v1/portal/operations/cancelCajamarNfse",
+            json=second_body | {"cancellation_reason": "duplicate_invoice", "human_approval": True},
+            headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-second-cancel-new-key"},
+        )
+        assert replay_cancel.status_code != 200
+        assert cancelled.call_count == 2, "Ambiguous cancel must not be re-posted"
 
 
 def _synthetic_a1_for_native_issuer() -> EphemeralCertificateMaterial:
