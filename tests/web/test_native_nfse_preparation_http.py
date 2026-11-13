@@ -768,7 +768,10 @@ def test_cajamar_portal_prepares_sends_recovers_and_downloads_authorized_xml(
         try:
             uncertain = web.post(
                 "/v1/portal/operations/cancelCajamarNfse",
-                json=second_body | {"cancellation_reason": "duplicate_invoice", "human_approval": True},
+                json=second_body | {
+                    "cancellation_reason": "duplicate_invoice",
+                    "human_approval": True,
+                },
                 headers={CSRF_HEADER: csrf, "Idempotency-Key": "cajamar-second-cancel"},
             )
             assert uncertain.status_code >= 400
