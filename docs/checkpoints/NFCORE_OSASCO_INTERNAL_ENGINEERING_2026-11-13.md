@@ -10,3 +10,33 @@
 **Escopo planejado:** reaproveitamento seletivo dos cinco módulos e testes de Osasco originados na PR #461, sem importar Osasco/Barueri/Jundiaí por tabela ou copiar o núcleo B. Completar preparação no mesmo Portal e FiscalApplicationService/UoW, recibo original durável, dados RTC validados, credencial por tenant/unidade/CNPJ/IM, consulta do XML completo sem segundo POST, cancelamento de nota com aprovação e correlação, testes HTTP/E2E, mapeamento dos resultados, escopo e CI completa no HEAD exato.
 
 **Dependências externas:** WSDL/schema vigente verificável, chave de autenticação municipal de contribuinte, resposta real de homologação e layout de impressão oficial. Não inserir segredos nem declarar 100% por artefatos sintéticos. Alterações às fronteiras protegidas do B exigem revisão e autorização de integração.
+
+
+## Matriz viva — execução nesta branch (não é homologação)
+
+| Capacidade | Código/contrato | Evidência | Estado |
+| --- | --- | --- | --- |
+| Web Service WCF v2.1, SOAP 1.1, homologação | `gateway/osasco_rtc_homologation.py` e builders | testes de gateway extraídos de #461 | IMPLEMENTED_NOT_CERTIFIED |
+| Fiscal RTC / regime / competência | `gateway/osasco_rtc_issue_builder.py` | testes de tax fields e guarda NFS-e nacional | IMPLEMENTED_NOT_CERTIFIED |
+| Fonte única, RPS e contador | `application/service.py`, `issuance/sp4_original_rps_archive.py` | mesma UoW, reserva, fingerprint, replay; teste HTTP novo | IMPLEMENTED_NOT_CERTIFIED |
+| Preparação via mesmo Portal | `web/native_nfse_preparation.py` | teste HTTP Osasco, emissão municipal e bloqueio Simples ≥ 01/11/2026 | IMPLEMENTED_NOT_CERTIFIED |
+| Ponte de emissão e consulta sem segundo POST | `runtime/sp4_municipal_provider_bridges.py` e `runtime/osasco_operational_composition.py` | E2E sintético com `Sp4ReviewedMunicipalPorts`; não é resposta oficial | IMPLEMENTED_NOT_CERTIFIED |
+| Proteção da chave municipal | `runtime/osasco_credentials.py` | `SecretResolutionService` / `FiscalSecretVault`; conferência tenant/unidade/CNPJ/IM; testes sem credencial real | IMPLEMENTED_NOT_CERTIFIED |
+| Contrato WSDL/XSD verificado de Osasco | WSDL 2026 citado, hash/schema e operação por método devem ser pinados | manual municipal v2.1 não inclui pacote de schema consumível aqui | EXTERNAL_CONTRACT_PENDING |
+| Dados RTC reais por perfil fiscal | `OsascoRtcTaxFields` exigido pelo builder | classificação NBS, cClassTrib, cidade/incidência e tributos precisam de regra proveniente do motor fiscal | INTERNAL_PENDING |
+| XML oficial completo e integridade | `ConsultarNotaCompleta` pelo recibo original; verificador injetado | formato exato do retorno e prova municipal atual precisam de contrato/fixture oficial | EXTERNAL_CONTRACT_PENDING |
+| Cancelamento/substituição integrados no lifecycle | `osasco_rtc_cancellation_builder.py` cobre envelope; composição de comando/jornada ainda pendente | sem teste E2E de cancelamento no Portal em HEAD | INTERNAL_PENDING |
+| Provisionamento real no entrypoint API | `build_osasco_trusted_transport` compõe contrato/secret por portas; não habilita automaticamente no `api:app` | depende da fonte governada de segredos e contrato de provedor | INTERNAL_PENDING / EXTERNAL_INPUT |
+| CI do HEAD exato, PostgreSQL, frontend/E2E, containers | `feat/nfcore-web-osasco-ci-20261113` como branch de CI | conferir sucesso completo do SHA de #466, nunca herdar selo de #463 | PENDING |
+
+**Não declarar Osasco 100% nesta fase.** O código é de engenharia, sem habilitação fiscal real. O retorno `RTC_EmitirNFE` com `Erro=false` não basta para arquivar nota autorizada; somente a consulta do XML completo, correlação do recibo e verificador oficial podem fazê-lo. O Portal permanece com autoridade canônica; não construir segundo motor nem autenticação paralela.
+
+### Contrato oficial: pontos relevantes de operação
+
+- A Prefeitura orienta uma **chave específica por inscrição municipal**; o segredo não é A1 e não deve ser colocado em manifesto versionado, Portal ou logs. A referência de credencial usa os contratos `SecretReferenceKind.CREDENTIALS`, `SecretUsagePurpose.PROVIDER_AUTHENTICATION` e o mesmo `SecretResolutionService`.
+- O método `ConsultarNotaCompleta` filtra por `NumeroReciboUnico`. O manual diz que retorna dados completos em XML, mas não fornece naquele trecho um XML suficiente para mapear com segurança todos os campos fiscais. **Não inventar XML de prefeitura**.
+- Os contratos oficiais distinguem RTC e emissão legada; o routing de competência é aplicado antes de abrir o transporte.
+
+### Gatilho para fechamento
+
+Concluir as pendências internas, demonstrar teste sintético real do `api:app` com WSDL/XSD fixture e chave sintética, revisão independente A/B e CI verde no HEAD da própria #466. Artefatos externos oficiais e credenciais reais permanecem fase distinta e não podem ser forjados. Não fazer merge/deploy sem autorização.
