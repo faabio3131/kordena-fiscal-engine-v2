@@ -19,6 +19,9 @@ from kordena_fiscal.archive import (
     FiscalArchiveVerifier,
     RetentionPolicyMetadata,
 )
+from kordena_fiscal.compliance.cajamar_municipal_legal import (
+    validate_cajamar_automatic_cancellation,
+)
 from kordena_fiscal.contingency import (
     FiscalOutboxEnqueueResult,
     FiscalOutboxEntry,
@@ -269,6 +272,13 @@ def _nfse_rejection_archive(
         archived_at=occurred_at,
         retention=retention,
     )
+
+
+def _cajamar_policy_now() -> datetime:
+    """Canonical trusted server clock; injectable only in offline tests."""
+    from datetime import UTC
+
+    return datetime.now(UTC)
 
 
 class FiscalApplicationService:
@@ -1787,7 +1797,7 @@ class FiscalApplicationService:
         return eligibility
 
     def preflight_cajamar_nfse_cancellation(
-        self, *, scope: ExecutionScope, document_id: str,
+        self, *, scope: ExecutionScope, document_id: str, cancellation_reason: str,
     ) -> tuple[NfseAuthorizationRequest, Sp4OriginalRps, Sp4VerifiedInvoice]:
         """Verify archived original RPS and authorized GeisWeb note in one scoped UoW."""
         if (
@@ -1799,6 +1809,11 @@ class FiscalApplicationService:
             request = self._load_prepared_from_uow(uow, scope, document_id)
             if not isinstance(request, NfseAuthorizationRequest):
                 raise PersistenceStateError("Cajamar cancellation requires prepared NFS-e")
+            validate_cajamar_automatic_cancellation(
+                competence=request.document.competence_date,
+                reason=cancellation_reason,
+                reviewed_at=_cajamar_policy_now(),
+            )
             uow.lifecycle.assert_scope(document_id, scope)
             current = uow.lifecycle.get(document_id)
             attempts = uow.idempotency.attempts(request.idempotency_key)
@@ -1852,6 +1867,7 @@ class FiscalApplicationService:
             [NfseAuthorizationRequest, Sp4OriginalRps, Sp4VerifiedInvoice],
             CajamarCancellationDecision,
         ],
+        cancellation_reason: str,
         occurred_at: datetime, retention: RetentionPolicyMetadata,
     ) -> DurableCajamarCancellationOutcome:
         """One original NFS-e cancellation claim, one reviewed transport attempt.
@@ -1870,6 +1886,7 @@ class FiscalApplicationService:
             raise FiscalValidationError("Invalid Cajamar cancellation dependencies")
         request, original, invoice = self.preflight_cajamar_nfse_cancellation(
             scope=scope, document_id=document_id,
+            cancellation_reason=cancellation_reason,
         )
         with self._uow_factory() as uow:
             uow.lifecycle.assert_scope(document_id, scope)
