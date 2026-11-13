@@ -1,0 +1,15 @@
+# A1 Vault durable host bind — opt-in ONLY after read-only host audit and escrow/restore.
+# Activate in the SAME canonical Compose, never a second A1 Vault or API.
+# Requires pre-existing host directory owned by API UID 10001, mode 0700.
+# A1 files and master key must be preserved before switching from an ephemeral path.
+services:
+  nfcore-api:
+    environment:
+      NFCORE_A1_VAULT_DIR: /var/lib/nfcore/a1-vault
+    volumes:
+      - type: bind
+        source: ${NFCORE_A1_VAULT_HOST_DIR:?preflight-and-provision-host-vault-first}
+        target: /var/lib/nfcore/a1-vault
+        read_only: false
+        bind:
+          create_host_path: false
