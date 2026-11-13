@@ -55,6 +55,13 @@ from kordena_fiscal.gateway.cajamar_geisweb_homologation import CAJAMAR_GEISWEB_
 from kordena_fiscal.gateway.cajamar_geisweb_invoice_interpreter import (
     decode_cajamar_archived_invoice,
 )
+from kordena_fiscal.gateway.osasco_rtc_cancellation_builder import (
+    OsascoCancellationDecision,
+)
+from kordena_fiscal.gateway.osasco_rtc_homologation import OSASCO_RTC_PROVIDER_ID
+from kordena_fiscal.gateway.osasco_rtc_invoice_interpreter import (
+    decode_osasco_archived_full_invoice,
+)
 from kordena_fiscal.gateway.sp4_municipal_canonical import (
     Sp4OriginalRps,
     Sp4VerifiedInvoice,
@@ -225,6 +232,15 @@ class DurableCajamarCancellationOutcome:
     """Municipal cancellation result archived with its fiscal state transaction."""
 
     decision: CajamarCancellationDecision
+    lifecycle: FiscalStateSnapshot
+    archive_reference: str
+
+
+@dataclass(frozen=True, slots=True)
+class DurableOsascoCancellationOutcome:
+    """One verified WCF cancellation response and its durable fiscal lifecycle."""
+
+    decision: OsascoCancellationDecision
     lifecycle: FiscalStateSnapshot
     archive_reference: str
 
@@ -1938,6 +1954,149 @@ class FiscalApplicationService:
             entry = uow.archive.append(event)
             uow.commit()
         return DurableCajamarCancellationOutcome(
+            decision=decision, lifecycle=final, archive_reference=entry.entry_id,
+        )
+
+    def preflight_osasco_nfse_cancellation(
+        self, *, scope: ExecutionScope, document_id: str, cancellation_reason: str,
+    ) -> tuple[NfseAuthorizationRequest, Sp4OriginalRps, Sp4VerifiedInvoice]:
+        """Source-verified WCF cancellation: same original taxpayer and official note."""
+        if (
+            not isinstance(scope, ExecutionScope)
+            or scope.environment is not FiscalEnvironment.HOMOLOGATION
+            or not isinstance(cancellation_reason, str)
+            or not 1 <= len(cancellation_reason.strip()) <= 500
+            or any(ord(ch) < 32 for ch in cancellation_reason)
+        ):
+            raise FiscalValidationError("Osasco cancellation requires reviewed reason and scope")
+        with self._uow_factory() as uow:
+            request = self._load_prepared_from_uow(uow, scope, document_id)
+            if not isinstance(request, NfseAuthorizationRequest):
+                raise PersistenceStateError("Osasco cancellation needs canonical NFS-e")
+            uow.lifecycle.assert_scope(document_id, scope)
+            current = uow.lifecycle.get(document_id)
+            attempts = uow.idempotency.attempts(request.idempotency_key)
+            if (
+                current is None or current.state is not FiscalDocumentState.AUTHORIZED
+                or not attempts
+                or attempts[-1].status is not IssuanceAttemptStatus.AUTHORIZED
+                or attempts[-1].document_id != document_id
+                or attempts[-1].request_fingerprint != request.request_fingerprint
+                or request.document.issuer.address.jurisdiction.municipality_ibge_code
+                != "3534401"
+                or request.document.issuer.municipal_registration is None
+            ):
+                raise PersistenceStateError(
+                    "Osasco cancellation requires one authorized original invoice"
+                )
+            entries = uow.archive.list_for_document(scope, document_id)
+            originals = [
+                e for e in entries
+                if e.kind is FiscalArchiveKind.OTHER
+                and e.media_type == SP4_ORIGINAL_RPS_MEDIA_TYPE
+            ]
+            invoices = [
+                e for e in entries
+                if e.kind is FiscalArchiveKind.AUTHORIZED_XML
+                and e.media_type == "application/xml"
+            ]
+            if len(originals) != 1 or len(invoices) != 1:
+                raise PersistenceStateError("Osasco original RPS and official XML are required")
+            FiscalArchiveVerifier().verify_entry(originals[0])
+            FiscalArchiveVerifier().verify_entry(invoices[0])
+            original = decode_sp4_original(
+                originals[0].content, scope=scope, request=request,
+            )
+            invoice = decode_osasco_archived_full_invoice(
+                invoices[0].content, original,
+            )
+            if attempts[-1].result_reference != invoice.invoice_reference:
+                raise PersistenceConflictError(
+                    "Osasco cancellation invoice number disagrees with authorization"
+                )
+        provider = self.resolve_configured_provider_id(
+            scope=scope, document_kind=FiscalDocumentKind.NFSE,
+            jurisdiction=request.document.issuer.address.jurisdiction,
+            operation="cancel",
+        )
+        if provider != OSASCO_RTC_PROVIDER_ID:
+            raise FiscalValidationError("Osasco cancellation provider binding mismatch")
+        return request, original, invoice
+
+    def cancel_prepared_osasco_nfse(
+        self, *, scope: ExecutionScope, document_id: str,
+        submit_verified_cancel: Callable[
+            [NfseAuthorizationRequest, Sp4OriginalRps, Sp4VerifiedInvoice, str],
+            OsascoCancellationDecision,
+        ],
+        cancellation_reason: str,
+        occurred_at: datetime, retention: RetentionPolicyMetadata,
+    ) -> DurableOsascoCancellationOutcome:
+        """Claim before exactly one WCF POST, archive reply and reconcile outcome.
+
+        Ambiguous/time-out leaves CANCEL_REQUESTED for read-only recovery.
+        No subsequent invocation may transmit an identical or changed command.
+        """
+        if (
+            not callable(submit_verified_cancel)
+            or not isinstance(occurred_at, datetime)
+            or occurred_at.tzinfo is None
+            or not isinstance(retention, RetentionPolicyMetadata)
+        ):
+            raise FiscalValidationError("Invalid Osasco municipal cancellation authority")
+        request, original, invoice = self.preflight_osasco_nfse_cancellation(
+            scope=scope, document_id=document_id,
+            cancellation_reason=cancellation_reason,
+        )
+        with self._uow_factory() as uow:
+            uow.lifecycle.assert_scope(document_id, scope)
+            previous = uow.lifecycle.get(document_id)
+            if previous is None or previous.state is not FiscalDocumentState.AUTHORIZED:
+                raise PersistenceConflictError("Concurrent Osasco cancellation request")
+            claim = self._state_machine.transition(
+                previous, FiscalDocumentState.CANCEL_REQUESTED,
+                occurred_at=occurred_at, reason="Osasco WCF cancellation claimed",
+                correlation_id=scope.correlation_id,
+            )
+            uow.lifecycle.save(claim, expected_version=previous.version)
+            uow.commit()
+        # No automatic exception retry: a failed exchange may already have
+        # been processed by the municipality. The durable claim survives.
+        decision = submit_verified_cancel(
+            request, original, invoice, cancellation_reason,
+        )
+        if not isinstance(decision, OsascoCancellationDecision):
+            raise FiscalValidationError("Unverified Osasco cancellation transport response")
+        event = FiscalArchiveEntry.build(
+            scope=scope, document_reference=document_id,
+            kind=FiscalArchiveKind.FISCAL_EVENT,
+            content=decision.response_xml, media_type="application/xml",
+            archived_at=occurred_at, retention=retention,
+        )
+        with self._uow_factory() as uow:
+            uow.lifecycle.assert_scope(document_id, scope)
+            current = uow.lifecycle.get(document_id)
+            if current != claim:
+                raise PersistenceConflictError("Osasco cancellation changed during delivery")
+            final = current
+            if decision.confirmed is not None:
+                final = self._state_machine.transition(
+                    current,
+                    (
+                        FiscalDocumentState.CANCELLED if decision.confirmed
+                        else FiscalDocumentState.AUTHORIZED
+                    ),
+                    occurred_at=occurred_at,
+                    reason=(
+                        "Osasco cancellation officially confirmed"
+                        if decision.confirmed else "Osasco cancellation officially rejected"
+                    ),
+                    correlation_id=scope.correlation_id,
+                )
+                uow.lifecycle.save(final, expected_version=current.version)
+            entry = uow.archive.append(event)
+            uow.commit()
+        return DurableOsascoCancellationOutcome(
             decision=decision, lifecycle=final, archive_reference=entry.entry_id,
         )
 
