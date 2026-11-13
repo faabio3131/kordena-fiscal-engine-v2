@@ -576,16 +576,19 @@ def build_runtime_fiscal_handler_factory(
                     not isinstance(key, str) or not key.strip() or len(key) > 256
                     or set(payload) != {
                         "unit_id", "environment", "document_id", "human_approval",
+                        "cancellation_reason",
                     }
                     or payload.get("unit_id") != scope.unit_id
                     or payload.get("environment") != scope.environment.value
                     or payload.get("human_approval") is not True
                     or not isinstance(payload.get("document_id"), str)
                     or not str(payload["document_id"]).strip()
+                    or not isinstance(payload.get("cancellation_reason"), str)
                 ):
                     raise FiscalValidationError("Human-reviewed Cajamar cancellation required")
                 application.preflight_cajamar_nfse_cancellation(
                     scope=scope, document_id=str(payload["document_id"]),
+                    cancellation_reason=str(payload["cancellation_reason"]),
                 )
 
             def execute_cajamar_cancel(
@@ -595,6 +598,7 @@ def build_runtime_fiscal_handler_factory(
                 result = application.cancel_prepared_cajamar_nfse(
                     scope=scope, document_id=str(payload["document_id"]),
                     submit_verified_cancel=reviewed_cancel,
+                    cancellation_reason=str(payload["cancellation_reason"]),
                     occurred_at=datetime.now(UTC), retention=retention,
                 )
                 return {
