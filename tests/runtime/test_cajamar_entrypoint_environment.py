@@ -21,7 +21,11 @@ from kordena_fiscal.runtime.canonical_fiscal_composition import (
 )
 from kordena_fiscal.runtime.config import RuntimeConfigurationError
 from kordena_fiscal.vault.encrypted_a1 import EncryptedA1Vault
-from kordena_fiscal.xml.schema import SchemaResource, SchemaSet
+from kordena_fiscal.xml.schema import (
+    SchemaIntegrityError,
+    SchemaResource,
+    SchemaSet,
+)
 
 
 def _fixture(tmp_path: Path) -> Path:
@@ -137,7 +141,7 @@ def test_cajamar_refuses_unpinned_or_unsafe_config_without_network(
     ).hexdigest()
     doc["xsd_resources"]["test.xsd"] = "1" * 64
     manifest.write_text(json.dumps(doc), encoding="utf-8")
-    with pytest.raises(Exception, match="digest mismatch"):
+    with pytest.raises(SchemaIntegrityError, match="digest mismatch"):
         CajamarReviewedStartup.load(str(manifest))
     doc["xsd_resources"]["test.xsd"] = hashlib.sha256(
         (tmp_path / "test.xsd").read_bytes(),
