@@ -222,7 +222,8 @@ def _extract_offline(archive: Path, stage: Path) -> int:
                 if (not isinstance(name, str) or not _RECORD.fullmatch(name)
                         or not isinstance(digest, str)
                         or not re.fullmatch(r"[0-9a-f]{64}", digest)
-                        or not isinstance(size, int) or not 34 <= size <= _OFFLINE_MAX_RECORD_BYTES):
+                        or not isinstance(size, int)
+                        or not 34 <= size <= _OFFLINE_MAX_RECORD_BYTES):
                     raise VaultOpsError()
                 expected_names.add("records/" + name)
                 payload = zf.read("records/" + name)
