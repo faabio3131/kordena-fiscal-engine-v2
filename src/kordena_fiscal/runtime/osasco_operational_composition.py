@@ -10,7 +10,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from kordena_fiscal.application.service import FiscalApplicationService
-from kordena_fiscal.domain import ExecutionScope
 from kordena_fiscal.gateway.osasco_rtc_homologation import (
     OsascoOperationReceipt,
     OsascoPreparedOperation,
