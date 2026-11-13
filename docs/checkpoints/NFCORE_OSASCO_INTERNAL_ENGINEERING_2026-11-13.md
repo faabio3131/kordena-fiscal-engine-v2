@@ -24,7 +24,7 @@
 | Proteção da chave municipal | `runtime/osasco_credentials.py` | `SecretResolutionService` / `FiscalSecretVault`; conferência tenant/unidade/CNPJ/IM; testes sem credencial real | IMPLEMENTED_NOT_CERTIFIED |
 | Contrato WSDL/XSD verificado de Osasco | WSDL 2026 citado, hash/schema e operação por método devem ser pinados | manual municipal v2.1 não inclui pacote de schema consumível aqui | EXTERNAL_CONTRACT_PENDING |
 | Dados RTC reais por perfil fiscal | `OsascoRtcTaxFields` exigido pelo builder | classificação NBS, cClassTrib, cidade/incidência e tributos precisam de regra proveniente do motor fiscal | INTERNAL_PENDING |
-| XML oficial completo e integridade | `ConsultarNotaCompleta` pelo recibo original; verificador injetado | formato exato do retorno e prova municipal atual precisam de contrato/fixture oficial | EXTERNAL_CONTRACT_PENDING |
+| XML oficial completo e integridade | `ConsultarNotaCompleta` pelo recibo original; parser estrito `osasco_rtc_invoice_interpreter.py` | modelo de resposta da Prefeitura v10.6/2024 e regressões sintéticas de RPS/CNPJ/valor/nota única; XSD vigente e retorno oficial não verificados | IMPLEMENTED_SYNTHETIC / EXTERNAL_CONTRACT_PENDING |
 | Cancelamento/substituição integrados no lifecycle | `osasco_rtc_cancellation_builder.py` cobre envelope; composição de comando/jornada ainda pendente | sem teste E2E de cancelamento no Portal em HEAD | INTERNAL_PENDING |
 | Provisionamento real no entrypoint API | `build_osasco_trusted_transport` compõe contrato/secret por portas; não habilita automaticamente no `api:app` | depende da fonte governada de segredos e contrato de provedor | INTERNAL_PENDING / EXTERNAL_INPUT |
 | CI do HEAD exato, PostgreSQL, frontend/E2E, containers | `feat/nfcore-web-osasco-ci-20261113` como branch de CI | conferir sucesso completo do SHA de #466, nunca herdar selo de #463 | PENDING |
@@ -40,3 +40,12 @@
 ### Gatilho para fechamento
 
 Concluir as pendências internas, demonstrar teste sintético real do `api:app` com WSDL/XSD fixture e chave sintética, revisão independente A/B e CI verde no HEAD da própria #466. Artefatos externos oficiais e credenciais reais permanecem fase distinta e não podem ser forjados. Não fazer merge/deploy sem autorização.
+
+
+## Evidência adicional da Prefeitura — formato histórico da consulta (13/11/2026)
+
+Fonte **oficial, porém histórica**: [Manual Web Service de Osasco v10.6, set/2024, páginas 18–20](https://nfe.osasco.sp.gov.br/EissnfeWebApp/Portal/Manual/Gera%C3%A7%C3%A3o%20de%20NF-E%20via%20Web%20Service%20V10.6.pdf). Descreve `ConsultarNotaCompletaResponse/ConsultarNotaCompletaResult` e `NotasGeradas/NotaFiscalRelatorioDTO`, com `NumeroRecibo`, `Numero`, `CodigoAutenticidade`, `Prestador/CNPJ`, `Valor`, `QtdeNotas`. O manual v2.1 de abril/2026 confirma que `ConsultarNotaCompleta` permanece disponível para qualquer competência.
+
+Foi criado `gateway/osasco_rtc_invoice_interpreter.py`: uma nota, recibo, CNPJ e valor precisam coincidir com o `Sp4OriginalRps` durável; erro SOAP, múltiplas notas, cancelamento, DTD ou divergência não autorizam automaticamente. Os testes passam XML sintético baseado no **modelo documental** histórico e não substituem validação por WSDL/XSD oficial vigente, resposta real ou inspeção independente de autorização fiscal. O `Sp4MunicipalCanonicalGateway` continua exigindo o `verify_official_invoice_xml` injetado para promover o status a autorizado.
+
+Ainda faltam integração do cancelamento no Portal, mapeamento RTC completo por política tributária validada, provisionamento real do entrypoint com os contratos de provedor e execução da matriz final no HEAD combinado.
