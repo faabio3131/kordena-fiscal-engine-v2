@@ -6,7 +6,7 @@ import base64
 import json
 from collections.abc import Callable
 from dataclasses import dataclass, replace
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 
 from kordena_fiscal.application.cajamar_substitution_review import (
