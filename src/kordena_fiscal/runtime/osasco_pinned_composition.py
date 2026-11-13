@@ -73,6 +73,7 @@ def build_osasco_pinned_operational_ports(
     resolve_policy: Callable[
         [NfseAuthorizationRequest, Sp4OriginalRps], OsascoReviewedRtcPolicy
     ],
+    fiscal_issuer_policy: Callable[[NfseAuthorizationRequest], None],
 ) -> OsascoTrustedRuntimePorts:
     """Prepare a single eligible municipal provider; no transport I/O at startup."""
     if (
@@ -80,6 +81,7 @@ def build_osasco_pinned_operational_ports(
         or not isinstance(wsdl, OsascoPinnedWcfWsdl)
         or not isinstance(schema, OsascoReviewedSchemaPorts)
         or not callable(resolve_policy)
+        or not callable(fiscal_issuer_policy)
     ):
         raise ValueError("Reviewed Osasco official municipal dependencies required")
     validators = {
@@ -140,13 +142,15 @@ def build_osasco_pinned_operational_ports(
         ):
             raise FiscalValidationError("Osasco municipal original RPS must be durable")
 
+    def verify_rps_identity(original: Sp4OriginalRps, raw: bytes) -> None:
+        valid_rps(original)
+        validate(raw, wsdl.sha256)
+
     return OsascoTrustedRuntimePorts(
         transport=transport,
         build_wcf_operation=build_issue,
-        verify_wcf_rps_identity=lambda original, raw: (
-            valid_rps(original), validate(raw, wsdl.sha256)
-        ) and None,
-        fiscal_issuer_policy=lambda request: None,
+        verify_wcf_rps_identity=verify_rps_identity,
+        fiscal_issuer_policy=fiscal_issuer_policy,
         validate_prepared_rps=valid_rps,
         verify_official_invoice_xml=schema.verify_full_invoice,
         verify_official_cancel=schema.verify_cancellation,
