@@ -31,6 +31,24 @@ não existe prova de upload ou armazenamento no cofre operacional.
   dispositivo `DESKTOP-URCTNQ1` offline; cota remota restante 0%.
   **Nenhuma sessão SSH, modificação no cofre, restart ou deploy foi feita.**
 
+## Evidência nova da auditoria Contabo — 13/11/2026
+
+Na VPS `vmi3692211`, o auditor A1 instalado via Plano B retornou
+`DEPLOY_SHA_EXACT=PASS` e `A1_VAULT_INFRA_GATE=PRECHECK_LOCAL_PARCIAL`.
+`docker inspect` confirmou **um bind RW** com origem e destino
+`/var/lib/nfcore/vault`. Diretório/permissões/formato da chave presentes;
+**nenhum `*.a1.enc` no instante da leitura**. Backup externo, custódia
+externa da chave e recuperação isolada seguem **NÃO VERIFICADOS**.
+A configuração efetiva do Compose do host ainda deve ser inspecionada;
+a versão no Git de `compose.prod.yml` não documenta esse bind.
+
+**Decisão de continuidade:** preservar o bind atual; não criar segundo cofre,
+não trocar `NFCORE_A1_VAULT_DIR` para `/var/lib/nfcore/a1-vault`.
+Reconciliação de overlay opt-in: usar destino
+`/var/lib/nfcore/vault`, com a fonte `NFCORE_A1_VAULT_HOST_DIR`
+definida para a mesma origem auditada e prova do Compose efetivo antes de
+recreate. Evitar duplicar a montagem se o Compose host já a declara.
+
 ## Engenharia preparada na própria PR #462
 
 - `deploy/contabo/compose.a1-vault.opt-in.yml`: overlay **não ativado**,
@@ -60,7 +78,7 @@ não existe prova de upload ou armazenamento no cofre operacional.
    comparar hashes/contagens, sem trocar a chave mestra. Se a procedência
    for ambígua, suspender substituição do contêiner; não repetir upload.
 3. Prover diretório dedicado **fora do checkout Git e da camada efêmera**,
-   exemplo `/opt/fm/nfcore/secure/a1-vault`, dono UID/GID 10001,
+   na instalação auditada `/var/lib/nfcore/vault`, dono UID/GID 10001,
    permissão 0700 (arquivos 0600). Usar mesmo caminho como
    `NFCORE_A1_VAULT_HOST_DIR` na configuração privada do Compose.
 4. Prover destino restic **realmente fora da VPS** com autenticação própria:
