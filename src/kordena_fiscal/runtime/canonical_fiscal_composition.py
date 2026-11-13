@@ -368,6 +368,9 @@ def build_runtime_fiscal_handler_factory(
         CajamarCancellationDecision,
     ] | None = None,
     cajamar_runtime_ports: CajamarTrustedRuntimePorts | None = None,
+    cajamar_port_builder: Callable[
+        [FiscalApplicationService], CajamarTrustedRuntimePorts
+    ] | None = None,
 ) -> Any:
     """Register all four canonical operations without granting fiscal readiness.
 
@@ -403,6 +406,14 @@ def build_runtime_fiscal_handler_factory(
         not isinstance(cajamar_runtime_ports, CajamarTrustedRuntimePorts)
         or sp4_reviewed_municipalities is not None
         or cajamar_verified_cancel is not None
+        or nfse_gateway is not None
+        or cajamar_port_builder is not None
+    ):
+        raise ValueError("Conflicting trusted Cajamar fiscal authorities")
+    if cajamar_port_builder is not None and (
+        not callable(cajamar_port_builder)
+        or cajamar_verified_cancel is not None
+        or sp4_reviewed_municipalities is not None
         or nfse_gateway is not None
     ):
         raise ValueError("Conflicting trusted Cajamar fiscal authorities")
@@ -442,8 +453,14 @@ def build_runtime_fiscal_handler_factory(
         # No secondary persistence, fiscal router, auth or signing identity.
         active_municipalities = sp4_reviewed_municipalities
         active_cajamar_cancel = cajamar_verified_cancel
-        if cajamar_runtime_ports is not None:
-            reviewed_ports, reviewed_cancel = cajamar_runtime_ports.attach(application)
+        selected_cajamar_ports = (
+            cajamar_port_builder(application)
+            if cajamar_port_builder is not None else cajamar_runtime_ports
+        )
+        if selected_cajamar_ports is not None:
+            if not isinstance(selected_cajamar_ports, CajamarTrustedRuntimePorts):
+                raise ValueError("Cajamar operator provisioning returned invalid ports")
+            reviewed_ports, reviewed_cancel = selected_cajamar_ports.attach(application)
             active_municipalities = {
                 "cajamar-geisweb-homologation": reviewed_ports,
             }
