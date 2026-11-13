@@ -30,7 +30,10 @@ from cryptography.hazmat.primitives.serialization import pkcs12
 from lxml import etree
 
 from kordena_fiscal.application.service import FiscalApplicationService
-from kordena_fiscal.compliance.nfse_preaudit import nfse_preaudit
+from kordena_fiscal.compliance.nfse_preaudit import (
+    ISS_RATE_CEILING,
+    ISS_RATE_FLOOR,
+)
 from kordena_fiscal.domain import Cnpj, ExecutionScope, FiscalAddress, FiscalValidationError
 from kordena_fiscal.gateway.cajamar_geisweb_homologation import (
     CajamarGeiswebWsdl,
@@ -339,8 +342,32 @@ class CajamarReviewedStartup:
                 raise FiscalValidationError("Invalid original Cajamar XMLDSig") from exc
 
         def check_request(request: NfseAuthorizationRequest) -> None:
+            # Keep municipal review distinct from the National DPS cTribNac
+            # format: this GeisWeb service uses the municipal service code.
             self._policy(request)
-            nfse_preaudit(request)
+            doc = request.document
+            if (
+                doc.scope.environment.value != "homologation"
+                or doc.issuer.address.jurisdiction.state_code != "SP"
+                or doc.issuer.address.jurisdiction.municipality_ibge_code != "3509205"
+                or doc.service_jurisdiction != doc.issuer.address.jurisdiction
+                or len(doc.services) != 1
+            ):
+                raise FiscalValidationError("Cajamar scope/issuer/service mismatch")
+            service = doc.services[0]
+            if (
+                not service.municipal_service_code
+                or not service.source_normative
+                or service.taxable_amount.amount <= 0
+                or service.iss_amount.amount < 0
+                or service.iss_amount.amount > service.taxable_amount.amount
+            ):
+                raise FiscalValidationError("Cajamar source tax basis is unavailable")
+            if service.iss_amount.amount > 0:
+                rate = service.iss_amount.amount * Decimal("100")
+                rate /= service.taxable_amount.amount
+                if not ISS_RATE_FLOOR <= rate <= ISS_RATE_CEILING:
+                    raise FiscalValidationError("Cajamar ISS rate outside reviewed statutory range")
 
         def issue_fields(
             request: NfseAuthorizationRequest, original: Sp4OriginalRps,
