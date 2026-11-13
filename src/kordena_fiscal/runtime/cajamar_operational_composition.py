@@ -11,8 +11,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from kordena_fiscal.application.service import FiscalApplicationService
-from kordena_fiscal.control_plane.commercial import DurableProviderBindingResolver
-from kordena_fiscal.domain import Cnpj, ExecutionScope
+from kordena_fiscal.domain import (
+    BrazilianJurisdiction, Cnpj, ExecutionScope, FiscalDocumentKind,
+)
 from kordena_fiscal.gateway.cajamar_geisweb_cancellation_builder import (
     CajamarCancellationDecision,
 )
@@ -26,7 +27,6 @@ from kordena_fiscal.gateway.sp4_municipal_canonical import (
     Sp4VerifiedInvoice,
 )
 from kordena_fiscal.issuance.nfe_nfse import NfseAuthorizationRequest
-from kordena_fiscal.persistence.ports import FiscalUnitOfWorkFactory
 from kordena_fiscal.vault.encrypted_a1 import EncryptedA1Vault
 
 from .sp4_municipal_canonical_composition import Sp4ReviewedMunicipalPorts
@@ -105,7 +105,7 @@ class CajamarTrustedRuntimePorts:
 
 def build_cajamar_trusted_transport(
     *,
-    uow_factory: FiscalUnitOfWorkFactory,
+    application: FiscalApplicationService,
     vault: EncryptedA1Vault,
     pinned_contract: CajamarGeiswebWsdl,
     validate_signed_xml: Callable[[bytes, str], None],
@@ -121,8 +121,22 @@ def build_cajamar_trusted_transport(
         or not callable(validate_signed_xml)
     ):
         raise ValueError("Cajamar requires reviewed official contract and A1 vault")
+    class _CanonicalProviderResolver:
+        """Use the same application configuration UoW, never a second registry."""
+
+        def resolve_provider_id(
+            self, *, scope: ExecutionScope,
+            document_kind: FiscalDocumentKind,
+            jurisdiction: BrazilianJurisdiction,
+            operation: str,
+        ) -> str:
+            return application.resolve_configured_provider_id(
+                scope=scope, document_kind=document_kind,
+                jurisdiction=jurisdiction, operation=operation,
+            )
+
     return CajamarGeiswebHomologationTransport(
-        resolver=DurableProviderBindingResolver(uow_factory),
+        resolver=_CanonicalProviderResolver(),
         resolve_certificate=lambda scope, cnpj: vault.resolve(
             scope=scope, issuer_cnpj=cnpj,
         ),
