@@ -695,7 +695,8 @@ class FiscalApplicationService:
                 or document.scope.environment is not FiscalEnvironment.HOMOLOGATION
                 or not document.scope.host_namespace
                 or document.issuer.address.jurisdiction.state_code != "SP"
-                or document.issuer.address.jurisdiction.municipality_ibge_code not in {"3509205", "3534401"}
+                or document.issuer.address.jurisdiction.municipality_ibge_code
+                not in {"3509205", "3534401"}
             ):
                 raise FiscalValidationError(
                     "SP4 municipal original RPS requires reviewed scope and series"
