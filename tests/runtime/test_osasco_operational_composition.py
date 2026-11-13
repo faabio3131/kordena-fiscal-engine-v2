@@ -1,0 +1,67 @@
+"""Osasco WCF composition: one canonical RPS loader and no implicit activation."""
+from __future__ import annotations
+
+from unittest.mock import Mock
+
+import pytest
+
+from kordena_fiscal.application.service import FiscalApplicationService
+from kordena_fiscal.gateway.osasco_rtc_homologation import OsascoRtcHomologationTransport
+from kordena_fiscal.persistence import SqliteFiscalDatabase
+from kordena_fiscal.runtime.canonical_fiscal_composition import (
+    build_runtime_fiscal_handler_factory,
+)
+from kordena_fiscal.runtime.osasco_operational_composition import OsascoTrustedRuntimePorts
+
+
+def _ports() -> OsascoTrustedRuntimePorts:
+    transport = OsascoRtcHomologationTransport(
+        resolver=Mock(),
+        resolve_key=Mock(side_effect=AssertionError("no real key at composition")),
+        validated_request=Mock(),
+        contract_for_method=Mock(),
+    )
+    return OsascoTrustedRuntimePorts(
+        transport=transport,
+        build_wcf_operation=Mock(),
+        verify_wcf_rps_identity=Mock(),
+        fiscal_issuer_policy=Mock(),
+        validate_prepared_rps=Mock(),
+        verify_official_invoice_xml=Mock(),
+        interpret_official_result=Mock(),
+    )
+
+
+def test_osasco_attaches_to_existing_application_factory_without_second_uow(
+    tmp_path: object,
+) -> None:
+    from pathlib import Path
+
+    assert isinstance(tmp_path, Path)
+    db = SqliteFiscalDatabase(tmp_path / "osasco-operational.sqlite")
+    db.initialize()
+    application = FiscalApplicationService(db)
+    ports = _ports()
+    reviewed = ports.attach(application)
+    assert reviewed.load_original_rps.__closure__ is not None
+    handlers = build_runtime_fiscal_handler_factory(
+        sp4_reviewed_municipalities={"osasco-rtc-homologation": reviewed},
+    )(application)
+    assert {"issueFiscalDocument", "queryFiscalDocument"} <= set(handlers)
+    default = build_runtime_fiscal_handler_factory()(application)
+    assert "issueFiscalDocument" in default
+    assert "cancelCajamarNfse" not in default
+
+
+def test_osasco_port_set_rejects_missing_external_verified_interpreter() -> None:
+    ports = _ports()
+    with pytest.raises(ValueError, match="complete reviewed"):
+        OsascoTrustedRuntimePorts(
+            transport=ports.transport,
+            build_wcf_operation=ports.build_wcf_operation,
+            verify_wcf_rps_identity=ports.verify_wcf_rps_identity,
+            fiscal_issuer_policy=ports.fiscal_issuer_policy,
+            validate_prepared_rps=ports.validate_prepared_rps,
+            verify_official_invoice_xml=ports.verify_official_invoice_xml,
+            interpret_official_result=None,  # type: ignore[arg-type]
+        )
