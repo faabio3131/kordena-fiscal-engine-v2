@@ -2269,6 +2269,18 @@ class FiscalApplicationService:
                     or candidate.state is not FiscalDocumentState.READY_TO_TRANSMIT
                 ):
                     raise PersistenceConflictError("Barueri replacement changed before claim")
+                # A PMB004 Type 2 reason 03 already carries the new RPS.
+                # Claim its original fiscal lifecycle in the SAME transaction:
+                # the regular issuance endpoint must never POST that RPS again.
+                substituted_claim = self._state_machine.transition(
+                    candidate, FiscalDocumentState.TRANSMITTING,
+                    occurred_at=occurred_at,
+                    reason="Barueri replacement RPS included in pending municipal event",
+                    correlation_id=scope.correlation_id,
+                )
+                uow.lifecycle.save(
+                    substituted_claim, expected_version=candidate.version,
+                )
             reserved = uow.sequences.reserve_next(
                 FiscalSequenceKey.from_scope(
                     scope, model=InternalFiscalSequenceStream.NFSE_RPS, series=1,
