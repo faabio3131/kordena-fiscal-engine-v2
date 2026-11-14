@@ -309,6 +309,9 @@ class OsascoReviewedStartup:
             raise FiscalValidationError("Osasco requires single canonical service")
         return candidates[0]
 
+    def validate_issuer(self, request: NfseAuthorizationRequest) -> None:
+        self._issuer(request)
+
     def schema_ports(self) -> OsascoReviewedSchemaPorts:
         def check_request(operation: str, raw: bytes) -> None:
             root = _element(raw, _WCF + operation)
@@ -380,7 +383,7 @@ class OsascoReviewedStartup:
             secrets=secrets, workload_id=self.workload_id, wsdl=self.wsdl,
             schema=self.schema_ports(),
             resolve_policy=lambda request, original: self._issuer(request).policy,
-            fiscal_issuer_policy=lambda request: self._issuer(request),
+            fiscal_issuer_policy=self.validate_issuer,
         )
 
 
@@ -415,7 +418,7 @@ def build_osasco_secret_service(
                 or not 128 <= stat_info.st_size <= 65536
             ):
                 raise ValueError
-            credentials, _ = google.auth.load_credentials_from_file(
+            credentials, _ = google.auth.load_credentials_from_file(  # type: ignore[no-untyped-call]
                 str(credential_path), scopes=[
                     "https://www.googleapis.com/auth/cloud-platform",
                 ],
