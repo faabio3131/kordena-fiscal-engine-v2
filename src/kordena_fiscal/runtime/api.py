@@ -15,6 +15,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from kordena_fiscal.application.bling_operations import BlingOperationsService
+from kordena_fiscal.application.service import FiscalApplicationService
 from kordena_fiscal.application.command_commercial import CommandCommercialReceiver
 from kordena_fiscal.application.commercial_acquisition import CommercialAcquisitionService
 from kordena_fiscal.cognitive.composition import build_cognitive_router
@@ -1205,17 +1206,21 @@ def build_entrypoint_fiscal_handler_factory(
                 "Reviewed municipal adapters require staging/production runtime"
             )
         return None
+    secrets_factory: Callable[[FiscalApplicationService], SecretResolutionService] | None
     if osasco_requested:
         if osasco_secret_vault is not None:
-            def osasco_secrets(application):
+            def provided_osasco_secrets(
+                application: FiscalApplicationService,
+            ) -> SecretResolutionService:
                 return SecretResolutionService(
                     unit_of_work_factory=application._uow_factory,
                     vault=osasco_secret_vault,
                 )
+            secrets_factory = provided_osasco_secrets
         else:
-            osasco_secrets = build_osasco_gsm_secret_factory(environ)
+            secrets_factory = build_osasco_gsm_secret_factory(environ)
     else:
-        osasco_secrets = None
+        secrets_factory = None
     configured_factory = build_runtime_fiscal_handler_factory(
         certificate_vault=vault,
         trusted_signed_dps_builder=build_signed_dps,
@@ -1230,7 +1235,7 @@ def build_entrypoint_fiscal_handler_factory(
             environ, vault=vault,
         ),
         osasco_port_builder=build_osasco_port_builder_from_environ(
-            environ, secrets_factory=osasco_secrets,
+            environ, secrets_factory=secrets_factory,
         ),
     )
     # The shared builder's public annotation is Any, but its closure implements
