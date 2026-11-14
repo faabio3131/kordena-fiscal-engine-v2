@@ -2,7 +2,9 @@
 
 Confirmed against Prefeitura de Barueri Guia para Conversao RPS em Lote
 v1.07 (January/2026), section 7 and annexes: return NFE_Layout-v3.pdf
-(August/2025), paired with *input* RPS_Layout-v4.2.pdf (January/2026).
+(August/2025). The current input RPS_Layout.pdf is revision 4.4
+(May/2026), still transmitted as PMB004; its additional conditional
+service-address rules do not change this return-file structure.
 Do not confuse the version 5.5 ERROR LIST with return layout. An error
 mirror or OK200 does not prove authorization. The actual fiscal XML must
 still be recovered and independently verified by the canonical gateway.
