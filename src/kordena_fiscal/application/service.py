@@ -5,15 +5,26 @@ from __future__ import annotations
 import base64
 import json
 from collections.abc import Callable
-from dataclasses import dataclass
-from datetime import datetime
+from dataclasses import dataclass, replace
+from datetime import UTC, datetime
 from enum import StrEnum
 
+from kordena_fiscal.application.cajamar_substitution_review import (
+    CajamarSubstitutionReview,
+    review_cajamar_substitution,
+)
 from kordena_fiscal.archive import (
     FiscalArchiveEntry,
     FiscalArchiveKind,
     FiscalArchiveVerifier,
     RetentionPolicyMetadata,
+)
+from kordena_fiscal.compliance.cajamar_municipal_legal import (
+    validate_cajamar_automatic_cancellation,
+)
+from kordena_fiscal.compliance.osasco_municipal_legal import (
+    validate_osasco_automatic_cancellation,
+    validate_osasco_substitution_references,
 )
 from kordena_fiscal.contingency import (
     FiscalOutboxEnqueueResult,
@@ -41,6 +52,24 @@ from kordena_fiscal.gateway import (
     AuthorizationStatus,
     FiscalGatewayClient,
 )
+from kordena_fiscal.gateway.cajamar_geisweb_cancellation_builder import (
+    CajamarCancellationDecision,
+)
+from kordena_fiscal.gateway.cajamar_geisweb_homologation import CAJAMAR_GEISWEB_PROVIDER
+from kordena_fiscal.gateway.cajamar_geisweb_invoice_interpreter import (
+    decode_cajamar_archived_invoice,
+)
+from kordena_fiscal.gateway.osasco_rtc_cancellation_builder import (
+    OsascoCancellationDecision,
+)
+from kordena_fiscal.gateway.osasco_rtc_homologation import OSASCO_RTC_PROVIDER_ID
+from kordena_fiscal.gateway.osasco_rtc_invoice_interpreter import (
+    decode_osasco_archived_full_invoice,
+)
+from kordena_fiscal.gateway.sp4_municipal_canonical import (
+    Sp4OriginalRps,
+    Sp4VerifiedInvoice,
+)
 from kordena_fiscal.gateway.webiss_extrema_canonical import (
     ExtremaCancellationOutcome,
     ExtremaSubstitutionOutcome,
@@ -52,11 +81,18 @@ from kordena_fiscal.issuance.nfe_nfse import (
     NfseCanonicalDocument,
     NfseGatewayClient,
     NfseQueryClient,
+    build_nfse_request_fingerprint,
 )
 from kordena_fiscal.issuance.nfse_archive import (
     NFSE_PREPARED_MEDIA_TYPE,
     decode_prepared_nfse,
     encode_prepared_nfse,
+)
+from kordena_fiscal.issuance.sp4_original_rps_archive import (
+    SP4_ORIGINAL_RPS_MEDIA_TYPE,
+    decode_sp4_original,
+    encode_sp4_original,
+    validate_sp4_original,
 )
 from kordena_fiscal.issuance.webiss_extrema_builder import (
     EXTREMA_INTENT_MEDIA_TYPE,
@@ -194,6 +230,75 @@ class DurableExtremaSubstitutionOutcome:
     replacement_lifecycle: FiscalStateSnapshot
     archive_reference: str
 
+
+@dataclass(frozen=True, slots=True)
+class DurableCajamarCancellationOutcome:
+    """Municipal cancellation result archived with its fiscal state transaction."""
+
+    decision: CajamarCancellationDecision
+    lifecycle: FiscalStateSnapshot
+    archive_reference: str
+
+
+@dataclass(frozen=True, slots=True)
+class DurableOsascoCancellationOutcome:
+    """One verified WCF cancellation response and its durable fiscal lifecycle."""
+
+    decision: OsascoCancellationDecision
+    lifecycle: FiscalStateSnapshot
+    archive_reference: str
+
+
+
+def _nfse_rejection_archive(
+    result: NfseAuthorizationResult,
+    *,
+    scope: ExecutionScope,
+    document_id: str,
+    occurred_at: datetime,
+    retention: RetentionPolicyMetadata,
+) -> FiscalArchiveEntry:
+    """Keep complete typed rejection evidence in tenant-scoped fiscal archive.
+
+    Raw provider messages never become HTTP/Portal status strings or logs.
+    No truncation is allowed; over-limit payloads fail at the model boundary.
+    """
+    if result.status is not AuthorizationStatus.REJECTED:
+        raise FiscalValidationError("Only rejected NFS-e can have rejection evidence")
+    content = json.dumps(
+        {
+            "status": result.status.value,
+            "provider_name": result.provider.provider_name,
+            "provider_request_id": result.provider_request_id,
+            "rejections": [
+                {
+                    "code": item.code,
+                    "origin": item.origin,
+                    "raw_message": item.raw_message,
+                }
+                for item in result.normalized_rejections()
+            ],
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    ).encode("utf-8")
+    return FiscalArchiveEntry.build(
+        scope=scope,
+        document_reference=document_id,
+        kind=FiscalArchiveKind.PROVIDER_RESPONSE,
+        content=content,
+        media_type="application/vnd.nfcore.nfse-rejection.v1+json",
+        archived_at=occurred_at,
+        retention=retention,
+    )
+
+
+def _cajamar_policy_now() -> datetime:
+    """Canonical trusted server clock; injectable only in offline tests."""
+    from datetime import UTC
+
+    return datetime.now(UTC)
 
 
 class FiscalApplicationService:
@@ -478,6 +583,7 @@ class FiscalApplicationService:
         rejection_reason: str,
         occurred_at: datetime,
         correlation_id: str,
+        archive_entry: FiscalArchiveEntry | None = None,
     ) -> FiscalStateSnapshot:
         """Atomically couple terminal rejection and idempotency result."""
 
@@ -501,6 +607,11 @@ class FiscalApplicationService:
             )
             uow.idempotency.mark_rejected(key, generation, rejection_reason)
             uow.lifecycle.save(updated, expected_version=current.version)
+            if archive_entry is not None:
+                uow.lifecycle.assert_scope(document_id, archive_entry.scope)
+                if archive_entry.document_reference != document_id:
+                    raise PersistenceConflictError("Rejection archive document does not match")
+                uow.archive.append(archive_entry)
             uow.commit()
             return updated
 
@@ -571,29 +682,67 @@ class FiscalApplicationService:
             [FiscalNumberReservation], ExtremaRpsIntent
         ] | None = None,
         extrema_rps_series: int | None = None,
+        sp4_original_builder: Callable[
+            [NfseAuthorizationRequest, FiscalNumberReservation], Sp4OriginalRps
+        ] | None = None,
+        sp4_rps_series: int | None = None,
     ) -> DurablePreparedAuthorization:
         """Atomically reserve, validate and archive one provider-neutral NFS-e request."""
         if not isinstance(document, NfseCanonicalDocument):
             raise FiscalValidationError("document must be NfseCanonicalDocument")
         if not isinstance(retention, RetentionPolicyMetadata):
             raise FiscalValidationError("retention must be RetentionPolicyMetadata")
-        request = NfseAuthorizationRequest.build(document)
+        if document.dps_number is not None:
+            raise FiscalValidationError(
+                "DPS serial is assigned exclusively by the durable fiscal application"
+            )
         if (extrema_intent_builder is None) != (extrema_rps_series is None):
             raise FiscalValidationError(
                 "WebISS intent builder and RPS numbering series must be supplied together"
             )
         if extrema_intent_builder is not None and not callable(extrema_intent_builder):
             raise FiscalValidationError("WebISS RPS builder must be trusted and callable")
-        entry = FiscalArchiveEntry.build(
-            scope=document.scope,
-            document_reference=document.document_id,
-            kind=FiscalArchiveKind.OTHER,
-            content=encode_prepared_nfse(request),
-            media_type=NFSE_PREPARED_MEDIA_TYPE,
-            archived_at=occurred_at,
-            retention=retention,
-        )
+        if (sp4_original_builder is None) != (sp4_rps_series is None):
+            raise FiscalValidationError(
+                "SP4 original RPS builder and numbering series must be supplied together"
+            )
+        if sp4_original_builder is not None:
+            if not callable(sp4_original_builder) or extrema_intent_builder is not None:
+                raise FiscalValidationError("Municipal fiscal RPS modes are exclusive")
+            if (
+                type(sp4_rps_series) is not int
+                or not 1 <= sp4_rps_series <= 99_999
+                or document.scope.environment is not FiscalEnvironment.HOMOLOGATION
+                or not document.scope.host_namespace
+                or document.issuer.address.jurisdiction.state_code != "SP"
+                or document.issuer.address.jurisdiction.municipality_ibge_code
+                not in {"3509205", "3534401"}
+            ):
+                raise FiscalValidationError(
+                    "SP4 municipal original RPS requires reviewed scope and series"
+                )
         with self._uow_factory() as uow:
+            if extrema_intent_builder is None and sp4_original_builder is None:
+                # The National DPS number and issuance reservation belong to one UoW.
+                dps_serial = uow.dps_sequences.reserve(
+                    document, input_fingerprint=build_nfse_request_fingerprint(document),
+                )
+                numbered_document = replace(
+                    document, dps_series=dps_serial.series, dps_number=dps_serial.number,
+                )
+            else:
+                # Municipal WebISS owns the RPS sequence; never allocate a DPS as well.
+                numbered_document = document
+            request = NfseAuthorizationRequest.build(numbered_document)
+            entry = FiscalArchiveEntry.build(
+                scope=document.scope,
+                document_reference=document.document_id,
+                kind=FiscalArchiveKind.OTHER,
+                content=encode_prepared_nfse(request),
+                media_type=NFSE_PREPARED_MEDIA_TYPE,
+                archived_at=occurred_at,
+                retention=retention,
+            )
             reservation = uow.idempotency.reserve(
                 request.idempotency_key,
                 request.request_fingerprint,
@@ -608,18 +757,29 @@ class FiscalApplicationService:
                 prepared = self._load_prepared_from_uow(uow, document.scope, document.document_id)
                 if not isinstance(prepared, NfseAuthorizationRequest):
                     raise PersistenceStateError("durable request is not NFS-e")
+                prior_entries = uow.archive.list_for_document(
+                    document.scope, document.document_id,
+                )
                 prior_intents = [
-                    archived.content
-                    for archived in uow.archive.list_for_document(
-                        document.scope, document.document_id,
-                    )
+                    archived for archived in prior_entries
                     if archived.media_type == EXTREMA_INTENT_MEDIA_TYPE
                 ]
-                if len(prior_intents) > 1 or bool(prior_intents) != (
-                    extrema_intent_builder is not None
+                prior_originals = [
+                    archived for archived in prior_entries
+                    if archived.media_type == SP4_ORIGINAL_RPS_MEDIA_TYPE
+                ]
+                if (
+                    len(prior_intents) > 1
+                    or bool(prior_intents) != (extrema_intent_builder is not None)
+                    or len(prior_originals) > 1
+                    or bool(prior_originals) != (sp4_original_builder is not None)
                 ):
                     raise PersistenceConflictError(
-                        "WebISS fiscal intent cannot change after idempotency reservation"
+                        "Municipal original RPS mode cannot change after reservation"
+                    )
+                if prior_originals:
+                    decode_sp4_original(
+                        prior_originals[0].content, scope=document.scope, request=prepared,
                     )
                 uow.commit()
                 return DurablePreparedAuthorization(attempt, current, prepared, True)
@@ -662,6 +822,32 @@ class FiscalApplicationService:
                     archived_at=occurred_at,
                     retention=retention,
                 )
+            elif sp4_original_builder is not None:
+                assert sp4_rps_series is not None
+                key = FiscalSequenceKey.from_scope(
+                    document.scope,
+                    model=InternalFiscalSequenceStream.NFSE_RPS,
+                    series=sp4_rps_series,
+                )
+                municipal_ibge = document.issuer.address.jurisdiction.municipality_ibge_code
+                max_number = (
+                    999_999_999_999_999 if municipal_ibge == "3534401"
+                    else 99_999_999
+                )
+                reserved_rps = uow.sequences.reserve_next(
+                    key, FiscalSequencePolicy(max_number=max_number),
+                )
+                original_rps = sp4_original_builder(request, reserved_rps)
+                validate_sp4_original(request, original_rps, reserved_rps)
+                municipal_entry = FiscalArchiveEntry.build(
+                    scope=document.scope,
+                    document_reference=document.document_id,
+                    kind=FiscalArchiveKind.OTHER,
+                    content=encode_sp4_original(request, original_rps, reserved_rps),
+                    media_type=SP4_ORIGINAL_RPS_MEDIA_TYPE,
+                    archived_at=occurred_at,
+                    retention=retention,
+                )
             current = FiscalStateSnapshot.initial(document.document_id, document.issued_at)
             uow.lifecycle.add(current, scope=document.scope)
             for target, reason in (
@@ -684,6 +870,29 @@ class FiscalApplicationService:
                 uow.archive.append(municipal_entry)
             uow.commit()
             return DurablePreparedAuthorization(attempt, current, request, False)
+
+    def load_sp4_original_rps(
+        self, scope: ExecutionScope, document_id: str,
+    ) -> Sp4OriginalRps:
+        """Recover SP4 original RPS from the same tenant-scoped canonical archive.
+
+        The fiscal application is the sole loader. Transport drivers cannot
+        supply alternate identity, lot, CNPJ, or original sequence authority.
+        """
+        with self._uow_factory() as uow:
+            prepared = self._load_prepared_from_uow(uow, scope, document_id)
+            if not isinstance(prepared, NfseAuthorizationRequest):
+                raise PersistenceStateError("Original RPS requires prepared NFS-e")
+            originals = [
+                entry for entry in uow.archive.list_for_document(scope, document_id)
+                if entry.kind is FiscalArchiveKind.OTHER
+                and entry.media_type == SP4_ORIGINAL_RPS_MEDIA_TYPE
+            ]
+            if len(originals) != 1:
+                raise PersistenceStateError("Exactly one original RPS archive is required")
+            return decode_sp4_original(
+                originals[0].content, scope=scope, request=prepared,
+            )
 
     def load_extrema_rps_intent(
         self, scope: ExecutionScope, document_id: str,
@@ -857,7 +1066,8 @@ class FiscalApplicationService:
                         policy_id="nfcore-fiscal-archive", policy_version=1
                     ),
                 )
-                if result.authorized_xml is not None else None
+                if isinstance(result, (AuthorizationResult, NfseAuthorizationResult))
+                and result.authorized_xml is not None else None
             )
             self.finalize_authorized(
                 archive_entry=xml_evidence,
@@ -878,6 +1088,18 @@ class FiscalApplicationService:
                 rejection_reason=result.rejection_code,
                 occurred_at=occurred_at,
                 correlation_id=scope.correlation_id,
+                archive_entry=(
+                    _nfse_rejection_archive(
+                        result,
+                        scope=scope,
+                        document_id=document_id,
+                        occurred_at=occurred_at,
+                        retention=RetentionPolicyMetadata(
+                            policy_id="nfcore-fiscal-archive", policy_version=1,
+                        ),
+                    )
+                    if isinstance(result, NfseAuthorizationResult) else None
+                ),
             )
         with self._uow_factory() as uow:
             latest = uow.idempotency.attempts(attempt.key)[-1]
@@ -1084,13 +1306,6 @@ class FiscalApplicationService:
                 raise PersistenceConflictError("NFS-e transmission changed during provider query")
             if result.status is AuthorizationStatus.AUTHORIZED:
                 assert result.invoice_reference is not None
-                if result.authorized_xml is not None:
-                    uow.archive.append(FiscalArchiveEntry.build(
-                        scope=scope, document_reference=document_id,
-                        kind=FiscalArchiveKind.AUTHORIZED_XML,
-                        content=result.authorized_xml, media_type="application/xml",
-                        archived_at=occurred_at, retention=retention,
-                    ))
                 updated = self._state_machine.transition(
                     current,
                     FiscalDocumentState.AUTHORIZED,
@@ -1102,6 +1317,18 @@ class FiscalApplicationService:
                     attempt.key, attempt.generation, result.invoice_reference
                 )
                 uow.lifecycle.save(updated, expected_version=current.version)
+                if result.authorized_xml is not None:
+                    # Atomic with the terminal state and provider query evidence;
+                    # no second POST or newly allocated serial during recovery.
+                    uow.archive.append(FiscalArchiveEntry.build(
+                        scope=scope,
+                        document_reference=document_id,
+                        kind=FiscalArchiveKind.AUTHORIZED_XML,
+                        content=result.authorized_xml,
+                        media_type="application/xml",
+                        archived_at=occurred_at,
+                        retention=retention,
+                    ))
                 current = updated
             elif result.status is AuthorizationStatus.REJECTED:
                 assert result.rejection_code is not None
@@ -1116,6 +1343,13 @@ class FiscalApplicationService:
                     attempt.key, attempt.generation, result.rejection_code
                 )
                 uow.lifecycle.save(updated, expected_version=current.version)
+                uow.archive.append(_nfse_rejection_archive(
+                    result,
+                    scope=scope,
+                    document_id=document_id,
+                    occurred_at=occurred_at,
+                    retention=retention,
+                ))
                 current = updated
             uow.archive.append(evidence)
             uow.commit()
@@ -1504,6 +1738,449 @@ class FiscalApplicationService:
             uow.commit()
         return DurableExtremaCancellationOutcome(
             result=result, lifecycle=final, archive_reference=archived.entry_id,
+        )
+
+    def review_prepared_cajamar_substitution(
+        self, *, scope: ExecutionScope, original_id: str, replacement_id: str,
+        reviewed_at: datetime,
+    ) -> CajamarSubstitutionReview:
+        """Preflight only: Cajamar 7.311/2024 requires the official city portal.
+
+        No SOAP substitution is manufactured; no lifecycle, RPS or numbering is
+        changed. The authoritative municipal confirmation must be reviewed later.
+        """
+        if (
+            not isinstance(scope, ExecutionScope)
+            or scope.environment is not FiscalEnvironment.HOMOLOGATION
+            or not isinstance(reviewed_at, datetime)
+            or reviewed_at.tzinfo is None
+        ):
+            raise FiscalValidationError("Cajamar substitution review needs scoped datetime")
+        original = self.load_prepared_nfse_authorization(scope, original_id)
+        candidate = self.load_prepared_nfse_authorization(scope, replacement_id)
+        eligibility = review_cajamar_substitution(
+            original=original, replacement=candidate, reviewed_at=reviewed_at,
+        )
+        with self._uow_factory() as uow:
+            uow.lifecycle.assert_scope(original_id, scope)
+            uow.lifecycle.assert_scope(replacement_id, scope)
+            previous = uow.lifecycle.get(original_id)
+            new = uow.lifecycle.get(replacement_id)
+            old_attempts = uow.idempotency.attempts(original.idempotency_key)
+            candidate_attempts = uow.idempotency.attempts(candidate.idempotency_key)
+            if (
+                previous is None
+                or previous.state is not FiscalDocumentState.AUTHORIZED
+                or new is None
+                or new.state is not FiscalDocumentState.READY_TO_TRANSMIT
+                or not old_attempts
+                or old_attempts[-1].status is not IssuanceAttemptStatus.AUTHORIZED
+                or old_attempts[-1].document_id != original_id
+                or not candidate_attempts
+                or candidate_attempts[-1].status is not IssuanceAttemptStatus.RESERVED
+                or candidate_attempts[-1].document_id != replacement_id
+            ):
+                raise PersistenceStateError(
+                    "Cajamar review requires an authorized original and unissued candidate"
+                )
+            original_archives = uow.archive.list_for_document(scope, original_id)
+            candidate_archives = uow.archive.list_for_document(scope, replacement_id)
+            archived_note = [
+                entry for entry in original_archives
+                if entry.kind is FiscalArchiveKind.AUTHORIZED_XML
+                and entry.media_type == "application/xml"
+            ]
+            originals = [
+                entry for entry in original_archives
+                if entry.media_type == SP4_ORIGINAL_RPS_MEDIA_TYPE
+            ]
+            candidate_rps = [
+                entry for entry in candidate_archives
+                if entry.media_type == SP4_ORIGINAL_RPS_MEDIA_TYPE
+            ]
+            if (
+                len(archived_note) != 1 or len(originals) != 1
+                or len(candidate_rps) != 1
+            ):
+                raise PersistenceStateError(
+                    "Cajamar review requires both original RPS and official NFS-e XML"
+                )
+            for entry in (archived_note[0], originals[0], candidate_rps[0]):
+                FiscalArchiveVerifier().verify_entry(entry)
+            persisted_rps = decode_sp4_original(
+                originals[0].content, scope=scope, request=original,
+            )
+            decode_sp4_original(
+                candidate_rps[0].content, scope=scope, request=candidate,
+            )
+            fiscal_note = decode_cajamar_archived_invoice(
+                archived_note[0].content, persisted_rps,
+            )
+            if old_attempts[-1].result_reference != fiscal_note.invoice_reference:
+                raise PersistenceConflictError(
+                    "Cajamar original authorization and archived XML disagree"
+                )
+        return eligibility
+
+    def preflight_cajamar_nfse_cancellation(
+        self, *, scope: ExecutionScope, document_id: str, cancellation_reason: str,
+    ) -> tuple[NfseAuthorizationRequest, Sp4OriginalRps, Sp4VerifiedInvoice]:
+        """Verify archived original RPS and authorized GeisWeb note in one scoped UoW."""
+        if (
+            not isinstance(scope, ExecutionScope)
+            or scope.environment is not FiscalEnvironment.HOMOLOGATION
+        ):
+            raise FiscalValidationError("Cajamar cancellation requires homologation scope")
+        with self._uow_factory() as uow:
+            request = self._load_prepared_from_uow(uow, scope, document_id)
+            if not isinstance(request, NfseAuthorizationRequest):
+                raise PersistenceStateError("Cajamar cancellation requires prepared NFS-e")
+            validate_cajamar_automatic_cancellation(
+                competence=request.document.competence_date,
+                reason=cancellation_reason,
+                reviewed_at=_cajamar_policy_now(),
+            )
+            uow.lifecycle.assert_scope(document_id, scope)
+            current = uow.lifecycle.get(document_id)
+            attempts = uow.idempotency.attempts(request.idempotency_key)
+            if (
+                current is None
+                or current.state is not FiscalDocumentState.AUTHORIZED
+                or not attempts
+                or attempts[-1].status is not IssuanceAttemptStatus.AUTHORIZED
+                or attempts[-1].document_id != document_id
+                or attempts[-1].request_fingerprint != request.request_fingerprint
+                or request.document.issuer.address.jurisdiction.municipality_ibge_code
+                != "3509205"
+            ):
+                raise PersistenceStateError(
+                    "Cancellation requires one authorized original Cajamar invoice"
+                )
+            originals = [
+                item for item in uow.archive.list_for_document(scope, document_id)
+                if item.kind is FiscalArchiveKind.OTHER
+                and item.media_type == SP4_ORIGINAL_RPS_MEDIA_TYPE
+            ]
+            official = [
+                item for item in uow.archive.list_for_document(scope, document_id)
+                if item.kind is FiscalArchiveKind.AUTHORIZED_XML
+                and item.media_type == "application/xml"
+            ]
+            if len(originals) != 1 or len(official) != 1:
+                raise PersistenceStateError("Original RPS/authorized XML is missing")
+            FiscalArchiveVerifier().verify_entry(originals[0])
+            FiscalArchiveVerifier().verify_entry(official[0])
+            source = decode_sp4_original(
+                originals[0].content, scope=scope, request=request,
+            )
+            invoice = decode_cajamar_archived_invoice(official[0].content, source)
+            if attempts[-1].result_reference != invoice.invoice_reference:
+                raise PersistenceConflictError(
+                    "Cajamar fiscal cancellation invoice reference disagrees with issuance"
+                )
+        binding = self.resolve_configured_provider_id(
+            scope=scope, document_kind=FiscalDocumentKind.NFSE,
+            jurisdiction=request.document.issuer.address.jurisdiction,
+            operation="cancel",
+        )
+        if binding != CAJAMAR_GEISWEB_PROVIDER:
+            raise FiscalValidationError("Cajamar cancellation provider binding mismatch")
+        return request, source, invoice
+
+    def cancel_prepared_cajamar_nfse(
+        self, *, scope: ExecutionScope, document_id: str,
+        submit_verified_cancel: Callable[
+            [NfseAuthorizationRequest, Sp4OriginalRps, Sp4VerifiedInvoice],
+            CajamarCancellationDecision,
+        ],
+        cancellation_reason: str,
+        occurred_at: datetime, retention: RetentionPolicyMetadata,
+    ) -> DurableCajamarCancellationOutcome:
+        """One original NFS-e cancellation claim, one reviewed transport attempt.
+
+        A transport failure leaves CANCEL_REQUESTED for investigation. Replay
+        does not issue another CancelaNfse POST. Only correlated official
+        response proof commits CANCELLED; a proven rejection restores AUTHORIZED.
+        """
+        if (
+            not callable(submit_verified_cancel)
+            or not isinstance(scope, ExecutionScope)
+            or not isinstance(retention, RetentionPolicyMetadata)
+            or not isinstance(occurred_at, datetime)
+            or occurred_at.tzinfo is None
+        ):
+            raise FiscalValidationError("Invalid Cajamar cancellation dependencies")
+        request, original, invoice = self.preflight_cajamar_nfse_cancellation(
+            scope=scope, document_id=document_id,
+            cancellation_reason=cancellation_reason,
+        )
+        with self._uow_factory() as uow:
+            uow.lifecycle.assert_scope(document_id, scope)
+            before = uow.lifecycle.get(document_id)
+            if before is None or before.state is not FiscalDocumentState.AUTHORIZED:
+                raise PersistenceConflictError("Concurrent Cajamar cancellation request")
+            claim = self._state_machine.transition(
+                before, FiscalDocumentState.CANCEL_REQUESTED,
+                occurred_at=occurred_at, reason="Cajamar fiscal cancellation claimed",
+                correlation_id=scope.correlation_id,
+            )
+            uow.lifecycle.save(claim, expected_version=before.version)
+            uow.commit()
+        decision = submit_verified_cancel(request, original, invoice)
+        if not isinstance(decision, CajamarCancellationDecision):
+            raise FiscalValidationError(
+                "Cajamar cancellation requires verified typed official response"
+            )
+        event = FiscalArchiveEntry.build(
+            scope=scope, document_reference=document_id,
+            kind=FiscalArchiveKind.FISCAL_EVENT,
+            content=decision.response_xml, media_type="application/xml",
+            archived_at=occurred_at, retention=retention,
+        )
+        with self._uow_factory() as uow:
+            uow.lifecycle.assert_scope(document_id, scope)
+            latest = uow.lifecycle.get(document_id)
+            if latest != claim:
+                raise PersistenceConflictError("Cajamar cancellation changed during delivery")
+            target = (
+                FiscalDocumentState.CANCELLED if decision.confirmed
+                else FiscalDocumentState.AUTHORIZED
+            )
+            final = self._state_machine.transition(
+                latest, target, occurred_at=occurred_at,
+                reason=(
+                    "Cajamar cancellation officially confirmed"
+                    if decision.confirmed else "Cajamar cancellation officially rejected"
+                ),
+                correlation_id=scope.correlation_id,
+            )
+            uow.lifecycle.save(final, expected_version=latest.version)
+            entry = uow.archive.append(event)
+            uow.commit()
+        return DurableCajamarCancellationOutcome(
+            decision=decision, lifecycle=final, archive_reference=entry.entry_id,
+        )
+
+    def preflight_osasco_nfse_cancellation(
+        self, *, scope: ExecutionScope, document_id: str, cancellation_reason: str,
+    ) -> tuple[NfseAuthorizationRequest, Sp4OriginalRps, Sp4VerifiedInvoice]:
+        """Source-verified WCF cancellation: same original taxpayer and official note."""
+        if (
+            not isinstance(scope, ExecutionScope)
+            or scope.environment is not FiscalEnvironment.HOMOLOGATION
+            or not isinstance(cancellation_reason, str)
+            or not 1 <= len(cancellation_reason.strip()) <= 500
+            or any(ord(ch) < 32 for ch in cancellation_reason)
+        ):
+            raise FiscalValidationError("Osasco cancellation requires reviewed reason and scope")
+        with self._uow_factory() as uow:
+            request = self._load_prepared_from_uow(uow, scope, document_id)
+            if not isinstance(request, NfseAuthorizationRequest):
+                raise PersistenceStateError("Osasco cancellation needs canonical NFS-e")
+            validate_osasco_automatic_cancellation(
+                issued_at=request.document.issued_at,
+                reviewed_at=datetime.now(UTC),
+            )
+            uow.lifecycle.assert_scope(document_id, scope)
+            current = uow.lifecycle.get(document_id)
+            attempts = uow.idempotency.attempts(request.idempotency_key)
+            if (
+                current is None or current.state is not FiscalDocumentState.AUTHORIZED
+                or not attempts
+                or attempts[-1].status is not IssuanceAttemptStatus.AUTHORIZED
+                or attempts[-1].document_id != document_id
+                or attempts[-1].request_fingerprint != request.request_fingerprint
+                or request.document.issuer.address.jurisdiction.municipality_ibge_code
+                != "3534401"
+                or request.document.issuer.municipal_registration is None
+            ):
+                raise PersistenceStateError(
+                    "Osasco cancellation requires one authorized original invoice"
+                )
+            entries = uow.archive.list_for_document(scope, document_id)
+            originals = [
+                e for e in entries
+                if e.kind is FiscalArchiveKind.OTHER
+                and e.media_type == SP4_ORIGINAL_RPS_MEDIA_TYPE
+            ]
+            invoices = [
+                e for e in entries
+                if e.kind is FiscalArchiveKind.AUTHORIZED_XML
+                and e.media_type == "application/xml"
+            ]
+            if len(originals) != 1 or len(invoices) != 1:
+                raise PersistenceStateError("Osasco original RPS and official XML are required")
+            FiscalArchiveVerifier().verify_entry(originals[0])
+            FiscalArchiveVerifier().verify_entry(invoices[0])
+            original = decode_sp4_original(
+                originals[0].content, scope=scope, request=request,
+            )
+            invoice = decode_osasco_archived_full_invoice(
+                invoices[0].content, original,
+            )
+            if attempts[-1].result_reference != invoice.invoice_reference:
+                raise PersistenceConflictError(
+                    "Osasco cancellation invoice number disagrees with authorization"
+                )
+        provider = self.resolve_configured_provider_id(
+            scope=scope, document_kind=FiscalDocumentKind.NFSE,
+            jurisdiction=request.document.issuer.address.jurisdiction,
+            operation="cancel",
+        )
+        if provider != OSASCO_RTC_PROVIDER_ID:
+            raise FiscalValidationError("Osasco cancellation provider binding mismatch")
+        return request, original, invoice
+
+    def preflight_osasco_nfse_substitution(
+        self, *, scope: ExecutionScope, original_id: str, replacement_id: str,
+        cancellation_reason: str,
+    ) -> tuple[NfseAuthorizationRequest, Sp4OriginalRps, Sp4VerifiedInvoice]:
+        """Type S requires an authorized old invoice and a distinct ready replacement."""
+        validate_osasco_substitution_references(original_id, replacement_id)
+        request, original, invoice = self.preflight_osasco_nfse_cancellation(
+            scope=scope, document_id=original_id,
+            cancellation_reason=cancellation_reason,
+        )
+        with self._uow_factory() as uow:
+            candidate = self._load_prepared_from_uow(uow, scope, replacement_id)
+            if not isinstance(candidate, NfseAuthorizationRequest):
+                raise PersistenceStateError("Osasco substitute needs prepared NFS-e")
+            uow.lifecycle.assert_scope(replacement_id, scope)
+            state = uow.lifecycle.get(replacement_id)
+            attempts = uow.idempotency.attempts(candidate.idempotency_key)
+            if (
+                state is None
+                or state.state is not FiscalDocumentState.READY_TO_TRANSMIT
+                or not attempts
+                or attempts[-1].status is not IssuanceAttemptStatus.RESERVED
+                or attempts[-1].document_id != replacement_id
+                or candidate.document.scope.identity_partition_key
+                != original.scope.identity_partition_key
+                or candidate.document.issuer.cnpj != original.issuer_cnpj
+                or candidate.document.issuer.address.jurisdiction.municipality_ibge_code
+                != "3534401"
+            ):
+                raise PersistenceStateError(
+                    "Osasco substitute must be unissued for the same taxpayer"
+                )
+            originals = [
+                e for e in uow.archive.list_for_document(scope, replacement_id)
+                if e.media_type == SP4_ORIGINAL_RPS_MEDIA_TYPE
+            ]
+            if len(originals) != 1:
+                raise PersistenceStateError("Osasco substitute needs durable original RPS")
+            FiscalArchiveVerifier().verify_entry(originals[0])
+            decode_sp4_original(
+                originals[0].content, scope=scope, request=candidate,
+            )
+        return request, original, invoice
+
+    def cancel_prepared_osasco_nfse(
+        self, *, scope: ExecutionScope, document_id: str,
+        submit_verified_cancel: Callable[
+            [NfseAuthorizationRequest, Sp4OriginalRps, Sp4VerifiedInvoice, str],
+            OsascoCancellationDecision,
+        ],
+        cancellation_reason: str,
+        occurred_at: datetime, retention: RetentionPolicyMetadata,
+        replacement_id: str | None = None,
+    ) -> DurableOsascoCancellationOutcome:
+        """Claim before exactly one WCF POST, archive reply and reconcile outcome.
+
+        Ambiguous/time-out leaves CANCEL_REQUESTED for read-only recovery.
+        No subsequent invocation may transmit an identical or changed command.
+        """
+        if (
+            not callable(submit_verified_cancel)
+            or not isinstance(occurred_at, datetime)
+            or occurred_at.tzinfo is None
+            or not isinstance(retention, RetentionPolicyMetadata)
+        ):
+            raise FiscalValidationError("Invalid Osasco municipal cancellation authority")
+        if replacement_id is not None:
+            request, original, invoice = self.preflight_osasco_nfse_substitution(
+                scope=scope, original_id=document_id,
+                replacement_id=replacement_id,
+                cancellation_reason=cancellation_reason,
+            )
+        else:
+            request, original, invoice = self.preflight_osasco_nfse_cancellation(
+                scope=scope, document_id=document_id,
+                cancellation_reason=cancellation_reason,
+            )
+        with self._uow_factory() as uow:
+            uow.lifecycle.assert_scope(document_id, scope)
+            previous = uow.lifecycle.get(document_id)
+            if previous is None or previous.state is not FiscalDocumentState.AUTHORIZED:
+                raise PersistenceConflictError("Concurrent Osasco cancellation request")
+            if replacement_id is not None:
+                uow.lifecycle.assert_scope(replacement_id, scope)
+                candidate = uow.lifecycle.get(replacement_id)
+                if (
+                    candidate is None
+                    or candidate.state is not FiscalDocumentState.READY_TO_TRANSMIT
+                ):
+                    raise PersistenceConflictError("Concurrent Osasco substitution changed")
+            claim = self._state_machine.transition(
+                previous, FiscalDocumentState.CANCEL_REQUESTED,
+                occurred_at=occurred_at, reason="Osasco WCF cancellation claimed",
+                correlation_id=scope.correlation_id,
+            )
+            uow.lifecycle.save(claim, expected_version=previous.version)
+            uow.commit()
+        # No automatic exception retry: a failed exchange may already have
+        # been processed by the municipality. The durable claim survives.
+        decision = submit_verified_cancel(
+            request, original, invoice, cancellation_reason,
+        )
+        if not isinstance(decision, OsascoCancellationDecision):
+            raise FiscalValidationError("Unverified Osasco cancellation transport response")
+        event = FiscalArchiveEntry.build(
+            scope=scope, document_reference=document_id,
+            kind=FiscalArchiveKind.FISCAL_EVENT,
+            content=decision.response_xml, media_type="application/xml",
+            archived_at=occurred_at, retention=retention,
+        )
+        with self._uow_factory() as uow:
+            uow.lifecycle.assert_scope(document_id, scope)
+            current = uow.lifecycle.get(document_id)
+            if current != claim:
+                raise PersistenceConflictError("Osasco cancellation changed during delivery")
+            final = current
+            if decision.confirmed is not None:
+                final = self._state_machine.transition(
+                    current,
+                    (
+                        FiscalDocumentState.CANCELLED if decision.confirmed
+                        else FiscalDocumentState.AUTHORIZED
+                    ),
+                    occurred_at=occurred_at,
+                    reason=(
+                        "Osasco cancellation officially confirmed"
+                        if decision.confirmed else "Osasco cancellation officially rejected"
+                    ),
+                    correlation_id=scope.correlation_id,
+                )
+                uow.lifecycle.save(final, expected_version=current.version)
+            entry = uow.archive.append(event)
+            if replacement_id is not None:
+                linked = FiscalArchiveEntry.build(
+                    scope=scope, document_reference=document_id,
+                    kind=FiscalArchiveKind.FISCAL_EVENT,
+                    content=json.dumps({
+                        "municipality_ibge": "3534401",
+                        "original_id": document_id,
+                        "replacement_id": replacement_id,
+                        "cancel_type": "S",
+                        "cancel_confirmed": decision.confirmed,
+                    }, sort_keys=True, separators=(",", ":")).encode("utf-8"),
+                    media_type="application/vnd.nfcore.osasco-substitution.v1+json",
+                    archived_at=occurred_at, retention=retention,
+                )
+                uow.archive.append(linked)
+            uow.commit()
+        return DurableOsascoCancellationOutcome(
+            decision=decision, lifecycle=final, archive_reference=entry.entry_id,
         )
 
     def reserve_number(

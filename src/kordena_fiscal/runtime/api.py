@@ -8,6 +8,7 @@ from collections.abc import AsyncIterator, Callable, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
+from typing import cast
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
@@ -16,6 +17,7 @@ from fastapi.responses import JSONResponse
 from kordena_fiscal.application.bling_operations import BlingOperationsService
 from kordena_fiscal.application.command_commercial import CommandCommercialReceiver
 from kordena_fiscal.application.commercial_acquisition import CommercialAcquisitionService
+from kordena_fiscal.application.service import FiscalApplicationService
 from kordena_fiscal.cognitive.composition import build_cognitive_router
 from kordena_fiscal.cognitive.durable_usage import DurableTokenQuotaStore
 from kordena_fiscal.compliance.nfse_preaudit import (
@@ -51,6 +53,7 @@ from kordena_fiscal.security.s2s import (
     WorkloadCredentialRecord,
 )
 from kordena_fiscal.security.secrets import SecretResolver
+from kordena_fiscal.vault.contracts import FiscalSecretVault, SecretResolutionService
 from kordena_fiscal.vault.encrypted_a1 import EncryptedA1Vault
 from kordena_fiscal.web.app import create_app
 from kordena_fiscal.web.command_commercial import create_command_commercial_router
@@ -85,6 +88,8 @@ from .bling_review import build_bling_review_router
 from .bling_status import build_bling_status_router
 from .bling_worker import build_bling_orders
 from .bridge_credentials import load_bridge_credentials
+from .cajamar_environment import build_cajamar_port_builder_from_environ
+from .cajamar_operational_composition import CajamarTrustedRuntimePorts
 from .cakto import build_cakto_webhook_router, compose_postgres_cakto_commercial_runtime
 from .cakto_claim_email import build_cakto_claim_delivery_from_environ
 from .canonical_fiscal_composition import (
@@ -111,6 +116,9 @@ from .observability import (
     StructuredLogger,
     TraceContext,
 )
+from .osasco_environment import build_osasco_port_builder_from_environ
+from .osasco_gsm_bootstrap import build_osasco_gsm_secret_factory
+from .osasco_operational_composition import OsascoTrustedRuntimePorts
 from .otel_trace_sink import build_trace_sink
 from .production_cakto_ingress import production_cakto_webhook_secret
 from .production_cakto_webhook_env import production_cakto_webhook_secret_from_env
@@ -249,10 +257,33 @@ def create_runtime_app(
     security_audit_sink: SecurityAuditSink | None = None,
     fiscal_operation_handlers: Mapping[str, FiscalOperationHandler] | None = None,
     fiscal_operation_handler_factory: FiscalOperationHandlerFactory | None = None,
+    cajamar_runtime_ports: CajamarTrustedRuntimePorts | None = None,
+    osasco_runtime_ports: OsascoTrustedRuntimePorts | None = None,
     certificate_vault: EncryptedA1Vault | None = None,
     fiscal_dependency_probe: Callable[[], Mapping[str, bool]] | None = None,
 ) -> FastAPI:
     resolved = settings or RuntimeSettings.from_environ()
+    if cajamar_runtime_ports is not None or osasco_runtime_ports is not None:
+        # One and only one canonical handler factory. This opt-in path is for
+        # operator-provisioned, independently validated GeisWeb dependencies.
+        # Without them, the default runtime remains non-transmitting.
+        if fiscal_operation_handlers is not None or fiscal_operation_handler_factory is not None:
+            raise RuntimeConfigurationError(
+                "Cajamar cannot introduce a second fiscal operation authority"
+            )
+        if resolved.environment.value not in {"staging", "production"}:
+            raise RuntimeConfigurationError(
+                "Cajamar official adapter can only attach to staging/production runtime"
+            )
+        fiscal_operation_handler_factory = build_runtime_fiscal_handler_factory(
+            certificate_vault=certificate_vault,
+            trusted_signed_dps_builder=(
+                build_signed_dps if certificate_vault is not None else None
+            ),
+            nfse_preaudit=(nfse_preaudit if certificate_vault is not None else None),
+            cajamar_runtime_ports=cajamar_runtime_ports,
+            osasco_runtime_ports=osasco_runtime_ports,
+        )
     runtime_metrics = metrics or MetricsRegistry()
     runtime = RuntimeApi(
         resolved,
@@ -1153,6 +1184,65 @@ def create_runtime_app(
     return app
 
 
+def build_entrypoint_fiscal_handler_factory(
+    settings: RuntimeSettings,
+    environ: Mapping[str, str],
+    vault: EncryptedA1Vault | None,
+    *,
+    osasco_secret_vault: FiscalSecretVault | None = None,
+) -> FiscalOperationHandlerFactory | None:
+    """Compose reviewed municipal providers in the same executable runtime.
+
+    Optional on-host Osasco contracts never activate without a scoped
+    secret authority; no second fiscal service or duplicate provider registry.
+    """
+    osasco_requested = bool(environ.get("NFCORE_OSASCO_WCF_CONFIG_PATH", "").strip())
+    if settings.environment.value not in {"staging", "production"}:
+        if (
+            environ.get("NFCORE_CAJAMAR_GEISWEB_CONFIG_PATH", "").strip()
+            or osasco_requested
+        ):
+            raise RuntimeConfigurationError(
+                "Reviewed municipal adapters require staging/production runtime"
+            )
+        return None
+    secrets_factory: Callable[[FiscalApplicationService], SecretResolutionService] | None
+    if osasco_requested:
+        if osasco_secret_vault is not None:
+            def provided_osasco_secrets(
+                application: FiscalApplicationService,
+            ) -> SecretResolutionService:
+                return SecretResolutionService(
+                    unit_of_work_factory=application._uow_factory,
+                    vault=osasco_secret_vault,
+                )
+            secrets_factory = provided_osasco_secrets
+        else:
+            secrets_factory = build_osasco_gsm_secret_factory(environ)
+    else:
+        secrets_factory = None
+    configured_factory = build_runtime_fiscal_handler_factory(
+        certificate_vault=vault,
+        trusted_signed_dps_builder=build_signed_dps,
+        nfse_preaudit=nfse_preaudit,
+        webiss_extrema_exchange=build_extrema_webiss_exchange(environ),
+        webiss_service_preaudit=(
+            extrema_abrasf_service_preaudit
+            if environ.get("NFCORE_EXTREMA_WEBISS_HOMOLOGATION_URL")
+            else None
+        ),
+        cajamar_port_builder=build_cajamar_port_builder_from_environ(
+            environ, vault=vault,
+        ),
+        osasco_port_builder=build_osasco_port_builder_from_environ(
+            environ, secrets_factory=secrets_factory,
+        ),
+    )
+    # The shared builder's public annotation is Any, but its closure implements
+    # the existing FiscalOperationHandlerFactory contract. Preserve B ownership.
+    return cast(FiscalOperationHandlerFactory, configured_factory)
+
+
 _entrypoint_settings = RuntimeSettings.from_environ()
 _entrypoint_certificate_vault = EncryptedA1Vault.from_environ()
 _development_ingress = development_commercial_ingress(_entrypoint_settings, os.environ)
@@ -1174,20 +1264,8 @@ app = create_runtime_app(
         if _entrypoint_settings.environment.value in {"development", "test"}
         else None
     ),
-    fiscal_operation_handler_factory=(
-        build_runtime_fiscal_handler_factory(
-            certificate_vault=_entrypoint_certificate_vault,
-            trusted_signed_dps_builder=build_signed_dps,
-            nfse_preaudit=nfse_preaudit,
-            webiss_extrema_exchange=build_extrema_webiss_exchange(os.environ),
-            webiss_service_preaudit=(
-                extrema_abrasf_service_preaudit
-                if os.environ.get("NFCORE_EXTREMA_WEBISS_HOMOLOGATION_URL")
-                else None
-            ),
-        )
-        if _entrypoint_settings.environment.value in {"staging", "production"}
-        else None
+    fiscal_operation_handler_factory=build_entrypoint_fiscal_handler_factory(
+        _entrypoint_settings, os.environ, _entrypoint_certificate_vault,
     ),
     commercial_acquisition_security=_development_ingress.get(
         "commercial_acquisition_security"

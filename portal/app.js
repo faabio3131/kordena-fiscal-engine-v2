@@ -220,6 +220,122 @@ function appendFiscalFilters(article, viewId) {
   article.append(notice);
 }
 
+/** Prepare one canonical NFS-e National or Cajamar record; no ERP or provider POST.
+ * @param {HTMLElement} article
+ */
+function appendNativeNfsePreparation(article) {
+  if (!bootstrapState?.permissions.includes("configuration.write")
+    || !bootstrapState.permissions.includes("document.issue")
+    || !["owner", "admin"].includes(bootstrapState.role)
+    || selectedFiscalEnvironment !== "homologation") return;
+
+  const form = document.createElement("form");
+  form.id = "native-nfse-preparation";
+  form.className = "panel-form";
+  const heading = document.createElement("h3");
+  heading.textContent = "Preparar NFS-e pelo NFCore — canal fiscal configurado";
+  const info = document.createElement("p");
+  info.className = "empty-state";
+  info.textContent = "Emissor próprio, sem ERP. Somente homologação. O canal Nacional ou Cajamar é determinado pelo vínculo fiscal e competência no servidor. Informe emitente, serviço e tomador revisados. Preparação não emite a nota; a numeração fiscal é reservada no Core.";
+  form.append(heading, info);
+  /** @type {Record<string, HTMLInputElement>} */
+  const inputs = {};
+  /** @type {Array<[string, string, string, string]>} */
+  const fields = [
+    ["source_id", "Referência imutável da ordem de serviço", "text", ""],
+    ["competence_date", "Competência do serviço", "date", ""],
+    ["service_state_code", "UF da prestação", "text", "[A-Za-z]{2}"],
+    ["service_municipality_ibge", "IBGE do local da prestação", "text", "[0-9]{7}"],
+    ["national_taxation_code", "cTribNac oficial (6 dígitos)", "text", "[0-9]{6}"],
+    ["municipal_service_code", "Código municipal de serviço", "text", ""],
+    ["description", "Descrição do serviço prestado", "text", ""],
+    ["gross_amount", "Valor bruto (R$ 0.00)", "text", "[0-9]+\\.[0-9]{2}"],
+    ["deduction_amount", "Deduções (R$ 0.00)", "text", "[0-9]+\\.[0-9]{2}"],
+    ["iss_amount", "ISS apurado e revisado (R$ 0.00)", "text", "[0-9]+\\.[0-9]{2}"],
+    ["taker_document", "CPF ou CNPJ do tomador", "text", "[0-9]{11}|[0-9]{14}"],
+    ["taker_name", "Nome ou razão social do tomador", "text", ""],
+    ["taker_street", "Logradouro do tomador", "text", ""],
+    ["taker_number", "Número do endereço do tomador", "text", ""],
+    ["taker_neighborhood", "Bairro do tomador", "text", ""],
+    ["taker_city", "Município do tomador", "text", ""],
+    ["taker_state", "UF do tomador", "text", "[A-Z]{2}"],
+    ["taker_municipality_ibge", "Código IBGE do município do tomador", "text", "[0-9]{7}"],
+    ["taker_postal_code", "CEP do tomador sem pontuação", "text", "[0-9]{8}"],
+    ["source_normative", "Referência da regra fiscal aprovada", "text", ""],
+    ["rule_version", "Versão da regra fiscal", "number", ""],
+  ];
+  for (const [name, labelText, type, pattern] of fields) {
+    const label = document.createElement("label");
+    label.textContent = labelText;
+    const input = document.createElement("input");
+    input.type = type; input.name = name; input.required = true; input.autocomplete = "off";
+    input.id = "native-nfse-" + name.replaceAll("_", "-");
+    if (type === "number") { input.min = "1"; input.max = "99999"; input.step = "1"; }
+    if (type === "text" && pattern) input.pattern = pattern;
+    input.maxLength = name === "description" ? 1000 : name === "source_normative" ? 512 : 160;
+    label.append(input); form.append(label); inputs[name] = input;
+  }
+  const withholding = document.createElement("label");
+  const select = document.createElement("select");
+  select.name = "iss_withheld"; select.required = true;
+  for (const [value, titleText] of [["", "Selecione após revisão"], ["false", "ISS não retido"], ["true", "ISS retido"]]) {
+    const option = document.createElement("option"); option.value = value;
+    option.textContent = titleText; select.append(option);
+  }
+  withholding.append("Retenção do ISS", select);
+  const reviewedLabel = document.createElement("label");
+  const reviewed = document.createElement("input");
+  reviewed.type = "checkbox"; reviewed.required = true;
+  reviewedLabel.append(reviewed, document.createTextNode(
+    " Confirmo a revisão dos dados fiscais, competência, tomador, código de serviço e ISS. A aplicação não presume enquadramento tributário."
+  ));
+  const submit = document.createElement("button");
+  submit.type = "submit"; submit.className = "primary"; submit.textContent = "Preparar NFS-e revisada em homologação";
+  const result = document.createElement("p"); result.id = "native-nfse-result";
+  result.setAttribute("role", "status"); result.setAttribute("aria-live", "polite");
+  form.append(withholding, reviewedLabel, submit, result); article.append(form);
+  /** @type {{fingerprint:string,key:string}|null} */
+  let attempt = null;
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    if (!selectedFiscalUnit || selectedFiscalEnvironment !== "homologation") {
+      result.textContent = "Selecione unidade fiscal autorizada em homologação."; return;
+    }
+    const payload = {
+      ...Object.fromEntries(Object.entries(inputs).map(([key, input]) => [key, input.value.trim()])),
+      unit_id: selectedFiscalUnit, environment: "homologation",
+      rule_version: Number(inputs.rule_version.value),
+      iss_withheld: select.value === "true",
+      fiscal_review_approved: reviewed.checked,
+    };
+    if (!Number.isSafeInteger(payload.rule_version)) {
+      result.textContent = "Informe a versão fiscal inteira."; return;
+    }
+    const fingerprint = JSON.stringify(payload);
+    if (attempt && attempt.fingerprint !== fingerprint) {
+      result.textContent = "Os dados mudaram após tentativa incerta. Consulte o pedido original."; return;
+    }
+    attempt ||= {fingerprint, key: crypto.randomUUID()};
+    submit.disabled = true; result.textContent = "Preparando documento no motor fiscal próprio...";
+    try {
+      const prepared = await api("/v1/portal/operations/prepareNativeNfse", {
+        method: "POST",
+        headers: {"X-CSRF-Token": csrfToken(), "Idempotency-Key": attempt.key},
+        body: JSON.stringify(payload),
+      });
+      operationDocument.value = String(prepared.document_id);
+      result.textContent = "NFS-e preparada: " + String(prepared.document_id)
+        + " (" + String(prepared.numbering_authority || "numeração fiscal durável") + ")."
+        + " Referência preenchida na emissão. Documento não transmitido nem autorizado.";
+      attempt = null;
+    } catch (error) {
+      result.textContent = (error instanceof Error ? error.message : "Preparação falhou")
+        + " Não gere outra ordem enquanto houver resultado incerto.";
+    } finally { submit.disabled = false; }
+  });
+}
+
 /** @param {HTMLElement} article */
 function appendExtremaNfsePreparation(article) {
   if (!bootstrapState?.permissions.includes("configuration.write")
@@ -433,6 +549,165 @@ function appendExtremaCancellation(article) {
       status.textContent = (error instanceof Error ? error.message : "Cancelamento não confirmado")
         + " Resultado incerto: não envie outra solicitação sem conciliar com o WebISS.";
     } finally { send.disabled = false; }
+  });
+}
+
+/** Governed Cajamar cancellation on the SAME authenticated fiscal Portal.
+ * @param {HTMLElement} article
+ */
+function appendCajamarCancellation(article) {
+  const operations = bootstrapState?.projection.configured_fiscal_operations;
+  if (!bootstrapState?.permissions.includes("document.cancel")
+    || !Array.isArray(operations) || !operations.includes("cancelCajamarNfse")) return;
+  const form = document.createElement("form");
+  form.id = "cajamar-cancellation-form";
+  form.className = "panel-form";
+  const heading = document.createElement("h3");
+  heading.textContent = "Cancelar NFS-e de Cajamar (homologação)";
+  const notice = document.createElement("p");
+  notice.textContent = "O cancelamento direto é admitido até dia 10 do mês seguinte à competência. Fora do prazo, siga o processo administrativo municipal; o NFCore não substituirá a decisão do Fisco. Resposta incerta não autoriza retransmissão.";
+  const refLabel = document.createElement("label");
+  refLabel.textContent = "Referência da NFS-e original";
+  const ref = document.createElement("input");
+  ref.required = true; ref.maxLength = 128; ref.autocomplete = "off";
+  refLabel.append(ref);
+  const motiveLabel = document.createElement("label");
+  motiveLabel.textContent = "Motivo fiscal permitido (Decreto nº 7.311/2024)";
+  const motive = document.createElement("select");
+  motive.required = true;
+  for (const [code, title] of [
+    ["", "Selecione o motivo legal"],
+    ["service_not_provided", "Serviço não prestado"],
+    ["duplicate_invoice", "NFS-e emitida em duplicidade"],
+    ["incorrect_taker", "Erro de identificação do tomador"],
+    ["incorrect_amount", "Erro no valor da NFS-e"],
+  ]) {
+    const opt = document.createElement("option");
+    opt.value = code; opt.textContent = title; motive.append(opt);
+  }
+  motiveLabel.append(motive);
+  const approvedLabel = document.createElement("label");
+  const approved = document.createElement("input");
+  approved.type = "checkbox"; approved.required = true;
+  approvedLabel.append(approved, document.createTextNode(
+    " Verifiquei o emitente, a nota original, sua situação e autorizo esta operação fiscal.",
+  ));
+  const submit = document.createElement("button");
+  submit.type = "submit"; submit.className = "primary";
+  submit.textContent = "Solicitar cancelamento GeisWeb";
+  const result = document.createElement("p");
+  result.setAttribute("role", "status"); result.setAttribute("aria-live", "polite");
+  form.append(heading, notice, refLabel, motiveLabel, approvedLabel, submit, result);
+  article.append(form);
+  /** @type {{fingerprint:string,key:string}|null} */
+  let attempt = null;
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    if (!selectedFiscalUnit || selectedFiscalEnvironment !== "homologation") {
+      result.textContent = "Selecione unidade autorizada de homologação."; return;
+    }
+    const payload = {
+      unit_id: selectedFiscalUnit, environment: selectedFiscalEnvironment,
+      document_id: ref.value.trim(), cancellation_reason: motive.value,
+      human_approval: approved.checked,
+    };
+    const fingerprint = JSON.stringify(payload);
+    if (attempt && attempt.fingerprint !== fingerprint) {
+      result.textContent = "Pedido fiscal pendente com conteúdo diferente. Consulte o original."; return;
+    }
+    attempt ||= {fingerprint, key: crypto.randomUUID()};
+    submit.disabled = true;
+    result.textContent = "Conferindo prova original e transmitindo um único cancelamento...";
+    try {
+      const reply = await api("/v1/portal/operations/cancelCajamarNfse", {
+        method: "POST",
+        headers: {"X-CSRF-Token": csrfToken(), "Idempotency-Key": attempt.key},
+        body: JSON.stringify(payload),
+      });
+      result.textContent = reply.official_fiscal_confirmation
+        ? "Cancelamento Cajamar confirmado. Evento arquivado no documento original."
+        : "A prefeitura rejeitou o pedido. Consulte o evento fiscal antes de outra ação.";
+      attempt = null;
+    } catch (error) {
+      result.textContent = (error instanceof Error ? error.message : "Cancelamento não confirmado")
+        + " Não retransmita: consulte o histórico e reconcilie o estado do pedido.";
+    } finally { submit.disabled = false; }
+  });
+}
+
+/** Portal-side review for Cajamar 7.311/2024, never a fake SOAP substitution.
+ * @param {HTMLElement} article
+ */
+function appendCajamarSubstitutionReview(article) {
+  const operations = bootstrapState?.projection.configured_fiscal_operations;
+  if (!bootstrapState?.permissions.includes("document.issue")
+    || !bootstrapState?.permissions.includes("document.cancel")
+    || !Array.isArray(operations)
+    || !operations.includes("reviewCajamarSubstitution")) return;
+
+  const form = document.createElement("form");
+  form.id = "cajamar-substitution-review-form";
+  form.className = "panel-form";
+  const title = document.createElement("h3");
+  title.textContent = "Analisar substituição de NFS-e — Cajamar";
+  const help = document.createElement("p");
+  help.textContent = "A substituição é realizada no sistema eletrônico da Prefeitura, não pelo SOAP GeisWeb. A competência, o tomador e o valor do serviço não podem mudar; o prazo regular é dia 10 do mês seguinte à competência.";
+  const originalLabel = document.createElement("label");
+  originalLabel.textContent = "ID da NFS-e original autorizada";
+  const original = document.createElement("input");
+  original.required = true; original.maxLength = 128; original.autocomplete = "off";
+  originalLabel.append(original);
+  const replacementLabel = document.createElement("label");
+  replacementLabel.textContent = "ID do documento substituto preparado (não transmitido)";
+  const replacement = document.createElement("input");
+  replacement.required = true; replacement.maxLength = 128; replacement.autocomplete = "off";
+  replacementLabel.append(replacement);
+  const reviewLabel = document.createElement("label");
+  const review = document.createElement("input");
+  review.type = "checkbox"; review.required = true;
+  reviewLabel.append(review, document.createTextNode(
+    " Confirmei a identidade, o vínculo entre os documentos e a análise fiscal humana.",
+  ));
+  const submit = document.createElement("button");
+  submit.type = "submit"; submit.className = "primary";
+  submit.textContent = "Validar substituição municipal";
+  const result = document.createElement("p");
+  result.setAttribute("role", "status"); result.setAttribute("aria-live", "polite");
+  const official = document.createElement("a");
+  official.className = "ghost";
+  official.textContent = "Serviços fiscais oficiais de Cajamar";
+  official.href = "https://cajamar.sp.gov.br/fazenda/servicos-online/";
+  official.target = "_blank"; official.rel = "noopener noreferrer";
+  form.append(title, help, originalLabel, replacementLabel, reviewLabel, submit, result, official);
+  article.append(form);
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
+    if (!selectedFiscalUnit || selectedFiscalEnvironment !== "homologation") {
+      result.textContent = "Selecione uma unidade fiscal autorizada em homologação.";
+      return;
+    }
+    submit.disabled = true;
+    result.textContent = "Conferindo os dois documentos, as restrições e o prazo municipal...";
+    try {
+      const response = await api("/v1/portal/operations/reviewCajamarSubstitution", {
+        method: "POST",
+        headers: {"X-CSRF-Token": csrfToken()},
+        body: JSON.stringify({
+          unit_id: selectedFiscalUnit, environment: selectedFiscalEnvironment,
+          original_id: original.value.trim(), replacement_id: replacement.value.trim(),
+          human_approval: review.checked,
+        }),
+      });
+      result.textContent = response.status === "MUNICIPAL_PORTAL_SUBSTITUTION_REQUIRED"
+        ? `Pré-análise interna aprovada até ${response.deadline}. Execute no portal oficial e registre a comprovação da prefeitura; nenhuma substituição fiscal foi transmitida.`
+        : "Resultado municipal não confirmado. Revise o procedimento.";
+    } catch (error) {
+      result.textContent = error instanceof Error
+        ? error.message : "Pré-análise indisponível; a NFS-e original não foi alterada.";
+    } finally { submit.disabled = false; }
   });
 }
 
@@ -887,11 +1162,11 @@ function fiscalRowElement(row) {
       artifact.rel = "noopener noreferrer";
     }
     wrapper.append(artifact);
-    if (kind === "authorized_xml") {
+    if (kind === "authorized_xml" && row.auxiliary_pdf_available === true) {
       const danfe = document.createElement("a");
       danfe.className = "ghost";
-      danfe.textContent = "Visualizar DANFE/PDF";
-      danfe.href = `/v1/portal/documents/${encodeURIComponent(reference)}/artifacts/danfe?${new URLSearchParams({
+      danfe.textContent = "Visualizar documento auxiliar (DANFE/DANFSe)";
+      danfe.href = `/v1/portal/documents/${encodeURIComponent(reference)}/artifacts/auxiliary_pdf?${new URLSearchParams({
         unit_id: unit, environment,
       })}`;
       danfe.target = "_blank";
@@ -2252,9 +2527,12 @@ async function renderSurface(viewId) {
     if (viewId === "users") appendUserAdministration(article, rows);
     if (viewId === "errors" || viewId === "reconciliation") appendCognitiveAdvisor(article, viewId);
     if (["inutilizations", "documents", "issuances", "reconciliation"].includes(viewId)) await appendFiscalRecovery(article);
+    if (viewId === "issuances") appendNativeNfsePreparation(article);
     if (viewId === "issuances") appendExtremaNfsePreparation(article);
     if (viewId === "issuances") appendExtremaCancellation(article);
+    if (viewId === "issuances") appendCajamarCancellation(article);
     if (viewId === "issuances") appendExtremaSubstitution(article);
+    if (viewId === "issuances") appendCajamarSubstitutionReview(article);
     if (viewId === "inutilizations") appendInutilizationForm(article);
     if (["documents", "issuances", "reconciliation"].includes(viewId)) appendFiscalActions(article);
     if (scopedViews.has(viewId) && viewId !== "capabilities") {
@@ -3006,6 +3284,13 @@ operationForm.addEventListener("submit", async (event) => {
     if (mutation) {
       status.textContent = "Resposta registrada. O recibo do pedido não confirma autorização fiscal. Confira o estado do documento em Emissões.";
       if (typeof result.reference_id === "string") status.textContent += ` Referência: ${result.reference_id}.`;
+      const evidence = result.operation_result;
+      if (evidence && typeof evidence === "object") {
+        if (typeof evidence.status === "string") status.textContent += ` Estado fiscal: ${evidence.status}.`;
+        if (typeof evidence.rejection_reason === "string") status.textContent += ` Código de rejeição: ${evidence.rejection_reason}.`;
+        if (typeof evidence.rejection_message === "string") status.textContent += ` Motivo: ${evidence.rejection_message}.`;
+        if (evidence.recovery_required === true) status.textContent += " Resultado incerto: reconcilie antes de retransmitir.";
+      }
     } else {
       status.textContent = `Resultado da consulta: ${typeof result.status === "string" ? result.status : "não informado"}.`;
       if (typeof result.access_key === "string") status.textContent += ` Chave: ${result.access_key}.`;
