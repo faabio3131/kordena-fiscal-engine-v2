@@ -26,6 +26,7 @@ from lxml import etree
 
 from kordena_fiscal.application.service import FiscalApplicationService
 from kordena_fiscal.domain import Cnpj, FiscalValidationError
+from kordena_fiscal.gateway.osasco_rtc_issue_builder import OsascoReviewedCartorioValues
 from kordena_fiscal.gateway.osasco_rtc_tax_policy import OsascoReviewedRtcPolicy
 from kordena_fiscal.gateway.sp4_municipal_canonical import Sp4OriginalRps, Sp4VerifiedInvoice
 from kordena_fiscal.issuance.nfe_nfse import NfseAuthorizationRequest
@@ -58,6 +59,7 @@ _REQUESTS = ("RTC_EmitirNFE", "ConsultarNotaCompleta", "Cancelar")
 _SCHEMAS = _REQUESTS + ("ConsultarNotaCompletaResponse", "CancelarResponse")
 _TAX_MONEY = frozenset({
     "iss_rate", "pis", "cofins", "csll", "income_tax", "inss", "other_taxes",
+    "pis_own", "cofins_own",
 })
 _TAX_DATES = frozenset({"effective_from", "effective_through"})
 
@@ -90,16 +92,18 @@ def _local_resource(directory: Path, name: object, digest: object) -> bytes:
 
 
 def _parse_policy(value: object) -> OsascoReviewedRtcPolicy:
-    required = set(OsascoReviewedRtcPolicy.__dataclass_fields__) - {
-        "no_iss_incidence", "additional_info",
-    }
+    optional = {"no_iss_incidence", "additional_info", "pis_own",
+                "cofins_own", "cartorio_values"}
+    required = set(OsascoReviewedRtcPolicy.__dataclass_fields__) - optional
     if not isinstance(value, dict) or not required.issubset(value) or (
-        set(value) - required - {"no_iss_incidence", "additional_info"}
+        set(value) - required - optional
     ):
         raise RuntimeConfigurationError("Osasco fiscal policy fields incomplete")
     parsed = dict(value)
     try:
         for key in _TAX_MONEY:
+            if key not in parsed:
+                continue
             raw = parsed[key]
             if not isinstance(raw, str) or not raw or any(
                 ch not in "0123456789." for ch in raw
@@ -111,6 +115,21 @@ def _parse_policy(value: object) -> OsascoReviewedRtcPolicy:
                 if not isinstance(parsed[key], str):
                     raise ValueError
                 parsed[key] = date.fromisoformat(parsed[key])
+        if "cartorio_values" in parsed and parsed["cartorio_values"] is not None:
+            raw_notary = _object(
+                parsed["cartorio_values"],
+                set(OsascoReviewedCartorioValues.__dataclass_fields__),
+                "notary deductions",
+            )
+            values: dict[str, Decimal] = {}
+            for key, raw in raw_notary.items():
+                if (
+                    not isinstance(raw, str) or not raw
+                    or any(ch not in "0123456789." for ch in raw)
+                ):
+                    raise ValueError
+                values[key] = Decimal(raw)
+            parsed["cartorio_values"] = OsascoReviewedCartorioValues(**values)
         policy = OsascoReviewedRtcPolicy(**parsed)
         if (
             not isinstance(policy.source_normative, str)
