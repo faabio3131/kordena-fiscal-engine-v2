@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import date, datetime
 
 from kordena_fiscal.application.service import FiscalApplicationService
 from kordena_fiscal.domain import (
@@ -15,6 +16,10 @@ from kordena_fiscal.domain import (
     ExecutionScope,
     FiscalDocumentKind,
     FiscalValidationError,
+)
+from kordena_fiscal.gateway.barueri_official_cancel_return import (
+    BarueriCancellationEvidence,
+    verify_barueri_cancellation_return,
 )
 from kordena_fiscal.gateway.barueri_official_invoice_xml import (
     retrieve_barueri_original_invoice_xml,
@@ -77,6 +82,16 @@ class BarueriTrustedRuntimePorts:
     validate_return_file: Callable[
         [BarueriRpsBatch, BarueriReceipt], BarueriConvertedNfseEvidence
     ] = _verify_return
+    decode_official_invoice: Callable[
+        [bytes, Sp4OriginalRps], Sp4VerifiedInvoice
+    ] | None = None
+    prepare_cancellation_event: Callable[
+        [
+            NfseAuthorizationRequest, Sp4OriginalRps, Sp4VerifiedInvoice,
+            str, str, str, datetime, str | None,
+        ],
+        BarueriRpsBatch,
+    ] | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.transport, BarueriPmb004HomologationTransport):
@@ -88,6 +103,75 @@ class BarueriTrustedRuntimePorts:
             self.retrieve_official_invoice_xml, self.validate_return_file,
         )):
             raise FiscalValidationError("Barueri fiscal review ports are incomplete")
+        if (self.decode_official_invoice is None) != (self.prepare_cancellation_event is None):
+            raise FiscalValidationError("Barueri event ports must be configured together")
+        if self.decode_official_invoice is not None and not all(callable(port) for port in (
+            self.decode_official_invoice, self.prepare_cancellation_event,
+        )):
+            raise FiscalValidationError("Barueri event ports require reviewed implementations")
+
+    @property
+    def supports_events(self) -> bool:
+        return self.decode_official_invoice is not None
+
+    def submit_cancellation_event(self, batch: BarueriRpsBatch) -> BarueriReceipt:
+        if not self.supports_events:
+            raise FiscalValidationError("Barueri cancellation ports are not configured")
+        return self.transport.submit(batch, binding_operation="cancel")
+
+    def query_cancellation_event(
+        self, batch: BarueriRpsBatch, issued: Sp4VerifiedInvoice,
+        protocol: str | None, submitted_on: date,
+    ) -> BarueriCancellationEvidence | None:
+        """Read-only recovery of one original event; never resend PMB004 files."""
+        if not self.supports_events or not isinstance(batch, BarueriRpsBatch):
+            raise FiscalValidationError("Barueri cancellation recovery is not configured")
+        return_name: str | None = None
+        if protocol is not None:
+            state = self.transport.status(batch=batch, protocol=protocol)
+            if (
+                state.operation != "NFeLoteStatusArquivo" or state.code != "OK200"
+                or state.remittance_protocol not in (None, protocol)
+            ):
+                raise FiscalValidationError("Barueri event protocol disagrees with municipality")
+            if state.situation not in (None, "1"):
+                return None
+            return_name = state.return_file_name
+        else:
+            matches = []
+            for situation in ("-2", "-1", "0", "1", "2"):
+                listing = self.transport.list_on_date(
+                    batch=batch, situation=situation, submitted_on=submitted_on,
+                )
+                if listing.operation != "NFeLoteListarArquivos" or listing.code != "OK200":
+                    raise FiscalValidationError("Barueri event listing is not official")
+                for entry in listing.listed_files:
+                    if entry.original_file_name != batch.file_name:
+                        continue
+                    if (
+                        entry.remittance != batch.remittance
+                        or entry.situation != situation or entry.validation_only
+                    ):
+                        raise FiscalValidationError("Ambiguous Barueri event listing")
+                    matches.append(entry)
+            if len(matches) > 1:
+                raise FiscalValidationError("Duplicate municipal cancellation events detected")
+            if not matches or matches[0].situation != "1":
+                return None
+            return_name = matches[0].return_file_name
+        if not return_name:
+            return None
+        receipt = self.transport.download(batch=batch, file_name=return_name)
+        if (
+            receipt.operation != "NFeLoteBaixarArquivo" or receipt.code != "OK200"
+            or receipt.return_file_name not in (None, return_name)
+            or not receipt.downloaded_file
+            or (protocol is not None and receipt.remittance_protocol not in (None, protocol))
+        ):
+            raise FiscalValidationError("Barueri event file does not match remittance")
+        return verify_barueri_cancellation_return(
+            event=batch, issued=issued, receipt=receipt,
+        )
 
     def attach(self, application: FiscalApplicationService) -> Sp4ReviewedMunicipalPorts:
         if not isinstance(application, FiscalApplicationService):
