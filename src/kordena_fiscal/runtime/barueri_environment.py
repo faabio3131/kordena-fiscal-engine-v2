@@ -11,9 +11,10 @@ import hashlib
 import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from typing import Any
 
 from lxml import etree
@@ -21,6 +22,9 @@ from lxml import etree
 from kordena_fiscal.application.service import FiscalApplicationService
 from kordena_fiscal.domain import Cnpj, FiscalAddress, FiscalValidationError, TaxRegimeCode
 from kordena_fiscal.gateway.barueri_pmb004_homologation import BarueriRpsBatch
+from kordena_fiscal.gateway.barueri_pmb004_cancellation_builder import (
+    build_barueri_cancellation_remittance,
+)
 from kordena_fiscal.gateway.barueri_pmb004_record_builder import (
     BarueriPmb004IssueFields,
     BarueriPmb004Recipient,
@@ -48,7 +52,7 @@ _LAYOUT = "PMB004-v4.2"
 _LIMIT = 2_097_152
 _XML_PROOF = frozenset({
     "issuer_cnpj", "invoice_number", "verification_code", "invoice_reference",
-    "rps_number", "gross_amount",
+    "rps_number", "gross_amount", "invoice_issued_on", "invoice_series",
 })
 _ISSUER_KEYS = frozenset({
     "tenant_id", "unit_id", "issuer_cnpj", "profile_id", "profile_version",
@@ -370,10 +374,35 @@ class BarueriReviewedStartup:
                 raise FiscalValidationError("Barueri PMB004 RPS identity mismatch")
             validate_fixed_width(batch.rps_bytes)
 
-        def official_xml(invoice: Sp4VerifiedInvoice) -> None:
-            root = _xml(invoice.authorized_xml)
+        def xml_values(raw: bytes) -> dict[str, str]:
+            root = _xml(raw)
             if not self.invoice_schema.validate(root):
                 raise FiscalValidationError("Barueri original invoice fails pinned official XSD")
+            values: dict[str, str] = {}
+            for field, tag in self.invoice_tags.items():
+                matching = [
+                    element.text.strip() for element in root.iter()
+                    if isinstance(element.tag, str)
+                    and etree.QName(element).localname == tag
+                    and element.text is not None
+                ]
+                if len(matching) != 1:
+                    raise FiscalValidationError("Barueri official XML evidence tag ambiguous")
+                values[field] = matching[0]
+            if not values["invoice_number"].isdigit():
+                raise FiscalValidationError("Barueri official invoice number invalid")
+            if not values["rps_number"].isdigit():
+                raise FiscalValidationError("Barueri official RPS number invalid")
+            if len(values["invoice_series"]) > 5:
+                raise FiscalValidationError("Barueri official invoice series invalid")
+            try:
+                date.fromisoformat(values["invoice_issued_on"])
+            except ValueError:
+                raise FiscalValidationError("Barueri official issue date invalid") from None
+            return values
+
+        def official_xml(invoice: Sp4VerifiedInvoice) -> None:
+            values = xml_values(invoice.authorized_xml)
             expected = {
                 "issuer_cnpj": invoice.issuer_cnpj.value,
                 "invoice_number": invoice.invoice_number,
@@ -383,26 +412,37 @@ class BarueriReviewedStartup:
                 "gross_amount": str(invoice.gross_amount),
             }
             for field, value in expected.items():
-                matching = [
-                    node.text.strip() for node in root.iter()
-                    if isinstance(node.tag, str)
-                    and etree.QName(node).localname == self.invoice_tags[field]
-                    and node.text is not None
-                ]
-                if len(matching) != 1:
-                    raise FiscalValidationError("Barueri invoice evidence tag ambiguous")
                 if field in ("invoice_number", "rps_number"):
-                    if not matching[0].isdigit() or int(matching[0]) != int(value):
-                        raise FiscalValidationError("Barueri official invoice number differs")
+                    if int(values[field]) != int(value):
+                        raise FiscalValidationError("Barueri official number differs")
                 elif field == "gross_amount":
                     try:
-                        parsed = Decimal(matching[0])
+                        amount = Decimal(values[field])
                     except InvalidOperation:
-                        raise FiscalValidationError("Barueri XML amount malformed") from None
-                    if parsed != invoice.gross_amount:
+                        raise FiscalValidationError("Invalid Barueri official amount") from None
+                    if amount != invoice.gross_amount:
                         raise FiscalValidationError("Barueri official amount differs")
-                elif matching[0] != value:
+                elif values[field] != value:
                     raise FiscalValidationError("Barueri official invoice identity differs")
+
+        def decode_official_invoice(
+            raw: bytes, original: Sp4OriginalRps,
+        ) -> Sp4VerifiedInvoice:
+            values = xml_values(raw)
+            evidence = Sp4VerifiedInvoice(
+                issuer_cnpj=original.issuer_cnpj,
+                issuer_ibge=original.issuer_ibge,
+                competence_date=original.competence_date,
+                rps_number=original.rps_number,
+                rps_series=original.rps_series,
+                gross_amount=original.gross_amount,
+                invoice_number=values["invoice_number"],
+                verification_code=values["verification_code"],
+                invoice_reference=values["invoice_reference"],
+                authorized_xml=raw,
+            )
+            official_xml(evidence)
+            return evidence
 
         transport = build_barueri_trusted_transport(
             application=application, vault=vault, validate_pmb004=validate_fixed_width,
@@ -416,6 +456,72 @@ class BarueriReviewedStartup:
                 "",
             ),
         )
+        def prepare_cancellation_event(
+            request: NfseAuthorizationRequest, original: Sp4OriginalRps,
+            issued: Sp4VerifiedInvoice, remittance: str,
+            reason_code: str, description: str, occurred_at: datetime,
+            replacement_number: str | None,
+            replacement_request: NfseAuthorizationRequest | None,
+            replacement_source: Sp4OriginalRps | None,
+        ) -> BarueriRpsBatch:
+            issued_values = xml_values(issued.authorized_xml)
+            official_xml(issued)
+            original_batch = build_remittance(request, original)
+            verify_identity(original, original_batch)
+            records = original_batch.rps_bytes.split(b"\r\n")
+            original_detail = records[1]
+            rtc_detail = next(
+                (row for row in records if row.startswith(b"4")), None,
+            )
+            if rtc_detail is None:
+                raise FiscalValidationError("Barueri original RTC record is missing")
+            replacement_detail: bytes | None = None
+            replacement_rtc: bytes | None = None
+            replacement_amount: Decimal | None = None
+            if reason_code == "03":
+                if (
+                    replacement_source is None or replacement_request is None
+                    or replacement_number != replacement_source.rps_number
+                    or replacement_request.document.issuer.cnpj != original.issuer_cnpj
+                    or replacement_request.document.competence_date
+                    != original.competence_date
+                    or replacement_request.document.issuer.tax_regime
+                    != request.document.issuer.tax_regime
+                ):
+                    raise FiscalValidationError("Barueri replacement is not canonical")
+                fresh = build_remittance(replacement_request, replacement_source)
+                verify_identity(replacement_source, fresh)
+                rows = fresh.rps_bytes.split(b"\r\n")
+                replacement_detail = rows[1]
+                replacement_rtc = next(
+                    (row for row in rows if row.startswith(b"4")), None,
+                )
+                if replacement_rtc is None:
+                    raise FiscalValidationError("Barueri replacement RTC is missing")
+                replacement_amount = replacement_source.gross_amount
+            elif any(value is not None for value in (
+                replacement_request, replacement_source, replacement_number,
+            )):
+                raise FiscalValidationError("Barueri simple cancel cannot replace RPS")
+            local = occurred_at.astimezone(ZoneInfo("America/Sao_Paulo"))
+            return build_barueri_cancellation_remittance(
+                original=original, issued=issued,
+                regime=request.document.issuer.tax_regime,
+                municipal_registration=original_batch.municipal_registration,
+                event_remittance=remittance, event_day=local.date(),
+                event_time=local.time().replace(tzinfo=None),
+                invoice_issued_on=date.fromisoformat(issued_values["invoice_issued_on"]),
+                reason_code=reason_code, description=description,
+                original_rps_detail=original_detail,
+                reviewed_rtc_record=rtc_detail,
+                replacement_rps_number=replacement_number,
+                replacement_rps_detail=replacement_detail,
+                replacement_rtc_record=replacement_rtc,
+                replacement_gross_amount=replacement_amount,
+                invoice_series=issued_values["invoice_series"],
+                human_approved=True,
+            )
+
         def validate_original(source: Sp4OriginalRps) -> None:
             if (
                 not isinstance(source, Sp4OriginalRps)
@@ -437,6 +543,8 @@ class BarueriReviewedStartup:
                 status=AuthorizationStatus.PENDING,
                 provider_request_id=receipt.remittance_protocol,
             ),
+            decode_official_invoice=decode_official_invoice,
+            prepare_cancellation_event=prepare_cancellation_event,
         )
 
 
