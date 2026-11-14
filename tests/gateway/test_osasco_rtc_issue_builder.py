@@ -22,6 +22,7 @@ from kordena_fiscal.gateway.osasco_rtc_issue_builder import (
     OsascoRtcIssueError,
     OsascoRtcRecipient,
     OsascoRtcTaxFields,
+    OsascoReviewedCartorioValues,
     build_osasco_rtc_issue_xml,
     prepare_osasco_rtc_issue,
 )
@@ -330,3 +331,103 @@ def test_osasco_reviewed_policy_rejects_missing_sources_and_wrong_iss() -> None:
     req.document.issuer.municipal_registration = None
     with pytest.raises(OsascoReviewedTaxPolicyError, match="registration"):
         reviewed_osasco_rtc_fields(req, original, policy)
+
+
+def test_municipal_manual_v22_normal_rate_and_taxpayer_are_explicit() -> None:
+    """Out/2026 official manual: normal regime sends Aliquota=0, payer P."""
+    original = _original()
+    xml = build_osasco_rtc_issue_xml(
+        request=_request(original), original=original,
+        fields=replace(_fields(), iss_rate=Decimal("3.20")),
+    )
+    root = etree.fromstring(xml)
+    assert root.findtext(f".//{{{_ISS}}}Aliquota") == "0.00"
+    assert root.findtext(f".//{{{_ISS}}}ResponsavelTributario") == "P"
+    assert root.findtext(f".//{{{_ISS}}}SimplesNacional") == "false"
+
+
+def test_municipal_manual_v22_outside_service_tax_substitution_rate() -> None:
+    original = _original()
+    request = _request(original)
+    request.document.service_jurisdiction.municipality_ibge_code = "3550308"
+    fields = replace(
+        _fields(), iss_rate=Decimal("3.50"), iss_withheld=True,
+        service_city="São Paulo", service_city_ibge="3550308",
+    )
+    xml = build_osasco_rtc_issue_xml(
+        request=request, original=original, fields=fields,
+    )
+    root = etree.fromstring(xml)
+    assert root.findtext(f".//{{{_ISS}}}Aliquota") == "3.50"
+    assert root.findtext(f".//{{{_ISS}}}ResponsavelTributario") == "T"
+    assert root.findtext(f".//{{{_ISS}}}SubstituicaoTributaria") == "true"
+
+
+def test_municipal_manual_v22_rejects_unsupported_iss_variants() -> None:
+    original = _original()
+    for fields in (
+        replace(_fields(), activity="1401"),
+        replace(_fields(), iss_withheld=True),
+        replace(_fields(), no_iss_incidence=True),
+    ):
+        with pytest.raises(OsascoRtcIssueError):
+            build_osasco_rtc_issue_xml(
+                request=_request(original), original=original,
+                fields=fields,
+            )
+
+
+def test_municipal_manual_v22_separates_own_and_withheld_taxes() -> None:
+    original = _original()
+    fields = replace(
+        _fields(), pis=Decimal("1.10"), pis_own=Decimal("2.30"),
+        cofins=Decimal("3.40"), cofins_own=Decimal("4.50"),
+    )
+    xml = build_osasco_rtc_issue_xml(
+        request=_request(original), original=original, fields=fields,
+    )
+    root = etree.fromstring(xml)
+    for name, expected in (
+        ("ValorPisPasep", "1.10"),
+        ("ValorPisProprio", "2.30"),
+        ("ValorCofins", "3.40"),
+        ("ValorCofinsProprio", "4.50"),
+    ):
+        assert root.findtext(f".//{{{_ISS}}}{name}") == expected
+
+
+def test_municipal_manual_v22_restricts_cartorio_special_deductions() -> None:
+    original = _original()
+    special = OsascoReviewedCartorioValues(
+        vl_contrib_sta_casa=Decimal("0"),
+        vl_emolumento=Decimal("10.00"),
+        vl_fundo_tj=Decimal("0"),
+        vl_intimacao=Decimal("0"),
+        vl_min_publico=Decimal("0"),
+        vl_repasse_estadual=Decimal("0"),
+        vl_sefaz=Decimal("0"),
+        vl_sinoreg=Decimal("0"),
+    )
+    fields = replace(_fields(), cartorio_values=special)
+    xml = build_osasco_rtc_issue_xml(
+        request=_request(original), original=original, fields=fields,
+    )
+    root = etree.fromstring(xml)
+    group = root.find(f".//{{{_ISS}}}ValoresCartorios")
+    assert group is not None
+    assert len(group) == 8
+    assert group.findtext(f"{{{_ISS}}}vlEmolumento") == "10.00"
+    for invalid in (
+        replace(fields, iss_withheld=True),
+        replace(fields, cartorio_values=replace(
+            special, vl_emolumento=Decimal("NaN"),
+        )),
+        replace(fields, cartorio_values=replace(
+            special, vl_emolumento=Decimal("0"),
+        )),
+    ):
+        with pytest.raises(OsascoRtcIssueError):
+            build_osasco_rtc_issue_xml(
+                request=_request(original), original=original,
+                fields=invalid,
+            )
