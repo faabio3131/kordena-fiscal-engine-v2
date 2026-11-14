@@ -144,6 +144,8 @@ def _request(**service_overrides) -> NfseAuthorizationRequest:
         service_jurisdiction=BrazilianJurisdiction("SP", "3550308"),
         services=(NfseServiceLine(**service_fields),),
         service_taker_reference="taker-ref-1",
+        # Synthetic fixture uses a reserved number; never hash-derived.
+        dps_number=1,
     )
     return NfseAuthorizationRequest.build(document)
 
@@ -176,9 +178,8 @@ def _governed_gateway(*, resolver_return: str = NACIONAL_HOMOLOGATION_PROVIDER_I
 
 def test_real_builder_and_preaudit_authorize_a_valid_document_end_to_end() -> None:
     """Preaudit passes, build_signed_dps produces a schema-valid unsigned DPS,
-    sign_nfse_dps_xml() signs it with RSA-SHA1 (matching the pinned
-    xml/official/NFSE_NACIONAL_1.00/xmldsig-core-schema.xsd's fixed
-    SignatureMethod/DigestMethod), and the governed gateway's own downstream
+    sign_nfse_dps_xml() signs the 1.01 layout with RSA-SHA256, and the
+    governed gateway's own downstream
     re-validation of the SIGNED document against the full pinned XSD now
     passes -- so the fake homologation exchange authorizes the document.
     """
@@ -245,7 +246,7 @@ def test_mg_national_channel_generates_signed_schema_valid_dps_envelope(
     """Offline synthetic DPS envelope tests: no official transmission claimed."""
     request = _mg_request(ibge, municipality)
     signed = build_signed_dps(request, _certificate())
-    national_dps_validator("1.00").validate_document(signed)
+    national_dps_validator("1.01").validate_document(signed)
     payload = encode_signed_dps(
         signed,
         issuer_cnpj=request.document.issuer.cnpj.value,
