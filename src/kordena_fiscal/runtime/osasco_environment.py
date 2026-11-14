@@ -19,6 +19,7 @@ from lxml import etree
 
 from kordena_fiscal.application.service import FiscalApplicationService
 from kordena_fiscal.domain import FiscalValidationError, MunicipalRegistration, TaxRegimeCode
+from kordena_fiscal.gateway.osasco_rtc_issue_builder import OsascoReviewedCartorioValues
 from kordena_fiscal.gateway.osasco_rtc_tax_policy import OsascoReviewedRtcPolicy
 from kordena_fiscal.gateway.sp4_municipal_canonical import Sp4OriginalRps, Sp4VerifiedInvoice
 from kordena_fiscal.issuance.nfe_nfse import NfseAuthorizationRequest
@@ -41,6 +42,7 @@ _SCHEMA_NAMES = frozenset({
 })
 _POLICY_NUMBERS = frozenset({
     "iss_rate", "pis", "cofins", "csll", "income_tax", "inss", "other_taxes",
+    "pis_own", "cofins_own",
 })
 _POLICY_DATES = frozenset({"effective_from", "effective_through"})
 
@@ -97,12 +99,30 @@ def _schema(raw: bytes) -> etree.XMLSchema:
 
 def _policy(raw: object) -> OsascoReviewedRtcPolicy:
     names = {field.name for field in fields(OsascoReviewedRtcPolicy)}
-    data = _object(raw, names, "tax policy")
+    optional = {"pis_own", "cofins_own", "cartorio_values"}
+    if not isinstance(raw, dict) or not (names - optional).issubset(raw) or (
+        set(raw) - names
+    ):
+        raise RuntimeConfigurationError("Invalid reviewed Osasco tax policy")
+    data = raw
     typed: dict[str, Any] = {}
     try:
         for key, value in data.items():
             if key in _POLICY_DATES:
                 typed[key] = date.fromisoformat(value) if value is not None else None
+            elif key == "cartorio_values":
+                if value is None:
+                    typed[key] = None
+                else:
+                    notary = _object(
+                        value, set(OsascoReviewedCartorioValues.__dataclass_fields__),
+                        "notary tax deductions",
+                    )
+                    if any(not isinstance(item, str) for item in notary.values()):
+                        raise ValueError
+                    typed[key] = OsascoReviewedCartorioValues(**{
+                        name: Decimal(item) for name, item in notary.items()
+                    })
             elif key in _POLICY_NUMBERS:
                 if not isinstance(value, str):
                     raise ValueError
