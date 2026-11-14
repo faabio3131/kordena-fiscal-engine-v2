@@ -23,6 +23,7 @@ _CANCEL = frozenset({
 _REPLACE = frozenset({
     "unit_id", "environment", "original_id", "replacement_id",
     "human_approval", "cancellation_reason",
+    "substitution_justification_code",
 })
 _RECOVER = frozenset({"unit_id", "environment", "document_id"})
 
@@ -72,6 +73,10 @@ def build_barueri_event_handlers(
                 or original_id == replacement_id
             ):
                 raise FiscalValidationError("Barueri replacement needs two distinct documents")
+            if payload.get("substitution_justification_code") not in (
+                "1", "2", "3", "4", "5", "9",
+            ):
+                raise FiscalValidationError("Barueri v4.4 justification code required")
             application.preflight_barueri_nfse_cancellation(
                 scope=scope, document_id=original_id,
                 replacement_id=replacement_id, decode_official_invoice=decoder,
@@ -130,6 +135,9 @@ def build_barueri_event_handlers(
             decode_official_invoice=decoder, prepare_event=prepare_event,
             submit_event=reviewed.submit_cancellation_event,
             reason_code="03", cancellation_reason=str(payload["cancellation_reason"]),
+            substitution_justification_code=str(
+                payload["substitution_justification_code"]
+            ),
             occurred_at=datetime.now(UTC), retention=retention,
         )
         return {
