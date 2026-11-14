@@ -6,7 +6,7 @@
 
 A API canônica aceita a variável NFCORE_OSASCO_WCF_CONFIG_PATH com caminho absoluto para manifesto operador de homologação. Não existe API paralela ou outro banco; o mesmo FiscalApplicationService/UoW reserva o RPS original antes do POST. O binding do contribuinte permanece no Control Plane, separado por tenant/unidade/CNPJ/inscrição municipal/perfil fiscal, com resolução de referência de credencial pelo mesmo SecretResolutionService, FiscalSecretVault e GSM com identidade de workload. O manifesto não contém chaves fiscais, segredos ou senha.
 
-O modo reviewed-homologation exige SHA-256 de WSDL original e cada XSD do conjunto revisado; verifica os métodos RTC_EmitirNFE, ConsultarNotaCompleta e Cancelar na binding SOAP 1.1; valida XML de solicitação, consulta e cancelamento e as respostas oficiais com o schema específico. Um HTML de landing page WCF NÃO substitui o arquivo XML WSDL.
+A configuração revisada exige SHA-256 de WSDL original e cada XSD do conjunto revisado; verifica os métodos RTC_EmitirNFE, ConsultarNotaCompleta e Cancelar na binding SOAP 1.1; valida XML de solicitação, consulta e cancelamento e as respostas oficiais com o schema específico. Um HTML de landing page WCF NÃO substitui o arquivo XML WSDL.
 
 O RTC municipal é somente para competência 2026 em diante e contribuinte com regime NORMAL (TaxRegimeCode=3) e perfil fiscal revisado. Simples Nacional segue o roteamento nacional pertinente.
 
@@ -25,19 +25,20 @@ Na estação autorizada, obter BYTES originais (não XML convertido em texto sem
 
 As ferramentas de leitura públicas consultadas retornaram o texto XML sem os atributos de namespaces/operadores; esse texto não pode ser usado como prova byte-a-byte nem para gerar hash verdadeiro. Não inventar hash, XSD, SOAPAction ou retorno fiscal.
 
-## Manifesto operador
+## Manifesto operador reconciliado com o entrypoint da PR #468/#469
 
-Exatamente estes grupos JSON: mode, wsdl_file, wsdl_sha256, binding_name, xsd_resources, xsd_roots, issuers e gsm.
+O formato válido é o da implementação canônica em runtime/osasco_environment.py, também descrito no runbook OSASCO_WCF_RUNTIME_PROVISIONING.md. O objeto JSON aceita **exatamente** os grupos wsdl, binding_name, schemas e issuers:
 
-- mode: reviewed-homologation.
-- wsdl_file: nome relativo seguro de WSDL local; wsdl_sha256: hash real.
-- binding_name: SOAP 1.1 revisada no WSDL vigente.
-- xsd_resources: dicionário nome local → SHA-256 real, preservando imports do conjunto.
-- xsd_roots: nome de arquivo raiz para cada um dos cinco documentos: RTC_EmitirNFE, ConsultarNotaCompleta, Cancelar, ConsultarNotaCompletaResponse e CancelarResponse.
-- issuers: lista de tenant_id, unit_id, issuer_cnpj, profile_id, profile_version, tax_regime=3, policy. Cada policy contém: source_normative, rule_version, effective_from, effective_through, municipal_service_code, national_taxation_code, activity, class_trib, nbs_code, incidence_location, operation_indicator, service_city, service_city_ibge, service_state, recipient_street_type, iss_rate, pis, cofins, csll, income_tax, inss, other_taxes, test_only. Opcionalmente no_iss_incidence e additional_info. Valores de tributos sempre strings decimais exatas.
-- gsm: project_id, project_number, resources (allowlist explícita de nomes projects/<projeto>/secrets/<identificador>), workload_id=nfcore-api.
+- wsdl: objeto {file, sha256}, com WSDL local e hash real.
+- binding_name: identificação literal do binding SOAP 1.1 no WSDL da prefeitura.
+- schemas: cinco objetos {file, sha256} independentes, de nomes issue_request, query_request, cancel_request, full_invoice_response, cancel_response.
+- issuers: lista de {tenant_id, unit_id, issuer_cnpj, municipal_registration, policy}, com uma combinação única de tenant/unidade/CNPJ e inscrição municipal confrontada com o perfil canônico.
+- policy: fonte, versão de regra, data inicial/final, código de serviço municipal, código nacional de tributação, atividade, classificação tributária, NBS, indicador de operação, local de incidência, município, UF, tipo de logradouro do tomador, ISS e valores federais revisados. Cada valor monetário JSON deve ser string decimal.
+- Na versão **2.2**, policy também aceita os campos **opcionais** pis_own e cofins_own (strings decimais, valores próprios distintos das retenções), e cartorio_values (null ou objeto com os oito campos vl_contrib_sta_casa, vl_emolumento, vl_fundo_tj, vl_intimacao, vl_min_publico, vl_repasse_estadual, vl_sefaz, vl_sinoreg, todos decimais). Ausentes, esses campos permanecem com zero ou null sem criar dedução.
 
-A configuração usa os dados da versão LEGALMENTE REVISADA por perfil, não valores fabricados. No staging, uma identidade federada WIF montada em NFCORE_OSASCO_GSM_WIF_FILE é necessária. Na produção, usa a identidade da API já validada pelo mecanismo production_credentials, sem ADC ou arquivo genérico. Não imprimir segredo nos logs.
+Não usar no manifesto as chaves mode, wsdl_file, wsdl_sha256, xsd_resources, xsd_roots, profile_id, profile_version ou gsm: elas pertencem a um protótipo isolado da PR #466, **não** são aceitas pela candidata de integração #468. O GSM é configurado fora do manifesto por NFCORE_GSM_PROJECT_ID, NFCORE_GSM_PROJECT_NUMBER, NFCORE_GSM_API_SERVICE_ACCOUNT e NFCORE_OSASCO_GSM_ALLOWED_RESOURCES. Staging exige uma autoridade de segredo externa explicitamente injetada; a implementação não reutiliza credencial de produção em staging.
+
+Esses dados são atribuição de operador com cadastro de CNPJ/IM válido e regras tributárias revisadas; nenhum valor fictício deve ser promovido ao servidor.
 
 ## Correções da v2.2 (outubro/2026)
 
