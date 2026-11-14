@@ -17,7 +17,8 @@ from kordena_fiscal.persistence import SqliteFiscalDatabase
 from kordena_fiscal.runtime import api
 from kordena_fiscal.runtime.config import RuntimeConfigurationError, RuntimeSettings
 from kordena_fiscal.runtime.osasco_environment import (
-    OsascoReviewedStartup, build_osasco_port_builder_from_environ,
+    OsascoReviewedStartup,
+    build_osasco_port_builder_from_environ,
 )
 from kordena_fiscal.vault.contracts import SecretResolutionService
 
