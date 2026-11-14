@@ -53,6 +53,7 @@ def build_barueri_cancellation_remittance(
     original_rps_detail: bytes,
     reviewed_rtc_record: bytes,
     replacement_rps_number: str | None = None,
+    substitution_justification_code: str | None = None,
     replacement_rps_detail: bytes | None = None,
     replacement_rtc_record: bytes | None = None,
     replacement_gross_amount: Decimal | None = None,
@@ -106,6 +107,10 @@ def build_barueri_cancellation_remittance(
     ):
         raise BarueriCancellationBuilderError("Original RPS or municipal note number differs")
     if reason_code == "03":
+        if substitution_justification_code not in ("1", "2", "3", "4", "5", "9"):
+            raise BarueriCancellationBuilderError(
+                "Reviewed PMB004 v4.4 substitution justification required"
+            )
         if (
             not isinstance(replacement_rps_number, str)
             or not 1 <= len(replacement_rps_number) <= 7
@@ -139,7 +144,7 @@ def build_barueri_cancellation_remittance(
         reviewed_rtc = replacement_rtc_record
         expected_amount = replacement_gross_amount
     elif any(field is not None for field in (
-        replacement_rps_number, replacement_rps_detail,
+        replacement_rps_number, substitution_justification_code, replacement_rps_detail,
         replacement_rtc_record, replacement_gross_amount,
     )):
         raise BarueriCancellationBuilderError("Normal cancellation cannot allocate a new RPS")
@@ -169,6 +174,12 @@ def build_barueri_cancellation_remittance(
     detail[49:54] = series
     detail[54:62] = invoice_issued_on.strftime("%Y%m%d").encode("ascii")
     detail[62:242] = encoded_description.ljust(180, b" ")
+    # Official Barueri PMB004 layout v4.4 (28/05/2026), type 2 position 514.
+    if reason_code == "03":
+        assert substitution_justification_code is not None
+        detail[513:514] = substitution_justification_code.encode("ascii")
+    else:
+        detail[513:514] = b" "
     if not detail[457:463].isdigit() or not detail[463:478].isdigit():
         raise BarueriCancellationBuilderError("Original service totals were malformed")
     total_cents = int(detail[457:463]) * int(detail[463:478])
