@@ -1827,8 +1827,35 @@ def _synthetic_barueri_soap(
     ).encode()
 
 
+def _synthetic_barueri_substitution_export(
+    original_file: bytes, event_file: bytes,
+) -> bytes:
+    """Official-v3-shaped two-note fixture: old C plus independent new A."""
+    old = _synthetic_barueri_export(
+        original_file, cancelled=True,
+    ).split(b"\r\n")
+    new = _synthetic_barueri_export(
+        event_file, cancelled=False,
+    ).split(b"\r\n")
+    adjusted = bytearray(new[1])
+    adjusted[5:12] = b"0008766"
+    adjusted[26:50] = b"AUTHCODE1234567891".ljust(24)
+    adjusted[1628:1678] = b"35" + b"0" * 47 + b"1"
+    original_cents = int(old[2][76:91])
+    substitute_cents = int(new[2][76:91])
+    footer = (
+        b"9" + b"0000006"
+        + f"{original_cents + substitute_cents:015d}".encode("ascii")
+        + b"0" * 15
+    )
+    return b"\r\n".join((
+        new[0], old[1], old[2], bytes(adjusted), new[2], footer,
+    )) + b"\r\n"
+
+
+@pytest.mark.parametrize("substitute", [False, True])
 def test_barueri_api_entrypoint_portal_issue_reconcile_cancel_replay_and_archive(
-    tmp_path: Path,
+    tmp_path: Path, substitute: bool,
 ) -> None:
     """One portal/API/UoW and real fixed-width driver; mocked municipal I/O only."""
     manifest = _synthetic_barueri_manifest(tmp_path)
@@ -1861,21 +1888,31 @@ def test_barueri_api_entrypoint_portal_issue_reconcile_cancel_replay_and_archive
         if method == "NFeLoteBaixarArquivo":
             return _synthetic_barueri_soap(
                 method, protocol=protocol,
-                return_file=_synthetic_barueri_export(sent[-1], cancelled=is_cancel),
+                return_file=(
+                    _synthetic_barueri_substitution_export(sent[0], sent[-1])
+                    if is_cancel and substitute
+                    else _synthetic_barueri_export(sent[-1], cancelled=is_cancel)
+                ),
             )
         return _synthetic_barueri_soap(method, protocol=protocol)
 
     def invoice_xml(url: str, _timeout: float) -> bytes:
         assert url.startswith("https://testeeiss.barueri.sp.gov.br/nfe/xmlNFe.ashx?")
+        new = "numdoc=0008766" in url
+        number = "0008766" if new else "0008765"
+        code = "AUTHCODE1234567891" if new else "AUTHCODE1234567890"
+        rps = "2" if new else "1"
+        amount = "130.00" if new else "100.00"
+        reference = "35" + "0" * (47 if new else 48) + ("1" if new else "")
         return (
             b"<NotaFiscal>"
             b"<issuer_cnpj>11222333000181</issuer_cnpj>"
-            b"<invoice_number>0008765</invoice_number>"
-            b"<verification_code>AUTHCODE1234567890</verification_code>"
-            b"<invoice_reference>" + b"35" + b"0" * 48
+            + f"<invoice_number>{number}</invoice_number>".encode()
+            + f"<verification_code>{code}</verification_code>".encode()
+            + f"<invoice_reference>{reference}".encode()
             + b"</invoice_reference>"
-            b"<rps_number>1</rps_number>"
-            b"<gross_amount>100.00</gross_amount>"
+            + f"<rps_number>{rps}</rps_number>".encode()
+            + f"<gross_amount>{amount}</gross_amount>".encode()
             b"<invoice_issued_on>2026-10-31</invoice_issued_on>"
             b"<invoice_series>NF</invoice_series></NotaFiscal>"
         )
@@ -1958,25 +1995,52 @@ def test_barueri_api_entrypoint_portal_issue_reconcile_cancel_replay_and_archive
         )
         assert replay.status_code == 200, replay.text
         assert calls.count("NFeLoteEnviarArquivo") == 1
+        candidate_id: str | None = None
+        if substitute:
+            fresh = _post(web, payload | {
+                "source_id": "barueri-reviewed-substitute",
+                "gross_amount": "130.00", "iss_amount": "3.90",
+            }, key="barueri-prepare-substitute")
+            assert fresh.status_code == 200, fresh.text
+            candidate_id = fresh.json()["document_id"]
+        event_name = "substituteBarueriNfse" if substitute else "cancelBarueriNfse"
+        event_data: dict[str, object] = (
+            {"original_id": document_id, "replacement_id": candidate_id,
+             "substitution_justification_code": "9",
+             "cancellation_reason": "Substituicao sintetica",
+             "human_approval": True}
+            if substitute else
+            {"document_id": document_id, "reason_code": "01",
+             "cancellation_reason": "Servico cancelado sinteticamente",
+             "human_approval": True}
+        )
         denied = operation(
-            "cancelBarueriNfse", {
-                "document_id": document_id, "reason_code": "01",
-                "cancellation_reason": "Teste de cancelamento",
-                "human_approval": False,
+            event_name, {
+                **event_data, "human_approval": False,
             }, "barueri-unapproved",
         )
         assert denied.status_code in (400, 403, 409)
         cancelled = operation(
-            "cancelBarueriNfse", {
-                "document_id": document_id, "reason_code": "01",
-                "cancellation_reason": "Servico cancelado sinteticamente",
-                "human_approval": True,
-            }, "barueri-cancel"
+            event_name, event_data, "barueri-cancel"
         )
         assert cancelled.status_code == 200, cancelled.text
-        assert cancelled.json()["status"] == FiscalDocumentState.CANCEL_REQUESTED.value
+        if substitute:
+            assert cancelled.json()["original_status"] == (
+                FiscalDocumentState.CANCEL_REQUESTED.value
+            )
+            assert cancelled.json()["replacement_status"] == (
+                FiscalDocumentState.TRANSMITTING.value
+            )
+        else:
+            assert cancelled.json()["status"] == (
+                FiscalDocumentState.CANCEL_REQUESTED.value
+            )
         assert calls.count("NFeLoteEnviarArquivo") == 2
-        assert sent[-1].split(b"\r\n")[1][39:40] == b"C"
+        event_detail = sent[-1].split(b"\r\n")[1]
+        assert event_detail[39:40] == b"C"
+        if substitute:
+            assert event_detail[40:42] == b"03"
+            assert event_detail[513:514] == b"9"
         confirmed = operation(
             "reconcileBarueriNfseCancellation",
             {"document_id": document_id}, "barueri-reconcile-cancel",
@@ -1989,12 +2053,17 @@ def test_barueri_api_entrypoint_portal_issue_reconcile_cancel_replay_and_archive
             entries = uow.archive.list_for_document(scope, document_id)
             assert len([v for v in entries if v.kind is FiscalArchiveKind.FISCAL_EVENT]) == 1
             assert uow.lifecycle.get(document_id).state is FiscalDocumentState.CANCELLED
+            if substitute:
+                assert candidate_id is not None
+                assert uow.lifecycle.get(candidate_id).state is FiscalDocumentState.AUTHORIZED
+                substitute_xml = [
+                    e for e in uow.archive.list_for_document(scope, candidate_id)
+                    if e.kind is FiscalArchiveKind.AUTHORIZED_XML
+                ]
+                assert len(substitute_xml) == 1
+                assert b"0008766" in substitute_xml[0].content
         duplicate = operation(
-            "cancelBarueriNfse", {
-                "document_id": document_id, "reason_code": "01",
-                "cancellation_reason": "Servico cancelado sinteticamente",
-                "human_approval": True,
-            }, "barueri-second-cancel",
+            event_name, event_data, "barueri-second-cancel",
         )
         assert duplicate.status_code != 200
         assert calls.count("NFeLoteEnviarArquivo") == 2
