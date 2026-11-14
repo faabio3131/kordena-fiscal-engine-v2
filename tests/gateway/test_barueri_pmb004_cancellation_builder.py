@@ -69,6 +69,8 @@ def _build(reason: str, **overrides):
         "replacement_rtc_record": b"4" + b"1" + b" " * 529,
         "replacement_gross_amount": Decimal("150.00"),
     } if reason == "03" else {}
+    original_detail = overrides.pop("original_rps_detail", _original_detail())
+    human_approved = overrides.pop("human_approved", True)
     replacement.update(overrides)
     return build_barueri_cancellation_remittance(
         original=original, issued=issued,
@@ -79,9 +81,9 @@ def _build(reason: str, **overrides):
         invoice_issued_on=date(2026, 10, 31),
         reason_code=reason,
         description="Servico nao prestado",
-        original_rps_detail=overrides.pop("original_rps_detail", _original_detail()),
+        original_rps_detail=original_detail,
         reviewed_rtc_record=b"4" + b"1" + b" " * 529,
-        human_approved=overrides.pop("human_approved", True),
+        human_approved=human_approved,
         **replacement,
     )
 
