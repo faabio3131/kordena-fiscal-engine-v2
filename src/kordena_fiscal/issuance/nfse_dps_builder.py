@@ -10,8 +10,8 @@ cryptography of its own and never reads or writes the A1 vault.
 
 DPS series and serial MUST be reserved by the canonical durable fiscal
 Unit of Work before calling this builder. Neither hashes nor MAX+1 can
-allocate fiscal numbers. Special ISS regimes and Simples sublimit assessment require an effective-dated
-reviewed canonical tax treatment, never a provisional hardcoded fallback.
+allocate fiscal numbers. Special ISS regimes and Simples sublimit assessment
+require an effective-dated reviewed treatment, never a provisional fallback.
 """
 from __future__ import annotations
 

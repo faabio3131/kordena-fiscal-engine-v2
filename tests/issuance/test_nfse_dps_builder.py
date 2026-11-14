@@ -465,7 +465,8 @@ def test_reviewed_special_regime_and_sublimit_are_not_guessed() -> None:
 
 def test_reviewed_tax_decision_is_immutable_in_archive_and_fingerprint() -> None:
     from kordena_fiscal.issuance.nfse_archive import (
-        decode_prepared_nfse, encode_prepared_nfse,
+        decode_prepared_nfse,
+        encode_prepared_nfse,
     )
     decision = NfseNationalTaxTreatment(
         iss_taxation_code="3", special_regime_code="0",

@@ -409,7 +409,9 @@ class NfseCanonicalDocument:
                 treatment.effective_to is not None
                 and self.competence_date >= treatment.effective_to
             ):
-                raise FiscalValidationError("National tax treatment is not effective for competence")
+                raise FiscalValidationError(
+                    "National tax treatment is not effective for competence"
+                )
             if (
                 treatment.simples_assessment_code is not None
                 and self.issuer.tax_regime not in {
@@ -421,7 +423,9 @@ class NfseCanonicalDocument:
             if treatment.iss_taxation_code != "1" and any(
                 line.iss_amount.amount > 0 or line.iss_withheld for line in self.services
             ):
-                raise FiscalValidationError("Non-taxable ISS treatment cannot charge or withhold ISS")
+                raise FiscalValidationError(
+                    "Non-taxable ISS treatment cannot charge or withhold ISS"
+                )
         if not isinstance(self.schema_version, int) or isinstance(self.schema_version, bool):
             raise FiscalValidationError("schema_version must be an integer")
         if self.schema_version < 1:
