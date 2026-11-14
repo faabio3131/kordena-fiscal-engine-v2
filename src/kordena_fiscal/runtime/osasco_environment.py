@@ -142,7 +142,7 @@ class _Issuer:
                 or type(row["profile_version"]) is not int
                 or row["profile_version"] <= 0
                 or type(row["tax_regime"]) is not int
-                or row["tax_regime"] != 1
+                or row["tax_regime"] != 3
             ):
                 raise ValueError
             return cls(
