@@ -78,6 +78,8 @@ from .activation_email import build_activation_delivery_from_environ
 from .ai_secrets import build_production_openai_key_readers
 from .alert_rules import InternalAlertMonitor, OperationalSignals
 from .api_staging_gsm_probe import staging_probe_verifier
+from .barueri_environment import build_barueri_port_builder_from_environ
+from .barueri_operational_composition import BarueriTrustedRuntimePorts
 from .bling_ingress import build_bling_ingress
 from .bling_multitenant_ingress import build_multitenant_bling_ingress
 from .bling_oauth_factory import build_bling_oauth_service
@@ -89,8 +91,6 @@ from .bling_status import build_bling_status_router
 from .bling_worker import build_bling_orders
 from .bridge_credentials import load_bridge_credentials
 from .cajamar_environment import build_cajamar_port_builder_from_environ
-from .barueri_environment import build_barueri_port_builder_from_environ
-from .barueri_operational_composition import BarueriTrustedRuntimePorts
 from .cajamar_operational_composition import CajamarTrustedRuntimePorts
 from .cakto import build_cakto_webhook_router, compose_postgres_cakto_commercial_runtime
 from .cakto_claim_email import build_cakto_claim_delivery_from_environ
