@@ -895,6 +895,73 @@ class FiscalApplicationService:
                 originals[0].content, scope=scope, request=prepared,
             )
 
+    def load_barueri_remittance_protocol(
+        self, scope: ExecutionScope, document_id: str,
+    ) -> str | None:
+        """Recover the municipality-issued protocol from the original durable attempt.
+
+        A provider acknowledgement is not an authorized fiscal note. Only the
+        source-bound acknowledgement from the canonical transmission is read.
+        """
+        with self._uow_factory() as uow:
+            request = self._load_prepared_from_uow(uow, scope, document_id)
+            if (
+                not isinstance(request, NfseAuthorizationRequest)
+                or request.document.issuer.address.jurisdiction.municipality_ibge_code
+                != "3505708"
+            ):
+                raise PersistenceStateError("Barueri original issuance is required")
+            records = [
+                entry for entry in uow.archive.list_for_document(scope, document_id)
+                if entry.kind is FiscalArchiveKind.PROVIDER_RESPONSE
+                and entry.media_type == "application/vnd.nfcore.barueri-remittance.v1+json"
+            ]
+            if not records:
+                return None
+            if len(records) != 1:
+                raise PersistenceStateError("Ambiguous Barueri remittance acknowledgements")
+            try:
+                data = json.loads(records[0].content)
+                protocol = data["provider_request_id"]
+                if (
+                    set(data) != {"provider_request_id", "document_id", "fingerprint"}
+                    or data["document_id"] != document_id
+                    or data["fingerprint"] != request.request_fingerprint
+                    or not isinstance(protocol, str)
+                    or not 1 <= len(protocol) <= 128
+                    or not protocol.isascii()
+                    or not protocol.isalnum()
+                ):
+                    raise ValueError
+            except (ValueError, TypeError, KeyError):
+                raise PersistenceStateError(
+                    "Barueri remittance acknowledgement is altered"
+                ) from None
+            return protocol
+
+    def load_barueri_submission_date(
+        self, scope: ExecutionScope, document_id: str,
+    ) -> date | None:
+        """Use the persisted first dispatch date to recover an uncertain POST."""
+        with self._uow_factory() as uow:
+            request = self._load_prepared_from_uow(uow, scope, document_id)
+            if (
+                not isinstance(request, NfseAuthorizationRequest)
+                or request.document.issuer.address.jurisdiction.municipality_ibge_code
+                != "3505708"
+            ):
+                raise PersistenceStateError("Barueri original issuance is required")
+            snapshot = uow.lifecycle.get(document_id)
+            if snapshot is None:
+                raise PersistenceStateError("Barueri fiscal lifecycle is absent")
+            transmissions = [
+                item.occurred_at.date() for item in snapshot.history
+                if item.to_state is FiscalDocumentState.TRANSMITTING
+            ]
+            if len(transmissions) > 1:
+                raise PersistenceStateError("Ambiguous Barueri original transmission")
+            return transmissions[0] if transmissions else None
+
     def load_extrema_rps_intent(
         self, scope: ExecutionScope, document_id: str,
     ) -> ExtremaRpsIntent:
@@ -1102,6 +1169,53 @@ class FiscalApplicationService:
                     if isinstance(result, NfseAuthorizationResult) else None
                 ),
             )
+        elif (
+            isinstance(result, NfseAuthorizationResult)
+            and result.status is AuthorizationStatus.PENDING
+            and result.provider.provider_name == "barueri-pmb004-homologation"
+        ):
+            protocol = result.provider_request_id
+            if (
+                not isinstance(protocol, str)
+                or not 1 <= len(protocol) <= 128
+                or not protocol.isascii()
+                or not protocol.isalnum()
+            ):
+                raise PersistenceStateError("Barueri remittance protocol is missing")
+            with self._uow_factory() as uow:
+                uow.lifecycle.assert_scope(document_id, scope)
+                current = uow.lifecycle.get(document_id)
+                current_attempts = uow.idempotency.attempts(attempt.key)
+                if (
+                    current is None
+                    or current.state is not FiscalDocumentState.TRANSMITTING
+                    or not current_attempts
+                    or current_attempts[-1].generation != attempt.generation
+                    or current_attempts[-1].request_fingerprint != attempt.request_fingerprint
+                ):
+                    raise PersistenceConflictError("Barueri transmission changed during receipt")
+                previous = [
+                    item for item in uow.archive.list_for_document(scope, document_id)
+                    if item.kind is FiscalArchiveKind.PROVIDER_RESPONSE
+                    and item.media_type == "application/vnd.nfcore.barueri-remittance.v1+json"
+                ]
+                if previous:
+                    raise PersistenceConflictError("Barueri remittance already acknowledged")
+                uow.archive.append(FiscalArchiveEntry.build(
+                    scope=scope, document_reference=document_id,
+                    kind=FiscalArchiveKind.PROVIDER_RESPONSE,
+                    content=json.dumps({
+                        "provider_request_id": protocol,
+                        "document_id": document_id,
+                        "fingerprint": request.request_fingerprint,
+                    }, sort_keys=True, separators=(",", ":")).encode("utf-8"),
+                    media_type="application/vnd.nfcore.barueri-remittance.v1+json",
+                    archived_at=occurred_at,
+                    retention=RetentionPolicyMetadata(
+                        policy_id="nfcore-fiscal-archive", policy_version=1,
+                    ),
+                ))
+                uow.commit()
         with self._uow_factory() as uow:
             latest = uow.idempotency.attempts(attempt.key)[-1]
             lifecycle = uow.lifecycle.get(document_id)
