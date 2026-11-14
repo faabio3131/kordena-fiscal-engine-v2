@@ -1913,7 +1913,7 @@ def test_barueri_api_entrypoint_portal_issue_reconcile_cancel_replay_and_archive
             + b"</invoice_reference>"
             + f"<rps_number>{rps}</rps_number>".encode()
             + f"<gross_amount>{amount}</gross_amount>".encode()
-            b"<invoice_issued_on>2026-10-31</invoice_issued_on>"
+            + b"<invoice_issued_on>2026-10-31</invoice_issued_on>"
             b"<invoice_series>NF</invoice_series></NotaFiscal>"
         )
 
