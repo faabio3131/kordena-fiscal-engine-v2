@@ -50,6 +50,7 @@ def _policy() -> dict[str, object]:
         "pis": "0.00", "cofins": "0.00", "csll": "0.00",
         "income_tax": "0.00", "inss": "0.00", "other_taxes": "0.00",
         "test_only": True, "no_iss_incidence": False, "additional_info": "",
+        "pis_own": "0.00", "cofins_own": "0.00", "cartorio_values": None,
     })
     return values
 
