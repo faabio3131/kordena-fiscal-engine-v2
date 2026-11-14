@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
@@ -18,6 +19,7 @@ from kordena_fiscal.domain import (
     MunicipalRegistration,
     TaxRegimeCode,
 )
+from kordena_fiscal.gateway.osasco_rtc_cancellation_builder import build_osasco_cancel_request
 from kordena_fiscal.gateway.osasco_rtc_issue_builder import (
     OsascoReviewedCartorioValues,
     OsascoRtcIssueError,
@@ -32,11 +34,18 @@ from kordena_fiscal.gateway.osasco_rtc_tax_policy import (
     build_osasco_reviewed_tax_resolver,
     reviewed_osasco_rtc_fields,
 )
-from kordena_fiscal.gateway.sp4_municipal_canonical import Sp4OriginalRps
+from kordena_fiscal.gateway.osasco_rtc_request_builder import (
+    build_osasco_original_note_query,
+)
+from kordena_fiscal.gateway.sp4_municipal_canonical import (
+    Sp4OriginalRps,
+    Sp4VerifiedInvoice,
+)
 from kordena_fiscal.issuance.nfe_nfse import (
     NfseAuthorizationRequest,
     NfseServiceTaker,
 )
+from kordena_fiscal.runtime.osasco_official_schema import compile_osasco_official_xsd
 from kordena_fiscal.runtime.sp4_municipal_request_factories import (
     build_osasco_rtc_issue_request_factory,
 )
@@ -431,3 +440,71 @@ def test_municipal_manual_v22_restricts_cartorio_special_deductions() -> None:
                 request=_request(original), original=original,
                 fields=invalid,
             )
+
+
+
+def _official_xsd_validator():
+    """Byte-for-byte municipal schemas, downloaded by GET from public WCF."""
+    base = (
+        Path(__file__).resolve().parents[2]
+        / "contracts/official/osasco/homologation"
+    )
+    return compile_osasco_official_xsd({
+        f"inline-xsd-{n:03}.xsd": (
+            base / f"inline-xsd-{n:03}.xsd"
+        ).read_bytes()
+        for n in range(6)
+    })
+
+
+def test_osasco_actual_municipal_xsd_validates_canonical_rtc_issue_xml() -> None:
+    """Official 2026 WSDL, not a synthetic permissive anyType schema."""
+    validator = _official_xsd_validator()
+    xml = build_osasco_rtc_issue_xml(
+        request=_request(_original()), original=_original(), fields=_fields(),
+    )
+    validator.validate_document(xml)
+
+
+def test_osasco_actual_municipal_xsd_validates_query_and_cancel_xml() -> None:
+    validator = _official_xsd_validator()
+    source = _original()
+    query = build_osasco_original_note_query(
+        original=source, regime=TaxRegimeCode.NORMAL,
+    )
+    validator.validate_document(query.request_xml)
+    issued = Sp4VerifiedInvoice(
+        issuer_cnpj=source.issuer_cnpj, issuer_ibge=source.issuer_ibge,
+        competence_date=source.competence_date, rps_number=source.rps_number,
+        rps_series=source.rps_series, gross_amount=source.gross_amount,
+        invoice_number="900123", verification_code="VALIDA123",
+        invoice_reference="900123", authorized_xml=b"<SyntheticInvoice/>",
+    )
+    cancel = build_osasco_cancel_request(
+        source=source, issued=issued, regime=TaxRegimeCode.NORMAL,
+        cancel_type="N", reason="Solicitacao revisada de teste",
+        human_approved=True,
+    )
+    validator.validate_document(cancel.request_xml)
+    cancel_s = build_osasco_cancel_request(
+        source=source, issued=issued, regime=TaxRegimeCode.NORMAL,
+        cancel_type="S", reason="Substituicao revisada de teste",
+        human_approved=True,
+    )
+    validator.validate_document(cancel_s.request_xml)
+
+
+def test_osasco_actual_schema_accepts_typed_cancel_result_but_not_unknown_method() -> None:
+    from kordena_fiscal.xml.schema import XmlSchemaValidationError
+
+    validator = _official_xsd_validator()
+    xml = (
+        b'<t:CancelarResponse xmlns:t="http://tempuri.org/" '
+        b'xmlns:a="http://schemas.datacontract.org/2004/07/'
+        b'Eissnfe.Negocio.WebServices.Mensagem">'
+        b'<t:CancelarResult><a:Erro>false</a:Erro>'
+        b'</t:CancelarResult></t:CancelarResponse>'
+    )
+    validator.validate_document(xml)
+    with pytest.raises(XmlSchemaValidationError):
+        validator.validate_document(xml.replace(b"CancelarResponse", b"UntrustedReply"))
