@@ -716,7 +716,7 @@ class FiscalApplicationService:
                 or not document.scope.host_namespace
                 or document.issuer.address.jurisdiction.state_code != "SP"
                 or document.issuer.address.jurisdiction.municipality_ibge_code
-                not in {"3509205", "3534401"}
+                not in {"3509205", "3505708", "3534401"}
             ):
                 raise FiscalValidationError(
                     "SP4 municipal original RPS requires reviewed scope and series"
@@ -832,6 +832,7 @@ class FiscalApplicationService:
                 municipal_ibge = document.issuer.address.jurisdiction.municipality_ibge_code
                 max_number = (
                     999_999_999_999_999 if municipal_ibge == "3534401"
+                    else 9_999_999 if municipal_ibge == "3505708"
                     else 99_999_999
                 )
                 reserved_rps = uow.sequences.reserve_next(
