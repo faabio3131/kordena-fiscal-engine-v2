@@ -86,6 +86,7 @@ from kordena_fiscal.operations import FakeFiscalOperationsGateway, FiscalOperati
 from kordena_fiscal.persistence import SqliteFiscalDatabase
 from kordena_fiscal.persistence.ports import PersistenceStateError
 from kordena_fiscal.runtime.api import build_entrypoint_fiscal_handler_factory
+from kordena_fiscal.runtime.barueri_environment import BarueriReviewedStartup
 from kordena_fiscal.runtime.canonical_fiscal_composition import (
     _GovernedNationalNfseGateway,
     build_runtime_fiscal_handler_factory,
@@ -115,6 +116,7 @@ from kordena_fiscal.security.human_identity import (
 )
 from kordena_fiscal.vault import EphemeralCertificateMaterial
 from kordena_fiscal.vault.contracts import EphemeralProviderCredentialsMaterial
+from kordena_fiscal.vault.encrypted_a1 import EncryptedA1Vault
 from kordena_fiscal.web import create_app
 from kordena_fiscal.web.human_auth import CSRF_COOKIE, CSRF_HEADER
 from kordena_fiscal.web.portal_runtime import DurableHumanPortalExecutor
@@ -162,13 +164,16 @@ def _database(
             tax_regime=tax_regime,
             state_registration=StateRegistration("SP", "123456789"),
             municipal_registration=(
-                MunicipalRegistration("123456") if issuer_ibge == "3534401" else None
+                MunicipalRegistration("123456") if issuer_ibge == "3534401"
+                else MunicipalRegistration("1234567") if issuer_ibge == "3505708"
+                else None
             ),
             primary_cnae=CnaeCode("6201501"),
             address=FiscalAddress(
                 street="Rua de Homologacao", number="10", district="Centro",
                 municipality_name=(
-                    "Osasco" if issuer_ibge == "3534401" else "Cajamar"
+                    "Osasco" if issuer_ibge == "3534401"
+                    else "Barueri" if issuer_ibge == "3505708" else "Cajamar"
                 ), jurisdiction=jurisdiction,
                 postal_code="07750000",
             ),
@@ -183,7 +188,10 @@ def _database(
                 operation=ConfiguredFiscalOperation.AUTHORIZE,
                 provider_id=provider_id,
             ))
-            if provider_id in {"cajamar-geisweb-homologation", "osasco-rtc-homologation"}:
+            if provider_id in {
+                "cajamar-geisweb-homologation", "osasco-rtc-homologation",
+                "barueri-pmb004-homologation",
+            }:
                 uow.commercial.put_provider_binding(ProviderBinding(
                     binding_id="cajamar-query-binding",
                     tenant_id=TENANT, unit_id=UNIT,
@@ -860,6 +868,49 @@ def test_cajamar_official_substitution_rules_do_not_infer_soap_completion(
             replacement_id=candidate.json()["document_id"],
             reviewed_at=datetime(2026, 11, 5, tzinfo=UTC),
         )
+
+
+def test_barueri_portal_prepares_original_with_durable_remittance_and_replay(
+    tmp_path: Path,
+) -> None:
+    db = _database(
+        tmp_path / "barueri-portal.sqlite",
+        issuer_ibge="3505708",
+        provider_id="barueri-pmb004-homologation",
+        tax_regime=TaxRegimeCode.NORMAL,
+    )
+    web = _client(db)
+    reviewed = _payload() | _TAKER_ADDRESS | {
+        "competence_date": "2026-10-31",
+        "service_municipality_ibge": "3505708",
+        "source_id": "barueri-original-rps-2026",
+    }
+    first = _post(web, reviewed, key="barueri-reviewed-prepare")
+    assert first.status_code == 200, first.text
+    record = first.json()
+    assert record["numbering_authority"] == "municipal_rps_durable"
+    assert record["status"] == FiscalDocumentState.READY_TO_TRANSMIT.value
+    assert record["transmitted"] is False
+    assert record["dps_numbering"] == "not_applicable_municipal_original_rps"
+    scope = ExecutionScope(
+        TENANT, UNIT, FiscalEnvironment.HOMOLOGATION, "barueri-replay", "fm-nfcore",
+    )
+    application = FiscalApplicationService(db)
+    original = application.load_sp4_original_rps(scope, record["document_id"])
+    assert original.issuer_ibge == "3505708"
+    assert original.rps_number == "1"
+    assert original.rps_series == ""
+    assert original.municipal_batch_id == "00000000001"
+    assert application.load_barueri_remittance_protocol(
+        scope, record["document_id"],
+    ) is None
+    assert application.load_barueri_submission_date(
+        scope, record["document_id"],
+    ) is None
+    again = _post(web, reviewed, key="barueri-reviewed-prepare")
+    assert again.status_code == 200, again.text
+    assert again.json()["replay"] is True
+    assert application.load_sp4_original_rps(scope, record["document_id"]) == original
 
 
 def test_cajamar_prepares_original_rps_through_same_portal_and_uow(
@@ -1655,3 +1706,371 @@ def test_osasco_executable_api_real_xsd_end_to_end_one_uow(
             application.load_sp4_original_rps(scope, replacement_id).rps_number == "2"
         )
         assert vault.resolve.call_count == 5
+
+
+def _synthetic_barueri_manifest(tmp_path: Path) -> Path:
+    """Operator manifest with artificial files/issuer; never external homologation."""
+    xsd = (
+        '<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">'
+        '<xs:element name="NotaFiscal"><xs:complexType><xs:all>'
+        + "".join(
+            f'<xs:element name="{name}" type="xs:string"/>'
+            for name in (
+                "issuer_cnpj", "invoice_number", "verification_code",
+                "invoice_reference", "rps_number", "gross_amount",
+                "invoice_issued_on", "invoice_series",
+            )
+        )
+        + '</xs:all></xs:complexType></xs:element></xs:schema>'
+    ).encode()
+    data: dict[str, object] = {
+        "mode": "reviewed-homologation",
+        "layout": "PMB004-v4.4",
+        "invoice_tags": {
+            field: field for field in (
+                "issuer_cnpj", "invoice_number", "verification_code",
+                "invoice_reference", "rps_number", "gross_amount",
+                "invoice_issued_on", "invoice_series",
+            )
+        },
+        "issuers": [{
+            "tenant_id": TENANT, "unit_id": UNIT,
+            "issuer_cnpj": "11222333000181",
+            "profile_id": "issuer-native",
+            "profile_version": 1, "tax_regime": TaxRegimeCode.NORMAL.value,
+            "municipal_registration": "1234567",
+            "effective_from": "2026-01-01", "effective_through": None,
+            "canonical_service_code": "0107",
+            "pmb004_service_code": "000000107",
+            "service_location_code": "1", "public_way_code": "2",
+            "nbs_code": "000000001", "operation_indicator": "000001",
+            "tax_classification": "000001", "ibs_cbs_status": "000",
+            "simples_assessment": "", "municipal_note_series": "",
+            "personal_use": "0", "recipient_differs": "0",
+            "recipient_emails": {
+                "12345678000195": "synthetic-buyer@example.invalid",
+            },
+            "non_base_allowed": False,
+        }],
+    }
+    for key, content in (
+        ("rps_layout", b"%PDF-1.4 synthetic-only PMB004 v4.4"),
+        ("return_layout", b"%PDF-1.4 synthetic-only ExportaNFe v3"),
+        ("invoice_xsd", xsd),
+    ):
+        file = tmp_path / (key + (".xsd" if key == "invoice_xsd" else ".pdf"))
+        file.write_bytes(content)
+        data[key] = {"file": file.name, "sha256": hashlib.sha256(content).hexdigest()}
+    target = tmp_path / "barueri-reviewed-fixture.json"
+    target.write_text(json.dumps(data), encoding="utf-8")
+    return target
+
+
+def _synthetic_barueri_export(rps_file: bytes, *, cancelled: bool) -> bytes:
+    """ExportaNFe v3 physical return using the actual on-wire original RPS."""
+    lines = rps_file.split(b"\r\n")
+    detail = lines[1]
+    remittance = lines[0][14:25]
+    assert detail[39:40] in (b"E", b"C")
+    number = detail[15:25] if not cancelled else b"0000000001"
+    amount = detail[463:478]
+    head = b"1" + b"1234567" + b" " * 16 + b"PMB003" + remittance
+    note = bytearray(b" " * 1678)
+    note[:1] = b"2"
+    note[1:5] = b"NF  "
+    note[5:12] = b"0008765"
+    note[12:20] = b"20261031"
+    note[20:26] = b"120000"
+    note[26:50] = b"AUTHCODE1234567890".ljust(24)
+    note[50:54] = b"    "
+    note[54:64] = number
+    note[64:65] = b"1"
+    note[65:66] = b"N"
+    note[66:67] = b"C" if cancelled else b"A"
+    if cancelled:
+        note[67:75] = b"20261114"
+    note[1628:1678] = b"35" + b"0" * 48
+    item = bytearray(b" " * 95)
+    item[0:1] = b"3"
+    item[1:7] = b"000001"
+    item[67:76] = b"000000107"
+    item[76:91] = amount
+    item[91:95] = b"0300"
+    footer = b"90000004" + amount + b"0" * 15
+    return b"\r\n".join((head, bytes(note), bytes(item), footer)) + b"\r\n"
+
+
+def _synthetic_barueri_soap(
+    method: str, *, protocol: str, return_file: bytes | None = None,
+) -> bytes:
+    namespace = "http://www.barueri.sp.gov.br/nfe"
+    extra = (
+        "<b:NomeArqRetorno>return.txt</b:NomeArqRetorno>"
+        if method != "NFeLoteEnviarArquivo" else ""
+    )
+    if return_file is not None:
+        extra += (
+            "<b:ArquivoRPSBase64>"
+            + base64.b64encode(return_file).decode("ascii")
+            + "</b:ArquivoRPSBase64>"
+        )
+    return (
+        '<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/" '
+        f'xmlns:b="{namespace}"><soap:Body>'
+        f"<b:{method}Response><b:{method}Result>"
+        "<b:ListaMensagemRetorno><b:Codigo>OK200</b:Codigo>"
+        "</b:ListaMensagemRetorno>"
+        f"<b:ProtocoloRemessa>{protocol}</b:ProtocoloRemessa>"
+        "<b:SituacaoArq>1</b:SituacaoArq>" + extra
+        + f"</b:{method}Result></b:{method}Response>"
+        "</soap:Body></soap:Envelope>"
+    ).encode()
+
+
+def _synthetic_barueri_substitution_export(
+    original_file: bytes, event_file: bytes,
+) -> bytes:
+    """Official-v3-shaped two-note fixture: old C plus independent new A."""
+    old = _synthetic_barueri_export(
+        original_file, cancelled=True,
+    ).split(b"\r\n")
+    new = _synthetic_barueri_export(
+        event_file, cancelled=False,
+    ).split(b"\r\n")
+    adjusted = bytearray(new[1])
+    adjusted[5:12] = b"0008766"
+    adjusted[26:50] = b"AUTHCODE1234567891".ljust(24)
+    adjusted[1628:1678] = b"35" + b"0" * 47 + b"1"
+    original_cents = int(old[2][76:91])
+    substitute_cents = int(new[2][76:91])
+    footer = (
+        b"9" + b"0000006"
+        + f"{original_cents + substitute_cents:015d}".encode("ascii")
+        + b"0" * 15
+    )
+    return b"\r\n".join((
+        new[0], old[1], old[2], bytes(adjusted), new[2], footer,
+    )) + b"\r\n"
+
+
+@pytest.mark.parametrize("substitute", [False, True])
+def test_barueri_api_entrypoint_portal_issue_reconcile_cancel_replay_and_archive(
+    tmp_path: Path, substitute: bool,
+) -> None:
+    """One portal/API/UoW and real fixed-width driver; mocked municipal I/O only."""
+    manifest = _synthetic_barueri_manifest(tmp_path)
+    db = _database(
+        tmp_path / "barueri-end-to-end.sqlite", issuer_ibge="3505708",
+        provider_id="barueri-pmb004-homologation", tax_regime=TaxRegimeCode.NORMAL,
+    )
+    vault = EncryptedA1Vault(
+        directory=tmp_path / "synthetic-vault", master_key=b"\x00" * 32,
+    )
+    vault.resolve = Mock(return_value=_synthetic_a1_for_native_issuer())
+    application = FiscalApplicationService(db)
+    sent: list[bytes] = []
+    calls: list[str] = []
+
+    def exchange(soap: bytes, action: str, _tls: object, _timeout: float) -> bytes:
+        method = action.strip('"').rsplit("/", 1)[-1]
+        calls.append(method)
+        xml = etree.fromstring(soap)
+        inner_text = xml.xpath("//*[local-name()='MensagemXML']")[0].text
+        assert isinstance(inner_text, str)
+        fields = etree.fromstring(inner_text.encode())
+        if method == "NFeLoteEnviarArquivo":
+            encoded = fields.findtext("ArquivoRPSBase64")
+            assert encoded
+            sent.append(base64.b64decode(encoded, validate=True))
+        assert sent
+        is_cancel = sent[-1].split(b"\r\n")[1][39:40] == b"C"
+        protocol = "CANCEL1" if is_cancel else "ISSUE1"
+        if method == "NFeLoteBaixarArquivo":
+            return _synthetic_barueri_soap(
+                method, protocol=protocol,
+                return_file=(
+                    _synthetic_barueri_substitution_export(sent[0], sent[-1])
+                    if is_cancel and substitute
+                    else _synthetic_barueri_export(sent[-1], cancelled=is_cancel)
+                ),
+            )
+        return _synthetic_barueri_soap(method, protocol=protocol)
+
+    def invoice_xml(url: str, _timeout: float) -> bytes:
+        assert url.startswith("https://testeeiss.barueri.sp.gov.br/nfe/xmlNFe.ashx?")
+        new = "numdoc=0008766" in url
+        number = "0008766" if new else "0008765"
+        code = "AUTHCODE1234567891" if new else "AUTHCODE1234567890"
+        rps = "2" if new else "1"
+        amount = "130.00" if new else "100.00"
+        reference = "35" + "0" * (47 if new else 48) + ("1" if new else "")
+        return (
+            b"<NotaFiscal>"
+            b"<issuer_cnpj>11222333000181</issuer_cnpj>"
+            + f"<invoice_number>{number}</invoice_number>".encode()
+            + f"<verification_code>{code}</verification_code>".encode()
+            + f"<invoice_reference>{reference}".encode()
+            + b"</invoice_reference>"
+            + f"<rps_number>{rps}</rps_number>".encode()
+            + f"<gross_amount>{amount}</gross_amount>".encode()
+            + b"<invoice_issued_on>2026-10-31</invoice_issued_on>"
+            b"<invoice_series>NF</invoice_series></NotaFiscal>"
+        )
+
+    settings = RuntimeSettings.from_mapping({
+        "NFCORE_ENVIRONMENT": "staging",
+        "NFCORE_PERSISTENCE_BACKEND": "postgres",
+        "DATABASE_URL": "postgresql://fake:fake@db/nfcore",
+        "NFCORE_SECRET_BACKEND": "external",
+    })
+    assert BarueriReviewedStartup.load(str(manifest)).policies
+    with patch(
+        "kordena_fiscal.gateway.barueri_pmb004_homologation._exchange",
+        exchange,
+    ), patch(
+        "kordena_fiscal.gateway.barueri_official_invoice_xml._exchange",
+        invoice_xml,
+    ):
+        factory = build_entrypoint_fiscal_handler_factory(
+            settings, {"NFCORE_BARUERI_PMB004_CONFIG_PATH": str(manifest)}, vault,
+        )
+        assert factory is not None
+        handlers = factory(application)
+        assert {
+            "issueFiscalDocument", "reconcileFiscalOperation",
+            "cancelBarueriNfse", "substituteBarueriNfse",
+            "reconcileBarueriNfseCancellation",
+        } <= handlers.keys()
+        web = _client(db, operation_executor=CanonicalPortalOperationExecutor(
+            unit_of_work_factory=db,
+            path=CanonicalFiscalOperationPath(application, handlers=handlers),
+        ))
+        payload = _payload() | _TAKER_ADDRESS | {
+            "source_id": "barueri-http-complete",
+            "competence_date": "2026-10-31",
+            "service_municipality_ibge": "3505708",
+        }
+        prepared = _post(web, payload, "barueri-http-prepare")
+        assert prepared.status_code == 200, prepared.text
+        document_id = prepared.json()["document_id"]
+        scope = ExecutionScope(
+            TENANT, UNIT, FiscalEnvironment.HOMOLOGATION, "barueri-proof", "fm-nfcore",
+        )
+        original = application.load_sp4_original_rps(scope, document_id)
+        assert original.municipal_batch_id == "00000000001"
+        csrf = web.cookies.get(CSRF_COOKIE)
+        assert csrf
+        common = {"unit_id": UNIT, "environment": "homologation"}
+        def operation(name: str, details: dict[str, object], key: str):
+            return web.post(
+                "/v1/portal/operations/" + name, json=common | details,
+                headers={CSRF_HEADER: csrf, "Idempotency-Key": key},
+            )
+        issued = operation(
+            "issueFiscalDocument", {"document_id": document_id}, "barueri-http-issue",
+        )
+        assert issued.status_code == 200, issued.text
+        assert issued.json()["status"] == FiscalDocumentState.TRANSMITTING.value
+        assert calls.count("NFeLoteEnviarArquivo") == 1
+        assert application.load_barueri_remittance_protocol(scope, document_id) == "ISSUE1"
+        done = operation(
+            "reconcileFiscalOperation", {"document_id": document_id},
+            "barueri-http-reconcile",
+        )
+        assert done.status_code == 200, done.text
+        assert done.json()["status"] == FiscalDocumentState.AUTHORIZED.value
+        assert calls.count("NFeLoteEnviarArquivo") == 1
+        official = web.get(
+            f"/v1/portal/documents/{document_id}/artifacts/authorized_xml",
+            params=common,
+        )
+        assert official.status_code == 200, official.text
+        assert official.content.startswith(b"<NotaFiscal>")
+        with db() as uow:
+            entries = uow.archive.list_for_document(scope, document_id)
+            assert len([v for v in entries if v.kind is FiscalArchiveKind.AUTHORIZED_XML]) == 1
+            assert uow.lifecycle.get(document_id).state is FiscalDocumentState.AUTHORIZED
+        replay = operation(
+            "issueFiscalDocument", {"document_id": document_id}, "barueri-http-issue",
+        )
+        assert replay.status_code == 200, replay.text
+        assert calls.count("NFeLoteEnviarArquivo") == 1
+        candidate_id: str | None = None
+        if substitute:
+            fresh = _post(web, payload | {
+                "source_id": "barueri-reviewed-substitute",
+                "gross_amount": "130.00", "iss_amount": "3.90",
+            }, key="barueri-prepare-substitute")
+            assert fresh.status_code == 200, fresh.text
+            candidate_id = fresh.json()["document_id"]
+        event_name = "substituteBarueriNfse" if substitute else "cancelBarueriNfse"
+        event_data: dict[str, object] = (
+            {"original_id": document_id, "replacement_id": candidate_id,
+             "substitution_justification_code": "9",
+             "cancellation_reason": "Substituicao sintetica",
+             "human_approval": True}
+            if substitute else
+            {"document_id": document_id, "reason_code": "01",
+             "cancellation_reason": "Servico cancelado sinteticamente",
+             "human_approval": True}
+        )
+        denied = operation(
+            event_name, {
+                **event_data, "human_approval": False,
+            }, "barueri-unapproved",
+        )
+        assert denied.status_code in (400, 403, 409)
+        cancelled = operation(
+            event_name, event_data, "barueri-cancel"
+        )
+        assert cancelled.status_code == 200, cancelled.text
+        if substitute:
+            assert cancelled.json()["original_status"] == (
+                FiscalDocumentState.CANCEL_REQUESTED.value
+            )
+            assert cancelled.json()["replacement_status"] == (
+                FiscalDocumentState.TRANSMITTING.value
+            )
+        else:
+            assert cancelled.json()["status"] == (
+                FiscalDocumentState.CANCEL_REQUESTED.value
+            )
+        assert calls.count("NFeLoteEnviarArquivo") == 2
+        event_detail = sent[-1].split(b"\r\n")[1]
+        assert event_detail[39:40] == b"C"
+        if substitute:
+            assert event_detail[40:42] == b"03"
+            assert event_detail[513:514] == b"9"
+        confirmed = operation(
+            "reconcileBarueriNfseCancellation",
+            {"document_id": document_id}, "barueri-reconcile-cancel",
+        )
+        assert confirmed.status_code == 200, confirmed.text
+        assert confirmed.json()["status"] == FiscalDocumentState.CANCELLED.value
+        assert confirmed.json()["official_fiscal_confirmation"] is True
+        assert calls.count("NFeLoteEnviarArquivo") == 2
+        with db() as uow:
+            entries = uow.archive.list_for_document(scope, document_id)
+            assert len([v for v in entries if v.kind is FiscalArchiveKind.FISCAL_EVENT]) == 1
+            assert uow.lifecycle.get(document_id).state is FiscalDocumentState.CANCELLED
+            if substitute:
+                assert candidate_id is not None
+                assert uow.lifecycle.get(candidate_id).state is FiscalDocumentState.AUTHORIZED
+                substitute_xml = [
+                    e for e in uow.archive.list_for_document(scope, candidate_id)
+                    if e.kind is FiscalArchiveKind.AUTHORIZED_XML
+                ]
+                assert len(substitute_xml) == 1
+                assert b"0008766" in substitute_xml[0].content
+        duplicate = operation(
+            event_name, event_data, "barueri-second-cancel",
+        )
+        assert duplicate.status_code != 200
+        assert calls.count("NFeLoteEnviarArquivo") == 2
+        replay_recovery = operation(
+            "reconcileBarueriNfseCancellation",
+            {"document_id": document_id}, "barueri-reconcile-cancel-again",
+        )
+        assert replay_recovery.status_code == 200, replay_recovery.text
+        assert replay_recovery.json()["replay"] is True
+        assert calls.count("NFeLoteEnviarArquivo") == 2

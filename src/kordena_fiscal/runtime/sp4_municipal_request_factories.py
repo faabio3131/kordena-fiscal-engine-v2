@@ -7,6 +7,12 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from kordena_fiscal.domain import ExecutionScope
+from kordena_fiscal.gateway.barueri_pmb004_homologation import BarueriRpsBatch
+from kordena_fiscal.gateway.barueri_pmb004_record_builder import (
+    BarueriPmb004IssueFields,
+    build_barueri_reviewed_issue_batch,
+)
 from kordena_fiscal.gateway.cajamar_geisweb_homologation import CajamarPreparedNfse
 from kordena_fiscal.gateway.cajamar_geisweb_issue_builder import (
     CajamarGeiswebIssueData,
@@ -125,6 +131,35 @@ def build_osasco_rtc_issue_request_factory(
             request=request, original=source,
             fields=resolve_rtc_fields(request, source),
             validate_request=validate_official_request,
+        )
+
+    return prepare
+
+
+def build_barueri_pmb004_issue_remittance_factory(
+    *,
+    resolve_issue_fields: Callable[
+        [NfseAuthorizationRequest, Sp4OriginalRps], BarueriPmb004IssueFields
+    ],
+    resolve_municipal_registration: Callable[[ExecutionScope, str], str],
+) -> Callable[[NfseAuthorizationRequest, Sp4OriginalRps], BarueriRpsBatch]:
+    """Wire verified PMB004 Type 2/4 records into the existing batch driver.
+
+    The trusted original RPS loader determines batch number and identity.
+    The fiscal core, not this factory, reviews rates, retention and RTC codes.
+    """
+    if not callable(resolve_issue_fields) or not callable(resolve_municipal_registration):
+        raise Sp4CanonicalMunicipalError("Barueri remittance issuer ports unavailable")
+
+    def prepare(
+        request: NfseAuthorizationRequest, source: Sp4OriginalRps,
+    ) -> BarueriRpsBatch:
+        return build_barueri_reviewed_issue_batch(
+            request=request, original=source,
+            fields=resolve_issue_fields(request, source),
+            municipal_registration=resolve_municipal_registration(
+                source.scope, source.issuer_cnpj.value,
+            ),
         )
 
     return prepare

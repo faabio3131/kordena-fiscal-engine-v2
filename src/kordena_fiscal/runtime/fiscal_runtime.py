@@ -69,6 +69,9 @@ _CAPABILITY_BY_OPERATION: dict[str, FiscalCapability] = {
     "cancelExtremaNfse": FiscalCapability.CANCEL,
     "cancelCajamarNfse": FiscalCapability.CANCEL,
     "cancelOsascoNfse": FiscalCapability.CANCEL,
+    "cancelBarueriNfse": FiscalCapability.CANCEL,
+    "substituteBarueriNfse": FiscalCapability.CANCEL,
+    "reconcileBarueriNfseCancellation": FiscalCapability.RECONCILE,
     "substituteOsascoNfse": FiscalCapability.CANCEL,
     "substituteExtremaNfse": FiscalCapability.CANCEL,
     "reviewCajamarSubstitution": FiscalCapability.CANCEL,
@@ -85,6 +88,9 @@ _BRIDGE_STATUS_BY_OPERATION: dict[str, int] = {
     "cancelExtremaNfse": 202,
     "cancelCajamarNfse": 202,
     "cancelOsascoNfse": 202,
+    "cancelBarueriNfse": 202,
+    "substituteBarueriNfse": 202,
+    "reconcileBarueriNfseCancellation": 200,
     "substituteOsascoNfse": 202,
     "substituteExtremaNfse": 202,
     "reviewCajamarSubstitution": 200,
@@ -202,6 +208,7 @@ class CanonicalBridgeSecurityBoundary:
             "substituteExtremaNfse", "cancelCajamarNfse",
             "reviewCajamarSubstitution", "cancelOsascoNfse",
             "substituteOsascoNfse",
+            "cancelBarueriNfse", "substituteBarueriNfse",
         }:
             raise HttpContractError(
                 403, "HUMAN_SUBSTITUTION_REQUIRED",
