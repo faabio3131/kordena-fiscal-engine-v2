@@ -48,6 +48,20 @@ class OsascoRtcRecipient:
 
 
 @dataclass(frozen=True, slots=True)
+class OsascoReviewedCartorioValues:
+    """Official v2.2 cartório deduction components, only from a reviewed profile."""
+
+    vl_contrib_sta_casa: Decimal
+    vl_emolumento: Decimal
+    vl_fundo_tj: Decimal
+    vl_intimacao: Decimal
+    vl_min_publico: Decimal
+    vl_repasse_estadual: Decimal
+    vl_sefaz: Decimal
+    vl_sinoreg: Decimal
+
+
+@dataclass(frozen=True, slots=True)
 class OsascoRtcTaxFields:
     """RTC classifications and tax options resolved by existing fiscal policies."""
 
@@ -81,6 +95,11 @@ class OsascoRtcTaxFields:
     construction_code: str | None = None
     # Separate municipal test-only flag from homologation endpoint selection.
     test_only: bool = False
+    # Official Oct/2026 v2.2: non-withheld contributions are separate from
+    # the retained amounts and must never be derived from gross invoice value.
+    pis_own: Decimal = Decimal("0")
+    cofins_own: Decimal = Decimal("0")
+    cartorio_values: OsascoReviewedCartorioValues | None = None
 
 
 def _str(value: str, field: str, max_len: int, *, numeric: bool = False) -> str:
@@ -163,7 +182,10 @@ def _validate_fields(fields: OsascoRtcTaxFields) -> None:
         or fields.iss_rate < 0 or fields.iss_rate > 5
     ):
         raise OsascoRtcIssueError("Osasco ISS rate must follow municipal legal policy")
-    for key in ("pis", "cofins", "csll", "income_tax", "inss", "other_taxes"):
+    for key in (
+        "pis", "cofins", "csll", "income_tax", "inss", "other_taxes",
+        "pis_own", "cofins_own",
+    ):
         _decimal(getattr(fields, key), key)
     if not isinstance(fields.recipient, OsascoRtcRecipient):
         raise OsascoRtcIssueError("Osasco recipient missing")
@@ -205,6 +227,20 @@ def _validate_fields(fields: OsascoRtcTaxFields) -> None:
         _str(fields.service_complement, "service complement", 100)
     if fields.construction_code is not None:
         _str(fields.construction_code, "construction code", 64)
+    if fields.cartorio_values is not None:
+        values = fields.cartorio_values
+        if not isinstance(values, OsascoReviewedCartorioValues):
+            raise OsascoRtcIssueError("Unreviewed Osasco notary fiscal deductions")
+        for component in OsascoReviewedCartorioValues.__dataclass_fields__:
+            _decimal(getattr(values, component), component)
+        if (
+            fields.iss_withheld or fields.no_iss_incidence
+            or all(
+                getattr(values, component) == 0
+                for component in OsascoReviewedCartorioValues.__dataclass_fields__
+            )
+        ):
+            raise OsascoRtcIssueError("Osasco notary deductions require approved special regime")
     if not isinstance(fields.test_only, bool):
         raise OsascoRtcIssueError("Osasco test-only selection must be explicit boolean")
     if not isinstance(fields.additional_info, str) or len(fields.additional_info) > 2000:
@@ -330,11 +366,31 @@ def build_osasco_rtc_issue_xml(
     issue("Valor", _decimal(original.gross_amount, "original gross amount"))
     issue("ValorCSLL", _decimal(fields.csll, "CSLL"))
     issue("ValorCofins", _decimal(fields.cofins, "COFINS"))
+    if fields.cofins_own:
+        issue("ValorCofinsProprio", _decimal(fields.cofins_own, "own COFINS"))
     issue("ValorDeducao", _decimal(service.deduction_amount.amount, "deduction"))
     issue("ValorINSS", _decimal(fields.inss, "INSS"))
     issue("ValorIR", _decimal(fields.income_tax, "IR"))
     issue("ValorOutrosImpostos", _decimal(fields.other_taxes, "other taxes"))
     issue("ValorPisPasep", _decimal(fields.pis, "PIS"))
+    if fields.pis_own:
+        issue("ValorPisProprio", _decimal(fields.pis_own, "own PIS"))
+    if fields.cartorio_values is not None:
+        notary = etree.SubElement(note, f"{{{_ISS}}}ValoresCartorios")
+        for xml_name, attr in (
+            ("vlContribStaCasa", "vl_contrib_sta_casa"),
+            ("vlEmolumento", "vl_emolumento"),
+            ("vlFundoTJ", "vl_fundo_tj"),
+            ("vlIntimacao", "vl_intimacao"),
+            ("vlMinPublico", "vl_min_publico"),
+            ("vlRepasseEstadual", "vl_repasse_estadual"),
+            ("vlSefaz", "vl_sefaz"),
+            ("vlSinoreg", "vl_sinoreg"),
+        ):
+            _append(
+                notary, _ISS, xml_name,
+                _decimal(getattr(fields.cartorio_values, attr), xml_name),
+            )
     issue("nrExercicioReferencia", str(original.competence_date.year))
     issue("nrMesReferencia", f"{original.competence_date.month:02d}")
     issue("ClassTrib", fields.class_trib)
