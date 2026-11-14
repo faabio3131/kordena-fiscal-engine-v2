@@ -472,6 +472,7 @@ class BarueriReviewedStartup:
             replacement_number: str | None,
             replacement_request: NfseAuthorizationRequest | None,
             replacement_source: Sp4OriginalRps | None,
+            substitution_justification_code: str | None,
         ) -> BarueriRpsBatch:
             issued_values = xml_values(issued.authorized_xml)
             official_xml(issued)
@@ -524,6 +525,7 @@ class BarueriReviewedStartup:
                 original_rps_detail=original_detail,
                 reviewed_rtc_record=rtc_detail,
                 replacement_rps_number=replacement_number,
+                substitution_justification_code=substitution_justification_code,
                 replacement_rps_detail=replacement_detail,
                 replacement_rtc_record=replacement_rtc,
                 replacement_gross_amount=replacement_amount,
