@@ -28,14 +28,14 @@ from kordena_fiscal.gateway.osasco_rtc_issue_builder import (
     build_osasco_rtc_issue_xml,
     prepare_osasco_rtc_issue,
 )
+from kordena_fiscal.gateway.osasco_rtc_request_builder import (
+    build_osasco_original_note_query,
+)
 from kordena_fiscal.gateway.osasco_rtc_tax_policy import (
     OsascoReviewedRtcPolicy,
     OsascoReviewedTaxPolicyError,
     build_osasco_reviewed_tax_resolver,
     reviewed_osasco_rtc_fields,
-)
-from kordena_fiscal.gateway.osasco_rtc_request_builder import (
-    build_osasco_original_note_query,
 )
 from kordena_fiscal.gateway.sp4_municipal_canonical import (
     Sp4OriginalRps,
