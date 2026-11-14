@@ -14,17 +14,18 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from zoneinfo import ZoneInfo
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from lxml import etree
 
 from kordena_fiscal.application.service import FiscalApplicationService
 from kordena_fiscal.domain import Cnpj, FiscalAddress, FiscalValidationError, TaxRegimeCode
-from kordena_fiscal.gateway.barueri_pmb004_homologation import BarueriRpsBatch
+from kordena_fiscal.gateway.authorization import AuthorizationStatus
 from kordena_fiscal.gateway.barueri_pmb004_cancellation_builder import (
     build_barueri_cancellation_remittance,
 )
+from kordena_fiscal.gateway.barueri_pmb004_homologation import BarueriRpsBatch
 from kordena_fiscal.gateway.barueri_pmb004_record_builder import (
     BarueriPmb004IssueFields,
     BarueriPmb004Recipient,
@@ -34,7 +35,6 @@ from kordena_fiscal.gateway.sp4_municipal_canonical import (
     Sp4ProviderOutcome,
     Sp4VerifiedInvoice,
 )
-from kordena_fiscal.gateway.authorization import AuthorizationStatus
 from kordena_fiscal.issuance.nfe_nfse import NfseAuthorizationRequest
 from kordena_fiscal.vault.encrypted_a1 import EncryptedA1Vault
 
