@@ -11,7 +11,8 @@ from decimal import Decimal
 
 from kordena_fiscal.domain import FiscalValidationError
 from kordena_fiscal.gateway.barueri_official_return_file import (
-    BarueriConvertedNfseEvidence, parse_barueri_official_return_file,
+    BarueriConvertedNfseEvidence,
+    parse_barueri_official_return_file,
 )
 from kordena_fiscal.gateway.barueri_pmb004_homologation import (
     BarueriReceipt,
