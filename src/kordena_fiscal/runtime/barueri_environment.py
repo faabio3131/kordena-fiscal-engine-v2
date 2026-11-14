@@ -48,7 +48,7 @@ from .sp4_municipal_request_factories import (
 )
 
 _ENV = "NFCORE_BARUERI_PMB004_CONFIG_PATH"
-_LAYOUT = "PMB004-v4.2"
+_LAYOUT = "PMB004-v4.4"
 _LIMIT = 2_097_152
 _XML_PROOF = frozenset({
     "issuer_cnpj", "invoice_number", "verification_code", "invoice_reference",
@@ -228,7 +228,7 @@ class _IssuerReview:
 
 @dataclass(frozen=True, slots=True)
 class BarueriReviewedStartup:
-    """Pinned contracts, official XML correlation and scoped tax mappings."""
+    """Pinned PMB004 layout 4.4 (28/05/2026) and scoped tax mappings."""
 
     policies: tuple[_IssuerReview, ...]
     invoice_schema: etree.XMLSchema
