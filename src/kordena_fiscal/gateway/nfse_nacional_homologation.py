@@ -18,13 +18,17 @@ from kordena_fiscal.gateway.authorization import (
     GatewayProviderMetadata,
 )
 from kordena_fiscal.gateway.fiscal_tls import RejectFiscalRedirects, build_fiscal_tls_context
+from kordena_fiscal.gateway.mg_nfse_channel_guard import require_mg_national_channel_eligibility
 from kordena_fiscal.gateway.nfse_national_homologation import (
     SEFIN_HOMOLOGATION_NFSE_URL,
     build_nfse_dps_request,
+    parse_national_nfse_rejections,
+    parse_nfse_homologation_response,
 )
 from kordena_fiscal.issuance.nfe_nfse import (
     NfseAuthorizationRequest,
     NfseAuthorizationResult,
+    NfseRejectionDetail,
 )
 from kordena_fiscal.vault import EphemeralCertificateMaterial
 from kordena_fiscal.vault.a1_preflight import validate_a1_for_issuer
@@ -101,6 +105,26 @@ class NfseNacionalHomologationGateway:
         issuer_municipality = document.issuer.address.jurisdiction.municipality_ibge_code
         if issuer_municipality is None:
             raise OfficialNfseTransportError("DPS requires an issuer municipality")
+        if document.dps_number is None:
+            raise OfficialNfseTransportError(
+                "DPS fiscal number not durably reserved; SEFIN dispatch denied"
+            )
+        try:
+            require_mg_national_channel_eligibility(
+                jurisdiction=document.issuer.address.jurisdiction,
+                tax_regime=document.issuer.tax_regime,
+                competence_date=document.competence_date,
+            )
+        except FiscalValidationError:
+            issuer_state = document.issuer.address.jurisdiction.state_code
+            city_label = (
+                "Contagem/MG"
+                if issuer_state == "MG" and issuer_municipality == "3118601"
+                else f"IBGE {issuer_municipality}/{issuer_state}"
+            )
+            raise OfficialNfseTransportError(
+                f"{city_label}: Emissor Nacional indisponível para regime/competência"
+            ) from None
         material = self._resolve_certificate(document.scope, issuer_cnpj)
         validate_a1_for_issuer(
             material.pkcs12_bytes, material.password, issuer_cnpj=Cnpj(issuer_cnpj),
@@ -115,37 +139,46 @@ class NfseNacionalHomologationGateway:
             raise OfficialNfseTransportError("Resposta SEFIN inválida")
         try:
             result = json.loads(response)
-            if not isinstance(result, dict) or result.get("tipoAmbiente", 2) != 2:
+            if not isinstance(result, dict) or result.get("tipoAmbiente") != 2:
                 raise ValueError
         except (ValueError, UnicodeDecodeError):
             raise OfficialNfseTransportError("Resposta SEFIN sem homologação válida") from None
 
         key = result.get("chaveAcesso")
+        invoice_reference: str | None = None
+        authorized_xml: bytes | None = None
+        rejection_code: str | None = None
+        rejection_message: str | None = None
+        rejections: tuple[NfseRejectionDetail, ...] = ()
         if isinstance(key, str) and key:
+            # The National access key alone is NOT proof. Require the exact
+            # official XML, bounded and bound to infNFSe/@Id in the parser.
+            parsed = parse_nfse_homologation_response(response)
+            if parsed.get("chaveAcesso") != key:
+                raise OfficialNfseTransportError("NFS-e access key mismatch")
             status = AuthorizationStatus.AUTHORIZED
-            kwargs = {"invoice_reference": key[:512]}
+            invoice_reference = key
+            authorized_xml = parsed["xml"].encode("utf-8")
         else:
-            errors = result.get("erros")
-            if isinstance(errors, list) and errors:
-                first = errors[0] if isinstance(errors[0], dict) else {}
+            rejections = parse_national_nfse_rejections(result)
+            if rejections:
                 status = AuthorizationStatus.REJECTED
-                kwargs = {
-                    "rejection_code": str(
-                        first.get("Codigo", first.get("codigo", "NFSE_REJECTED"))
-                    )[:512],
-                    "rejection_message": str(
-                        first.get("Descricao", first.get("descricao", "DPS rejeitada"))
-                    )[:512],
-                }
+                rejection_code = rejections[0].code
+                # Preserve provider evidence without silent 512-character
+                # truncation. The raw details go to the tenant-scoped archive.
+                rejection_message = rejections[0].raw_message.strip()
             else:
                 status = AuthorizationStatus.PENDING
-                kwargs = {}
         return NfseAuthorizationResult(
             status=status, scope=document.scope, document_id=document.document_id,
             idempotency_key=request.idempotency_key,
             request_fingerprint=request.request_fingerprint,
             provider=_PROVIDER,
-            provider_request_id=str(result["idDps"])[:512]
+            provider_request_id=result["idDps"][:512]
             if isinstance(result.get("idDps"), str) else None,
-            **kwargs,
+            invoice_reference=invoice_reference,
+            authorized_xml=authorized_xml,
+            rejection_code=rejection_code,
+            rejection_message=rejection_message,
+            rejections=rejections,
         )

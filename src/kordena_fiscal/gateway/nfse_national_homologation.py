@@ -18,6 +18,7 @@ from lxml import etree
 
 from kordena_fiscal.domain import FiscalValidationError
 from kordena_fiscal.gateway.fiscal_tls import RejectFiscalRedirects, build_fiscal_tls_context
+from kordena_fiscal.issuance.nfe_nfse import NfseRejectionDetail
 from kordena_fiscal.signing.nfse_xmldsig import sign_nfse_dps_xml
 from kordena_fiscal.vault import EphemeralCertificateMaterial
 from kordena_fiscal.xml.nfse_nacional_schema import national_dps_validator
@@ -88,6 +89,35 @@ def build_nfse_dps_request(
     ).encode("ascii")
 
 
+def parse_national_nfse_rejections(payload: object) -> tuple[NfseRejectionDetail, ...]:
+    """Normalize all SEFIN error entries without truncation or secret echo.
+
+    Preserves raw provider descriptions in the private fiscal result; callers
+    must never return that text directly through HTTP or log it. The caller
+    stores details under the scoped fiscal archive's retention policy.
+    """
+    if not isinstance(payload, dict):
+        raise OfficialNfseTransportError("Resposta NFS-e Nacional inválida")
+    errors = payload.get("erros")
+    if errors is None:
+        return ()
+    if not isinstance(errors, list) or not 1 <= len(errors) <= 32:
+        raise OfficialNfseTransportError("Lista de rejeições SEFIN inválida")
+    details: list[NfseRejectionDetail] = []
+    for entry in errors:
+        if not isinstance(entry, dict):
+            raise OfficialNfseTransportError("Rejeição SEFIN inválida")
+        code = entry.get("Codigo", entry.get("codigo"))
+        message = entry.get("Descricao", entry.get("descricao"))
+        if (not isinstance(code, (str, int)) or isinstance(code, bool)
+                or not isinstance(message, str)):
+            raise OfficialNfseTransportError("Rejeição SEFIN sem código e motivo")
+        details.append(NfseRejectionDetail(
+            code=str(code), origin="SEFIN_NACIONAL", raw_message=message,
+        ))
+    return tuple(details)
+
+
 def parse_nfse_homologation_response(raw: bytes) -> dict[str, str]:
     """Expose only references and canonical XML; never reflect provider internals."""
     if not raw or len(raw) > _MAX_RESPONSE_BYTES:
@@ -110,9 +140,21 @@ def parse_nfse_homologation_response(raw: bytes) -> dict[str, str]:
                 document = stream.read(_MAX_RESPONSE_BYTES + 1)
             if len(document) > _MAX_RESPONSE_BYTES:
                 raise ValueError
-            etree.fromstring(
+            root = etree.fromstring(
                 document, parser=etree.XMLParser(resolve_entities=False, no_network=True)
             )
+            ns = "http://www.sped.fazenda.gov.br/nfse"
+            if (
+                root.tag != f"{{{ns}}}NFSe"
+                or bool(getattr(root.getroottree().docinfo, "doctype", ""))
+                or not access_key.isascii()
+                or not access_key.isdecimal()
+                or len(access_key) != 50
+            ):
+                raise ValueError("Invalid national access key or NFS-e root")
+            infos = root.findall(f"{{{ns}}}infNFSe")
+            if len(infos) != 1 or infos[0].get("Id") != "NFS" + access_key:
+                raise ValueError("XML does not belong to the returned NFS-e access key")
         except (ValueError, OSError, etree.XMLSyntaxError):
             raise OfficialNfseTransportError(
                 "XML retornado pela NFS-e Nacional é inválido"
