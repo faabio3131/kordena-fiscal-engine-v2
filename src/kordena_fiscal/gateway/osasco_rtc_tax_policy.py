@@ -13,8 +13,8 @@ from decimal import ROUND_HALF_UP, Decimal
 
 from kordena_fiscal.domain import FiscalAddress, FiscalValidationError, TaxRegimeCode
 from kordena_fiscal.gateway.osasco_rtc_issue_builder import (
-    OsascoRtcRecipient,
     OsascoReviewedCartorioValues,
+    OsascoRtcRecipient,
     OsascoRtcTaxFields,
 )
 from kordena_fiscal.gateway.sp4_municipal_canonical import Sp4OriginalRps
