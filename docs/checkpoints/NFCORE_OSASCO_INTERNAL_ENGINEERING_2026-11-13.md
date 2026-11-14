@@ -1,3 +1,9 @@
+> **RECONCILIAÇÃO SUPERVENIENTE 13/11/2026 — Ler antes do histórico abaixo.**
+> O estado IMPLEMENTING/NOT CERTIFIED registrado originalmente neste arquivo é um checkpoint histórico da PR #466, anterior às entregas das PRs #469 e #472 e à recuperação de WSDL/XSD municipais reais.
+> A fonte atual de engenharia é o checkpoint [NFCORE_OSASCO_OFFICIAL_WCF_RTC_V22_FINAL_2026-11-13.md](NFCORE_OSASCO_OFFICIAL_WCF_RTC_V22_FINAL_2026-11-13.md), com contratos públicos e testes da fábrica executável api:app.
+> O aceite final depende de CI integral SUCCESS no SHA de integração final da PR #468. Homologação municipal de contribuinte permanece uma evidência externa distinta.
+
+---
 # Osasco — engenharia isolada de NFS-e WCF RTC (13/11/2026)
 
 **Status: IMPLEMENTING / NOT CERTIFIED.** PR sucessora de Cajamar #463@72f7ed5df2d57f77c2de72b00b9ccf19672b8337; a base nuclear #454 continua em Draft. Não há homologação oficial nem merge/deploy.
