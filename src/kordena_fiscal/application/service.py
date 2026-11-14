@@ -2093,6 +2093,264 @@ class FiscalApplicationService:
             decision=decision, lifecycle=final, archive_reference=entry.entry_id,
         )
 
+    def preflight_barueri_nfse_cancellation(
+        self, *, scope: ExecutionScope, document_id: str,
+        decode_official_invoice: Callable[
+            [bytes, Sp4OriginalRps], Sp4VerifiedInvoice
+        ],
+        replacement_id: str | None = None,
+    ) -> tuple[
+        NfseAuthorizationRequest, Sp4OriginalRps, Sp4VerifiedInvoice,
+        Sp4OriginalRps | None,
+    ]:
+        """Approve only the original, source-correlated authorized Barueri NFS-e.
+
+        A replacement is a different persisted, unissued RPS of the SAME issuer.
+        This preflight performs no municipal I/O and never invents an invoice.
+        """
+        if (
+            not isinstance(scope, ExecutionScope)
+            or scope.environment is not FiscalEnvironment.HOMOLOGATION
+            or not callable(decode_official_invoice)
+            or not isinstance(document_id, str)
+            or not document_id.strip()
+            or replacement_id == document_id
+        ):
+            raise FiscalValidationError("Barueri cancellation scope or source invalid")
+        with self._uow_factory() as uow:
+            request = self._load_prepared_from_uow(uow, scope, document_id)
+            if not isinstance(request, NfseAuthorizationRequest):
+                raise PersistenceStateError("Barueri cancellation needs prepared NFS-e")
+            state = uow.lifecycle.get(document_id)
+            attempts = uow.idempotency.attempts(request.idempotency_key)
+            if (
+                state is None or state.state is not FiscalDocumentState.AUTHORIZED
+                or not attempts
+                or attempts[-1].status is not IssuanceAttemptStatus.AUTHORIZED
+                or attempts[-1].document_id != document_id
+                or attempts[-1].request_fingerprint != request.request_fingerprint
+                or request.document.issuer.address.jurisdiction.municipality_ibge_code
+                != "3505708"
+            ):
+                raise PersistenceStateError("Barueri cancellation requires authorized original")
+            stored = uow.archive.list_for_document(scope, document_id)
+            original_entries = [
+                item for item in stored
+                if item.media_type == SP4_ORIGINAL_RPS_MEDIA_TYPE
+                and item.kind is FiscalArchiveKind.OTHER
+            ]
+            invoices = [
+                item for item in stored
+                if item.kind is FiscalArchiveKind.AUTHORIZED_XML
+                and item.media_type == "application/xml"
+            ]
+            if len(original_entries) != 1 or len(invoices) != 1:
+                raise PersistenceStateError("Barueri original RPS/official XML missing")
+            verifier = FiscalArchiveVerifier()
+            verifier.verify_entry(original_entries[0])
+            verifier.verify_entry(invoices[0])
+            original = decode_sp4_original(
+                original_entries[0].content, scope=scope, request=request,
+            )
+            invoice = decode_official_invoice(invoices[0].content, original)
+            if (
+                not isinstance(invoice, Sp4VerifiedInvoice)
+                or invoice.issuer_ibge != "3505708"
+                or invoice.issuer_cnpj != original.issuer_cnpj
+                or invoice.rps_number != original.rps_number
+                or invoice.rps_series != original.rps_series
+                or invoice.gross_amount != original.gross_amount
+                or attempts[-1].result_reference != invoice.invoice_reference
+            ):
+                raise PersistenceConflictError("Barueri official invoice differs from source")
+            replacement: Sp4OriginalRps | None = None
+            if replacement_id is not None:
+                candidate = self._load_prepared_from_uow(uow, scope, replacement_id)
+                if not isinstance(candidate, NfseAuthorizationRequest):
+                    raise PersistenceStateError("Barueri replacement needs prepared NFS-e")
+                latest = uow.lifecycle.get(replacement_id)
+                candidate_attempts = uow.idempotency.attempts(candidate.idempotency_key)
+                if (
+                    latest is None
+                    or latest.state is not FiscalDocumentState.READY_TO_TRANSMIT
+                    or not candidate_attempts
+                    or candidate_attempts[-1].status is not IssuanceAttemptStatus.RESERVED
+                    or candidate_attempts[-1].document_id != replacement_id
+                    or candidate.document.scope.identity_partition_key
+                    != original.scope.identity_partition_key
+                    or candidate.document.issuer.cnpj != original.issuer_cnpj
+                    or candidate.document.issuer.address.jurisdiction.municipality_ibge_code
+                    != "3505708"
+                ):
+                    raise PersistenceStateError(
+                        "Barueri replacement must be unissued by same taxpayer"
+                    )
+                sources = [
+                    item for item in uow.archive.list_for_document(scope, replacement_id)
+                    if item.media_type == SP4_ORIGINAL_RPS_MEDIA_TYPE
+                    and item.kind is FiscalArchiveKind.OTHER
+                ]
+                if len(sources) != 1:
+                    raise PersistenceStateError("Barueri replacement original RPS absent")
+                verifier.verify_entry(sources[0])
+                replacement = decode_sp4_original(
+                    sources[0].content, scope=scope, request=candidate,
+                )
+        selected = self.resolve_configured_provider_id(
+            scope=scope, document_kind=FiscalDocumentKind.NFSE,
+            jurisdiction=request.document.issuer.address.jurisdiction,
+            operation="cancel",
+        )
+        if selected != "barueri-pmb004-homologation":
+            raise FiscalValidationError("Barueri cancellation binding is not canonical")
+        return request, original, invoice, replacement
+
+    def cancel_prepared_barueri_nfse(
+        self, *, scope: ExecutionScope, document_id: str,
+        decode_official_invoice: Callable[
+            [bytes, Sp4OriginalRps], Sp4VerifiedInvoice
+        ],
+        prepare_event: Callable[
+            [
+                NfseAuthorizationRequest, Sp4OriginalRps, Sp4VerifiedInvoice,
+                str, str, str, datetime, str | None,
+            ],
+            BarueriRpsBatch,
+        ],
+        submit_event: Callable[[BarueriRpsBatch], BarueriReceipt],
+        reason_code: str,
+        cancellation_reason: str,
+        occurred_at: datetime,
+        retention: RetentionPolicyMetadata,
+        replacement_id: str | None = None,
+    ) -> DurableBarueriCancellationOutcome:
+        """Commit the cancellation claim and exact event bytes BEFORE municipal POST.
+
+        Network uncertainty retains CANCEL_REQUESTED, allowing ONLY read-only
+        reconciliation of the immutable event; no retry can send a second POST.
+        """
+        if (
+            reason_code not in ("01", "02", "03")
+            or (reason_code == "03") != (replacement_id is not None)
+            or not isinstance(cancellation_reason, str)
+            or not 1 <= len(cancellation_reason.strip()) <= 180
+            or any(ord(ch) < 32 for ch in cancellation_reason)
+            or not isinstance(occurred_at, datetime)
+            or occurred_at.tzinfo is None
+            or not isinstance(retention, RetentionPolicyMetadata)
+            or not callable(prepare_event)
+            or not callable(submit_event)
+        ):
+            raise FiscalValidationError("Invalid reviewed Barueri cancellation intent")
+        request, original, invoice, replacement = (
+            self.preflight_barueri_nfse_cancellation(
+                scope=scope, document_id=document_id,
+                decode_official_invoice=decode_official_invoice,
+                replacement_id=replacement_id,
+            )
+        )
+        with self._uow_factory() as uow:
+            uow.lifecycle.assert_scope(document_id, scope)
+            before = uow.lifecycle.get(document_id)
+            if before is None or before.state is not FiscalDocumentState.AUTHORIZED:
+                raise PersistenceConflictError("Concurrent Barueri event already claimed")
+            if replacement_id is not None:
+                uow.lifecycle.assert_scope(replacement_id, scope)
+                candidate = uow.lifecycle.get(replacement_id)
+                if candidate is None or candidate.state is not FiscalDocumentState.READY_TO_TRANSMIT:
+                    raise PersistenceConflictError("Barueri replacement changed before claim")
+            reserved = uow.sequences.reserve_next(
+                FiscalSequenceKey.from_scope(
+                    scope, model=InternalFiscalSequenceStream.NFSE_RPS, series=1,
+                ),
+                FiscalSequencePolicy(max_number=9_999_999),
+            )
+            remittance = f"{reserved.number:011d}"
+            batch = prepare_event(
+                request, original, invoice, remittance, reason_code,
+                cancellation_reason, occurred_at,
+                replacement.rps_number if replacement is not None else None,
+            )
+            if (
+                not isinstance(batch, BarueriRpsBatch)
+                or batch.remittance != remittance
+                or batch.scope.identity_partition_key != scope.identity_partition_key
+                or batch.issuer_cnpj != original.issuer_cnpj
+                or not any(
+                    row[39:40] == b"C"
+                    for row in batch.rps_bytes.split(b"\r\n")
+                    if row[:1] == b"2"
+                )
+            ):
+                raise PersistenceConflictError("Barueri original event bytes disagree")
+            event_data = {
+                "version": 1,
+                "document_id": document_id,
+                "fingerprint": request.request_fingerprint,
+                "reason_code": reason_code,
+                "replacement_id": replacement_id,
+                "event_remittance": remittance,
+                "sent_on": occurred_at.date().isoformat(),
+                "municipal_registration": batch.municipal_registration,
+                "rps_bytes_base64": base64.b64encode(batch.rps_bytes).decode("ascii"),
+            }
+            event_entry = FiscalArchiveEntry.build(
+                scope=scope, document_reference=document_id,
+                kind=FiscalArchiveKind.OTHER,
+                content=json.dumps(
+                    event_data, sort_keys=True, separators=(",", ":"),
+                ).encode("utf-8"),
+                media_type="application/vnd.nfcore.barueri-cancel-intent.v1+json",
+                archived_at=occurred_at, retention=retention,
+            )
+            claim = self._state_machine.transition(
+                before, FiscalDocumentState.CANCEL_REQUESTED,
+                occurred_at=occurred_at, reason="Barueri municipal event claimed",
+                correlation_id=scope.correlation_id,
+            )
+            uow.lifecycle.save(claim, expected_version=before.version)
+            stored = uow.archive.append(event_entry)
+            uow.commit()
+        # The intent and source identity are durable here, before any network call.
+        # On timeout, leave the claim unchanged for query-only recovery.
+        receipt = submit_event(batch)
+        protocol = receipt.remittance_protocol if isinstance(receipt, BarueriReceipt) else None
+        if (
+            not isinstance(receipt, BarueriReceipt)
+            or receipt.operation != "NFeLoteEnviarArquivo"
+            or receipt.code != "OK200"
+            or not isinstance(protocol, str)
+            or not 1 <= len(protocol) <= 128
+            or not protocol.isascii() or not protocol.isalnum()
+        ):
+            raise PersistenceStateError("Barueri cancellation returned no recoverable protocol")
+        with self._uow_factory() as uow:
+            uow.lifecycle.assert_scope(document_id, scope)
+            latest = uow.lifecycle.get(document_id)
+            if latest != claim:
+                raise PersistenceConflictError("Barueri event state changed during POST")
+            acks = [
+                item for item in uow.archive.list_for_document(scope, document_id)
+                if item.media_type == "application/vnd.nfcore.barueri-cancel-ack.v1+json"
+            ]
+            if acks:
+                raise PersistenceConflictError("Barueri event protocol already recorded")
+            uow.archive.append(FiscalArchiveEntry.build(
+                scope=scope, document_reference=document_id,
+                kind=FiscalArchiveKind.PROVIDER_RESPONSE,
+                content=json.dumps({
+                    "document_id": document_id, "event_remittance": remittance,
+                    "provider_request_id": protocol,
+                }, sort_keys=True, separators=(",", ":")).encode("utf-8"),
+                media_type="application/vnd.nfcore.barueri-cancel-ack.v1+json",
+                archived_at=occurred_at, retention=retention,
+            ))
+            uow.commit()
+        return DurableBarueriCancellationOutcome(
+            lifecycle=claim, archive_reference=stored.entry_id,
+            protocol=protocol, recovery_required=True, replay=False,
+        )
+
     def preflight_osasco_nfse_cancellation(
         self, *, scope: ExecutionScope, document_id: str, cancellation_reason: str,
     ) -> tuple[NfseAuthorizationRequest, Sp4OriginalRps, Sp4VerifiedInvoice]:
