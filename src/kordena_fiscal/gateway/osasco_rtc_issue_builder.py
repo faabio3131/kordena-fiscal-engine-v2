@@ -113,7 +113,15 @@ def _append(parent: etree._Element, namespace: str, name: str, value: str) -> No
 def _validate_fields(fields: OsascoRtcTaxFields) -> None:
     if not isinstance(fields, OsascoRtcTaxFields):
         raise OsascoRtcIssueError("Osasco fiscal RTC metadata unavailable")
-    _str(fields.activity, "activity", 5)
+    activity = _str(fields.activity, "activity", 5)
+    if (
+        activity.count(".") != 1
+        or len(activity.split(".")[0]) not in (1, 2)
+        or len(activity.split(".")[1]) != 2
+        or not activity.replace(".", "").isascii()
+        or not activity.replace(".", "").isdecimal()
+    ):
+        raise OsascoRtcIssueError("Osasco service activity must use official 00.00 format")
     # Osasco manual v2.1 (Apr/2026), p.14: ClassTrib and IndOperacao
     # retain all six digits including leading zeroes. CodigoNBS is the
     # dotted 12-character classification (0.0000.00.00) and local incidence
@@ -237,6 +245,20 @@ def build_osasco_rtc_issue_xml(
         raise OsascoRtcIssueError("Osasco RTC requires matching normal-regime 2026 source")
     _validate_fields(fields)
     if (
+        fields.iss_withheld
+        and fields.service_city_ibge == "3534401"
+    ):
+        raise OsascoRtcIssueError(
+            "Osasco municipal substitution requires service outside municipality"
+        )
+    if (
+        fields.no_iss_incidence
+        and fields.recipient.country.upper() in ("BRASIL", "BRAZIL")
+    ):
+        raise OsascoRtcIssueError(
+            "Osasco ISS non-incidence requires foreign service outcome and recipient"
+        )
+    if (
         doc.service_jurisdiction.municipality_ibge_code != fields.service_city_ibge
         or doc.service_jurisdiction.state_code != fields.service_state
         or doc.services[0].gross_amount.amount != original.gross_amount
@@ -251,8 +273,13 @@ def build_osasco_rtc_issue_xml(
     def issue(name: str, value: str) -> None:
         _append(note, _ISS, name, value)
 
-    # Official request layout, manual v2.1 pp.5-6: WCF field ordering.
-    issue("Aliquota", _decimal(fields.iss_rate, "ISS rate"))
+    # Official Osasco v2.2, Oct/2026, p.7: regular NORMAL taxpayers
+    # send 0.00 and municipality calculates its current ISS service rate.
+    # Only reviewed outside-Osasco substitution/retention passes the other
+    # municipality's rate. Do not send a local ISS rate as if it were a
+    # municipal parameter for normal taxable domestic services.
+    sent_rate = fields.iss_rate if fields.iss_withheld else Decimal("0")
+    issue("Aliquota", _decimal(sent_rate, "ISS rate"))
     issue("Atividade", fields.activity)
     if fields.service_district is not None:
         issue("BairroPrestacaoServico", fields.service_district)
@@ -276,6 +303,9 @@ def build_osasco_rtc_issue_xml(
     if fields.service_number is not None:
         issue("NumeroPrestacaoServico", fields.service_number)
     issue("NumeroRecibo", original.rps_number)
+    # Optional in the official v2.2 contract; make payer identity explicit
+    # from the same reviewed canonical withholding fact.
+    issue("ResponsavelTributario", "T" if fields.iss_withheld else "P")
     issue("SemIncidenciaISS", "true" if fields.no_iss_incidence else "false")
     issue("SimplesNacional", "false")
     issue("SubstituicaoTributaria", "true" if fields.iss_withheld else "false")
