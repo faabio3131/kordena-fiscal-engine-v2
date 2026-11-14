@@ -24,7 +24,6 @@ from kordena_fiscal.gateway.barueri_official_return_file import (
     parse_barueri_official_return_file,
 )
 from kordena_fiscal.gateway.barueri_pmb004_homologation import (
-    BARUERI_PMB004_PROVIDER,
     BarueriPmb004HomologationTransport,
     BarueriReceipt,
     BarueriRpsBatch,
@@ -42,6 +41,16 @@ from .sp4_municipal_provider_bridges import (
     Sp4BridgeAuthority,
     build_barueri_reviewed_ports,
 )
+
+
+def _verify_return(
+    batch: BarueriRpsBatch, receipt: BarueriReceipt,
+) -> BarueriConvertedNfseEvidence:
+    return parse_barueri_official_return_file(batch=batch, receipt=receipt)
+
+
+def _fetch_invoice_xml(evidence: BarueriConvertedNfseEvidence) -> bytes:
+    return retrieve_barueri_original_invoice_xml(evidence=evidence)
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,10 +73,10 @@ class BarueriTrustedRuntimePorts:
     ]
     retrieve_official_invoice_xml: Callable[
         [BarueriConvertedNfseEvidence], bytes
-    ] = retrieve_barueri_original_invoice_xml
+    ] = _fetch_invoice_xml
     validate_return_file: Callable[
         [BarueriRpsBatch, BarueriReceipt], BarueriConvertedNfseEvidence
-    ] = parse_barueri_official_return_file
+    ] = _verify_return
 
     def __post_init__(self) -> None:
         if not isinstance(self.transport, BarueriPmb004HomologationTransport):
