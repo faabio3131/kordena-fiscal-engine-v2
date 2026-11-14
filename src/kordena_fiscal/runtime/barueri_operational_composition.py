@@ -89,6 +89,7 @@ class BarueriTrustedRuntimePorts:
         [
             NfseAuthorizationRequest, Sp4OriginalRps, Sp4VerifiedInvoice,
             str, str, str, datetime, str | None,
+            NfseAuthorizationRequest | None, Sp4OriginalRps | None,
         ],
         BarueriRpsBatch,
     ] | None = None
