@@ -2,6 +2,20 @@
 
 **Atualização:** 2026-11-10. **Status:** preparação interna em PR, ativação real sujeita a gates de host e OAuth externo. Não confundir merge ou CI com conexão real.
 
+### Planejamento somente leitura de migrations Bling (checkpoint histórico da branch production)
+
+
+Após a publicação certificada da versão contendo o planejador, com `NFCORE_BLING_INSTALLATIONS_ENABLED` **desabilitado** e sem scripts de deploy concorrentes, usar somente:
+
+```bash
+cd /opt/fm/nfcore && docker compose run --rm --no-deps -T nfcore-api python scripts/ci/migration_guard.py --plan-production-bling
+```
+
+A resposta esperada para schema 19 íntegro é `Bling production migration plan: PASS READ_ONLY ... pending=20,21 ... no DDL executed`. Em schema 21 íntegro a saída será `pending=NONE`. Qualquer erro é `NO_GO` até ser investigado. Este comando **não aprova** `--apply`. Aplicar migrations 20/21 produtivas requer autorização específica, revisão de schema e Cakto, backup com restore comprovado, verificação de exclusividade/janela, lock do deploy e execução da autoridade canônica com flags temporárias e auditadas. Nenhuma ativação de OAuth/Worker Bling antes de schema 21 completo.
+
+**Atualização:** 2026-11-10. **Status:** preparação interna em PR, ativação real sujeita a gates de host e OAuth externo. Não confundir merge ou CI com conexão real.
+
+
 ## Autoridades únicas
 - A API continua sendo `nfcore-api` — a mesma sessão humana, RBAC, CSRF e bindings fiscais canônicos. Nenhuma segunda API ou nova autoridade de empresa/tenant.
 - O Worker usa a outbox fiscal existente, `NFCORE_WORKER_CONNECTOR=bling-multi` e a composição explicitamente autorizada, somente homologação.
