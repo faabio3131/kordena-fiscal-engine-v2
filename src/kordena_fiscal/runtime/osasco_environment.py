@@ -239,6 +239,9 @@ class OsascoReviewedStartup:
                 raise FiscalValidationError("Osasco original RPS scope mismatch")
             return rows[0].policy
 
+        def reviewed_issuer_policy(request: NfseAuthorizationRequest) -> None:
+            policy_for(request)
+
         schema = OsascoReviewedSchemaPorts(
             validate_issuance=lambda xml: validate_schema("issue_request", xml),
             validate_query=lambda xml: validate_schema("query_request", xml),
@@ -258,7 +261,7 @@ class OsascoReviewedStartup:
             secrets=secrets, workload_id="nfcore-api",
             wsdl=self.wsdl, schema=schema,
             resolve_policy=lambda request, original: policy_for(request, original),
-            fiscal_issuer_policy=lambda request: policy_for(request),
+            fiscal_issuer_policy=reviewed_issuer_policy,
         )
 
 
