@@ -20,13 +20,7 @@ from lxml import etree
 
 from kordena_fiscal.application.service import FiscalApplicationService
 from kordena_fiscal.domain import Cnpj, FiscalAddress, FiscalValidationError, TaxRegimeCode
-from kordena_fiscal.gateway.barueri_official_return_file import (
-    BarueriConvertedNfseEvidence,
-)
-from kordena_fiscal.gateway.barueri_pmb004_homologation import (
-    BarueriReceipt,
-    BarueriRpsBatch,
-)
+from kordena_fiscal.gateway.barueri_pmb004_homologation import BarueriRpsBatch
 from kordena_fiscal.gateway.barueri_pmb004_record_builder import (
     BarueriPmb004IssueFields,
     BarueriPmb004Recipient,
@@ -422,17 +416,20 @@ class BarueriReviewedStartup:
                 "",
             ),
         )
+        def validate_original(source: Sp4OriginalRps) -> None:
+            if (
+                not isinstance(source, Sp4OriginalRps)
+                or source.issuer_ibge != "3505708"
+                or source.municipal_batch_id is None
+                or len(source.municipal_batch_id) != 11
+            ):
+                raise FiscalValidationError("Missing durable Barueri original RPS")
+
         return BarueriTrustedRuntimePorts(
             transport=transport, build_remittance=build_remittance,
             verify_fixed_width_rps_identity=verify_identity,
             fiscal_issuer_policy=fiscal_policy,
-            validate_prepared_rps=lambda original: (
-                None if original.issuer_ibge == "3505708"
-                and original.municipal_batch_id is not None
-                else (_ for _ in ()).throw(
-                    FiscalValidationError("Missing durable Barueri original RPS")
-                )
-            ),
+            validate_prepared_rps=validate_original,
             verify_official_invoice_xml=official_xml,
             # Interpretation occurs in the asynchronous remittance/return bridge;
             # the first OK200 never promotes an invoice.
