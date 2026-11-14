@@ -135,6 +135,7 @@ _IDEMPOTENT_MUTATIONS = {
     "cancelOsascoNfse",
     "cancelBarueriNfse",
     "substituteBarueriNfse",
+    "reconcileBarueriNfseCancellation",
     "substituteOsascoNfse",
     "substituteExtremaNfse",
     "inutilizeFiscalRange",
