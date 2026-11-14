@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+from pathlib import Path
 
 import pytest
 
@@ -98,3 +99,29 @@ def test_wsdl_rejects_dtd_and_xml_entity_aliasing() -> None:
     )
     with pytest.raises(OsascoWsdlIntegrityError, match="DTD"):
         _load(xml)
+
+
+
+def test_osasco_official_2026_single_wsdl_sha_and_soap_actions_are_exact() -> None:
+    """Source bytes fetched by GET from Prefeitura; no synthetic interface name."""
+    root = (
+        Path(__file__).resolve().parents[2]
+        / "contracts/official/osasco/homologation"
+    )
+    raw = (root / "NotaFiscalEletronica.singleWsdl.xml").read_bytes()
+    digest = hashlib.sha256(raw).hexdigest()
+    assert digest == (
+        "0e6798bbe317e690d0795cdfac876225961686d8a77cccbbf92c9aab6b50b22c"
+    )
+    contract = load_osasco_pinned_wsdl(
+        document=raw, expected_sha256=digest,
+        binding_name="BasicHttpBinding_INotaFiscalEletronicaServico",
+    )
+    assert set(contract.operations) == {
+        "RTC_EmitirNFE", "ConsultarNotaCompleta", "Cancelar",
+    }
+    for name, method in contract.operations.items():
+        assert method.action == (
+            "http://tempuri.org/INotaFiscalEletronicaServico/" + name
+        )
+        assert method.wsdl_sha256 == digest
