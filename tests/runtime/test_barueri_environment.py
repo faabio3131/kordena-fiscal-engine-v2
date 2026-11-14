@@ -70,7 +70,7 @@ def _manifest(folder: Path) -> Path:
     }
     manifest: dict[str, object] = {
         "mode": "reviewed-homologation",
-        "layout": "PMB004-v4.2",
+        "layout": "PMB004-v4.4",
         "invoice_tags": dict(_TAGS),
         "issuers": [_policy()],
     }
