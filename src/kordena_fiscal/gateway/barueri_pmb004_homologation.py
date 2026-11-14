@@ -479,13 +479,22 @@ class BarueriPmb004HomologationTransport:
         )
         return _parse_reply(raw, method)
 
-    def submit(self, batch: BarueriRpsBatch) -> BarueriReceipt:
+    def submit(
+        self, batch: BarueriRpsBatch, *, binding_operation: str = "authorize",
+    ) -> BarueriReceipt:
         if not isinstance(batch, BarueriRpsBatch):
             raise BarueriContractError("Trusted PMB004 batch required")
+        records = batch.rps_bytes.split(b"\r\n")
+        cancel = any(record[39:40] == b"C" for record in records if record[:1] == b"2")
+        if (
+            binding_operation not in ("authorize", "cancel")
+            or (binding_operation == "cancel") != cancel
+        ):
+            raise BarueriContractError("PMB004 event requires matching fiscal operation")
         self._validate(batch.rps_bytes)
         return self._send(
             scope=batch.scope, cnpj=batch.issuer_cnpj,
-            method="NFeLoteEnviarArquivo", operation="authorize",
+            method="NFeLoteEnviarArquivo", operation=binding_operation,
             fields=(
                 ("InscricaoMunicipal", batch.municipal_registration),
                 ("CPFCNPJContrib", batch.issuer_cnpj.value),
