@@ -61,6 +61,7 @@ _ISSUER_KEYS = frozenset({
     "service_location_code", "public_way_code", "nbs_code",
     "operation_indicator", "tax_classification", "ibs_cbs_status",
     "simples_assessment", "municipal_note_series", "recipient_emails",
+    "personal_use", "recipient_differs",
     "non_base_allowed",
 })
 
@@ -126,6 +127,8 @@ class _IssuerReview:
     tax_classification: str
     ibs_cbs_status: str
     simples_assessment: str
+    personal_use: str
+    recipient_differs: str
     municipal_note_series: str
     recipient_emails: Mapping[str, str]
     non_base_allowed: bool
@@ -152,6 +155,8 @@ class _IssuerReview:
                 or not isinstance(row["recipient_emails"], dict)
                 or not isinstance(row["simples_assessment"], str)
                 or not isinstance(row["municipal_note_series"], str)
+                or row["personal_use"] not in ("0", "1")
+                or row["recipient_differs"] not in ("0", "1")
             ):
                 raise ValueError
             Cnpj(row["issuer_cnpj"])
@@ -344,6 +349,8 @@ class BarueriReviewedStartup:
                 simples_status=simples,
                 simples_assessment=policy.simples_assessment,
                 municipal_note_series=policy.municipal_note_series,
+                personal_use=policy.personal_use,
+                recipient_differs=policy.recipient_differs,
                 federal_retentions=(),
                 non_base_amount=deduction if deduction else None,
             )
