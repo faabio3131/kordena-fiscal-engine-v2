@@ -26,4 +26,4 @@ jobs:
           mypy
       - name: Execute exact official six-XSD gates and scoped composition
         run: |
-          pytest -q tests/gateway/test_osasco_rtc_issue_builder.py tests/runtime/test_osasco_entrypoint_environment.py
+          pytest -q tests/gateway/test_osasco_rtc_issue_builder.py tests/runtime/test_osasco_entrypoint_environment.py tests/web/test_native_nfse_preparation_http.py
