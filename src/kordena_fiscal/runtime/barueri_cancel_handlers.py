@@ -136,7 +136,7 @@ def build_barueri_event_handlers(
             "original_id": str(payload["original_id"]),
             "replacement_id": str(payload["replacement_id"]),
             "original_status": outcome.lifecycle.state.value,
-            "replacement_status": "ready_to_transmit",
+            "replacement_status": "transmitting",
             "municipality_ibge": "3505708",
             "event_archive_id": outcome.archive_reference,
             "protocol": outcome.protocol,
