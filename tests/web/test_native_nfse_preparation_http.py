@@ -57,7 +57,6 @@ from kordena_fiscal.domain import (
     TaxRegimeCode,
 )
 from kordena_fiscal.gateway.authorization import AuthorizationStatus
-from kordena_fiscal.runtime.barueri_environment import BarueriReviewedStartup
 from kordena_fiscal.gateway.cajamar_geisweb_cancellation_builder import (
     CajamarCancellationDecision,
     interpret_cajamar_cancel_response,
@@ -87,6 +86,7 @@ from kordena_fiscal.operations import FakeFiscalOperationsGateway, FiscalOperati
 from kordena_fiscal.persistence import SqliteFiscalDatabase
 from kordena_fiscal.persistence.ports import PersistenceStateError
 from kordena_fiscal.runtime.api import build_entrypoint_fiscal_handler_factory
+from kordena_fiscal.runtime.barueri_environment import BarueriReviewedStartup
 from kordena_fiscal.runtime.canonical_fiscal_composition import (
     _GovernedNationalNfseGateway,
     build_runtime_fiscal_handler_factory,
@@ -115,8 +115,8 @@ from kordena_fiscal.security.human_identity import (
     ScryptPasswordHasher,
 )
 from kordena_fiscal.vault import EphemeralCertificateMaterial
-from kordena_fiscal.vault.encrypted_a1 import EncryptedA1Vault
 from kordena_fiscal.vault.contracts import EphemeralProviderCredentialsMaterial
+from kordena_fiscal.vault.encrypted_a1 import EncryptedA1Vault
 from kordena_fiscal.web import create_app
 from kordena_fiscal.web.human_auth import CSRF_COOKIE, CSRF_HEADER
 from kordena_fiscal.web.portal_runtime import DurableHumanPortalExecutor
@@ -1805,7 +1805,7 @@ def _synthetic_barueri_soap(
 ) -> bytes:
     namespace = "http://www.barueri.sp.gov.br/nfe"
     extra = (
-        f"<b:NomeArqRetorno>return.txt</b:NomeArqRetorno>"
+        "<b:NomeArqRetorno>return.txt</b:NomeArqRetorno>"
         if method != "NFeLoteEnviarArquivo" else ""
     )
     if return_file is not None:
