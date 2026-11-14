@@ -81,6 +81,7 @@ from kordena_fiscal.vault import EphemeralCertificateMaterial
 from kordena_fiscal.vault.encrypted_a1 import EncryptedA1Vault
 from kordena_fiscal.xml import NfeAccessKey
 
+from .barueri_cancel_handlers import build_barueri_event_handlers
 from .barueri_operational_composition import BarueriTrustedRuntimePorts
 from .cajamar_operational_composition import CajamarTrustedRuntimePorts
 from .fiscal_runtime import FiscalOperationHandler, PreflightFiscalOperationHandler
@@ -653,6 +654,17 @@ def build_runtime_fiscal_handler_factory(
             prepared_nfse_query_client=nfse_query_client,
             archive_retention=retention,
         )
+        if (
+            selected_barueri_ports is not None
+            and selected_barueri_ports.supports_events
+        ):
+            for operation, handler in build_barueri_event_handlers(
+                application=application, reviewed=selected_barueri_ports,
+                retention=retention,
+            ).items():
+                if operation in handlers:
+                    raise ValueError("Duplicate Barueri event handler authority")
+                handlers[operation] = handler
         if active_osasco_cancel is not None:
             handlers["cancelOsascoNfse"] = build_osasco_cancel_handler(
                 application=application, verified_cancel=active_osasco_cancel,
