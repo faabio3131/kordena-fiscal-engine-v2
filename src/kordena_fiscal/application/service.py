@@ -2101,7 +2101,7 @@ class FiscalApplicationService:
         replacement_id: str | None = None,
     ) -> tuple[
         NfseAuthorizationRequest, Sp4OriginalRps, Sp4VerifiedInvoice,
-        Sp4OriginalRps | None,
+        Sp4OriginalRps | None, NfseAuthorizationRequest | None,
     ]:
         """Approve only the original, source-correlated authorized Barueri NFS-e.
 
@@ -2164,6 +2164,7 @@ class FiscalApplicationService:
             ):
                 raise PersistenceConflictError("Barueri official invoice differs from source")
             replacement: Sp4OriginalRps | None = None
+            candidate_request: NfseAuthorizationRequest | None = None
             if replacement_id is not None:
                 candidate = self._load_prepared_from_uow(uow, scope, replacement_id)
                 if not isinstance(candidate, NfseAuthorizationRequest):
@@ -2196,6 +2197,9 @@ class FiscalApplicationService:
                 replacement = decode_sp4_original(
                     sources[0].content, scope=scope, request=candidate,
                 )
+                if candidate.document.competence_date != request.document.competence_date:
+                    raise PersistenceStateError("Barueri substitute must preserve competence")
+                candidate_request = candidate
         selected = self.resolve_configured_provider_id(
             scope=scope, document_kind=FiscalDocumentKind.NFSE,
             jurisdiction=request.document.issuer.address.jurisdiction,
@@ -2203,7 +2207,7 @@ class FiscalApplicationService:
         )
         if selected != "barueri-pmb004-homologation":
             raise FiscalValidationError("Barueri cancellation binding is not canonical")
-        return request, original, invoice, replacement
+        return request, original, invoice, replacement, candidate_request
 
     def cancel_prepared_barueri_nfse(
         self, *, scope: ExecutionScope, document_id: str,
@@ -2214,6 +2218,7 @@ class FiscalApplicationService:
             [
                 NfseAuthorizationRequest, Sp4OriginalRps, Sp4VerifiedInvoice,
                 str, str, str, datetime, str | None,
+                NfseAuthorizationRequest | None, Sp4OriginalRps | None,
             ],
             BarueriRpsBatch,
         ],
@@ -2242,7 +2247,7 @@ class FiscalApplicationService:
             or not callable(submit_event)
         ):
             raise FiscalValidationError("Invalid reviewed Barueri cancellation intent")
-        request, original, invoice, replacement = (
+        request, original, invoice, replacement, replacement_request = (
             self.preflight_barueri_nfse_cancellation(
                 scope=scope, document_id=document_id,
                 decode_official_invoice=decode_official_invoice,
@@ -2270,6 +2275,7 @@ class FiscalApplicationService:
                 request, original, invoice, remittance, reason_code,
                 cancellation_reason, occurred_at,
                 replacement.rps_number if replacement is not None else None,
+                replacement_request, replacement,
             )
             if (
                 not isinstance(batch, BarueriRpsBatch)
