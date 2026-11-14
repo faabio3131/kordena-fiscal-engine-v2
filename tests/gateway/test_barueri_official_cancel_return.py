@@ -103,11 +103,11 @@ def test_cancel_proof_must_match_event_and_authorized_original() -> None:
 
 @pytest.mark.parametrize("offset,replacement", [
     (30, b"9"),  # Different remittance.
-    (41 + 66, b"A"),  # Still active, not cancelled.
-    (41 + 67, b"3"),  # Invalid cancellation date.
-    (41 + 5, b"9"),  # Different fiscal note.
-    (41 + 1628, b"9"),  # Different ADN access key.
-    (41 + 76 + 91, b"9"),  # Different service total.
+    (41 + 2 + 66, b"A"),  # Still active, not cancelled.
+    (41 + 2 + 71, b"9"),  # Invalid cancellation date.
+    (41 + 2 + 5, b"9"),  # Different fiscal note.
+    (41 + 2 + 1628, b"9"),  # Different ADN access key.
+    (41 + 2 + 1678 + 2 + 76, b"9"),  # Different service total.
 ])
 def test_accepted_soap_never_overrides_unmatched_official_evidence(
     offset: int, replacement: bytes,
