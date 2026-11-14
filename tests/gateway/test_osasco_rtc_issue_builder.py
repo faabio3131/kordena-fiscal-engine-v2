@@ -19,10 +19,10 @@ from kordena_fiscal.domain import (
     TaxRegimeCode,
 )
 from kordena_fiscal.gateway.osasco_rtc_issue_builder import (
+    OsascoReviewedCartorioValues,
     OsascoRtcIssueError,
     OsascoRtcRecipient,
     OsascoRtcTaxFields,
-    OsascoReviewedCartorioValues,
     build_osasco_rtc_issue_xml,
     prepare_osasco_rtc_issue,
 )
