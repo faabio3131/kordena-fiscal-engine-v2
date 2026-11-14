@@ -18,9 +18,9 @@ from typing import Any
 from lxml import etree
 
 from kordena_fiscal.application.service import FiscalApplicationService
-from kordena_fiscal.domain import FiscalValidationError, TaxRegimeCode
+from kordena_fiscal.domain import FiscalValidationError, MunicipalRegistration, TaxRegimeCode
 from kordena_fiscal.gateway.osasco_rtc_tax_policy import OsascoReviewedRtcPolicy
-from kordena_fiscal.gateway.sp4_municipal_canonical import Sp4OriginalRps
+from kordena_fiscal.gateway.sp4_municipal_canonical import Sp4OriginalRps, Sp4VerifiedInvoice
 from kordena_fiscal.issuance.nfe_nfse import NfseAuthorizationRequest
 from kordena_fiscal.persistence.ports import FiscalUnitOfWorkFactory
 from kordena_fiscal.vault.contracts import SecretResolutionService
@@ -88,7 +88,7 @@ def _schema(raw: bytes) -> etree.XMLSchema:
                 huge_tree=False,
             ),
         )
-        if root.getroottree().docinfo.doctype:
+        if bool(getattr(root.getroottree().docinfo, "doctype", "")):
             raise ValueError
         return etree.XMLSchema(root)
     except (etree.XMLSyntaxError, etree.XMLSchemaParseError, ValueError):
@@ -140,7 +140,9 @@ class _ScopedPolicy:
         return cls(
             tenant_id=row["tenant_id"], unit_id=row["unit_id"],
             issuer_cnpj=row["issuer_cnpj"],
-            municipal_registration=row["municipal_registration"],
+            municipal_registration=MunicipalRegistration(
+                row["municipal_registration"]
+            ).number,
             policy=_policy(row["policy"]),
         )
 
@@ -151,7 +153,8 @@ class _ScopedPolicy:
             scope.tenant_id == self.tenant_id
             and scope.unit_id == self.unit_id
             and issuer.cnpj.value == self.issuer_cnpj
-            and issuer.municipal_registration == self.municipal_registration
+            and issuer.municipal_registration is not None
+            and issuer.municipal_registration.number == self.municipal_registration
             and issuer.tax_regime is TaxRegimeCode.NORMAL
             and issuer.address.jurisdiction.municipality_ibge_code == "3534401"
             and self.policy.effective_from <= request.document.competence_date
@@ -219,7 +222,7 @@ class OsascoReviewedStartup:
                         huge_tree=False,
                     ),
                 )
-                if root.getroottree().docinfo.doctype:
+                if bool(getattr(root.getroottree().docinfo, "doctype", "")):
                     raise ValueError
                 self.schemas[name].assertValid(root)
             except (ValueError, etree.XMLSyntaxError, etree.DocumentInvalid):
@@ -242,6 +245,13 @@ class OsascoReviewedStartup:
         def reviewed_issuer_policy(request: NfseAuthorizationRequest) -> None:
             policy_for(request)
 
+        def verify_cancellation(
+            raw: bytes, _original: Sp4OriginalRps, _invoice: Sp4VerifiedInvoice,
+        ) -> bool | None:
+            validate_schema("cancel_response", raw)
+            # XML schema parity is not municipal proof of a successful cancellation.
+            return None
+
         schema = OsascoReviewedSchemaPorts(
             validate_issuance=lambda xml: validate_schema("issue_request", xml),
             validate_query=lambda xml: validate_schema("query_request", xml),
@@ -251,9 +261,7 @@ class OsascoReviewedStartup:
             ),
             # A valid response envelope is not enough to confirm a legal cancellation.
             # Only a municipality-reviewed semantic proof adapter can return True.
-            verify_cancellation=lambda raw, _original, _invoice: (
-                validate_schema("cancel_response", raw) or None
-            ),
+            verify_cancellation=verify_cancellation,
         )
         return build_osasco_pinned_operational_ports(
             application=application,
