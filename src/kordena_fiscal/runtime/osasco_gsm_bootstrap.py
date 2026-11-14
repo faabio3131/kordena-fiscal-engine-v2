@@ -8,6 +8,8 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Mapping
 
+from google.cloud import secretmanager_v1
+
 from kordena_fiscal.application.service import FiscalApplicationService
 from kordena_fiscal.vault.contracts import SecretResolutionService
 from kordena_fiscal.vault.external import (
@@ -17,7 +19,7 @@ from kordena_fiscal.vault.external import (
 from kordena_fiscal.vault.google_secret_manager import (
     DurableGsmReader,
     GoogleFiscalSecretClient,
-    build_google_sdk_access,
+    GoogleSdkSecretAccess,
 )
 
 from .config import RuntimeConfigurationError
@@ -55,10 +57,17 @@ def build_osasco_gsm_secret_factory(
         credentials, expiry = production_credentials(source, identity)
     except (KeyError, ValueError, TypeError):
         raise RuntimeConfigurationError("Osasco GSM provider identity is not approved") from None
-    access = build_google_sdk_access(
-        credentials=credentials, environment="production",
-        bootstrap_not_after=expiry,
-    )
+    try:
+        client = secretmanager_v1.SecretManagerServiceClient(
+            credentials=credentials,
+            client_options={
+                "api_endpoint": "secretmanager.googleapis.com",
+                "universe_domain": "googleapis.com",
+            },
+        )
+    except Exception:
+        raise RuntimeConfigurationError("Osasco GSM SDK identity unavailable") from None
+    access = GoogleSdkSecretAccess(client, bootstrap_not_after=expiry)
 
     def resolve(application: FiscalApplicationService) -> SecretResolutionService:
         # Same persistence factory and workload identity used by the canonical app.
