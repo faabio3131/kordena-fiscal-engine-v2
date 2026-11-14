@@ -52,6 +52,7 @@ from kordena_fiscal.security.s2s import (
     WorkloadCredentialRecord,
 )
 from kordena_fiscal.security.secrets import SecretResolver
+from kordena_fiscal.vault.contracts import FiscalSecretVault, SecretResolutionService
 from kordena_fiscal.vault.encrypted_a1 import EncryptedA1Vault
 from kordena_fiscal.web.app import create_app
 from kordena_fiscal.web.command_commercial import create_command_commercial_router
@@ -114,6 +115,8 @@ from .observability import (
     StructuredLogger,
     TraceContext,
 )
+from .osasco_environment import build_osasco_port_builder_from_environ
+from .osasco_gsm_bootstrap import build_osasco_gsm_secret_factory
 from .osasco_operational_composition import OsascoTrustedRuntimePorts
 from .otel_trace_sink import build_trace_sink
 from .production_cakto_ingress import production_cakto_webhook_secret
@@ -1184,18 +1187,35 @@ def build_entrypoint_fiscal_handler_factory(
     settings: RuntimeSettings,
     environ: Mapping[str, str],
     vault: EncryptedA1Vault | None,
+    *,
+    osasco_secret_vault: FiscalSecretVault | None = None,
 ) -> FiscalOperationHandlerFactory | None:
-    """Compose the actual server entrypoint with the same canonical fiscal factory.
+    """Compose reviewed municipal providers in the same executable runtime.
 
-    An opt-in Cajamar manifest must never be silently ignored because the
-    process is in a development/test configuration.
+    Optional on-host Osasco contracts never activate without a scoped
+    secret authority; no second fiscal service or duplicate provider registry.
     """
+    osasco_requested = bool(environ.get("NFCORE_OSASCO_WCF_CONFIG_PATH", "").strip())
     if settings.environment.value not in {"staging", "production"}:
-        if environ.get("NFCORE_CAJAMAR_GEISWEB_CONFIG_PATH", "").strip():
+        if (
+            environ.get("NFCORE_CAJAMAR_GEISWEB_CONFIG_PATH", "").strip()
+            or osasco_requested
+        ):
             raise RuntimeConfigurationError(
-                "Cajamar reviewed fiscal adapters require staging/production runtime"
+                "Reviewed municipal adapters require staging/production runtime"
             )
         return None
+    if osasco_requested:
+        if osasco_secret_vault is not None:
+            def osasco_secrets(application):
+                return SecretResolutionService(
+                    unit_of_work_factory=application._uow_factory,
+                    vault=osasco_secret_vault,
+                )
+        else:
+            osasco_secrets = build_osasco_gsm_secret_factory(environ)
+    else:
+        osasco_secrets = None
     configured_factory = build_runtime_fiscal_handler_factory(
         certificate_vault=vault,
         trusted_signed_dps_builder=build_signed_dps,
@@ -1208,6 +1228,9 @@ def build_entrypoint_fiscal_handler_factory(
         ),
         cajamar_port_builder=build_cajamar_port_builder_from_environ(
             environ, vault=vault,
+        ),
+        osasco_port_builder=build_osasco_port_builder_from_environ(
+            environ, secrets_factory=osasco_secrets,
         ),
     )
     # The shared builder's public annotation is Any, but its closure implements
