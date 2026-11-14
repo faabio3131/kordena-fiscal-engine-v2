@@ -8,6 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from enum import StrEnum
+from zoneinfo import ZoneInfo
 
 from kordena_fiscal.application.cajamar_substitution_review import (
     CajamarSubstitutionReview,
@@ -972,7 +973,8 @@ class FiscalApplicationService:
             if snapshot is None:
                 raise PersistenceStateError("Barueri fiscal lifecycle is absent")
             transmissions = [
-                item.occurred_at.date() for item in snapshot.history
+                item.occurred_at.astimezone(ZoneInfo("America/Sao_Paulo")).date()
+                for item in snapshot.history
                 if item.to_state is FiscalDocumentState.TRANSMITTING
             ]
             if len(transmissions) > 1:
@@ -2296,7 +2298,9 @@ class FiscalApplicationService:
                 "reason_code": reason_code,
                 "replacement_id": replacement_id,
                 "event_remittance": remittance,
-                "sent_on": occurred_at.date().isoformat(),
+                "sent_on": occurred_at.astimezone(
+                    ZoneInfo("America/Sao_Paulo")
+                ).date().isoformat(),
                 "municipal_registration": batch.municipal_registration,
                 "rps_bytes_base64": base64.b64encode(batch.rps_bytes).decode("ascii"),
             }
