@@ -89,6 +89,7 @@ from .bling_status import build_bling_status_router
 from .bling_worker import build_bling_orders
 from .bridge_credentials import load_bridge_credentials
 from .cajamar_environment import build_cajamar_port_builder_from_environ
+from .barueri_environment import build_barueri_port_builder_from_environ
 from .barueri_operational_composition import BarueriTrustedRuntimePorts
 from .cajamar_operational_composition import CajamarTrustedRuntimePorts
 from .cakto import build_cakto_webhook_router, compose_postgres_cakto_commercial_runtime
@@ -1202,10 +1203,12 @@ def build_entrypoint_fiscal_handler_factory(
     secret authority; no second fiscal service or duplicate provider registry.
     """
     osasco_requested = bool(environ.get("NFCORE_OSASCO_WCF_CONFIG_PATH", "").strip())
+    barueri_requested = bool(environ.get("NFCORE_BARUERI_PMB004_CONFIG_PATH", "").strip())
     if settings.environment.value not in {"staging", "production"}:
         if (
             environ.get("NFCORE_CAJAMAR_GEISWEB_CONFIG_PATH", "").strip()
             or osasco_requested
+            or barueri_requested
         ):
             raise RuntimeConfigurationError(
                 "Reviewed municipal adapters require staging/production runtime"
@@ -1241,6 +1244,9 @@ def build_entrypoint_fiscal_handler_factory(
         ),
         osasco_port_builder=build_osasco_port_builder_from_environ(
             environ, secrets_factory=secrets_factory,
+        ),
+        barueri_port_builder=build_barueri_port_builder_from_environ(
+            environ, vault=vault,
         ),
     )
     # The shared builder's public annotation is Any, but its closure implements
