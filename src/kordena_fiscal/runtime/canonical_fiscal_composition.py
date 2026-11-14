@@ -81,6 +81,7 @@ from kordena_fiscal.vault import EphemeralCertificateMaterial
 from kordena_fiscal.vault.encrypted_a1 import EncryptedA1Vault
 from kordena_fiscal.xml import NfeAccessKey
 
+from .barueri_operational_composition import BarueriTrustedRuntimePorts
 from .cajamar_operational_composition import CajamarTrustedRuntimePorts
 from .fiscal_runtime import FiscalOperationHandler, PreflightFiscalOperationHandler
 from .osasco_cancel_handlers import (
@@ -380,6 +381,10 @@ def build_runtime_fiscal_handler_factory(
     osasco_port_builder: Callable[
         [FiscalApplicationService], OsascoTrustedRuntimePorts
     ] | None = None,
+    barueri_runtime_ports: BarueriTrustedRuntimePorts | None = None,
+    barueri_port_builder: Callable[
+        [FiscalApplicationService], BarueriTrustedRuntimePorts
+    ] | None = None,
 ) -> Any:
     """Register all four canonical operations without granting fiscal readiness.
 
@@ -444,6 +449,16 @@ def build_runtime_fiscal_handler_factory(
         and (not callable(osasco_port_builder) or nfse_gateway is not None)
     ):
         raise ValueError("Conflicting reviewed Osasco municipal fiscal authorities")
+    if (
+        barueri_runtime_ports is not None
+        and (not isinstance(barueri_runtime_ports, BarueriTrustedRuntimePorts)
+             or barueri_port_builder is not None
+             or nfse_gateway is not None)
+    ) or (
+        barueri_port_builder is not None
+        and (not callable(barueri_port_builder) or nfse_gateway is not None)
+    ):
+        raise ValueError("Conflicting reviewed Barueri municipal fiscal authorities")
     if webiss_extrema_exchange is not None or webiss_service_preaudit is not None:
         if (
             nfse_gateway is not None
@@ -507,6 +522,19 @@ def build_runtime_fiscal_handler_factory(
             active_osasco_substitute = selected_osasco_ports.attach_verified_cancellation(
                 application, cancel_type="S",
             )
+        selected_barueri_ports = (
+            barueri_port_builder(application)
+            if barueri_port_builder is not None else barueri_runtime_ports
+        )
+        if selected_barueri_ports is not None:
+            if not isinstance(selected_barueri_ports, BarueriTrustedRuntimePorts):
+                raise ValueError("Barueri operator provisioning returned invalid ports")
+            if active_municipalities and "barueri-pmb004-homologation" in active_municipalities:
+                raise ValueError("Duplicate Barueri provider authority")
+            active_municipalities = {
+                **(active_municipalities or {}),
+                "barueri-pmb004-homologation": selected_barueri_ports.attach(application),
+            }
         gateway = selected_operations or UnprovisionedFiscalGateway()
         if operations_gateway is None and certificate_vault is not None:
             vault = certificate_vault
