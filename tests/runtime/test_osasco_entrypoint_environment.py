@@ -192,3 +192,45 @@ def test_osasco_manifest_cannot_escape_artifact_directory(tmp_path: Path) -> Non
     manifest.write_text(json.dumps(doc), encoding="utf-8")
     with pytest.raises(RuntimeConfigurationError, match="Unsafe"):
         OsascoReviewedStartup.load(str(manifest))
+
+
+
+def test_osasco_v22_operator_review_accepts_only_scoped_tax_and_notary_values(
+    tmp_path: Path,
+) -> None:
+    """Tax buckets are independent; eight notary deductions are exact decimals."""
+    manifest = _manifest(tmp_path)
+    raw = json.loads(manifest.read_text(encoding="utf-8"))
+    policy = raw["issuers"][0]["policy"]
+    policy["pis"] = "1.10"
+    policy["cofins"] = "2.20"
+    policy["pis_own"] = "3.30"
+    policy["cofins_own"] = "4.40"
+    notary = {
+        "vl_contrib_sta_casa": "0.00",
+        "vl_emolumento": "10.00",
+        "vl_fundo_tj": "0.00",
+        "vl_intimacao": "0.00",
+        "vl_min_publico": "0.00",
+        "vl_repasse_estadual": "0.00",
+        "vl_sefaz": "0.00",
+        "vl_sinoreg": "0.00",
+    }
+    policy["cartorio_values"] = notary
+    manifest.write_text(json.dumps(raw), encoding="utf-8")
+    config = OsascoReviewedStartup.load(str(manifest))
+    reviewed = config.issuers[0].policy
+    assert (str(reviewed.pis), str(reviewed.pis_own)) == ("1.10", "3.30")
+    assert (str(reviewed.cofins), str(reviewed.cofins_own)) == ("2.20", "4.40")
+    assert reviewed.cartorio_values is not None
+    assert str(reviewed.cartorio_values.vl_emolumento) == "10.00"
+
+    for forbidden in ("NaN", "Infinity", "-1.00", "1.001", "not-a-money"):
+        notary["vl_emolumento"] = forbidden
+        manifest.write_text(json.dumps(raw), encoding="utf-8")
+        with pytest.raises(RuntimeConfigurationError, match="classification"):
+            OsascoReviewedStartup.load(str(manifest))
+    notary.pop("vl_sinoreg")
+    manifest.write_text(json.dumps(raw), encoding="utf-8")
+    with pytest.raises(RuntimeConfigurationError, match="deductions"):
+        OsascoReviewedStartup.load(str(manifest))
