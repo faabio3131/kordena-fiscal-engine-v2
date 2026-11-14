@@ -7,7 +7,7 @@ protocol archive and recovery. This adapter introduces no second persistence.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 
 from kordena_fiscal.application.service import FiscalApplicationService
@@ -20,6 +20,7 @@ from kordena_fiscal.domain import (
 from kordena_fiscal.gateway.barueri_official_cancel_return import (
     BarueriCancellationEvidence,
     verify_barueri_cancellation_return,
+    verify_barueri_substitution_return,
 )
 from kordena_fiscal.gateway.barueri_official_invoice_xml import (
     retrieve_barueri_original_invoice_xml,
@@ -124,6 +125,8 @@ class BarueriTrustedRuntimePorts:
     def query_cancellation_event(
         self, batch: BarueriRpsBatch, issued: Sp4VerifiedInvoice,
         protocol: str | None, submitted_on: date,
+        replacement_request: NfseAuthorizationRequest | None = None,
+        replacement_source: Sp4OriginalRps | None = None,
     ) -> BarueriCancellationEvidence | None:
         """Read-only recovery of one original event; never resend PMB004 files."""
         if not self.supports_events or not isinstance(batch, BarueriRpsBatch):
@@ -171,9 +174,41 @@ class BarueriTrustedRuntimePorts:
             or (protocol is not None and receipt.remittance_protocol not in (None, protocol))
         ):
             raise FiscalValidationError("Barueri event file does not match remittance")
-        return verify_barueri_cancellation_return(
-            event=batch, issued=issued, receipt=receipt,
+        if (replacement_request is None) != (replacement_source is None):
+            raise FiscalValidationError("Barueri substitute requires its own approved RPS")
+        if replacement_request is None:
+            return verify_barueri_cancellation_return(
+                event=batch, issued=issued, receipt=receipt,
+            )
+        assert replacement_source is not None
+        replacement_batch = self.build_remittance(
+            replacement_request, replacement_source,
         )
+        self.verify_fixed_width_rps_identity(
+            replacement_source, replacement_batch,
+        )
+        proof = verify_barueri_substitution_return(
+            event=batch, issued=issued, replacement_batch=replacement_batch,
+            receipt=receipt,
+        )
+        new_note = proof.replacement_return
+        if new_note is None:
+            raise FiscalValidationError("Barueri new note is absent from return")
+        official_xml = self.retrieve_official_invoice_xml(new_note)
+        verified_new = Sp4VerifiedInvoice(
+            issuer_cnpj=replacement_source.issuer_cnpj,
+            issuer_ibge=replacement_source.issuer_ibge,
+            competence_date=replacement_source.competence_date,
+            rps_number=replacement_source.rps_number,
+            rps_series=replacement_source.rps_series,
+            gross_amount=replacement_source.gross_amount,
+            invoice_number=new_note.note_number,
+            verification_code=new_note.verification_code,
+            invoice_reference=new_note.access_key,
+            authorized_xml=official_xml,
+        )
+        self.verify_official_invoice_xml(verified_new)
+        return replace(proof, replacement_invoice=verified_new)
 
     def attach(self, application: FiscalApplicationService) -> Sp4ReviewedMunicipalPorts:
         if not isinstance(application, FiscalApplicationService):
