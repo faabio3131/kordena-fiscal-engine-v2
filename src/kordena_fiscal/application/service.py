@@ -2389,7 +2389,10 @@ class FiscalApplicationService:
             [bytes, Sp4OriginalRps], Sp4VerifiedInvoice
         ],
         query_official_event: Callable[
-            [BarueriRpsBatch, Sp4VerifiedInvoice, str | None, date],
+            [
+                BarueriRpsBatch, Sp4VerifiedInvoice, str | None, date,
+                NfseAuthorizationRequest | None, Sp4OriginalRps | None,
+            ],
             BarueriCancellationEvidence | None,
         ],
         occurred_at: datetime,
@@ -2528,9 +2531,67 @@ class FiscalApplicationService:
                         raise ValueError
             except (TypeError, KeyError, ValueError, FiscalValidationError):
                 raise PersistenceStateError("Altered durable Barueri event archive") from None
+            # A reason-03 event already claimed the second durable RPS before
+            # POST. Recover the exact substitute from the SAME partition.
+            replacement_request: NfseAuthorizationRequest | None = None
+            replacement_source: Sp4OriginalRps | None = None
+            replacement_id = raw["replacement_id"]
+            if replacement_id is not None:
+                if (
+                    not isinstance(replacement_id, str)
+                    or not replacement_id.strip()
+                    or replacement_id == document_id
+                ):
+                    raise PersistenceStateError("Invalid archived substitute document")
+                replacement_request = self._load_prepared_from_uow(
+                    uow, scope, replacement_id,
+                )
+                if not isinstance(replacement_request, NfseAuthorizationRequest):
+                    raise PersistenceStateError("Prepared substitute is unavailable")
+                replacement_state = uow.lifecycle.get(replacement_id)
+                replacement_attempts = uow.idempotency.attempts(
+                    replacement_request.idempotency_key,
+                )
+                sources = [
+                    item for item in uow.archive.list_for_document(
+                        scope, replacement_id,
+                    )
+                    if item.kind is FiscalArchiveKind.OTHER
+                    and item.media_type == SP4_ORIGINAL_RPS_MEDIA_TYPE
+                ]
+                if (
+                    replacement_state is None
+                    or replacement_state.state is not FiscalDocumentState.TRANSMITTING
+                    or not replacement_attempts
+                    or replacement_attempts[-1].status
+                    is not IssuanceAttemptStatus.RESERVED
+                    or replacement_attempts[-1].document_id != replacement_id
+                    or replacement_attempts[-1].request_fingerprint
+                    != replacement_request.request_fingerprint
+                    or len(sources) != 1
+                ):
+                    raise PersistenceStateError(
+                        "Barueri replacement has no reserved transmission"
+                    )
+                verifier.verify_entry(sources[0])
+                replacement_source = decode_sp4_original(
+                    sources[0].content, scope=scope, request=replacement_request,
+                )
+                if (
+                    replacement_source.issuer_cnpj != original.issuer_cnpj
+                    or replacement_source.issuer_ibge != "3505708"
+                    or replacement_source.competence_date != original.competence_date
+                    or batch.rps_bytes.split(b"\r\n")[1][15:25]
+                    != replacement_source.rps_number.zfill(10).encode("ascii")
+                ):
+                    raise PersistenceConflictError(
+                        "Barueri replacement RPS does not match cancelled event"
+                    )
         # Query only: either by the original persisted protocol or by the
         # exact event remittance + first transmission date after ambiguous POST.
-        proof = query_official_event(batch, invoice, protocol, when)
+        proof = query_official_event(
+            batch, invoice, protocol, when, replacement_request, replacement_source,
+        )
         if proof is None:
             return DurableBarueriCancellationOutcome(
                 lifecycle, event_entries[0].entry_id,
@@ -2542,11 +2603,77 @@ class FiscalApplicationService:
             or int(proof.invoice_number) != int(invoice.invoice_number)
         ):
             raise PersistenceConflictError("Barueri cancellation response is not source-bound")
+        if (
+            (replacement_source is None) != (proof.replacement_invoice is None)
+            or (replacement_source is None) != (proof.replacement_return is None)
+        ):
+            raise PersistenceConflictError(
+                "Barueri cancellation/substitution lacks independent official proof"
+            )
+        if replacement_source is not None:
+            substitute = proof.replacement_invoice
+            assert substitute is not None
+            if (
+                substitute.issuer_cnpj != replacement_source.issuer_cnpj
+                or substitute.issuer_ibge != "3505708"
+                or substitute.competence_date != replacement_source.competence_date
+                or substitute.rps_number != replacement_source.rps_number
+                or substitute.rps_series != replacement_source.rps_series
+                or substitute.gross_amount != replacement_source.gross_amount
+            ):
+                raise PersistenceConflictError(
+                    "Barueri substitute does not match its durable original RPS"
+                )
         with self._uow_factory() as uow:
             uow.lifecycle.assert_scope(document_id, scope)
             latest = uow.lifecycle.get(document_id)
             if latest != lifecycle:
                 raise PersistenceConflictError("Barueri event state changed during recovery")
+            if replacement_source is not None:
+                assert replacement_request is not None
+                assert replacement_id is not None
+                assert proof.replacement_invoice is not None
+                uow.lifecycle.assert_scope(replacement_id, scope)
+                replacement_latest = uow.lifecycle.get(replacement_id)
+                attempts = uow.idempotency.attempts(
+                    replacement_request.idempotency_key,
+                )
+                if (
+                    replacement_latest is None
+                    or replacement_latest.state is not FiscalDocumentState.TRANSMITTING
+                    or not attempts
+                    or attempts[-1].status is not IssuanceAttemptStatus.RESERVED
+                    or attempts[-1].document_id != replacement_id
+                    or attempts[-1].request_fingerprint
+                    != replacement_request.request_fingerprint
+                    or any(
+                        item.kind is FiscalArchiveKind.AUTHORIZED_XML
+                        for item in uow.archive.list_for_document(scope, replacement_id)
+                    )
+                ):
+                    raise PersistenceConflictError(
+                        "Barueri replacement changed during official reconciliation"
+                    )
+                substitute_final = self._state_machine.transition(
+                    replacement_latest, FiscalDocumentState.AUTHORIZED,
+                    occurred_at=occurred_at,
+                    reason="Barueri substitution original NFS-e officially verified",
+                    correlation_id=scope.correlation_id,
+                )
+                uow.lifecycle.save(
+                    substitute_final, expected_version=replacement_latest.version,
+                )
+                uow.idempotency.mark_authorized(
+                    replacement_request.idempotency_key, attempts[-1].generation,
+                    proof.replacement_invoice.invoice_reference,
+                )
+                uow.archive.append(FiscalArchiveEntry.build(
+                    scope=scope, document_reference=replacement_id,
+                    kind=FiscalArchiveKind.AUTHORIZED_XML,
+                    content=proof.replacement_invoice.authorized_xml,
+                    media_type="application/xml",
+                    archived_at=occurred_at, retention=retention,
+                ))
             final = self._state_machine.transition(
                 latest, FiscalDocumentState.CANCELLED,
                 occurred_at=occurred_at,
