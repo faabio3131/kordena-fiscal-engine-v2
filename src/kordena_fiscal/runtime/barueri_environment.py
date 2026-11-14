@@ -311,6 +311,8 @@ class BarueriReviewedStartup:
                     "Barueri requires matched approved service, location and recipient"
                 )
             taker = doc.service_taker
+            if taker is None or taker.tax_id is None:
+                raise FiscalValidationError("Barueri taxpayer recipient is missing")
             src = doc.issuer.address
             target = taker.address
             assert isinstance(target, FiscalAddress)
