@@ -25,8 +25,10 @@ from kordena_fiscal.gateway.sp4_municipal_canonical import Sp4OriginalRps, Sp4Ve
 from kordena_fiscal.issuance.nfe_nfse import NfseAuthorizationRequest
 from kordena_fiscal.persistence.ports import FiscalUnitOfWorkFactory
 from kordena_fiscal.vault.contracts import SecretResolutionService
+from kordena_fiscal.xml.schema import XmlSchemaValidationError, XmlSchemaValidator
 
 from .config import RuntimeConfigurationError
+from .osasco_official_schema import compile_osasco_official_xsd
 from .osasco_operational_composition import OsascoTrustedRuntimePorts
 from .osasco_pinned_composition import (
     OsascoReviewedSchemaPorts,
@@ -196,7 +198,7 @@ class _ScopedPolicy:
 @dataclass(frozen=True, slots=True)
 class OsascoReviewedStartup:
     wsdl: OsascoPinnedWcfWsdl
-    schemas: Mapping[str, etree.XMLSchema]
+    schemas: Mapping[str, etree.XMLSchema | XmlSchemaValidator]
     issuers: tuple[_ScopedPolicy, ...]
 
     @classmethod
@@ -210,9 +212,13 @@ class OsascoReviewedStartup:
             manifest = json.loads(path.read_text(encoding="utf-8"), object_pairs_hook=_unique)
         except (UnicodeError, ValueError, OSError):
             raise RuntimeConfigurationError("Unreadable Osasco reviewed manifest") from None
-        doc = _object(
-            manifest, {"wsdl", "binding_name", "schemas", "issuers"}, "manifest",
-        )
+        base_fields = {"wsdl", "binding_name", "issuers"}
+        if not isinstance(manifest, dict) or set(manifest) not in (
+            base_fields | {"schemas"},
+            base_fields | {"official_xsd_package"},
+        ):
+            raise RuntimeConfigurationError("Incomplete Osasco official XSD/manifest")
+        doc = manifest
         if not isinstance(doc["binding_name"], str):
             raise RuntimeConfigurationError("Missing reviewed Osasco WSDL binding")
         wsdl_spec = _object(doc["wsdl"], {"file", "sha256"}, "WSDL")
@@ -221,12 +227,30 @@ class OsascoReviewedStartup:
             expected_sha256=wsdl_spec["sha256"],
             binding_name=doc["binding_name"],
         )
-        if not isinstance(doc["schemas"], dict) or set(doc["schemas"]) != _SCHEMA_NAMES:
-            raise RuntimeConfigurationError("Incomplete Osasco XSD review matrix")
-        schemas = {
-            name: _schema(_read_pinned(path.parent, spec))
-            for name, spec in doc["schemas"].items()
-        }
+        schemas: dict[str, etree.XMLSchema | XmlSchemaValidator]
+        if "official_xsd_package" in doc:
+            package = doc["official_xsd_package"]
+            if not isinstance(package, dict) or set(package) != {
+                f"inline-xsd-{index:03}.xsd" for index in range(6)
+            }:
+                raise RuntimeConfigurationError("Six original official Osasco XSDs required")
+            try:
+                official_validator = compile_osasco_official_xsd({
+                    name: _read_pinned(path.parent, spec)
+                    for name, spec in package.items()
+                })
+            except (FiscalValidationError, XmlSchemaValidationError) as exc:
+                raise RuntimeConfigurationError(
+                    "Official municipal XSD package cannot be compiled"
+                ) from exc
+            schemas = {name: official_validator for name in _SCHEMA_NAMES}
+        else:
+            if not isinstance(doc["schemas"], dict) or set(doc["schemas"]) != _SCHEMA_NAMES:
+                raise RuntimeConfigurationError("Incomplete Osasco XSD review matrix")
+            schemas = {
+                name: _schema(_read_pinned(path.parent, spec))
+                for name, spec in doc["schemas"].items()
+            }
         if not isinstance(doc["issuers"], list) or not doc["issuers"]:
             raise RuntimeConfigurationError("Reviewed Osasco taxpayer scope required")
         issuers = tuple(_ScopedPolicy.parse(row) for row in doc["issuers"])
@@ -252,8 +276,39 @@ class OsascoReviewedStartup:
                 )
                 if bool(getattr(root.getroottree().docinfo, "doctype", "")):
                     raise ValueError
-                self.schemas[name].assertValid(root)
-            except (ValueError, etree.XMLSyntaxError, etree.DocumentInvalid):
+                selected = self.schemas[name]
+                if isinstance(selected, XmlSchemaValidator):
+                    if name in ("full_invoice_response", "cancel_response"):
+                        soap = "{http://schemas.xmlsoap.org/soap/envelope/}"
+                        expected = (
+                            "ConsultarNotaCompletaResponse"
+                            if name == "full_invoice_response" else "CancelarResponse"
+                        )
+                        bodies = root.findall(soap + "Body")
+                        if (
+                            root.tag != soap + "Envelope" or len(bodies) != 1
+                            or len(bodies[0]) != 1
+                            or bodies[0][0].tag != "{http://tempuri.org/}" + expected
+                        ):
+                            raise FiscalValidationError(
+                                "Official Osasco SOAP method and result differ"
+                            )
+                        root = bodies[0][0]
+                    else:
+                        expected = {
+                            "issue_request": "RTC_EmitirNFE",
+                            "query_request": "ConsultarNotaCompleta",
+                            "cancel_request": "Cancelar",
+                        }[name]
+                        if root.tag != "{http://tempuri.org/}" + expected:
+                            raise FiscalValidationError("Wrong Osasco WCF request")
+                    selected.validate_document(etree.tostring(root))
+                else:
+                    selected.assertValid(root)
+            except (
+                ValueError, etree.XMLSyntaxError, etree.DocumentInvalid,
+                XmlSchemaValidationError,
+            ):
                 raise FiscalValidationError("Osasco XML differs from reviewed XSD") from None
 
         def policy_for(
@@ -274,10 +329,45 @@ class OsascoReviewedStartup:
             policy_for(request)
 
         def verify_cancellation(
-            raw: bytes, _original: Sp4OriginalRps, _invoice: Sp4VerifiedInvoice,
+            raw: bytes, original: Sp4OriginalRps, invoice: Sp4VerifiedInvoice,
         ) -> bool | None:
             validate_schema("cancel_response", raw)
-            # XML schema parity is not municipal proof of a successful cancellation.
+            if (
+                original.issuer_ibge != "3534401"
+                or original.issuer_cnpj != invoice.issuer_cnpj
+                or original.rps_number != invoice.rps_number
+                or original.rps_series != invoice.rps_series
+                or original.gross_amount != invoice.gross_amount
+                or original.competence_date != invoice.competence_date
+            ):
+                raise FiscalValidationError("Osasco cancellation source invoice differs")
+            # Official v2.2 WCF schema: CancelarResult extends ResponseBase,
+            # containing Erro (true=not cancelled; false=success).
+            # A 200/empty/ambiguous SOAP response is NOT fiscal confirmation.
+            root = etree.fromstring(raw, parser=etree.XMLParser(
+                resolve_entities=False, load_dtd=False,
+                no_network=True, huge_tree=False,
+            ))
+            ns = "{http://tempuri.org/}"
+            dto = "{http://schemas.datacontract.org/2004/07/Eissnfe.Negocio.WebServices.Mensagem}"
+            response = root.find(
+                "{http://schemas.xmlsoap.org/soap/envelope/}Body/" + ns + "CancelarResponse"
+            )
+            if response is None or len(response) != 1:
+                return None
+            result = response.find(ns + "CancelarResult")
+            if result is None:
+                return None
+            errors = result.findall(dto + "Erro")
+            notes = result.findall(dto + "MensagemErro")
+            if len(errors) != 1 or len(notes) > 1 or errors[0].text is None:
+                return None
+            status = errors[0].text.strip().lower()
+            message = (notes[0].text or "").strip() if notes else ""
+            if status in ("false", "0") and not message:
+                return True
+            if status in ("true", "1"):
+                return False
             return None
 
         schema = OsascoReviewedSchemaPorts(
