@@ -120,9 +120,17 @@ def _policy(raw: object) -> OsascoReviewedRtcPolicy:
                     )
                     if any(not isinstance(item, str) for item in notary.values()):
                         raise ValueError
-                    typed[key] = OsascoReviewedCartorioValues(**{
+                    amounts = {
                         name: Decimal(item) for name, item in notary.items()
-                    })
+                    }
+                    if any(
+                        not amount.is_finite() or amount < 0
+                        or amount >= Decimal("1000000000000")
+                        or amount * 100 != (amount * 100).to_integral_value()
+                        for amount in amounts.values()
+                    ):
+                        raise ValueError
+                    typed[key] = OsascoReviewedCartorioValues(**amounts)
             elif key in _POLICY_NUMBERS:
                 if not isinstance(value, str):
                     raise ValueError
