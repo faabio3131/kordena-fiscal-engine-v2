@@ -327,7 +327,8 @@ def build_osasco_rtc_issue_xml(
     issue("CodigoCidadeIBGEPrestacaoServico", fields.service_city_ibge)
     if fields.service_complement is not None:
         issue("ComplementoPrestacaoServico", fields.service_complement)
-    issue("DataRecibo", doc.issued_at.date().isoformat())
+    # WCF inline XSD: DataRecibo is xs:dateTime, not xs:date.
+    issue("DataRecibo", doc.issued_at.isoformat(timespec="seconds"))
     issue("DeduzirRepasse", "false")
     if fields.service_street is not None:
         issue("EnderecoPrestacaoServico", fields.service_street)
