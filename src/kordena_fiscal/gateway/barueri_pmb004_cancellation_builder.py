@@ -53,6 +53,9 @@ def build_barueri_cancellation_remittance(
     original_rps_detail: bytes,
     reviewed_rtc_record: bytes,
     replacement_rps_number: str | None = None,
+    replacement_rps_detail: bytes | None = None,
+    replacement_rtc_record: bytes | None = None,
+    replacement_gross_amount: Decimal | None = None,
     invoice_series: str = "",
     human_approved: bool,
 ) -> BarueriRpsBatch:
@@ -112,11 +115,39 @@ def build_barueri_cancellation_remittance(
             or int(replacement_rps_number) == int(original.rps_number)
         ):
             raise BarueriCancellationBuilderError("New replacement RPS must be reserved")
+        if (
+            not isinstance(replacement_rps_detail, bytes)
+            or len(replacement_rps_detail) != 1970
+            or not replacement_rps_detail.startswith(b"2RPS  ")
+            or replacement_rps_detail[39:40] != b"E"
+            or replacement_rps_detail[15:25] !=
+            str(int(replacement_rps_number)).zfill(10).encode("ascii")
+            or not isinstance(replacement_rtc_record, bytes)
+            or len(replacement_rtc_record) != 531
+            or not replacement_rtc_record.startswith(b"4")
+            or not isinstance(replacement_gross_amount, Decimal)
+            or not replacement_gross_amount.is_finite()
+            or replacement_gross_amount <= 0
+            or replacement_gross_amount * 100
+            != (replacement_gross_amount * 100).to_integral_value()
+        ):
+            raise BarueriCancellationBuilderError(
+                "Substitution needs fiscal facts from the new reviewed RPS"
+            )
         rps_number = str(int(replacement_rps_number)).zfill(10).encode("ascii")
-    elif replacement_rps_number is not None:
+        reviewed_detail = replacement_rps_detail
+        reviewed_rtc = replacement_rtc_record
+        expected_amount = replacement_gross_amount
+    elif any(field is not None for field in (
+        replacement_rps_number, replacement_rps_detail,
+        replacement_rtc_record, replacement_gross_amount,
+    )):
         raise BarueriCancellationBuilderError("Normal cancellation cannot allocate a new RPS")
     else:
         rps_number = b"0000000000"
+        reviewed_detail = original_rps_detail
+        reviewed_rtc = reviewed_rtc_record
+        expected_amount = original.gross_amount
     series = _ascii_field(invoice_series, 5, "official invoice series")
     if not isinstance(description, str) or not description.strip():
         raise BarueriCancellationBuilderError("Cancellation description required")
@@ -128,7 +159,7 @@ def build_barueri_cancellation_remittance(
         raise BarueriCancellationBuilderError("Municipal cancellation text not encodable") from None
     if len(encoded_description) > 180:
         raise BarueriCancellationBuilderError("Municipal cancellation text exceeds layout")
-    detail = bytearray(original_rps_detail)
+    detail = bytearray(reviewed_detail)
     detail[15:25] = rps_number
     detail[25:33] = event_day.strftime("%Y%m%d").encode("ascii")
     detail[33:39] = event_time.strftime("%H%M%S").encode("ascii")
@@ -143,7 +174,7 @@ def build_barueri_cancellation_remittance(
     total_cents = int(detail[457:463]) * int(detail[463:478])
     if (
         total_cents >= 10**15
-        or Decimal(total_cents) / 100 != original.gross_amount
+        or Decimal(total_cents) / 100 != expected_amount
     ):
         raise BarueriCancellationBuilderError("Original fiscal service amount differs")
     header = (
@@ -158,7 +189,7 @@ def build_barueri_cancellation_remittance(
         + b"000000000000000"
     )
     content = b"\r\n".join(
-        (header, bytes(detail), reviewed_rtc_record, footer),
+        (header, bytes(detail), reviewed_rtc, footer),
     ) + b"\r\n"
     return BarueriRpsBatch(
         scope=original.scope, issuer_cnpj=original.issuer_cnpj,
