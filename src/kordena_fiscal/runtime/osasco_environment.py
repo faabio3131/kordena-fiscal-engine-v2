@@ -20,7 +20,7 @@ from lxml import etree
 from kordena_fiscal.application.service import FiscalApplicationService
 from kordena_fiscal.domain import FiscalValidationError, TaxRegimeCode
 from kordena_fiscal.gateway.osasco_rtc_tax_policy import OsascoReviewedRtcPolicy
-from kordena_fiscal.gateway.sp4_municipal_canonical import Sp4OriginalRps, Sp4VerifiedInvoice
+from kordena_fiscal.gateway.sp4_municipal_canonical import Sp4OriginalRps
 from kordena_fiscal.issuance.nfe_nfse import NfseAuthorizationRequest
 from kordena_fiscal.persistence.ports import FiscalUnitOfWorkFactory
 from kordena_fiscal.vault.contracts import SecretResolutionService
