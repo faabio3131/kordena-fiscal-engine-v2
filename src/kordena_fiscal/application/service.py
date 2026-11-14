@@ -2221,6 +2221,7 @@ class FiscalApplicationService:
                 NfseAuthorizationRequest, Sp4OriginalRps, Sp4VerifiedInvoice,
                 str, str, str, datetime, str | None,
                 NfseAuthorizationRequest | None, Sp4OriginalRps | None,
+                str | None,
             ],
             BarueriRpsBatch,
         ],
@@ -2230,6 +2231,7 @@ class FiscalApplicationService:
         occurred_at: datetime,
         retention: RetentionPolicyMetadata,
         replacement_id: str | None = None,
+        substitution_justification_code: str | None = None,
     ) -> DurableBarueriCancellationOutcome:
         """Commit the cancellation claim and exact event bytes BEFORE municipal POST.
 
@@ -2239,6 +2241,9 @@ class FiscalApplicationService:
         if (
             reason_code not in ("01", "02", "03")
             or (reason_code == "03") != (replacement_id is not None)
+            or (reason_code == "03" and substitution_justification_code
+                not in ("1", "2", "3", "4", "5", "9"))
+            or (reason_code != "03" and substitution_justification_code is not None)
             or not isinstance(cancellation_reason, str)
             or not 1 <= len(cancellation_reason.strip()) <= 180
             or any(ord(ch) < 32 for ch in cancellation_reason)
@@ -2293,6 +2298,7 @@ class FiscalApplicationService:
                 cancellation_reason, occurred_at,
                 replacement.rps_number if replacement is not None else None,
                 replacement_request, replacement,
+                substitution_justification_code,
             )
             if (
                 not isinstance(batch, BarueriRpsBatch)
@@ -2311,6 +2317,7 @@ class FiscalApplicationService:
                 "document_id": document_id,
                 "fingerprint": request.request_fingerprint,
                 "reason_code": reason_code,
+                "substitution_justification_code": substitution_justification_code,
                 "replacement_id": replacement_id,
                 "event_remittance": remittance,
                 "sent_on": occurred_at.astimezone(
@@ -2468,7 +2475,8 @@ class FiscalApplicationService:
                 raw = json.loads(event_entries[0].content)
                 if not isinstance(raw, dict) or set(raw) != {
                     "version", "document_id", "fingerprint", "reason_code",
-                    "replacement_id", "event_remittance", "sent_on",
+                    "substitution_justification_code", "replacement_id",
+                    "event_remittance", "sent_on",
                     "municipal_registration", "rps_bytes_base64",
                 } or raw["version"] != 1:
                     raise ValueError
@@ -2479,6 +2487,11 @@ class FiscalApplicationService:
                     or raw["fingerprint"] != prepared.request_fingerprint
                     or raw["reason_code"] not in ("01", "02", "03")
                     or (raw["reason_code"] == "03") != (raw["replacement_id"] is not None)
+                    or (raw["reason_code"] == "03"
+                        and raw["substitution_justification_code"]
+                        not in ("1", "2", "3", "4", "5", "9"))
+                    or (raw["reason_code"] != "03"
+                        and raw["substitution_justification_code"] is not None)
                     or not isinstance(remittance, str)
                     or len(remittance) != 11 or not remittance.isascii()
                     or not remittance.isdecimal()
