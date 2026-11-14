@@ -68,6 +68,7 @@ def _build(reason: str, **overrides):
         "replacement_rps_detail": bytes(fresh_detail),
         "replacement_rtc_record": b"4" + b"1" + b" " * 529,
         "replacement_gross_amount": Decimal("150.00"),
+        "substitution_justification_code": "9",
     } if reason == "03" else {}
     original_detail = overrides.pop("original_rps_detail", _original_detail())
     human_approved = overrides.pop("human_approved", True)
@@ -193,3 +194,17 @@ def test_substitution_uses_new_invoice_amount_not_original_amount() -> None:
     assert lines[1][463:478] == b"000000000020000"
     assert lines[-2][8:23] == b"000000000020000"
 
+
+def test_v44_requires_explicit_substitution_justification() -> None:
+    with pytest.raises(BarueriCancellationBuilderError, match="justification"):
+        _build("03", replacement_rps_number="43",
+               substitution_justification_code=None)
+    for code in ("1", "2", "3", "4", "5", "9"):
+        batch = _build("03", replacement_rps_number="43",
+                       substitution_justification_code=code)
+        assert batch.rps_bytes.split(b"\r\n")[1][513:514] == code.encode("ascii")
+
+
+def test_simple_cancellation_rejects_substitution_code() -> None:
+    with pytest.raises(BarueriCancellationBuilderError):
+        _build("01", substitution_justification_code="9")
