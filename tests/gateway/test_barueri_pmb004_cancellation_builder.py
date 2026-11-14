@@ -62,6 +62,14 @@ def _original_detail() -> bytes:
 def _build(reason: str, **overrides):
     original = overrides.pop("original", _source())
     issued = overrides.pop("issued", _issued())
+    fresh_detail = bytearray(_original_detail())
+    fresh_detail[15:25] = b"0000000043"
+    replacement = {
+        "replacement_rps_detail": bytes(fresh_detail),
+        "replacement_rtc_record": b"4" + b"1" + b" " * 529,
+        "replacement_gross_amount": Decimal("150.00"),
+    } if reason == "03" else {}
+    replacement.update(overrides)
     return build_barueri_cancellation_remittance(
         original=original, issued=issued,
         regime=TaxRegimeCode.NORMAL,
@@ -74,7 +82,7 @@ def _build(reason: str, **overrides):
         original_rps_detail=overrides.pop("original_rps_detail", _original_detail()),
         reviewed_rtc_record=b"4" + b"1" + b" " * 529,
         human_approved=overrides.pop("human_approved", True),
-        **overrides,
+        **replacement,
     )
 
 
@@ -168,3 +176,18 @@ def test_same_note_cannot_be_cancelled_twice_in_same_remittance() -> None:
     )) + b"\r\n"
     with pytest.raises(BarueriContractError, match="Duplicate"):
         replace(single, rps_bytes=duplicate)
+
+
+def test_substitution_uses_new_invoice_amount_not_original_amount() -> None:
+    replacement = bytearray(_original_detail())
+    replacement[15:25] = b"0000000043"
+    replacement[463:478] = b"000000000020000"
+    batch = _build(
+        "03", replacement_rps_number="43",
+        replacement_rps_detail=bytes(replacement),
+        replacement_gross_amount=Decimal("200.00"),
+    )
+    lines = batch.rps_bytes.split(b"\r\n")
+    assert lines[1][463:478] == b"000000000020000"
+    assert lines[-2][8:23] == b"000000000020000"
+
