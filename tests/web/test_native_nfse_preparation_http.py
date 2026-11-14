@@ -162,13 +162,16 @@ def _database(
             tax_regime=tax_regime,
             state_registration=StateRegistration("SP", "123456789"),
             municipal_registration=(
-                MunicipalRegistration("123456") if issuer_ibge == "3534401" else None
+                MunicipalRegistration("123456") if issuer_ibge == "3534401"
+                else MunicipalRegistration("1234567") if issuer_ibge == "3505708"
+                else None
             ),
             primary_cnae=CnaeCode("6201501"),
             address=FiscalAddress(
                 street="Rua de Homologacao", number="10", district="Centro",
                 municipality_name=(
-                    "Osasco" if issuer_ibge == "3534401" else "Cajamar"
+                    "Osasco" if issuer_ibge == "3534401"
+                    else "Barueri" if issuer_ibge == "3505708" else "Cajamar"
                 ), jurisdiction=jurisdiction,
                 postal_code="07750000",
             ),
@@ -183,7 +186,10 @@ def _database(
                 operation=ConfiguredFiscalOperation.AUTHORIZE,
                 provider_id=provider_id,
             ))
-            if provider_id in {"cajamar-geisweb-homologation", "osasco-rtc-homologation"}:
+            if provider_id in {
+                "cajamar-geisweb-homologation", "osasco-rtc-homologation",
+                "barueri-pmb004-homologation",
+            }:
                 uow.commercial.put_provider_binding(ProviderBinding(
                     binding_id="cajamar-query-binding",
                     tenant_id=TENANT, unit_id=UNIT,
@@ -860,6 +866,49 @@ def test_cajamar_official_substitution_rules_do_not_infer_soap_completion(
             replacement_id=candidate.json()["document_id"],
             reviewed_at=datetime(2026, 11, 5, tzinfo=UTC),
         )
+
+
+def test_barueri_portal_prepares_original_with_durable_remittance_and_replay(
+    tmp_path: Path,
+) -> None:
+    db = _database(
+        tmp_path / "barueri-portal.sqlite",
+        issuer_ibge="3505708",
+        provider_id="barueri-pmb004-homologation",
+        tax_regime=TaxRegimeCode.NORMAL,
+    )
+    web = _client(db)
+    reviewed = _payload() | _TAKER_ADDRESS | {
+        "competence_date": "2026-10-31",
+        "service_municipality_ibge": "3505708",
+        "source_id": "barueri-original-rps-2026",
+    }
+    first = _post(web, reviewed, key="barueri-reviewed-prepare")
+    assert first.status_code == 200, first.text
+    record = first.json()
+    assert record["numbering_authority"] == "municipal_rps_durable"
+    assert record["status"] == FiscalDocumentState.READY_TO_TRANSMIT.value
+    assert record["transmitted"] is False
+    assert record["dps_numbering"] == "not_applicable_municipal_original_rps"
+    scope = ExecutionScope(
+        TENANT, UNIT, FiscalEnvironment.HOMOLOGATION, "barueri-replay", "fm-nfcore",
+    )
+    application = FiscalApplicationService(db)
+    original = application.load_sp4_original_rps(scope, record["document_id"])
+    assert original.issuer_ibge == "3505708"
+    assert original.rps_number == "1"
+    assert original.rps_series == ""
+    assert original.municipal_batch_id == "00000000001"
+    assert application.load_barueri_remittance_protocol(
+        scope, record["document_id"],
+    ) is None
+    assert application.load_barueri_submission_date(
+        scope, record["document_id"],
+    ) is None
+    again = _post(web, reviewed, key="barueri-reviewed-prepare")
+    assert again.status_code == 200, again.text
+    assert again.json()["replay"] is True
+    assert application.load_sp4_original_rps(scope, record["document_id"]) == original
 
 
 def test_cajamar_prepares_original_rps_through_same_portal_and_uow(
