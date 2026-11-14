@@ -14,6 +14,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from kordena_fiscal.domain import FiscalAddress, FiscalValidationError, TaxRegimeCode
 from kordena_fiscal.gateway.osasco_rtc_issue_builder import (
     OsascoRtcRecipient,
+    OsascoReviewedCartorioValues,
     OsascoRtcTaxFields,
 )
 from kordena_fiscal.gateway.sp4_municipal_canonical import Sp4OriginalRps
@@ -57,6 +58,9 @@ class OsascoReviewedRtcPolicy:
     test_only: bool
     no_iss_incidence: bool = False
     additional_info: str = ""
+    pis_own: Decimal = Decimal("0")
+    cofins_own: Decimal = Decimal("0")
+    cartorio_values: OsascoReviewedCartorioValues | None = None
 
     def __post_init__(self) -> None:
         if (
@@ -78,6 +82,7 @@ class OsascoReviewedRtcPolicy:
         for amount in (
             self.iss_rate, self.pis, self.cofins, self.csll,
             self.income_tax, self.inss, self.other_taxes,
+            self.pis_own, self.cofins_own,
         ):
             if (
                 not isinstance(amount, Decimal)
@@ -85,6 +90,11 @@ class OsascoReviewedRtcPolicy:
                 or amount < 0
             ):
                 raise OsascoReviewedTaxPolicyError("Osasco tax field must have reviewed amount")
+        if (
+            self.cartorio_values is not None
+            and not isinstance(self.cartorio_values, OsascoReviewedCartorioValues)
+        ):
+            raise OsascoReviewedTaxPolicyError("Unreviewed Osasco notary deductions")
         if self.iss_rate > 5:
             raise OsascoReviewedTaxPolicyError("ISS municipal rate is outside supported range")
 
@@ -165,6 +175,8 @@ def reviewed_osasco_rtc_fields(
         pis=policy.pis, cofins=policy.cofins, csll=policy.csll,
         income_tax=policy.income_tax, inss=policy.inss,
         other_taxes=policy.other_taxes, additional_info=policy.additional_info,
+        pis_own=policy.pis_own, cofins_own=policy.cofins_own,
+        cartorio_values=policy.cartorio_values,
         test_only=policy.test_only,
     )
 
