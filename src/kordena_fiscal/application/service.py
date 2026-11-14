@@ -52,6 +52,13 @@ from kordena_fiscal.gateway import (
     AuthorizationStatus,
     FiscalGatewayClient,
 )
+from kordena_fiscal.gateway.barueri_official_cancel_return import (
+    BarueriCancellationEvidence,
+)
+from kordena_fiscal.gateway.barueri_pmb004_homologation import (
+    BarueriReceipt,
+    BarueriRpsBatch,
+)
 from kordena_fiscal.gateway.cajamar_geisweb_cancellation_builder import (
     CajamarCancellationDecision,
 )
@@ -248,6 +255,16 @@ class DurableOsascoCancellationOutcome:
     lifecycle: FiscalStateSnapshot
     archive_reference: str
 
+
+@dataclass(frozen=True, slots=True)
+class DurableBarueriCancellationOutcome:
+    """Asynchronous municipal event with a single original dispatch claim."""
+
+    lifecycle: FiscalStateSnapshot
+    archive_reference: str | None
+    protocol: str | None
+    recovery_required: bool
+    replay: bool
 
 
 def _nfse_rejection_archive(
