@@ -114,6 +114,7 @@ from .observability import (
     StructuredLogger,
     TraceContext,
 )
+from .osasco_environment import build_osasco_port_builder_from_environ
 from .osasco_operational_composition import OsascoTrustedRuntimePorts
 from .otel_trace_sink import build_trace_sink
 from .production_cakto_ingress import production_cakto_webhook_secret
@@ -1191,9 +1192,12 @@ def build_entrypoint_fiscal_handler_factory(
     process is in a development/test configuration.
     """
     if settings.environment.value not in {"staging", "production"}:
-        if environ.get("NFCORE_CAJAMAR_GEISWEB_CONFIG_PATH", "").strip():
+        if (
+            environ.get("NFCORE_CAJAMAR_GEISWEB_CONFIG_PATH", "").strip()
+            or environ.get("NFCORE_OSASCO_RTC_CONFIG_PATH", "").strip()
+        ):
             raise RuntimeConfigurationError(
-                "Cajamar reviewed fiscal adapters require staging/production runtime"
+                "Reviewed municipal fiscal adapters require staging/production runtime"
             )
         return None
     configured_factory = build_runtime_fiscal_handler_factory(
@@ -1209,6 +1213,7 @@ def build_entrypoint_fiscal_handler_factory(
         cajamar_port_builder=build_cajamar_port_builder_from_environ(
             environ, vault=vault,
         ),
+        osasco_port_builder=build_osasco_port_builder_from_environ(environ),
     )
     # The shared builder's public annotation is Any, but its closure implements
     # the existing FiscalOperationHandlerFactory contract. Preserve B ownership.
