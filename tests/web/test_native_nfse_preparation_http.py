@@ -5,7 +5,7 @@ import base64
 import gzip
 import hashlib
 import json
-from dataclasses import replace
+from dataclasses import asdict, replace
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -27,7 +27,12 @@ from kordena_fiscal.application.cajamar_substitution_review import (
 from kordena_fiscal.application.service import FiscalApplicationService
 from kordena_fiscal.archive import FiscalArchiveKind, RetentionPolicyMetadata
 from kordena_fiscal.compliance.nfse_preaudit import nfse_preaudit
-from kordena_fiscal.control_plane import FiscalOrganization, FiscalUnitRegistration
+from kordena_fiscal.control_plane import (
+    FiscalOrganization,
+    FiscalUnitRegistration,
+    SecretReference,
+    SecretReferenceKind,
+)
 from kordena_fiscal.control_plane.commercial import (
     ConfiguredFiscalOperation,
     ProviderBinding,
@@ -80,10 +85,12 @@ from kordena_fiscal.lifecycle import FiscalDocumentState
 from kordena_fiscal.operations import FakeFiscalOperationsGateway, FiscalOperationsClient
 from kordena_fiscal.persistence import SqliteFiscalDatabase
 from kordena_fiscal.persistence.ports import PersistenceStateError
+from kordena_fiscal.runtime.api import build_entrypoint_fiscal_handler_factory
 from kordena_fiscal.runtime.canonical_fiscal_composition import (
     _GovernedNationalNfseGateway,
     build_runtime_fiscal_handler_factory,
 )
+from kordena_fiscal.runtime.config import RuntimeSettings
 from kordena_fiscal.runtime.fiscal_runtime import (
     CanonicalFiscalOperationPath,
     CanonicalPortalOperationExecutor,
@@ -107,6 +114,7 @@ from kordena_fiscal.security.human_identity import (
     ScryptPasswordHasher,
 )
 from kordena_fiscal.vault import EphemeralCertificateMaterial
+from kordena_fiscal.vault.contracts import EphemeralProviderCredentialsMaterial
 from kordena_fiscal.web import create_app
 from kordena_fiscal.web.human_auth import CSRF_COOKIE, CSRF_HEADER
 from kordena_fiscal.web.portal_runtime import DurableHumanPortalExecutor
@@ -1418,3 +1426,232 @@ def test_web_native_nfse_preparation_to_signed_gateway_and_authorized_xml(
     assert again.status_code == 200, again.text
     assert len(captured) == 1, "Replay must not retransmit the signed DPS"
     assert _post(browser, _payload(), "native-after-authorization").status_code == 200
+
+
+
+def _official_osasco_manifest(tmp_path: Path) -> Path:
+    """Operator manifest using exact public 2026 WSDL/XSD bytes, synthetic issuer."""
+    origin = (
+        Path(__file__).resolve().parents[2]
+        / "contracts/official/osasco/homologation"
+    )
+    manifest = {
+        "wsdl": {
+            "file": "municipal.wsdl",
+            "sha256": hashlib.sha256(
+                (origin / "NotaFiscalEletronica.singleWsdl.xml").read_bytes(),
+            ).hexdigest(),
+        },
+        "binding_name": "BasicHttpBinding_INotaFiscalEletronicaServico",
+        "official_xsd_package": {},
+        "issuers": [],
+    }
+    (tmp_path / "municipal.wsdl").write_bytes(
+        (origin / "NotaFiscalEletronica.singleWsdl.xml").read_bytes(),
+    )
+    for number in range(6):
+        filename = f"inline-xsd-{number:03}.xsd"
+        raw = (origin / filename).read_bytes()
+        (tmp_path / filename).write_bytes(raw)
+        manifest["official_xsd_package"][filename] = {  # type: ignore[index]
+            "file": filename, "sha256": hashlib.sha256(raw).hexdigest(),
+        }
+    policy = asdict(_osasco_synthetic_policy())
+    for key, value in list(policy.items()):
+        if isinstance(value, date):
+            policy[key] = value.isoformat()
+        elif isinstance(value, Decimal):
+            policy[key] = str(value)
+    manifest["issuers"] = [{
+        "tenant_id": TENANT, "unit_id": UNIT,
+        "issuer_cnpj": "11222333000181",
+        "municipal_registration": "123456", "policy": policy,
+    }]
+    target = tmp_path / "osasco-official-synthetic-issuer.json"
+    target.write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
+    return target
+
+
+def _osasco_official_schema_soap(method: str, receipt: str) -> bytes:
+    """Valid public WCF XSD element order, no real municipality interaction."""
+    prefix = (
+        '<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" '
+        'xmlns:t="http://tempuri.org/" '
+        'xmlns:a="http://schemas.datacontract.org/2004/07/'
+        'Eissnfe.Negocio.WebServices.Mensagem" '
+        'xmlns:b="http://schemas.datacontract.org/2004/07/'
+        'Eissnfe.Dominio.DataTransferObject.Prestador" '
+        'xmlns:c="http://schemas.datacontract.org/2004/07/'
+        'Eissnfe.Dominio.DataTransferObject.Contribuinte">'
+    )
+    response = (
+        f"<s:Body><t:{method}Response><t:{method}Result>"
+        "<a:Erro>false</a:Erro>"
+    )
+    if method == "ConsultarNotaCompleta":
+        response += (
+            "<a:NotasGeradas><b:NotaFiscalRelatorioDTO>"
+            "<b:CodigoAutenticidade>OSASCO1234</b:CodigoAutenticidade>"
+            f"<b:Numero>{8000 + int(receipt)}</b:Numero>"
+            f"<b:NumeroRecibo>{receipt}</b:NumeroRecibo>"
+            "<b:Prestador><c:CNPJ>11222333000181</c:CNPJ></b:Prestador>"
+            "<b:Valor>100.00</b:Valor>"
+            "</b:NotaFiscalRelatorioDTO></a:NotasGeradas>"
+            "<a:QtdeNotas>1</a:QtdeNotas>"
+        )
+    return (
+        prefix + response
+        + f"</t:{method}Result></t:{method}Response></s:Body></s:Envelope>"
+    ).encode()
+
+
+def test_osasco_executable_api_real_xsd_end_to_end_one_uow(
+    tmp_path: Path,
+) -> None:
+    """Portal→api:app factory→official WSDL/XSD→synthetic WCF→durable UoW.
+
+    Every fiscal response is synthetic but checked against real official XSD.
+    No taxpayer key, network issuance, external fiscal homologation or DDL.
+    """
+    manifest = _official_osasco_manifest(tmp_path)
+    db = _database(
+        tmp_path / "osasco-actual-entrypoint.sqlite",
+        issuer_ibge="3534401", provider_id="osasco-rtc-homologation",
+        tax_regime=TaxRegimeCode.NORMAL,
+    )
+    with db() as uow:
+        uow.control_plane.add_secret_reference(SecretReference(
+            reference_id="ref:osasco-fixture-key",
+            kind=SecretReferenceKind.CREDENTIALS,
+            tenant_id=TENANT, unit_id=UNIT,
+            environment=FiscalEnvironment.HOMOLOGATION,
+            provider_id="osasco-rtc-homologation",
+        ))
+        uow.commit()
+    vault = Mock()
+    vault.resolve.side_effect = lambda ref, context: EphemeralProviderCredentialsMaterial(
+        reference_id=ref.reference_id,
+        credential_bytes=b"12345678-1234-1234-1234-123456789012",
+    )
+    observed: list[tuple[str, str | None, str]] = []
+
+    def synthetic_exchange(soap: bytes, action: str, _timeout: float) -> bytes:
+        method = action.rsplit("/", 1)[-1]
+        assert action.startswith("http://tempuri.org/INotaFiscalEletronicaServico/")
+        root = etree.fromstring(soap)
+        fields = {
+            etree.QName(node).localname: node.text
+            for node in root.iter() if isinstance(node.tag, str)
+        }
+        assert fields["ChaveAutenticacao"] == "12345678-1234-1234-1234-123456789012"
+        receipt = fields.get("NumeroReciboUnico") or fields.get("NumeroRecibo") or "1"
+        observed.append((method, fields.get("TipoCancelamento"), receipt))
+        return _osasco_official_schema_soap(method, receipt)
+
+    settings = RuntimeSettings.from_mapping({
+        "NFCORE_ENVIRONMENT": "staging",
+        "NFCORE_PERSISTENCE_BACKEND": "postgres",
+        "DATABASE_URL": "postgresql://fake:fake@db/nfcore",
+        "NFCORE_SECRET_BACKEND": "external",
+    })
+    with patch(
+        "kordena_fiscal.gateway.osasco_rtc_homologation._exchange",
+        synthetic_exchange,
+    ):
+        factory = build_entrypoint_fiscal_handler_factory(
+            settings,
+            {"NFCORE_OSASCO_WCF_CONFIG_PATH": str(manifest)},
+            None,
+            osasco_secret_vault=vault,
+        )
+        assert factory is not None
+        application = FiscalApplicationService(db)
+        handlers = factory(application)
+        assert {
+            "issueFiscalDocument", "reconcileFiscalOperation",
+            "cancelOsascoNfse", "substituteOsascoNfse",
+        } <= handlers.keys()
+        web = _client(
+            db, operation_executor=CanonicalPortalOperationExecutor(
+                unit_of_work_factory=db,
+                path=CanonicalFiscalOperationPath(application, handlers=handlers),
+            ),
+        )
+        values = _payload() | _TAKER_ADDRESS | {
+            "competence_date": "2026-11-12",
+            "service_municipality_ibge": "3534401",
+        }
+        first = _post(web, values | {"source_id": "osasco-original"}, "prepare-original")
+        second = _post(web, values | {"source_id": "osasco-replacement"}, "prepare-replace")
+        assert first.status_code == second.status_code == 200
+        original_id, replacement_id = (
+            first.json()["document_id"], second.json()["document_id"]
+        )
+        csrf = web.cookies.get(CSRF_COOKIE)
+        assert csrf
+        headers = {CSRF_HEADER: csrf}
+        base = {"unit_id": UNIT, "environment": "homologation"}
+
+        def execute(operation: str, payload: dict[str, object], key: str):
+            return web.post(
+                f"/v1/portal/operations/{operation}",
+                json=base | payload,
+                headers=headers | {"Idempotency-Key": key},
+            )
+
+        issued = execute("issueFiscalDocument", {"document_id": original_id}, "issue-original")
+        assert issued.status_code == 200, issued.text
+        queried = execute(
+            "reconcileFiscalOperation", {"document_id": original_id}, "query-original",
+        )
+        assert queried.status_code == 200, queried.text
+        assert queried.json()["status"] == FiscalDocumentState.AUTHORIZED.value
+        download = web.get(
+            f"/v1/portal/documents/{original_id}/artifacts/authorized_xml",
+            params=base,
+        )
+        assert download.status_code == 200
+        assert b"OSASCO1234" in download.content
+        cancel = execute(
+            "substituteOsascoNfse",
+            {"original_id": original_id, "replacement_id": replacement_id,
+             "human_approval": True, "cancellation_reason": "Substituicao revisada"},
+            "cancel-type-s",
+        )
+        assert cancel.status_code == 200, cancel.text
+        assert cancel.json()["original_status"] == FiscalDocumentState.CANCELLED.value
+        assert cancel.json()["next_action"] == "issueFiscalDocument"
+        retry = execute(
+            "substituteOsascoNfse",
+            {"original_id": original_id, "replacement_id": replacement_id,
+             "human_approval": True, "cancellation_reason": "Substituicao revisada"},
+            "cancel-type-s",
+        )
+        assert retry.status_code == 200
+        assert sum(method == "Cancelar" for method, _, _ in observed) == 1
+        next_issue = execute(
+            "issueFiscalDocument", {"document_id": replacement_id}, "issue-replace",
+        )
+        assert next_issue.status_code == 200, next_issue.text
+        next_query = execute(
+            "reconcileFiscalOperation", {"document_id": replacement_id}, "query-replace",
+        )
+        assert next_query.status_code == 200, next_query.text
+        assert next_query.json()["status"] == FiscalDocumentState.AUTHORIZED.value
+        assert [(method, cancel_type) for method, cancel_type, _ in observed] == [
+            ("RTC_EmitirNFE", None),
+            ("ConsultarNotaCompleta", None),
+            ("Cancelar", "S"),
+            ("RTC_EmitirNFE", None),
+            ("ConsultarNotaCompleta", None),
+        ]
+        scope = ExecutionScope(
+            TENANT, UNIT, FiscalEnvironment.HOMOLOGATION, "proof", "fm-nfcore",
+        )
+        assert (
+            application.load_sp4_original_rps(scope, original_id).rps_number == "1"
+        )
+        assert (
+            application.load_sp4_original_rps(scope, replacement_id).rps_number == "2"
+        )
+        assert vault.resolve.call_count == 5
