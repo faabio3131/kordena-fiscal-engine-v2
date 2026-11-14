@@ -32,17 +32,21 @@ from kordena_fiscal.issuance.nfe_nfse import NfseAuthorizationRequest
 from kordena_fiscal.persistence.ports import FiscalUnitOfWorkFactory
 from kordena_fiscal.vault.contracts import SecretResolutionService
 from kordena_fiscal.vault.external import (
-    ExternalFiscalSecretVault, SecretAccessAuditEvent,
+    ExternalFiscalSecretVault,
+    SecretAccessAuditEvent,
 )
 from kordena_fiscal.vault.google_secret_manager import (
-    DurableGsmReader, GoogleFiscalSecretClient, GoogleSdkSecretAccess,
+    DurableGsmReader,
+    GoogleFiscalSecretClient,
+    GoogleSdkSecretAccess,
 )
 from kordena_fiscal.xml.schema import SchemaResource, SchemaSet, XmlSchemaValidator
 
 from .config import RuntimeConfigurationError
 from .osasco_operational_composition import OsascoTrustedRuntimePorts
 from .osasco_pinned_composition import (
-    OsascoReviewedSchemaPorts, build_osasco_pinned_operational_ports,
+    OsascoReviewedSchemaPorts,
+    build_osasco_pinned_operational_ports,
 )
 from .osasco_wsdl_contract import OsascoPinnedWcfWsdl, load_osasco_pinned_wsdl
 
